@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./brand/logo/duenest-logo.png" alt="DueNest Logo" width="120" />
+  <img src="./brand/logo/duenest-logo.png" alt="DueNest Logo" width="369" />
 </p>
 
 <h1 align="center">DueNest</h1>
