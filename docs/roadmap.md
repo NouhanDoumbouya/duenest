@@ -1,0 +1,1048 @@
+# DueNest Roadmap
+
+**Version:** v0.1  
+**Status:** Planning  
+**Product Type:** SaaS-ready life admin platform  
+**Execution Style:** Small, consistent weekly progress  
+**Timeline Start:** Monday, June 8, 2026  
+**Target MVP Date:** Sunday, October 11, 2026  
+**Backup MVP Date:** Sunday, October 25, 2026  
+**Primary Constraint:** Built as a side project while balancing studies, BaraLink, and other responsibilities  
+
+---
+
+## 1. Roadmap Summary
+
+This roadmap defines how DueNest will move from a well-documented product concept to a working MVP.
+
+DueNest will be built gradually through focused sprints. Each sprint should produce a clear deliverable that can be committed, reviewed, tested, and demonstrated.
+
+The goal is not to build everything at once. The goal is to build the right foundation first, then progressively add useful and technically impressive features.
+
+---
+
+## 2. Execution Philosophy
+
+DueNest should be built with the following execution principles:
+
+- Build consistently, even if progress is small.
+- Prioritize working features over perfect plans.
+- Avoid overengineering in the early stage.
+- Keep every sprint focused.
+- Use branches and pull requests for clean progress.
+- Document decisions before implementation.
+- Build the manual product before AI automation.
+- Treat security as a core product requirement.
+- Make every major feature demoable.
+- Keep the project impressive, but realistic.
+
+---
+
+## 3. Roadmap Visualization
+
+```mermaid
+flowchart TD
+    A["Project Foundation"] --> B["Product Documentation"]
+    B --> C["Backend Foundation"]
+    C --> D["Authentication"]
+    D --> E["Frontend Foundation"]
+    E --> F["Document Vault"]
+    F --> G["Renewal Tracker"]
+    G --> H["Dashboard"]
+    H --> I["Application Packs"]
+    I --> J["Reminders & Notifications"]
+    J --> K["MVP Polish"]
+    K --> L["Deployment Preparation"]
+    L --> M["AI Extraction Research"]
+    M --> N["Future SaaS Enhancements"]
+
+    A:::done
+    B:::done
+    C:::next
+    D:::planned
+    E:::planned
+    F:::planned
+    G:::planned
+    H:::planned
+    I:::planned
+    J:::planned
+    K:::planned
+    L:::future
+    M:::future
+    N:::future
+
+    classDef done fill:#d1fae5,stroke:#059669,color:#064e3b
+    classDef next fill:#fef3c7,stroke:#d97706,color:#78350f
+    classDef planned fill:#e0f2fe,stroke:#0284c7,color:#0c4a6e
+    classDef future fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
+```
+
+---
+
+## 4. Product Build Order
+
+DueNest will be built in this order:
+
+1. Project foundation
+2. Product documentation
+3. Backend foundation
+4. Authentication
+5. Frontend foundation
+6. Document vault
+7. Renewal tracker
+8. Dashboard
+9. Application packs
+10. Reminders and notifications
+11. MVP polish
+12. Deployment preparation
+13. AI extraction research
+14. Secure sharing
+15. Integrations
+16. SaaS polish
+
+---
+
+## 5. Current Development Stage
+
+| Area | Status |
+| --- | --- |
+| Branding | Completed |
+| Repository setup | Completed |
+| README | Completed |
+| Product blueprint | Completed |
+| Architecture document | Completed |
+| Database design | Completed |
+| API specification | Completed |
+| Security plan | Completed |
+| Roadmap | In Progress |
+| Backend setup | Not Started |
+| Frontend setup | Not Started |
+| MVP implementation | Not Started |
+
+---
+
+## 6. Version Roadmap
+
+```mermaid
+timeline
+    title DueNest Version Roadmap
+
+    v0.1 Core MVP
+        : Authentication
+        : Document Vault
+        : Renewal Tracker
+        : Dashboard
+        : Application Packs
+        : Basic Reminders
+
+    v0.2 Smart Automation
+        : PDF Extraction
+        : OCR Foundation
+        : AI Classification
+        : Expiry Date Extraction
+        : User Confirmation Flow
+
+    v0.3 Secure Sharing
+        : Application Templates
+        : Secure Share Links
+        : Link Expiration
+        : Access Logs
+        : ZIP Export Improvements
+
+    v0.4 Integrations
+        : Gmail Renewal Scanning
+        : Google Calendar Reminders
+        : Email Notifications
+        : Cloud Storage Integration
+
+    v0.5 Workspace
+        : Family Workspace
+        : Team Workspace
+        : Shared Documents
+        : Role-Based Access Control
+
+    v1.0 SaaS Ready
+        : Deployment
+        : CI/CD
+        : Monitoring
+        : Demo Account
+        : Pricing Page
+        : Billing Foundation
+```
+
+---
+
+## 7. Version Details
+
+### v0.1 — Core MVP
+
+Focus: manual but useful product.
+
+v0.1 should allow a user to:
+
+- register and log in
+- access a protected dashboard
+- upload documents
+- add document metadata
+- track document expiry dates
+- create renewal records
+- view upcoming deadlines
+- create application packs
+- select documents for a pack
+- export or prepare document bundles
+- receive basic in-app reminders or notifications
+
+### v0.2 — Smart Automation
+
+Focus: AI-assisted document processing.
+
+Planned features:
+
+- PDF text extraction
+- OCR foundation
+- AI document classification
+- expiry date extraction
+- renewal date extraction
+- provider and amount extraction
+- confidence score
+- user confirmation flow
+
+### v0.3 — Secure Sharing and Application Packs
+
+Focus: making application packs more powerful.
+
+Planned features:
+
+- application pack templates
+- secure share links
+- expiring links
+- access logs
+- revoke access
+- ZIP export improvements
+- application-specific checklists
+
+### v0.4 — Integrations
+
+Focus: connecting DueNest with user workflows.
+
+Planned features:
+
+- Gmail renewal scanning
+- Google Calendar reminders
+- email reminders
+- cloud storage integration
+- optional WhatsApp or Telegram reminders
+
+### v0.5 — Family and Team Workspace
+
+Focus: collaboration.
+
+Planned features:
+
+- family workspace
+- team workspace
+- shared documents
+- role-based access control
+- shared renewals
+- member invitations
+
+### v1.0 — SaaS-Ready Release
+
+Focus: public demo or launch readiness.
+
+Planned features:
+
+- polished landing page
+- demo account
+- deployment
+- CI/CD
+- automated tests
+- monitoring
+- production security hardening
+- pricing page
+- billing foundation
+- case study and demo video
+
+---
+
+## 8. Dated Execution Timeline with Buffers
+
+This execution timeline starts from **Monday, June 8, 2026**.
+
+The plan is intentionally realistic because DueNest is being built as a side project while balancing studies, BaraLink, and other responsibilities.
+
+The timeline includes:
+
+- focused build weeks
+- buffer weeks
+- review and polish time
+- flexible weekend execution
+- room for delays without breaking the whole roadmap
+
+```mermaid
+gantt
+    title DueNest v0.1 Execution Timeline with Buffer Time
+    dateFormat  YYYY-MM-DD
+    axisFormat  %d %b
+
+    section Backend Foundation
+    Backend project setup                  :backend_setup, 2026-06-08, 7d
+    Backend config, env, database setup    :backend_config, 2026-06-15, 7d
+    Authentication API                     :auth_api, 2026-06-22, 7d
+    Buffer, auth tests, cleanup            :auth_buffer, 2026-06-29, 7d
+
+    section Frontend Foundation
+    Frontend project setup                 :frontend_setup, 2026-07-06, 7d
+    Landing, auth pages, dashboard shell   :frontend_auth, 2026-07-13, 7d
+    Buffer, frontend-backend integration   :frontend_buffer, 2026-07-20, 7d
+
+    section Core Product Modules
+    Document model and APIs                :document_api, 2026-07-27, 7d
+    File upload, download, validation      :file_upload, 2026-08-03, 7d
+    Buffer and document vault UI           :document_buffer, 2026-08-10, 7d
+    Renewal tracker backend and API        :renewal_api, 2026-08-17, 7d
+    Renewal UI and dashboard backend       :renewal_ui, 2026-08-24, 7d
+    Buffer and dashboard polish            :dashboard_buffer, 2026-08-31, 7d
+
+    section Application Packs
+    Application pack backend               :pack_backend, 2026-09-07, 7d
+    Application pack UI and ZIP export     :pack_ui, 2026-09-14, 7d
+    Buffer, tests, documentation cleanup   :pack_buffer, 2026-09-21, 7d
+
+    section Reminders and MVP Polish
+    Reminders and notifications foundation :reminders, 2026-09-28, 7d
+    MVP polish and demo preparation        :mvp_polish, 2026-10-05, 7d
+
+    section Optional Stretch
+    Deployment preparation                 :deployment_prep, 2026-10-12, 7d
+    AI extraction research prototype       :ai_research, 2026-10-19, 7d
+```
+
+> Dates are planning targets, not strict deadlines. If a week becomes busy, move unfinished work into the nearest buffer week.
+
+---
+
+## 9. Week-by-Week Execution Plan
+
+| Week | Date Range | Focus | Expected Output | Buffer Strategy |
+| --- | --- | --- | --- | --- |
+| Week 1 | Jun 8 – Jun 14, 2026 | Backend foundation | Django project created inside `backend/` | Keep scope small: project setup only |
+| Week 2 | Jun 15 – Jun 21, 2026 | Backend configuration | Settings, environment variables, database setup | Use weekend to fix setup issues |
+| Week 3 | Jun 22 – Jun 28, 2026 | Authentication API | Register, login, refresh token, current user endpoint | Focus only on backend auth |
+| Week 4 | Jun 29 – Jul 5, 2026 | Buffer and auth cleanup | Auth tests, cleanup, documentation updates | Dedicated buffer week |
+| Week 5 | Jul 6 – Jul 12, 2026 | Frontend foundation | Next.js project, Tailwind, shadcn/ui setup | Keep UI simple first |
+| Week 6 | Jul 13 – Jul 19, 2026 | Frontend auth pages | Landing page, login, register, dashboard shell | Connect only basic API calls |
+| Week 7 | Jul 20 – Jul 26, 2026 | Integration buffer | Fix frontend-backend issues | Dedicated buffer week |
+| Week 8 | Jul 27 – Aug 2, 2026 | Document backend | Document model, serializer, endpoints | Backend first, UI later |
+| Week 9 | Aug 3 – Aug 9, 2026 | File upload and access | Upload, list, download, delete documents | Prioritize security checks |
+| Week 10 | Aug 10 – Aug 16, 2026 | Document vault buffer/UI | Document vault page and cleanup | Dedicated buffer week |
+| Week 11 | Aug 17 – Aug 23, 2026 | Renewal tracker backend | Renewal model and API endpoints | Keep it CRUD + status logic |
+| Week 12 | Aug 24 – Aug 30, 2026 | Renewal UI and dashboard backend | Renewal page and dashboard summary endpoint | Avoid overbuilding charts |
+| Week 13 | Aug 31 – Sep 6, 2026 | Dashboard buffer | Dashboard polish, empty states, summary cards | Dedicated buffer week |
+| Week 14 | Sep 7 – Sep 13, 2026 | Application pack backend | Pack model, pack-document relationship, endpoints | Backend first |
+| Week 15 | Sep 14 – Sep 20, 2026 | Application pack UI and ZIP export | Pack creation, document selector, ZIP export | Keep secure sharing out of v0.1 |
+| Week 16 | Sep 21 – Sep 27, 2026 | Buffer, tests, docs | Fix bugs, add tests, update documentation | Dedicated buffer week |
+| Week 17 | Sep 28 – Oct 4, 2026 | Reminders and notifications | Reminder model, notification model, basic in-app alerts | Email reminders can wait |
+| Week 18 | Oct 5 – Oct 11, 2026 | MVP polish and demo prep | Clean UI, screenshots, README updates, demo flow | Prepare portfolio presentation |
+| Week 19 | Oct 12 – Oct 18, 2026 | Optional deployment prep | Prepare deployment configs | Optional/stretch |
+| Week 20 | Oct 19 – Oct 25, 2026 | Optional AI research | Small AI extraction prototype | Optional/stretch |
+
+---
+
+## 10. Buffer Strategy
+
+DueNest is not planned as a full-time project, so buffer time is part of the roadmap by design.
+
+### Weekly Buffer
+
+Each week should leave room for:
+
+- unexpected school work
+- BaraLink responsibilities
+- debugging
+- documentation updates
+- unfinished tasks from the previous week
+
+### Dedicated Buffer Weeks
+
+The roadmap includes dedicated buffer weeks:
+
+| Buffer Week | Date Range | Purpose |
+| --- | --- | --- |
+| Week 4 | Jun 29 – Jul 5, 2026 | Authentication cleanup and tests |
+| Week 7 | Jul 20 – Jul 26, 2026 | Frontend-backend integration cleanup |
+| Week 10 | Aug 10 – Aug 16, 2026 | Document vault cleanup and UI |
+| Week 13 | Aug 31 – Sep 6, 2026 | Dashboard cleanup and polish |
+| Week 16 | Sep 21 – Sep 27, 2026 | Application pack tests, docs, and bug fixes |
+
+### Minimum Progress Rule
+
+If a week becomes too busy, the minimum acceptable progress is:
+
+- complete one small task
+- make one clean commit
+- update one checklist item
+- avoid breaking the project
+
+Small progress still counts.
+
+---
+
+## 11. Sprint Roadmap
+
+## Sprint 0 — Project Foundation
+
+**Status:** Completed / In Progress  
+**Goal:** Prepare the project foundation before implementation.
+
+### Tasks
+
+- [x] Create GitHub repository
+- [x] Clone repository with SSH
+- [x] Create monorepo structure
+- [x] Add README
+- [x] Add brand assets
+- [x] Add product blueprint
+- [x] Add architecture document
+- [x] Add database design
+- [x] Add API specification
+- [x] Add security plan
+- [ ] Add roadmap document
+
+### Deliverable
+
+A clean, professional project foundation ready for backend implementation.
+
+---
+
+## Sprint 1 — Backend Foundation
+
+**Status:** Not Started  
+**Target Date:** Jun 8 – Jun 21, 2026  
+**Goal:** Set up the Django REST Framework backend.
+
+### Tasks
+
+- [ ] Create Django project inside `backend/`
+- [ ] Configure virtual environment
+- [ ] Install Django and Django REST Framework
+- [ ] Configure project settings
+- [ ] Set up environment variables
+- [ ] Configure PostgreSQL connection
+- [ ] Create modular app structure
+- [ ] Add custom user model
+- [ ] Configure Django admin
+- [ ] Add initial backend README
+- [ ] Add basic health check endpoint
+
+### Deliverable
+
+A working Django backend that runs locally and is ready for authentication implementation.
+
+### Definition of Done
+
+- Backend runs locally.
+- Django admin works.
+- Database connection works.
+- Environment variables are used.
+- No secrets are committed.
+- Basic project structure follows the architecture document.
+
+---
+
+## Sprint 2 — Authentication
+
+**Status:** Not Started  
+**Target Date:** Jun 22 – Jul 5, 2026  
+**Goal:** Implement secure user registration and login.
+
+### Tasks
+
+- [ ] Create custom user model
+- [ ] Create user serializer
+- [ ] Create registration endpoint
+- [ ] Configure JWT authentication
+- [ ] Create login endpoint
+- [ ] Create token refresh endpoint
+- [ ] Create current user endpoint
+- [ ] Add password validation
+- [ ] Add authentication tests
+- [ ] Update API documentation if needed
+
+### Deliverable
+
+Users can register, log in, refresh tokens, and access a protected profile endpoint.
+
+### Definition of Done
+
+- User can register.
+- User can log in.
+- Protected endpoint rejects unauthenticated requests.
+- Passwords are hashed.
+- Duplicate email registration is rejected.
+- Tests cover basic authentication flows.
+
+---
+
+## Sprint 3 — Frontend Foundation
+
+**Status:** Not Started  
+**Target Date:** Jul 6 – Jul 26, 2026  
+**Goal:** Set up the Next.js frontend.
+
+### Tasks
+
+- [ ] Create Next.js app inside `frontend/`
+- [ ] Configure TypeScript
+- [ ] Configure Tailwind CSS
+- [ ] Install shadcn/ui
+- [ ] Add global layout
+- [ ] Add landing page
+- [ ] Add login page
+- [ ] Add register page
+- [ ] Add dashboard shell
+- [ ] Add API client
+- [ ] Add environment variable setup
+
+### Deliverable
+
+A working frontend with landing page, auth pages, and dashboard shell.
+
+### Definition of Done
+
+- Frontend runs locally.
+- Landing page displays correctly.
+- Login and register pages exist.
+- Dashboard layout exists.
+- Frontend can call backend health check or auth endpoint.
+
+---
+
+## Sprint 4 — Document Vault
+
+**Status:** Not Started  
+**Target Date:** Jul 27 – Aug 16, 2026  
+**Goal:** Build the core document management module.
+
+### Tasks
+
+- [ ] Create Document model
+- [ ] Create document serializer
+- [ ] Create document endpoints
+- [ ] Add file upload support
+- [ ] Add file validation
+- [ ] Add document listing
+- [ ] Add document detail endpoint
+- [ ] Add document update endpoint
+- [ ] Add document delete endpoint
+- [ ] Add document download endpoint
+- [ ] Add expiry status logic
+- [ ] Add ownership tests
+- [ ] Build document vault frontend page
+
+### Deliverable
+
+Users can upload, view, edit, delete, and download their own documents.
+
+### Definition of Done
+
+- User can upload a document.
+- User can see only their documents.
+- User cannot access another user’s document.
+- File upload validates type and size.
+- Expiry status is calculated.
+- Frontend document vault displays uploaded files.
+
+---
+
+## Sprint 5 — Renewal Tracker
+
+**Status:** Not Started  
+**Target Date:** Aug 17 – Aug 30, 2026  
+**Goal:** Build subscription and renewal tracking.
+
+### Tasks
+
+- [ ] Create Renewal model
+- [ ] Create renewal serializer
+- [ ] Create renewal endpoints
+- [ ] Add renewal date logic
+- [ ] Add status calculation
+- [ ] Add cost fields
+- [ ] Add category and provider fields
+- [ ] Add renewal list page
+- [ ] Add create renewal form
+- [ ] Add update and delete actions
+- [ ] Add ownership tests
+
+### Deliverable
+
+Users can track subscriptions, renewals, costs, providers, and renewal dates.
+
+### Definition of Done
+
+- User can create a renewal.
+- User can list renewals.
+- User can update renewals.
+- User can delete renewals.
+- User can see only their own renewals.
+- Renewal status is calculated correctly.
+
+---
+
+## Sprint 6 — Dashboard
+
+**Status:** Not Started  
+**Target Date:** Aug 24 – Sep 6, 2026  
+**Goal:** Build the central overview dashboard.
+
+### Tasks
+
+- [ ] Create dashboard summary endpoint
+- [ ] Add document count summary
+- [ ] Add expiring documents summary
+- [ ] Add expired documents summary
+- [ ] Add renewal summary
+- [ ] Add upcoming deadlines endpoint
+- [ ] Add dashboard cards
+- [ ] Add simple charts
+- [ ] Add timeline or upcoming actions section
+- [ ] Add empty states
+
+### Deliverable
+
+Users can see upcoming deadlines, expiring documents, renewals, and action summaries in one place.
+
+### Definition of Done
+
+- Dashboard loads user-specific data.
+- Upcoming documents are shown.
+- Upcoming renewals are shown.
+- Summary cards work.
+- Empty states are clear.
+- Queries are scoped to the authenticated user.
+
+---
+
+## Sprint 7 — Application Packs
+
+**Status:** Not Started  
+**Target Date:** Sep 7 – Sep 27, 2026  
+**Goal:** Allow users to create reusable document packs.
+
+### Tasks
+
+- [ ] Create ApplicationPack model
+- [ ] Create ApplicationPackDocument model
+- [ ] Create pack endpoints
+- [ ] Add document-to-pack endpoint
+- [ ] Add remove-document-from-pack endpoint
+- [ ] Add pack detail endpoint
+- [ ] Add ZIP export endpoint
+- [ ] Build application packs frontend page
+- [ ] Add pack creation form
+- [ ] Add document selector
+- [ ] Add ownership validation
+
+### Deliverable
+
+Users can create application packs and add selected documents to them.
+
+### Definition of Done
+
+- User can create a pack.
+- User can add documents to a pack.
+- User can remove documents from a pack.
+- User can export pack documents.
+- User cannot add another user’s document to a pack.
+
+---
+
+## Sprint 8 — Reminders and Notifications
+
+**Status:** Not Started  
+**Target Date:** Sep 28 – Oct 4, 2026  
+**Goal:** Add reminder and notification foundation.
+
+### Tasks
+
+- [ ] Create Reminder model
+- [ ] Create Notification model
+- [ ] Create reminder endpoints
+- [ ] Create notification endpoints
+- [ ] Add reminder creation logic
+- [ ] Add in-app notification logic
+- [ ] Configure Celery
+- [ ] Configure Redis
+- [ ] Add scheduled reminder task
+- [ ] Add notification UI
+- [ ] Add security tests
+
+### Deliverable
+
+Users can create reminders and receive in-app notifications for important dates.
+
+### Definition of Done
+
+- Reminder records can be created.
+- Upcoming reminders can be listed.
+- Notifications can be created.
+- Users only see their notifications.
+- Celery worker can process reminder tasks locally.
+
+---
+
+## Sprint 9 — MVP Polish
+
+**Status:** Not Started  
+**Target Date:** Oct 5 – Oct 11, 2026  
+**Goal:** Prepare a presentable MVP demo.
+
+### Tasks
+
+- [ ] Polish landing page
+- [ ] Polish dashboard UI
+- [ ] Add empty states
+- [ ] Add sample demo data
+- [ ] Update README
+- [ ] Add screenshots
+- [ ] Write demo flow
+- [ ] Fix known bugs
+- [ ] Review security checklist
+- [ ] Prepare portfolio case study outline
+
+### Deliverable
+
+A presentable DueNest v0.1 MVP ready for recruiter/demo use.
+
+### Definition of Done
+
+- MVP can be demonstrated end-to-end.
+- UI is clean and responsive.
+- Core workflows work locally.
+- README reflects actual progress.
+- Security warnings and demo data are clear.
+
+---
+
+## Sprint 10 — Optional Deployment Preparation
+
+**Status:** Optional / Stretch  
+**Target Date:** Oct 12 – Oct 18, 2026  
+**Goal:** Prepare deployment configuration.
+
+### Tasks
+
+- [ ] Review backend deployment options
+- [ ] Review frontend deployment options
+- [ ] Prepare production environment variables
+- [ ] Prepare database hosting plan
+- [ ] Prepare Redis hosting plan
+- [ ] Prepare file storage strategy
+- [ ] Add deployment notes
+
+### Deliverable
+
+DueNest is ready for deployment planning.
+
+---
+
+## Sprint 11 — Optional AI Research Prototype
+
+**Status:** Optional / Stretch  
+**Target Date:** Oct 19 – Oct 25, 2026  
+**Goal:** Explore AI extraction after MVP stability.
+
+### Tasks
+
+- [ ] Test PDF text extraction
+- [ ] Test OCR options
+- [ ] Test structured metadata extraction
+- [ ] Define extraction confidence logic
+- [ ] Define user confirmation workflow
+- [ ] Update AI extraction plan
+
+### Deliverable
+
+A small research prototype or documented plan for v0.2 AI extraction.
+
+---
+
+## 12. What Not to Build Too Early
+
+The following should not be built in the first MVP:
+
+- Gmail scanning
+- bank transaction import
+- native mobile app
+- browser extension
+- team workspaces
+- billing system
+- real-time collaboration
+- enterprise admin panel
+- complex analytics
+- custom AI model training
+- Kubernetes
+- microservices
+- advanced sharing links
+- end-to-end encryption
+
+These are future improvements, not first-version requirements.
+
+---
+
+## 13. MVP Completion Criteria
+
+DueNest v0.1 is considered complete when:
+
+- users can register and log in
+- users can access a protected dashboard
+- users can upload documents
+- users can manage document metadata
+- users can track document expiry dates
+- users can create renewal records
+- users can see upcoming renewals
+- users can see dashboard summaries
+- users can create application packs
+- users can add documents to packs
+- users can export selected documents
+- basic reminders or notifications exist
+- security checks prevent cross-user access
+- backend and frontend run locally
+- project has useful documentation
+- app has a clean responsive UI
+
+---
+
+## 14. Technical Definition of Done
+
+A feature is considered done when:
+
+- backend model/API is implemented
+- frontend UI is implemented if needed
+- validation is handled
+- ownership/security checks are included
+- errors are handled cleanly
+- basic tests are added for critical logic
+- documentation is updated if needed
+- code is committed through a focused branch
+- feature can be demonstrated locally
+
+---
+
+## 15. Pull Request Standards
+
+Each PR should be focused and easy to review.
+
+### Good PR Examples
+
+```txt
+docs: add DueNest roadmap
+backend: set up Django project
+backend: add custom user model
+feat: add document upload API
+feat: build document vault page
+test: add document ownership tests
+```
+
+### PR Description Template
+
+```md
+## Summary
+
+Briefly describe what this PR adds or changes.
+
+## Added
+
+- Item 1
+- Item 2
+- Item 3
+
+## Notes
+
+Mention important implementation decisions, trade-offs, or follow-up tasks.
+```
+
+---
+
+## 16. Release Milestones
+
+```mermaid
+flowchart LR
+    M1["Milestone 1<br/>Documentation Complete"] --> M2["Milestone 2<br/>Backend Foundation"]
+    M2 --> M3["Milestone 3<br/>Core Product Backend"]
+    M3 --> M4["Milestone 4<br/>Core Frontend"]
+    M4 --> M5["Milestone 5<br/>MVP Demo Ready"]
+
+    M1:::done
+    M2:::next
+    M3:::planned
+    M4:::planned
+    M5:::future
+
+    classDef done fill:#d1fae5,stroke:#059669,color:#064e3b
+    classDef next fill:#fef3c7,stroke:#d97706,color:#78350f
+    classDef planned fill:#e0f2fe,stroke:#0284c7,color:#0c4a6e
+    classDef future fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
+```
+
+### Milestone 1 — Documentation Complete
+
+Includes:
+
+- README
+- brand assets
+- product blueprint
+- architecture document
+- database design
+- API specification
+- security plan
+- roadmap
+
+### Milestone 2 — Backend Foundation Complete
+
+Includes:
+
+- Django setup
+- custom user model
+- PostgreSQL connection
+- DRF setup
+- JWT authentication
+- health check endpoint
+
+### Milestone 3 — Core Product Backend Complete
+
+Includes:
+
+- document APIs
+- renewal APIs
+- reminder APIs
+- notification APIs
+- application pack APIs
+- dashboard APIs
+
+### Milestone 4 — Core Frontend Complete
+
+Includes:
+
+- landing page
+- authentication pages
+- dashboard
+- document vault
+- renewal tracker
+- application packs
+
+### Milestone 5 — MVP Demo Ready
+
+Includes:
+
+- deployed frontend
+- deployed backend
+- demo account
+- sample documents
+- screenshots
+- demo video
+- polished README
+
+---
+
+## 17. Learning Priorities
+
+The most important learning areas for implementation are:
+
+### Django and DRF
+
+- custom user model
+- serializers
+- viewsets
+- permissions
+- authentication
+- file uploads
+- testing
+
+### PostgreSQL
+
+- relationships
+- indexes
+- constraints
+- date queries
+- aggregation queries
+
+### Next.js
+
+- app router
+- layouts
+- forms
+- protected routes
+- API client
+- dashboard UI
+
+### Security
+
+- ownership checks
+- file validation
+- environment variables
+- safe error handling
+- private storage
+
+### Background Jobs
+
+- Celery setup
+- Redis broker
+- scheduled tasks
+- notification processing
+
+### AI Later
+
+- PDF extraction
+- OCR
+- structured extraction
+- confidence scoring
+- user confirmation workflow
+
+---
+
+## 18. Timeline Management Rules
+
+The dated roadmap is a planning tool, not a pressure system.
+
+### If a Task Takes Longer Than Expected
+
+Move unfinished work to the closest buffer week.
+
+### If a Week Is Very Busy
+
+Complete only one small task and make one clean commit.
+
+### If a Sprint Becomes Too Large
+
+Split it into smaller branches and PRs.
+
+### If Implementation Reveals a Better Approach
+
+Update the relevant documentation before changing the architecture or data model.
+
+### If the Project Starts Feeling Too Big
+
+Return to the v0.1 scope and remove non-essential features.
+
+---
+
+## 19. Summary
+
+DueNest should be built slowly but professionally.
+
+The immediate priority is not to build every advanced feature. The immediate priority is to create a stable, secure, and useful MVP that demonstrates strong engineering judgment.
+
+The roadmap is intentionally staged so the project can grow from:
+
+```txt
+well-documented idea
+→ working MVP
+→ AI-powered product
+→ SaaS-ready platform
+```
+
+The most important rule is:
+
+> Build the useful core first. Add intelligence and scale later.
