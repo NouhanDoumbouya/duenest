@@ -1,0 +1,39 @@
+{
+  "brand": "DueNest",
+  "tagline": "Documents, deadlines, and renewals in one secure AI workspace.",
+  "colors": {
+    "Midnight Navy": "#0B1220",
+    "Nest Teal": "#14B8A6",
+    "Trust Blue": "#2563EB",
+    "Due Amber": "#F59E0B",
+    "Soft Mint": "#CCFBF1",
+    "Cloud White": "#F8FAFC",
+    "Slate": "#475569",
+    "Line Gray": "#E2E8F0",
+    "Success Green": "#22C55E",
+    "Risk Red": "#EF4444"
+  },
+  "typography": {
+    "display": "Sora or Space Grotesk",
+    "body": "Inter",
+    "fallback": "system-ui, sans-serif",
+    "note": "Font files are not included. Use Google Fonts or your framework font loader."
+  },
+  "borderRadius": {
+    "sm": "8px",
+    "md": "12px",
+    "lg": "20px",
+    "xl": "28px",
+    "full": "999px"
+  },
+  "shadow": {
+    "card": "0 16px 40px rgba(15, 23, 42, 0.08)",
+    "floating": "0 24px 70px rgba(15, 23, 42, 0.16)"
+  },
+  "productPillars": [
+    "Secure document vault",
+    "Deadline and renewal intelligence",
+    "Application document packs",
+    "AI extraction and smart reminders"
+  ]
+}

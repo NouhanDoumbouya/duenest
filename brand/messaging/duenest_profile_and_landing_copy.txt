@@ -1,0 +1,17 @@
+DueNest
+AI-powered life-admin platform for essential documents, deadlines, subscriptions, renewals, and application packs.
+
+Short bio:
+DueNest helps people store important documents, track expiry dates and renewals, and prepare application packs in one secure workspace.
+
+Landing hero headline:
+Never miss an important document, deadline, or renewal again.
+
+Landing hero subheadline:
+DueNest keeps passports, visas, certificates, subscriptions, contracts, and application documents organized in one secure AI-powered workspace.
+
+Call to action examples:
+- Start organizing
+- Build your document vault
+- Track your first deadline
+- Create an application pack
