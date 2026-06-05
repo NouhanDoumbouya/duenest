@@ -1,0 +1,18 @@
+:root {
+  --dn-midnight: #0B1220;
+  --dn-teal: #14B8A6;
+  --dn-blue: #2563EB;
+  --dn-amber: #F59E0B;
+  --dn-mint: #CCFBF1;
+  --dn-cloud: #F8FAFC;
+  --dn-slate: #475569;
+  --dn-line: #E2E8F0;
+  --dn-success: #22C55E;
+  --dn-risk: #EF4444;
+  --dn-radius-card: 20px;
+  --dn-shadow-card: 0 16px 40px rgba(15, 23, 42, 0.08);
+}
+
+.dn-gradient { background: linear-gradient(135deg, var(--dn-midnight), #07111F); }
+.dn-card { border: 1px solid var(--dn-line); border-radius: var(--dn-radius-card); box-shadow: var(--dn-shadow-card); }
+.dn-primary-button { background: var(--dn-teal); color: white; border-radius: 999px; }
