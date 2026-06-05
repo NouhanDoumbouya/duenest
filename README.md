@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./brand/logo/duenest-logo.png" alt="DueNest Logo" width="396" />
+  <img src="./brand/logo/duenest-logo.png" alt="DueNest Logo" width="120" />
 </p>
 
 <h1 align="center">DueNest</h1>
@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/status-planning-blue" alt="Project Status" />
+  <img src="https://img.shields.io/badge/status-implementation%20ready-brightgreen" alt="Project Status" />
   <img src="https://img.shields.io/badge/frontend-Next.js-black" alt="Frontend" />
   <img src="https://img.shields.io/badge/backend-Django%20REST%20Framework-092E20" alt="Backend" />
   <img src="https://img.shields.io/badge/database-PostgreSQL-336791" alt="Database" />
@@ -97,6 +97,9 @@ The long-term vision is to turn DueNest into an **AI-powered life admin operatin
   - [Goal](#goal-8)
   - [Tasks](#tasks-8)
   - [Deliverable](#deliverable-8)
+  - [Goal](#goal-9)
+  - [Tasks](#tasks-9)
+  - [Deliverable](#deliverable-9)
 - [Documentation](#documentation)
 - [Security Principles](#security-principles)
 - [Local Development](#local-development)
@@ -352,8 +355,8 @@ duenest/
 │   ├── architecture.md
 │   ├── database-design.md
 │   ├── api-spec.md
-│   ├── roadmap.md
-│   └── security-plan.md
+│   ├── security-plan.md
+│   └── roadmap.md
 │
 ├── brand/
 │   ├── logo/
@@ -447,9 +450,10 @@ Uses AI to extract document type, expiry date, provider, amount, renewal date, a
 
 | Area | Status |
 | --- | --- |
-| Planning | 🟡 In Progress |
+| Planning | ✅ Completed |
 | Branding | ✅ Completed |
 | Repository Setup | ✅ Completed |
+| Product Documentation | ✅ Completed |
 | Backend | ⚪ Not Started |
 | Frontend | ⚪ Not Started |
 | MVP Development | ⚪ Not Started |
@@ -470,14 +474,18 @@ Uses AI to extract document type, expiry date, provider, amount, renewal date, a
 
 ## Current Focus
 
-The current focus is preparing the technical foundation for implementation.
+The project foundation and planning phase is complete.
 
-- Finalizing core project documentation
-- Organizing product and technical planning files
-- Preparing backend architecture
-- Preparing frontend architecture
-- Preparing the first Django REST Framework backend sprint
-- Keeping the repository clean, structured, and implementation-ready
+The next focus is starting the first real implementation sprint:
+
+- Set up the Django backend foundation
+- Configure Django REST Framework
+- Prepare environment variable management
+- Prepare PostgreSQL-ready settings
+- Add a basic health check endpoint
+- Add the initial backend README
+
+Real development is planned to begin from **Monday, June 8, 2026**, following the roadmap in `docs/roadmap.md`.
 
 ---
 
@@ -487,13 +495,14 @@ The current focus is preparing the technical foundation for implementation.
 
 - [x] Sprint 0 — Project Foundation
 - [ ] Sprint 1 — Backend Foundation
-- [ ] Sprint 2 — Frontend Foundation
-- [ ] Sprint 3 — Document Vault
-- [ ] Sprint 4 — Renewal Tracker
-- [ ] Sprint 5 — Dashboard
-- [ ] Sprint 6 — Application Packs
-- [ ] Sprint 7 — Reminders
-- [ ] Sprint 8 — AI Extraction
+- [ ] Sprint 2 — Authentication
+- [ ] Sprint 3 — Frontend Foundation
+- [ ] Sprint 4 — Document Vault
+- [ ] Sprint 5 — Renewal Tracker
+- [ ] Sprint 6 — Dashboard
+- [ ] Sprint 7 — Application Packs
+- [ ] Sprint 8 — Reminders and Notifications
+- [ ] Sprint 9 — MVP Polish
 
 ---
 
@@ -516,13 +525,13 @@ Prepare the repository, documentation, branding, roadmap, and initial product st
 - [x] Set up brand folder
 - [x] Set up GitHub workflow folders
 - [x] Add initial README
-- [x] Add initial project documentation placeholders
 - [x] Add brand assets to repository
-- [ ] Add full product blueprint in Markdown
-- [ ] Add architecture document
-- [ ] Add database ERD
-- [ ] Add API specification
-- [ ] Add security plan
+- [x] Add product blueprint
+- [x] Add architecture document
+- [x] Add database design
+- [x] Add API specification
+- [x] Add security plan
+- [x] Add implementation roadmap
 
 ### Deliverable
 
@@ -535,30 +544,53 @@ A clean, professional repository foundation ready for backend and frontend imple
 
 ### Goal
 
-Set up the Django backend foundation.
+Set up the Django REST Framework backend foundation.
 
 ### Tasks
 
-- [ ] Create Django project
-- [ ] Create modular backend app structure
-- [ ] Configure Django REST Framework
-- [ ] Configure environment variables
-- [ ] Configure PostgreSQL
-- [ ] Create custom user model
-- [ ] Add JWT authentication
-- [ ] Configure CORS
-- [ ] Configure development settings
-- [ ] Add backend README
-- [ ] Add initial backend tests
+- [ ] Create Django project inside `backend/`
+- [ ] Configure virtual environment
+- [ ] Install Django and Django REST Framework
+- [ ] Configure project settings
+- [ ] Set up environment variables
+- [ ] Configure PostgreSQL-ready settings
+- [ ] Create modular backend structure
+- [ ] Add basic health check endpoint
+- [ ] Add initial backend README
 
 ### Deliverable
 
-A working Django REST API foundation with authentication support.
+A working Django backend foundation ready for authentication implementation.
 
 </details>
 
 <details>
-<summary><strong>Sprint 2 — Frontend Foundation</strong> ⚪</summary>
+<summary><strong>Sprint 2 — Authentication</strong> ⚪</summary>
+
+### Goal
+
+Implement secure user registration, login, token refresh, and current user profile access.
+
+### Tasks
+
+- [ ] Create custom user model
+- [ ] Create user serializer
+- [ ] Create registration endpoint
+- [ ] Configure JWT authentication
+- [ ] Create login endpoint
+- [ ] Create token refresh endpoint
+- [ ] Create current user endpoint
+- [ ] Add password validation
+- [ ] Add authentication tests
+
+### Deliverable
+
+Users can register, log in, refresh tokens, and access protected account information.
+
+</details>
+
+<details>
+<summary><strong>Sprint 3 — Frontend Foundation</strong> ⚪</summary>
 
 ### Goal
 
@@ -566,7 +598,7 @@ Set up the Next.js frontend foundation.
 
 ### Tasks
 
-- [ ] Create Next.js application
+- [ ] Create Next.js application inside `frontend/`
 - [ ] Configure TypeScript
 - [ ] Configure Tailwind CSS
 - [ ] Install and configure shadcn/ui
@@ -574,10 +606,8 @@ Set up the Next.js frontend foundation.
 - [ ] Build landing page
 - [ ] Build login page
 - [ ] Build register page
-- [ ] Create dashboard layout
-- [ ] Create protected route structure
+- [ ] Create dashboard shell
 - [ ] Set up API client
-- [ ] Connect frontend to backend API
 
 ### Deliverable
 
@@ -586,7 +616,7 @@ A working frontend foundation with landing page, authentication screens, and das
 </details>
 
 <details>
-<summary><strong>Sprint 3 — Document Vault</strong> ⚪</summary>
+<summary><strong>Sprint 4 — Document Vault</strong> ⚪</summary>
 
 ### Goal
 
@@ -598,10 +628,12 @@ Build the first core product module for managing essential documents.
 - [ ] Create document serializer
 - [ ] Create document API endpoints
 - [ ] Add file upload support
+- [ ] Add file validation
 - [ ] Add document listing
 - [ ] Add document detail view
 - [ ] Add document metadata editing
 - [ ] Add document deletion
+- [ ] Add document download
 - [ ] Add categories and document types
 - [ ] Add expiry date field
 - [ ] Add expiry status calculation
@@ -614,7 +646,7 @@ Users can upload, view, organize, edit, and manage important documents.
 </details>
 
 <details>
-<summary><strong>Sprint 4 — Renewal Tracker</strong> ⚪</summary>
+<summary><strong>Sprint 5 — Renewal Tracker</strong> ⚪</summary>
 
 ### Goal
 
@@ -641,7 +673,7 @@ Users can manage subscriptions, renewals, and recurring obligations.
 </details>
 
 <details>
-<summary><strong>Sprint 5 — Dashboard</strong> ⚪</summary>
+<summary><strong>Sprint 6 — Dashboard</strong> ⚪</summary>
 
 ### Goal
 
@@ -667,7 +699,7 @@ Users can quickly understand what requires attention and what deadlines are appr
 </details>
 
 <details>
-<summary><strong>Sprint 6 — Application Packs</strong> ⚪</summary>
+<summary><strong>Sprint 7 — Application Packs</strong> ⚪</summary>
 
 ### Goal
 
@@ -692,7 +724,7 @@ Users can generate reusable document packs for real-world applications.
 </details>
 
 <details>
-<summary><strong>Sprint 7 — Reminders</strong> ⚪</summary>
+<summary><strong>Sprint 8 — Reminders and Notifications</strong> ⚪</summary>
 
 ### Goal
 
@@ -718,29 +750,28 @@ Users can receive reminders before important deadlines and renewal dates.
 </details>
 
 <details>
-<summary><strong>Sprint 8 — AI Extraction</strong> 🔵</summary>
+<summary><strong>Sprint 9 — MVP Polish</strong> ⚪</summary>
 
 ### Goal
 
-Add intelligent document processing and metadata extraction.
+Prepare a presentable DueNest v0.1 MVP for portfolio, recruiter, and demo use.
 
 ### Tasks
 
-- [ ] Add PDF text extraction
-- [ ] Add OCR foundation
-- [ ] Add document classification
-- [ ] Extract expiry dates
-- [ ] Extract renewal dates
-- [ ] Extract provider names
-- [ ] Extract document type
-- [ ] Add confidence score
-- [ ] Add user confirmation workflow
-- [ ] Save extraction results
-- [ ] Allow user corrections
+- [ ] Polish landing page
+- [ ] Polish dashboard UI
+- [ ] Add empty states
+- [ ] Add sample demo data
+- [ ] Update README with actual progress
+- [ ] Add screenshots
+- [ ] Write demo flow
+- [ ] Fix known bugs
+- [ ] Review security checklist
+- [ ] Prepare portfolio case study outline
 
 ### Deliverable
 
-DueNest can intelligently extract useful metadata from uploaded documents.
+A presentable MVP that demonstrates product thinking, full-stack engineering, security awareness, and SaaS execution.
 
 </details>
 
@@ -748,16 +779,16 @@ DueNest can intelligently extract useful metadata from uploaded documents.
 
 ## Documentation
 
-Detailed project documentation will be maintained in the `docs/` folder.
+Detailed project documentation is maintained in the `docs/` folder.
 
-| Document | Purpose |
-| --- | --- |
-| `product-blueprint.md` | Product vision, target users, features, MVP scope, and product strategy |
-| `architecture.md` | System architecture, technical decisions, and platform structure |
-| `database-design.md` | Database models, relationships, indexes, and ERD planning |
-| `api-spec.md` | API endpoints, request/response formats, and backend contracts |
-| `roadmap.md` | Sprint plan, feature prioritization, and release roadmap |
-| `security-plan.md` | Security principles, risks, privacy controls, and protection strategy |
+| Document | Purpose | Status |
+| --- | --- | --- |
+| `product-blueprint.md` | Product vision, target users, features, MVP scope, and product strategy | ✅ Completed |
+| `architecture.md` | System architecture, technical decisions, and platform structure | ✅ Completed |
+| `database-design.md` | Database models, relationships, indexes, and ERD planning | ✅ Completed |
+| `api-spec.md` | API endpoints, request/response formats, and backend contracts | ✅ Completed |
+| `security-plan.md` | Security principles, risks, privacy controls, and protection strategy | ✅ Completed |
+| `roadmap.md` | Sprint plan, feature prioritization, and release roadmap | ✅ Completed |
 
 ---
 
@@ -800,7 +831,7 @@ git clone git@github.com:nouhandoumbouya655/duenest.git
 cd duenest
 ```
 
-Backend, frontend, database, and Docker setup instructions will be documented in future implementation sprints.
+Backend, frontend, database, and Docker setup instructions will be documented during the implementation sprints.
 
 ---
 
@@ -814,9 +845,15 @@ Example branches:
 setup/project-foundation
 docs/initial-readme
 brand/add-initial-assets
+docs/product-blueprint
+docs/architecture
+docs/database-design
+docs/api-spec
+docs/security-plan
+docs/roadmap
 backend/django-setup
+backend/authentication
 frontend/nextjs-setup
-feature/authentication
 feature/document-vault
 feature/renewal-tracker
 feature/dashboard
@@ -831,11 +868,13 @@ Commit message examples:
 chore: initialize project structure
 docs: add product roadmap
 brand: add initial brand assets
+backend: set up Django project foundation
+backend: add custom user model
 feat: add user registration API
 feat: build document upload endpoint
 fix: correct expiry status calculation
 refactor: reorganize document services
-test: add renewal model tests
+test: add document ownership tests
 ```
 
 ---
@@ -877,4 +916,4 @@ DueNest is built as a flagship full-stack SaaS project focused on real-world pro
 
 ## Note
 
-DueNest is currently under active planning and early development. The repository will evolve as the product moves from foundation setup to working MVP.
+DueNest has completed its initial foundation and planning phase. The next phase is backend implementation, starting with the Django REST Framework project setup.
