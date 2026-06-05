@@ -55,6 +55,7 @@ The long-term vision is to turn DueNest into an **AI-powered life admin operatin
 - [Platform Strategy](#platform-strategy)
 - [Planned Architecture](#planned-architecture)
 - [Repository Structure](#repository-structure)
+- [Brand Assets](#brand-assets)
 - [Product Modules](#product-modules)
   - [Authentication](#authentication)
   - [Document Vault](#document-vault)
@@ -355,7 +356,13 @@ duenest/
 │   └── security-plan.md
 │
 ├── brand/
-│   └── DueNest brand assets and guidelines
+│   ├── logo/
+│   ├── icons/
+│   ├── colors/
+│   ├── social/
+│   ├── guidelines/
+│   ├── messaging/
+│   └── README.md
 │
 ├── .github/
 │   ├── workflows/
@@ -364,6 +371,39 @@ duenest/
 ├── README.md
 └── docker-compose.yml
 ```
+
+---
+
+## Brand Assets
+
+DueNest brand assets are stored in the `brand/` folder.
+
+This includes:
+
+- Logo variations
+- App icons and favicons
+- Color palette
+- UI design tokens
+- Social and pitch assets
+- Brand guidelines
+- Messaging references
+
+The main logo used in this README is located at:
+
+```txt
+brand/logo/duenest-logo.png
+```
+
+Brand asset folders:
+
+| Folder | Purpose |
+| --- | --- |
+| `brand/logo/` | Main logo, logo variations, SVG and PNG assets |
+| `brand/icons/` | Favicons, app icons, and PWA icon assets |
+| `brand/colors/` | Color palette, CSS variables, and UI tokens |
+| `brand/social/` | Social banners, Open Graph images, and pitch visuals |
+| `brand/guidelines/` | Brand guideline documents |
+| `brand/messaging/` | Messaging system, landing copy, and profile copy |
 
 ---
 
@@ -409,7 +449,7 @@ Uses AI to extract document type, expiry date, provider, amount, renewal date, a
 | --- | --- |
 | Planning | 🟡 In Progress |
 | Branding | ✅ Completed |
-| Repository Setup | 🟡 In Progress |
+| Repository Setup | ✅ Completed |
 | Backend | ⚪ Not Started |
 | Frontend | ⚪ Not Started |
 | MVP Development | ⚪ Not Started |
@@ -430,14 +470,14 @@ Uses AI to extract document type, expiry date, provider, amount, renewal date, a
 
 ## Current Focus
 
-The current focus is setting up a clean project foundation before implementation.
+The current focus is preparing the technical foundation for implementation.
 
-- Finalizing the repository structure
-- Adding core documentation
-- Preparing the backend architecture
-- Preparing the frontend architecture
-- Organizing the brand assets
+- Finalizing core project documentation
+- Organizing product and technical planning files
+- Preparing backend architecture
+- Preparing frontend architecture
 - Preparing the first Django REST Framework backend sprint
+- Keeping the repository clean, structured, and implementation-ready
 
 ---
 
@@ -477,12 +517,12 @@ Prepare the repository, documentation, branding, roadmap, and initial product st
 - [x] Set up GitHub workflow folders
 - [x] Add initial README
 - [x] Add initial project documentation placeholders
+- [x] Add brand assets to repository
 - [ ] Add full product blueprint in Markdown
 - [ ] Add architecture document
 - [ ] Add database ERD
 - [ ] Add API specification
 - [ ] Add security plan
-- [ ] Add brand assets to repository
 
 ### Deliverable
 
@@ -773,6 +813,7 @@ Example branches:
 ```txt
 setup/project-foundation
 docs/initial-readme
+brand/add-initial-assets
 backend/django-setup
 frontend/nextjs-setup
 feature/authentication
@@ -789,6 +830,7 @@ Commit message examples:
 ```txt
 chore: initialize project structure
 docs: add product roadmap
+brand: add initial brand assets
 feat: add user registration API
 feat: build document upload endpoint
 fix: correct expiry status calculation
