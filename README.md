@@ -456,7 +456,7 @@ Uses AI to extract document type, expiry date, provider, amount, renewal date, a
 | Product Documentation | ✅ Completed |
 | Backend | ⚪ Not Started |
 | Frontend | ⚪ Not Started |
-| MVP Development | ⚪ Not Started |
+| MVP Development | 🔵 Planned |
 | AI Features | 🔵 Planned |
 | Deployment | 🔵 Planned |
 
