@@ -6,7 +6,8 @@ from decouple import config
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-SECRET_KEY = config("DJANGO_SECRET_KEY", default="unsafe-dev-secret-key-change-me")
+SECRET_KEY = config("DJANGO_SECRET_KEY", 
+                    default="unsafe-dev-secret-key-change-me-for-local-development-only")
 
 DEBUG = config("DJANGO_DEBUG", default=False, cast=bool)
 
