@@ -417,7 +417,7 @@ Uses AI to extract document type, expiry date, provider, amount, renewal date, a
 | Repository Setup       | ✅ Completed   |
 | Product Documentation  | ✅ Completed   |
 | Backend Foundation     | ✅ Completed   |
-| Backend Authentication | ⚪ Not Started |
+| Backend Authentication | ✅ Completed |
 | Frontend               | ⚪ Not Started |
 | MVP Development        | 🔵 Planned    |
 | AI Features            | 🔵 Planned    |
@@ -492,7 +492,7 @@ backend/authentication
 
 * [x] Sprint 0 — Project Foundation
 * [x] Sprint 1 — Backend Foundation
-* [ ] Sprint 2 — Authentication
+* [x] Sprint 2 — Authentication
 * [ ] Sprint 3 — Frontend Foundation
 * [ ] Sprint 4 — Document Vault
 * [ ] Sprint 5 — Renewal Tracker
@@ -571,14 +571,14 @@ Implement secure user registration, login, token refresh, and current user profi
 
 ### Tasks
 
-* [ ] Create user serializers
-* [ ] Create registration endpoint
-* [ ] Configure JWT login endpoint
-* [ ] Configure JWT refresh endpoint
-* [ ] Create protected current-user endpoint
-* [ ] Add password validation
-* [ ] Add authentication permissions
-* [ ] Add authentication tests
+* [x] Create user serializers
+* [x] Create registration endpoint
+* [x] Configure JWT login endpoint
+* [x] Configure JWT refresh endpoint
+* [x] Create protected current-user endpoint
+* [x] Add password validation
+* [x] Add authentication permissions
+* [x] Add authentication tests
 * [ ] Document authentication API usage
 
 ### Deliverable
