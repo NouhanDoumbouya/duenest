@@ -563,7 +563,7 @@ A working Django REST Framework backend foundation ready for authentication impl
 </details>
 
 <details>
-<summary><strong>Sprint 2 — Authentication</strong> ⚪</summary>
+<summary><strong>Sprint 2 — Authentication</strong> ✅</summary>
 
 ### Goal
 
