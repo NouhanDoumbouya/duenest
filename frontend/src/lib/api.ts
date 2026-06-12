@@ -23,7 +23,10 @@ export class ApiError extends Error {
 }
 
 interface ApiFetchOptions extends Omit<RequestInit, "body"> {
-  /** Plain object serialized to JSON, or undefined for GET/DELETE. */
+  /**
+   * Request body. A plain object is serialized to JSON; a `FormData` instance
+   * is sent as multipart (the browser sets the boundary). Omit for GET/DELETE.
+   */
   body?: unknown;
   /** Attach the stored access token as a Bearer header. Default: false. */
   auth?: boolean;
@@ -51,9 +54,14 @@ export async function apiFetch<T>(
   path: string,
   { body, auth = false, headers, ...init }: ApiFetchOptions = {},
 ): Promise<T> {
+  const isFormData =
+    typeof FormData !== "undefined" && body instanceof FormData;
+
   const requestHeaders = new Headers(headers);
   requestHeaders.set("Accept", "application/json");
-  if (body !== undefined) {
+  // For FormData we must NOT set Content-Type — the browser adds the multipart
+  // boundary itself. Only JSON bodies get an explicit content type.
+  if (body !== undefined && !isFormData) {
     requestHeaders.set("Content-Type", "application/json");
   }
   if (auth) {
@@ -66,7 +74,12 @@ export async function apiFetch<T>(
     response = await fetch(`${API_BASE_URL}${path}`, {
       ...init,
       headers: requestHeaders,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      body:
+        body === undefined
+          ? undefined
+          : isFormData
+            ? (body as FormData)
+            : JSON.stringify(body),
     });
   } catch {
     // Network-level failure (server down, CORS, offline).
