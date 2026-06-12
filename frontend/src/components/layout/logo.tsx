@@ -1,13 +1,14 @@
 import Link from "next/link";
+import Image from "next/image";
 
 import { cn } from "@/lib/utils";
 
 type LogoSize = "sm" | "md" | "lg";
 
-const markSize: Record<LogoSize, string> = {
-  sm: "size-7",
-  md: "size-8",
-  lg: "size-9",
+const markPx: Record<LogoSize, number> = {
+  sm: 28,
+  md: 32,
+  lg: 36,
 };
 
 const wordSize: Record<LogoSize, string> = {
@@ -16,37 +17,29 @@ const wordSize: Record<LogoSize, string> = {
   lg: "text-xl",
 };
 
-/** The DueNest mark: a calm "nest" glyph on a deep navy tile. */
+/**
+ * The DueNest brand mark (the real icon from brand/logo).
+ * Use `onDark` on dark surfaces to swap to the light-tile variant.
+ */
 export function LogoMark({
   size = "md",
+  onDark = false,
   className,
 }: {
   size?: LogoSize;
+  onDark?: boolean;
   className?: string;
 }) {
+  const px = markPx[size];
   return (
-    <span
-      aria-hidden
-      className={cn(
-        "relative flex items-center justify-center rounded-[0.6rem] bg-brand-navy shadow-sm ring-1 ring-white/10",
-        markSize[size],
-        className,
-      )}
-    >
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        className="size-1/2 text-brand-teal"
-        stroke="currentColor"
-        strokeWidth={2}
-        strokeLinecap="round"
-      >
-        {/* nested arcs = a nest sheltering what matters */}
-        <path d="M3 13a9 9 0 0 1 18 0" />
-        <path d="M7 13a5 5 0 0 1 10 0" className="text-white/80" />
-        <circle cx="12" cy="13" r="1.4" fill="currentColor" stroke="none" />
-      </svg>
-    </span>
+    <Image
+      src={onDark ? "/brand/duenest-icon-light.svg" : "/brand/duenest-icon.svg"}
+      alt="DueNest"
+      width={px}
+      height={px}
+      priority
+      className={cn("rounded-[0.6rem]", className)}
+    />
   );
 }
 
@@ -54,18 +47,21 @@ export function LogoMark({
 export function Logo({
   size = "md",
   href = "/",
+  onDark = false,
   className,
 }: {
   size?: LogoSize;
   href?: string | null;
+  onDark?: boolean;
   className?: string;
 }) {
   const content = (
     <span className={cn("flex items-center gap-2", className)}>
-      <LogoMark size={size} />
+      <LogoMark size={size} onDark={onDark} />
       <span
         className={cn(
-          "font-heading font-semibold tracking-tight text-foreground",
+          "font-heading font-semibold tracking-tight",
+          onDark ? "text-white" : "text-foreground",
           wordSize[size],
         )}
       >

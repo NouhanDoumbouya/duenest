@@ -37,7 +37,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
           className="pointer-events-none absolute inset-0 opacity-90 [background:radial-gradient(70%_55%_at_15%_0%,rgba(20,184,166,0.25),transparent_60%),radial-gradient(60%_50%_at_100%_100%,rgba(37,99,235,0.30),transparent_60%)]"
         />
         <div className="relative">
-          <Logo size="lg" className="[&_span]:text-white" />
+          <Logo size="lg" onDark />
         </div>
 
         <div className="relative space-y-8">
