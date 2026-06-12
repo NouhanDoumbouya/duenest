@@ -434,6 +434,53 @@ This endpoint may blacklist the refresh token if token blacklisting is enabled.
 
 ---
 
+## 12.5 Google Sign-In
+
+```http
+POST /api/v1/auth/google/
+```
+
+Exchanges a Google ID token (obtained by the frontend via Google Sign-In) for
+DueNest Simple JWT tokens. This sits alongside username/password login and does
+not replace it.
+
+The backend verifies the ID token against `GOOGLE_OAUTH_CLIENT_ID`, then either
+finds the matching user (by Google id, then by email) or creates a new one, and
+returns DueNest tokens.
+
+### Request
+
+```json
+{
+  "id_token": "GOOGLE_ID_TOKEN_HERE"
+}
+```
+
+### Response: `200 OK`
+
+```json
+{
+  "refresh": "refresh_token_here",
+  "access": "access_token_here",
+  "user": {
+    "id": 1,
+    "username": "example",
+    "email": "example@gmail.com",
+    "first_name": "Example",
+    "last_name": "User"
+  }
+}
+```
+
+### Behavior & Errors
+
+- A new local user is created on first Google sign-in (with an unusable password).
+- If a password account already uses the token's email, that account is linked to the Google id.
+- `400 Bad Request` if the token's email is not verified or the payload is incomplete.
+- `401 Unauthorized` if the ID token is missing, invalid, or issued for another application.
+
+---
+
 # 13. User API
 
 ## 13.1 Get Current User

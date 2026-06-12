@@ -27,3 +27,15 @@ class RegisterSerializer(serializers.ModelSerializer):
         user.set_password(password)
         user.save()
         return user
+
+
+class GoogleAuthSerializer(serializers.Serializer):
+    """
+    Validates the request body for the Google sign-in endpoint.
+
+    The frontend only sends the Google ID token; everything else is derived
+    from the verified token on the server, so this serializer is intentionally
+    just a single required field.
+    """
+
+    id_token = serializers.CharField(write_only=True, trim_whitespace=True)

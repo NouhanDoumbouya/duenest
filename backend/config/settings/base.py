@@ -11,6 +11,10 @@ SECRET_KEY = config("DJANGO_SECRET_KEY",
 
 DEBUG = config("DJANGO_DEBUG", default=False, cast=bool)
 
+# OAuth client id used to verify Google ID tokens at POST /api/v1/auth/google/.
+# Keep this out of source control; set it via the environment / .env file.
+GOOGLE_OAUTH_CLIENT_ID = config("GOOGLE_OAUTH_CLIENT_ID", default="")
+
 ALLOWED_HOSTS = config(
     "DJANGO_ALLOWED_HOSTS",
     default="localhost,127.0.0.1",
