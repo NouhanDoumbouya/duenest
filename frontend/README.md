@@ -40,33 +40,45 @@ The backend (Django REST API) is expected at the URL in
 ```txt
 src/
 ├── app/
-│   ├── (marketing)/page.tsx        # Landing page (/)
-│   ├── (auth)/login/page.tsx       # /login
-│   ├── (auth)/register/page.tsx    # /register
-│   ├── (dashboard)/dashboard/...   # /dashboard (auth-gated, preview state)
-│   ├── layout.tsx                  # Root layout + fonts + metadata
-│   └── globals.css                 # Tailwind + DueNest theme tokens
+│   ├── (marketing)/page.tsx                  # Landing page (/)
+│   ├── (auth)/login/page.tsx                 # /login
+│   ├── (auth)/register/page.tsx              # /register
+│   ├── (dashboard)/layout.tsx                # Auth gate + shell + user context
+│   ├── (dashboard)/dashboard/page.tsx        # /dashboard (real document summary)
+│   ├── (dashboard)/dashboard/documents/      # /dashboard/documents (list)
+│   │   ├── page.tsx                           #   list + delete
+│   │   ├── new/page.tsx                       #   /dashboard/documents/new
+│   │   └── [id]/edit/page.tsx                 #   /dashboard/documents/:id/edit
+│   ├── layout.tsx                            # Root layout + fonts + metadata
+│   └── globals.css                          # Tailwind + DueNest theme tokens
 ├── components/
-│   ├── layout/
-│   │   ├── logo.tsx                # Shared brand mark + wordmark
-│   │   ├── site-header.tsx         # Marketing top nav
-│   │   └── dashboard-shell.tsx     # Authenticated app chrome (sidebar)
-│   ├── marketing/
-│   │   ├── app-preview.tsx         # Decorative hero dashboard mock
-│   │   └── feature-card.tsx        # Reusable feature highlight
-│   ├── auth/
-│   │   ├── auth-shell.tsx          # Two-panel auth layout
-│   │   └── google-button.tsx       # Honest disabled Google CTA
-│   ├── dashboard/
-│   │   └── stat-card.tsx           # Reusable dashboard metric card
-│   └── ui/                         # shadcn/ui primitives
+│   ├── layout/                              # logo, site-header, dashboard-shell
+│   ├── marketing/                           # app-preview, feature-card
+│   ├── auth/                                # auth-shell, google-button
+│   ├── dashboard/                           # stat-card, user-context
+│   ├── documents/                           # document-card, document-form, status-badge
+│   └── ui/                                  # shadcn/ui primitives (+ textarea, confirm-dialog)
 ├── lib/
-│   ├── api.ts                      # fetch wrapper + ApiError
-│   ├── auth.ts                     # login/register/logout + token helpers
-│   └── utils.ts                    # cn()
+│   ├── api.ts                               # fetch wrapper + ApiError
+│   ├── auth.ts                              # login/register/logout + token helpers
+│   ├── documents.ts                         # documents API + date/status helpers
+│   └── utils.ts                             # cn()
 └── types/
-    └── auth.ts                     # User / token / payload types
+    ├── auth.ts                              # User / token / payload types
+    └── documents.ts                         # DocumentRecord / requests / category
 ```
+
+## Documents management
+
+- Routes live under `/dashboard/documents` (list, `new`, `[id]/edit`).
+- All document calls go through `src/lib/documents.ts`, which uses the shared
+  `apiFetch` with `auth: true` (so the access token + error handling stay in one
+  place). Endpoints: `GET/POST/PATCH/DELETE /api/v1/documents/`.
+- The `(dashboard)/layout.tsx` performs the client-side auth gate once and
+  exposes the user via `useDashboardUser()`; pages no longer re-check auth.
+- The dashboard summary cards are computed from real `GET /documents/` data.
+- Category selection is not yet available (the backend exposes no categories
+  list endpoint); `category_name` is shown read-only when present.
 
 ## Design system
 

@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   CalendarClock,
   CreditCard,
@@ -18,8 +18,8 @@ import { logout } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, active: true },
-  { label: "Documents", href: "#", icon: FileText, soon: true },
+  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Documents", href: "/dashboard/documents", icon: FileText },
   { label: "Renewals", href: "#", icon: RefreshCw, soon: true },
   { label: "Subscriptions", href: "#", icon: CreditCard, soon: true },
   { label: "Deadlines", href: "#", icon: CalendarClock, soon: true },
@@ -37,6 +37,8 @@ function initials(name: string) {
 }
 
 function NavLinks() {
+  const pathname = usePathname();
+
   return (
     <nav className="flex flex-1 flex-col gap-1 p-4">
       <p className="px-3 pb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
@@ -44,15 +46,19 @@ function NavLinks() {
       </p>
       {navItems.map((item) => {
         const Icon = item.icon;
+        const active =
+          item.href === "/dashboard"
+            ? pathname === item.href
+            : !item.soon && pathname.startsWith(item.href);
         return (
           <Link
             key={item.label}
             href={item.href}
-            aria-current={item.active ? "page" : undefined}
+            aria-current={active ? "page" : undefined}
             aria-disabled={item.soon || undefined}
             className={cn(
               "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-              item.active
+              active
                 ? "bg-accent text-accent-foreground"
                 : "text-muted-foreground hover:bg-muted hover:text-foreground",
             )}
