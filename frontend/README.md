@@ -43,12 +43,22 @@ src/
 │   ├── (marketing)/page.tsx        # Landing page (/)
 │   ├── (auth)/login/page.tsx       # /login
 │   ├── (auth)/register/page.tsx    # /register
-│   ├── (dashboard)/dashboard/...   # /dashboard (mock data)
+│   ├── (dashboard)/dashboard/...   # /dashboard (auth-gated, preview state)
 │   ├── layout.tsx                  # Root layout + fonts + metadata
 │   └── globals.css                 # Tailwind + DueNest theme tokens
 ├── components/
-│   ├── layout/site-header.tsx
-│   ├── layout/dashboard-shell.tsx
+│   ├── layout/
+│   │   ├── logo.tsx                # Shared brand mark + wordmark
+│   │   ├── site-header.tsx         # Marketing top nav
+│   │   └── dashboard-shell.tsx     # Authenticated app chrome (sidebar)
+│   ├── marketing/
+│   │   ├── app-preview.tsx         # Decorative hero dashboard mock
+│   │   └── feature-card.tsx        # Reusable feature highlight
+│   ├── auth/
+│   │   ├── auth-shell.tsx          # Two-panel auth layout
+│   │   └── google-button.tsx       # Honest disabled Google CTA
+│   ├── dashboard/
+│   │   └── stat-card.tsx           # Reusable dashboard metric card
 │   └── ui/                         # shadcn/ui primitives
 ├── lib/
 │   ├── api.ts                      # fetch wrapper + ApiError
@@ -57,6 +67,17 @@ src/
 └── types/
     └── auth.ts                     # User / token / payload types
 ```
+
+## Design system
+
+- **Fonts:** Inter (body) + Sora (display/headings), loaded via `next/font`.
+- **Brand tokens:** defined in `globals.css` from `brand/` — Trust Blue
+  (`--primary`), Nest Teal, Due Amber, Soft Mint (`--accent`), Midnight Navy
+  text, plus `brand-*` color utilities (e.g. `text-brand-teal`).
+- **Components:** shadcn/ui "base-nova" primitives (built on `@base-ui`). Use
+  `buttonVariants()` on `next/link` for link-styled buttons.
+- **Patterns:** reusable section/card components live under `components/marketing`,
+  `components/dashboard`, and `components/auth` to keep pages thin.
 
 ## Authentication (current state)
 
