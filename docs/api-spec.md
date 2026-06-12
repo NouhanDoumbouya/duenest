@@ -1606,6 +1606,97 @@ The API should:
 
 ---
 
+# 21.5 Document Vault API Plan
+
+Planned endpoint groups for the documents-first roadmap (see
+[`document-vault-roadmap.md`](document-vault-roadmap.md)). Status:
+**Implemented** · **Planned MVP** · **Future**. All require authentication and
+are scoped to the authenticated owner; cross-user access returns `404`.
+
+### Documents — Implemented
+```txt
+GET    /api/v1/documents/
+POST   /api/v1/documents/
+GET    /api/v1/documents/:id/
+PATCH  /api/v1/documents/:id/
+DELETE /api/v1/documents/:id/
+```
+
+### Document files — Implemented
+```txt
+GET    /api/v1/documents/:id/files/
+POST   /api/v1/documents/:id/files/
+GET    /api/v1/documents/:id/files/:file_id/
+DELETE /api/v1/documents/:id/files/:file_id/
+GET    /api/v1/documents/:id/files/:file_id/download/   # controlled, owner-only
+```
+
+### Preview / download — Planned MVP
+```txt
+GET    /api/v1/documents/:id/files/:file_id/preview/    # inline stream for PDF/image viewer
+```
+Preview must be authorized exactly like download (owner-only, no public path).
+
+### Search / filter / calendar — Planned MVP
+```txt
+GET    /api/v1/documents/search/        # ?q=&status=&category=&type=&ordering=
+GET    /api/v1/documents/attention-needed/   # expired / expiring-soon / renewal-due / missing-info
+GET    /api/v1/documents/calendar/      # ?from=&to= expiry/renewal events
+```
+
+### Reminder rules — Planned MVP
+```txt
+GET    /api/v1/documents/:id/reminder-rules/
+POST   /api/v1/documents/:id/reminder-rules/
+PATCH  /api/v1/documents/:id/reminder-rules/:rule_id/
+DELETE /api/v1/documents/:id/reminder-rules/:rule_id/
+```
+
+### Checklists — Planned MVP
+```txt
+GET    /api/v1/documents/:id/checklist/
+PATCH  /api/v1/documents/:id/checklist/:item_id/
+```
+
+### Share links — Future (Phase 3)
+```txt
+POST   /api/v1/documents/:id/files/:file_id/share-links/
+GET    /api/v1/documents/:id/files/:file_id/share-links/
+POST   /api/v1/share-links/:id/revoke/
+GET    /api/v1/share/:token/            # public, gated by token + expiry + revocation
+GET    /api/v1/share/:token/download/
+```
+
+### OCR extraction — Future (Phase 4)
+```txt
+POST   /api/v1/documents/:id/files/:file_id/ocr/        # start extraction (async)
+GET    /api/v1/documents/:id/files/:file_id/ocr/        # extraction result + confidence
+POST   /api/v1/documents/:id/apply-ocr-suggestions/     # review-gated; never auto-applies
+```
+
+### Bundles — Future (Phase 5)
+```txt
+GET    /api/v1/document-bundles/
+POST   /api/v1/document-bundles/
+GET    /api/v1/document-bundles/:id/
+PATCH  /api/v1/document-bundles/:id/
+DELETE /api/v1/document-bundles/:id/
+```
+
+### Activity / version history / exports — Future (Phase 5)
+```txt
+GET    /api/v1/documents/:id/activity/
+GET    /api/v1/documents/:id/files/:file_id/versions/
+GET    /api/v1/documents/export/?format=pdf|csv         # vault summary
+GET    /api/v1/documents/:id/files/export-zip/          # all files as ZIP
+```
+
+> Endpoint shapes are indicative and may change during implementation. Each
+> group ships in its roadmap phase, behind the same ownership and validation
+> rules as the implemented endpoints above.
+
+---
+
 # 22. Rate Limiting Strategy
 
 Rate limiting should be considered for:

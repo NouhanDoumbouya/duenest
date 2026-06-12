@@ -834,6 +834,83 @@ Future versions should consider:
 
 ---
 
+## 26.5 Document Vault Security Plan
+
+Security considerations for the documents-first roadmap (see
+[`document-vault-roadmap.md`](document-vault-roadmap.md)). The vault handles
+sensitive identity documents, so security is a first-class product requirement,
+not a later add-on.
+
+### Core rules (apply to every phase)
+
+- **User-owned access:** every document, file, reminder, checklist, share link,
+  bundle, and activity record is scoped to its owner. Cross-user access returns
+  `404`, never `403` (no existence leak).
+- **Private storage:** uploaded files are never served as public static media.
+  They are returned only through authenticated, ownership-checked endpoints.
+- **Preview = download authorization:** the in-app preview endpoint must enforce
+  the **same** ownership checks as download. A preview URL is not "less
+  sensitive" than a download URL.
+- **No path as security:** never expose raw internal file paths or rely on an
+  unguessable path as access control. Authorization is checked on every request.
+- **No frontend-only access control:** the backend is always the source of
+  truth for who can read a file.
+
+### Share links (Phase 3)
+
+- Tokens must be **unguessable** (cryptographically random), never sequential.
+- Every link has an **expiry**; expired links return nothing.
+- Links are **revocable**; revoked links return nothing immediately.
+- Optional **password** protection (hashed, never stored in plaintext).
+- **Log access** (timestamp, coarse metadata) for the owner's activity view.
+- Public share routes must not list other files or expose internal paths.
+
+### OCR privacy (Phase 4)
+
+- OCR runs server-side on owner-private files; extracted text is owner-scoped.
+- **OCR must never silently overwrite trusted fields.** Suggestions are stored
+  separately and only applied after explicit user review/confirm.
+- If a third-party OCR service is ever used, document the data-processing path
+  and prefer self-hosted/processing-in-region options for identity documents.
+
+### Sensitive data, masking, and lock mode (Phase 5)
+
+- Support **sensitive-field masking** (e.g. document numbers) in the UI and in
+  share/preview contexts.
+- **Document lock mode** can require re-authentication before viewing the most
+  sensitive records.
+- **Private notes** are owner-only and excluded from shares/exports by default.
+
+### Audit, trash, and exports (Phase 5)
+
+- **Activity/audit logs** are append-only and owner-readable.
+- **Trash/restore:** deleting moves to trash; restore is possible within a
+  window. **Deleted files must not remain accessible** once purged, and any
+  share links to them stop working immediately.
+- **Exports** (PDF/CSV/ZIP) are generated on demand, owner-scoped, and should
+  not include masked/sensitive fields unless explicitly chosen.
+
+### Emergency access (Phase 6)
+
+- Emergency packs and trusted-contact access are **very high risk**; build them
+  only after sharing + audit are mature. Require explicit setup, expiry, and a
+  full access log.
+
+### Production storage
+
+- Move blobs to **private object storage** (S3-compatible) with **signed,
+  time-limited URLs**; never make document buckets public.
+
+### Explicit warnings
+
+- Never expose raw internal file paths as security.
+- Never trust frontend-only access control.
+- Never let OCR overwrite important fields without review.
+- Never allow share links without expiry and revocation.
+- Never allow deleted files to remain accessible.
+
+---
+
 ## 27. Security Non-Goals for v0.1
 
 The following are intentionally not required in the first MVP:

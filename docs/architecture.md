@@ -1043,6 +1043,62 @@ DueNest should be built with the following engineering principles:
 
 ---
 
+## 29.5 Document Vault Architecture Evolution
+
+How the document vault evolves under the documents-first roadmap (see
+[`document-vault-roadmap.md`](document-vault-roadmap.md)). The modular monolith
+stays; capabilities are added as clear layers, not new services, until volume
+justifies extraction.
+
+### Current (implemented)
+
+- **Frontend document UI** (Next.js): vault list, create/edit workspace, upload.
+- **Backend document API** (DRF): documents + files CRUD, owner-scoped.
+- **Private file storage:** local `MEDIA_ROOT` (dev), never served as public
+  static media.
+- **Controlled download endpoint:** authenticated, ownership-checked streaming.
+
+### Near-term (MVP layers)
+
+- **Preview/download access layer:** one authorization path serving both inline
+  preview and attachment download.
+- **Status & expiry intelligence:** server-side derivation of status, expiry
+  urgency, and missing-information flags (pure functions over existing data —
+  no new infrastructure).
+- **Search/filter layer:** query params + indexing on the documents table.
+- **Attention inbox:** a focused query endpoint composed from status intel.
+- **Reminder engine:** rule storage + a scheduled evaluation pass (starts as a
+  simple periodic job; in-app surfacing first, email later).
+
+### Mid-term (Phase 3–4)
+
+- **Share-link access layer:** a separate, token-gated public route that never
+  touches private endpoints; expiry + revocation enforced on every request.
+- **OCR worker/service:** an async worker (queue) that produces *review-gated*
+  extraction results; never writes document fields directly.
+
+### Later (Phase 5–6)
+
+- **Notification service:** in-app → email → optional push.
+- **Audit/activity tracking:** append-only event log per document.
+- **Export service:** on-demand PDF/CSV/ZIP generation.
+- **Production storage:** S3-compatible private object storage with signed URLs.
+
+### Current vs future at a glance
+
+| Capability | Today | Future |
+| --- | --- | --- |
+| Document + file CRUD | ✅ Implemented | — |
+| Private storage + controlled download | ✅ Implemented (local) | Object storage + signed URLs |
+| In-app preview | Planned MVP | — |
+| Status/expiry intelligence | Planned MVP | — |
+| Reminders | Planned MVP (periodic job) | Notification service |
+| Sharing | — | Token-gated access layer |
+| OCR | — | Async worker, review-gated |
+| Audit / export | — | Activity log + export service |
+
+---
+
 ## 30. Future Evolution Path
 
 The architecture should allow DueNest to evolve without a rewrite.

@@ -20,6 +20,30 @@ DueNest helps users answer one important question:
 
 ---
 
+## 1.5 Documents-First Strategy
+
+DueNest is now sequenced as a **documents-first product**. The long-term vision
+(below) is unchanged, but the path to it starts by making **one module** —
+the Documents module — strong enough to stand alone as a paid product.
+
+- **Primary MVP:** a premium **document renewal and expiry management vault**.
+- **Future expansion:** subscriptions, application packs, an AI assistant, and
+  broader life-admin tasks — layered on top of a proven vault.
+
+The vault's job is not "store documents." It is to help users see which
+documents are **safe, incomplete, expiring soon, expired, or ready for
+renewal**, and to tell them what to do next. The full phased plan, paid-MVP
+definition, prioritization, and build order live in
+[`document-vault-roadmap.md`](document-vault-roadmap.md).
+
+### Target audiences (documents-first)
+
+International students · immigrants · travelers · families · professionals ·
+freelancers · scholarship applicants · people managing documents across
+countries.
+
+---
+
 ## 2. Product Vision
 
 The long-term vision of DueNest is to become an **AI-powered life admin operating system** for individuals, students, professionals, immigrants, freelancers, families, and small teams.

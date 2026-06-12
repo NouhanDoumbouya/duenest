@@ -769,6 +769,69 @@ A small research prototype or documented plan for v0.2 AI extraction.
 
 ---
 
+## 11.5 Documents-First Build Sequence
+
+DueNest is now sequenced **documents-first**: make the Documents module a
+pay-worthy product before expanding into subscriptions, application packs, an AI
+assistant, and broader life-admin tasks. The full plan, paid-MVP definition,
+prioritization, and data/API/security planning live in
+[`document-vault-roadmap.md`](document-vault-roadmap.md).
+
+### Paid MVP (Documents module)
+
+A beautiful, mobile-friendly vault that **thinks for the user**: document
+records + type templates, file upload, in-app preview, secure download, smart
+expiry/status intelligence, missing-information detection, an "Attention Needed"
+inbox, search/filter/sort, a polished detail page, reminder rules, and renewal
+checklists — all behind strong ownership checks. Users pay because DueNest helps
+them **avoid expiry mistakes, lost-document chaos, and last-minute renewal
+stress**.
+
+### Recommended order
+
+```txt
+1. Premium authenticated app UI polish            (done)
+2. Backend file upload foundation                 (done)
+3. Frontend document upload UI                     (done)
+4. Backend secure preview/download access
+5. Frontend in-app document preview
+6. Smart status and expiry intelligence
+7. Search, filter, and sort
+8. Missing-information detection
+9. Attention Needed inbox
+10. Renewal reminder rules
+11. Renewal preparation checklists
+12. Document detail page upgrade
+13. Calendar/timeline view
+14. Secure share links
+15. OCR-assisted extraction
+16. Application/renewal bundles
+17. Activity timeline and audit log
+18. Version history
+19. Emergency access pack
+20. Export and backup features
+```
+
+Sharing (14) and OCR (15) deliberately come **after** upload, preview, and
+status intelligence are solid.
+
+### Upcoming branches
+
+```txt
+backend/document-preview-access        frontend/document-preview-viewer
+backend/document-status-intelligence   frontend/document-status-polish
+backend/document-search-filter         frontend/document-search-filter
+backend/document-attention-inbox       frontend/document-attention-inbox
+backend/document-reminder-rules        frontend/document-reminder-experience
+backend/document-checklists            frontend/document-checklists
+backend/file-sharing-foundation        frontend/file-sharing-ui
+backend/document-ocr-foundation        frontend/document-ocr-review-ui
+```
+
+The **next implementation branch** is `backend/document-preview-access` (step 4).
+
+---
+
 ## 12. What Not to Build Too Early
 
 The following should not be built in the first MVP:
