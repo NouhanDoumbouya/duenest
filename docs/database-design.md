@@ -1202,6 +1202,146 @@ These should be added only when product needs justify them.
 
 ---
 
+## 29.5 Planned Document Vault Models
+
+Model sketches for the documents-first roadmap (see
+[`document-vault-roadmap.md`](document-vault-roadmap.md)). These are **planning
+sketches**, not migrations — no code or migrations are created in the planning
+branch. Every user-owned model is scoped to its owner and follows the existing
+404-not-403 ownership rule.
+
+**Legend:** *Implemented* = exists today · *MVP* = first paid release ·
+*Future* = later phase.
+
+### Document — *Implemented*
+- **Purpose:** one important document record (metadata only).
+- **Key fields:** `owner`, `category`, `title`, `document_type`, `issuer`,
+  `country`, `reference_number`, `issue_date`, `expiry_date`, `renewal_date`,
+  `notes`, `status`, timestamps.
+- **Relationships:** `owner → User`; `category → DocumentCategory`; has many
+  `DocumentFile`.
+- **Security:** owner-scoped; status/expiry will be partly auto-derived (MVP).
+
+### DocumentCategory — *Implemented*
+- **Purpose:** shared, controlled vocabulary (Passport, Visa, Insurance…).
+- **Key fields:** `name` (unique), `slug`, `description`, timestamps.
+- **Relationships:** referenced by many `Document`.
+- **Security:** app-wide reference data, not user-owned.
+
+### DocumentFile — *Implemented*
+- **Purpose:** a file attached to a `Document` (metadata + stored blob).
+- **Key fields:** `document`, `uploaded_by`, `file`, `original_filename`,
+  `content_type`, `file_size`, `checksum`, timestamps.
+- **Relationships:** `document → Document` (cascade).
+- **Security:** ownership via parent document; private storage; controlled
+  download only.
+
+### DocumentTemplate — *MVP*
+- **Purpose:** document-type presets (default fields, suggested expiry window,
+  checklist template) to make adding documents fast and consistent.
+- **Key fields:** `name`, `document_type`, `default_fields` (JSON),
+  `suggested_renewal_window_days`, `checklist_template` (FK, optional).
+- **Relationships:** referenced when creating a `Document`.
+- **Security:** shared reference data (curated), not user-owned.
+
+### DocumentCustomField — *Future*
+- **Purpose:** user/template-defined extra fields per document type.
+- **Key fields:** `document` (or `template`), `key`, `label`, `value`, `type`.
+- **Relationships:** `document → Document`.
+- **Security:** owner-scoped via document; treat values as sensitive.
+
+### DocumentReminderRule — *MVP*
+- **Purpose:** when/how to remind for a document's expiry or renewal.
+- **Key fields:** `document`, `owner`, `offset_days` (e.g. 90/30/7 before),
+  `channel` (in-app first), `is_active`, `last_triggered_at`.
+- **Relationships:** `document → Document`; `owner → User`.
+- **Security:** owner-scoped; evaluation runs server-side only.
+
+### DocumentChecklist — *MVP*
+- **Purpose:** a renewal/preparation checklist attached to a document or
+  derived from a template.
+- **Key fields:** `document`, `owner`, `title`, `template_key`, timestamps.
+- **Relationships:** has many `DocumentChecklistItem`; `document → Document`.
+- **Security:** owner-scoped.
+
+### DocumentChecklistItem — *MVP*
+- **Purpose:** one step in a checklist.
+- **Key fields:** `checklist`, `label`, `is_done`, `due_date`, `sort_order`,
+  `notes`.
+- **Relationships:** `checklist → DocumentChecklist`.
+- **Security:** owner-scoped via checklist.
+
+### DocumentShareLink — *Future (Phase 3)*
+- **Purpose:** a revocable, time-limited link to one file.
+- **Key fields:** `file`, `owner`, `token` (unguessable), `permission`
+  (view/download), `password_hash` (optional), `expires_at`, `revoked_at`,
+  `view_count`.
+- **Relationships:** `file → DocumentFile`; `owner → User`.
+- **Security:** **highest sensitivity** — token unguessable; no access after
+  expiry/revocation; never exposes internal paths; access logged.
+
+### DocumentActivity — *Future (Phase 5)*
+- **Purpose:** activity timeline / audit log for a document.
+- **Key fields:** `document`, `actor`, `action`, `metadata` (JSON), `created_at`.
+- **Relationships:** `document → Document`.
+- **Security:** owner-readable; append-only; never edited.
+
+### DocumentVersion — *Future (Phase 5)*
+- **Purpose:** version history for a re-issued file.
+- **Key fields:** `file`, `version_number`, `stored_file`, `is_current`,
+  `uploaded_by`, `created_at`.
+- **Relationships:** `file → DocumentFile`.
+- **Security:** owner-scoped; old versions retained until explicit purge.
+
+### DocumentBundle — *Future (Phase 5)*
+- **Purpose:** reusable application/renewal pack (e.g. Student Pass Renewal).
+- **Key fields:** `owner`, `name`, `purpose`, `description`, `readiness_score`
+  (derived), timestamps.
+- **Relationships:** has many `DocumentBundleItem`.
+- **Security:** owner-scoped.
+
+### DocumentBundleItem — *Future (Phase 5)*
+- **Purpose:** a required slot in a bundle, optionally linked to a document.
+- **Key fields:** `bundle`, `required_label`, `document` (nullable),
+  `is_satisfied` (derived), `sort_order`.
+- **Relationships:** `bundle → DocumentBundle`; `document → Document`.
+- **Security:** owner-scoped via bundle; bundle and document must share owner.
+
+### DocumentTag — *Future (Phase 5)*
+- **Purpose:** smart tags/labels for organization.
+- **Key fields:** `owner`, `name`, `color`; M2M to `Document`.
+- **Relationships:** many-to-many with `Document`.
+- **Security:** owner-scoped.
+
+### DocumentContact — *Future (Phase 5)*
+- **Purpose:** institution/contact directory (issuers, embassies, insurers).
+- **Key fields:** `owner`, `name`, `organization`, `email`, `phone`, `notes`.
+- **Relationships:** optionally linked from documents/appointments.
+- **Security:** owner-scoped; PII — treat as sensitive.
+
+### DocumentAppointment — *Future (Phase 2/5)*
+- **Purpose:** track a renewal appointment.
+- **Key fields:** `document`, `owner`, `title`, `location`, `scheduled_at`,
+  `status`, `notes`.
+- **Relationships:** `document → Document`; optional `contact`.
+- **Security:** owner-scoped.
+
+### DocumentRenewalHistory — *Future (Phase 2)*
+- **Purpose:** record of past renewals and their process status.
+- **Key fields:** `document`, `owner`, `process_status`, `started_at`,
+  `completed_at`, `cost`, `currency`, `notes`.
+- **Relationships:** `document → Document`.
+- **Security:** owner-scoped.
+
+### EmergencyPack — *Future (Phase 6)*
+- **Purpose:** a curated, quickly accessible set of critical documents.
+- **Key fields:** `owner`, `name`, `description`; items reference documents/files.
+- **Relationships:** references many `Document`/`DocumentFile`.
+- **Security:** **very high** — combine with sharing/audit maturity before
+  enabling any external/emergency access.
+
+---
+
 ## 30. Database Non-Goals for v0.1
 
 The following are intentionally not part of the first database implementation:

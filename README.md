@@ -31,6 +31,12 @@ The platform helps users organize essential files, track expiry dates, manage re
 
 The long-term vision is to turn DueNest into an **AI-powered life admin operating system** for students, professionals, immigrants, freelancers, families, and small teams.
 
+DueNest is being built **documents-first**: the immediate focus is making the
+Documents module a premium, pay-worthy **document renewal and expiry management
+vault** before expanding into subscriptions, application packs, and AI. See the
+[Document Vault Roadmap](./docs/document-vault-roadmap.md) for the phased plan,
+paid-MVP definition, and build order.
+
 ---
 
 ## Table of Contents
