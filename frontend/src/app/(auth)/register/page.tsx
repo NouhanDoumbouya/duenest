@@ -67,9 +67,17 @@ export default function RegisterPage() {
         <CardContent className="flex flex-col gap-5">
           {/* TODO(google-auth): wire to POST /api/v1/auth/google/ once the Google
               backend endpoint is merged. Disabled until then — we never fake it. */}
-          <Button variant="outline" size="lg" className="w-full" disabled>
+          <Button
+            variant="outline"
+            size="lg"
+            className="w-full"
+            disabled
+            title="Google sign-in coming soon"
+          >
             Continue with Google
-            <span className="ml-1 text-xs text-muted-foreground">(soon)</span>
+            <span className="ml-1 text-xs text-muted-foreground">
+              (coming soon)
+            </span>
           </Button>
 
           <div className="flex items-center gap-3">

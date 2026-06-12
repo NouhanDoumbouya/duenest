@@ -1,8 +1,16 @@
-import type { Metadata } from "next";
+"use client";
+
+// TODO: Add middleware/server-side route protection when auth cookies are implemented.
+// For now this is client-side protection: we check the access token on mount,
+// redirect to /login if missing, and verify it by fetching /users/me/.
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   CalendarClock,
   CreditCard,
   FileText,
+  Loader2,
   RefreshCw,
 } from "lucide-react";
 
@@ -15,29 +23,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-
-export const metadata: Metadata = {
-  title: "Dashboard",
-};
-
-// TODO(auth): this route is currently open. Add protected-route handling
-// (middleware redirect to /login when no valid token, plus a server-side
-// session check) once token refresh + cookie storage are in place.
+import { getAccessToken, getCurrentUser, logout } from "@/lib/auth";
+import type { User } from "@/types/auth";
 
 // Mock data — replaced by real API calls in a later milestone.
 const stats = [
-  {
-    label: "Documents",
-    value: 12,
-    hint: "stored in your vault",
-    icon: FileText,
-  },
-  {
-    label: "Renewals",
-    value: 4,
-    hint: "tracked this quarter",
-    icon: RefreshCw,
-  },
+  { label: "Documents", value: 12, hint: "stored in your vault", icon: FileText },
+  { label: "Renewals", value: 4, hint: "tracked this quarter", icon: RefreshCw },
   {
     label: "Subscriptions",
     value: 7,
@@ -59,12 +51,59 @@ const upcomingDeadlines = [
 ];
 
 export default function DashboardPage() {
+  const router = useRouter();
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // No token at all → straight to login.
+    if (!getAccessToken()) {
+      router.replace("/login");
+      return;
+    }
+
+    let active = true;
+    getCurrentUser()
+      .then((me) => {
+        if (active) {
+          setUser(me);
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        // Token missing/expired/invalid → clear and bounce to login.
+        if (active) {
+          logout();
+          router.replace("/login");
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [router]);
+
+  if (loading || !user) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-muted/40">
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" />
+          <span>Loading your workspace…</span>
+        </div>
+      </div>
+    );
+  }
+
+  const greetingName = user.first_name?.trim() || user.username;
+
   return (
     <DashboardShell>
       <div className="mx-auto w-full max-w-5xl space-y-8">
         {/* Welcome */}
         <div>
-          <h1 className="text-2xl font-semibold sm:text-3xl">Welcome back</h1>
+          <h1 className="text-2xl font-semibold sm:text-3xl">
+            Welcome back, {greetingName}
+          </h1>
           <p className="mt-1 text-muted-foreground">
             Here&apos;s a snapshot of your documents, renewals, and upcoming
             deadlines.
@@ -85,9 +124,7 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent>
                   <p className="text-3xl font-semibold">{stat.value}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {stat.hint}
-                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">{stat.hint}</p>
                 </CardContent>
               </Card>
             );

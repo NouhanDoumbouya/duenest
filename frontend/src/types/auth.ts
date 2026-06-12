@@ -9,21 +9,34 @@ export interface User {
   last_name: string;
 }
 
-/** Credentials accepted by POST /api/v1/auth/login/ (SimpleJWT uses username). */
-export interface LoginCredentials {
+/** The access/refresh pair returned by SimpleJWT. */
+export interface AuthTokens {
+  access: string;
+  refresh: string;
+}
+
+/** Credentials sent to POST /api/v1/auth/login/ (SimpleJWT uses username). */
+export interface LoginRequest {
   username: string;
   password: string;
 }
 
-/** Payload accepted by POST /api/v1/auth/register/. */
-export interface RegisterPayload {
+/** POST /api/v1/auth/login/ returns the token pair. */
+export type LoginResponse = AuthTokens;
+
+/** Payload sent to POST /api/v1/auth/register/. */
+export interface RegisterRequest {
   username: string;
   email: string;
   password: string;
 }
 
-/** The access/refresh pair returned by SimpleJWT on login. */
-export interface AuthTokens {
-  access: string;
-  refresh: string;
+/** Payload sent to POST /api/v1/auth/google/ (Google ID token from the client). */
+export interface GoogleAuthRequest {
+  id_token: string;
+}
+
+/** POST /api/v1/auth/google/ returns tokens plus the user. */
+export interface GoogleAuthResponse extends AuthTokens {
+  user: User;
 }

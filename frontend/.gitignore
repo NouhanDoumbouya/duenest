@@ -35,6 +35,10 @@ yarn-error.log*
 # ...but keep the example template tracked so others know which vars to set
 !.env.local.example
 
+# The repo-root .gitignore (a Python template) ignores `lib/`, which wrongly
+# matches our frontend source folder src/lib/. Re-include it here.
+!src/lib/
+
 # vercel
 .vercel
 
