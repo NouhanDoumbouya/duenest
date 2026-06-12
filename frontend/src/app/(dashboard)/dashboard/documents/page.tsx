@@ -72,16 +72,16 @@ export default function DocumentsPage() {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="font-heading text-2xl font-semibold sm:text-3xl">
+          <h1 className="font-heading text-3xl font-semibold tracking-tight">
             Documents
           </h1>
-          <p className="mt-1 text-muted-foreground">
+          <p className="mt-1.5 text-muted-foreground">
             Track your important documents, their statuses, and key dates.
           </p>
         </div>
         <Link
           href="/dashboard/documents/new"
-          className={cn(buttonVariants({ size: "lg" }), "h-10 shadow-sm")}
+          className={cn(buttonVariants({ size: "lg" }))}
         >
           <Plus className="size-4" />
           Add document

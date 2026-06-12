@@ -113,17 +113,19 @@ export default function DashboardPage() {
       {/* Welcome */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-sm text-muted-foreground">{today}</p>
-          <h1 className="mt-1 font-heading text-2xl font-semibold sm:text-3xl">
-            Welcome, {greetingName}
+          <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+            {today}
+          </p>
+          <h1 className="mt-2 font-heading text-3xl font-semibold tracking-tight">
+            Welcome back, {greetingName}
           </h1>
-          <p className="mt-1 text-muted-foreground">
-            Here&apos;s a snapshot of your documents and upcoming deadlines.
+          <p className="mt-1.5 text-muted-foreground">
+            Here&apos;s what needs your attention across documents and deadlines.
           </p>
         </div>
         <Link
           href="/dashboard/documents/new"
-          className={cn(buttonVariants({ size: "lg" }), "h-10 shadow-sm")}
+          className={cn(buttonVariants({ size: "lg" }))}
         >
           <Plus className="size-4" />
           Add document

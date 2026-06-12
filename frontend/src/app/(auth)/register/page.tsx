@@ -51,10 +51,10 @@ export default function RegisterPage() {
 
   return (
     <AuthShell>
-      <Card className="w-full max-w-md p-2 shadow-xl shadow-foreground/5">
-        <CardHeader className="text-center">
+      <Card className="w-full max-w-md p-2 shadow-elevated">
+        <CardHeader className="items-center text-center">
           <CardTitle className="text-2xl">Create your account</CardTitle>
-          <CardDescription>
+          <CardDescription className="text-[0.95rem]">
             Start organizing your documents and deadlines — free to begin.
           </CardDescription>
         </CardHeader>

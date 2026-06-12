@@ -13,8 +13,8 @@ export interface Feature {
 export function FeatureCard({ feature }: { feature: Feature }) {
   const Icon = feature.icon;
   return (
-    <Card className="h-full transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-foreground/5">
-      <CardContent className="flex h-full flex-col gap-3 py-2">
+    <Card className="h-full transition-all duration-200 hover:-translate-y-1 hover:shadow-elevated">
+      <CardContent className="flex h-full flex-col gap-3">
         <div className="flex items-center justify-between">
           <span className="flex size-11 items-center justify-center rounded-xl bg-accent text-accent-foreground ring-1 ring-brand-teal/15">
             <Icon className="size-5" />

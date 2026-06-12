@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
-import Link from "next/link";
-import { CalendarClock, FileCheck2, ShieldCheck } from "lucide-react";
+import { CalendarClock, FileCheck2, Lock, ShieldCheck } from "lucide-react";
 
 import { Logo } from "@/components/layout/logo";
 
@@ -8,7 +7,7 @@ const trustPoints = [
   {
     icon: FileCheck2,
     title: "Everything in one place",
-    description: "Documents, renewals, and deadlines in a single calm workspace.",
+    description: "Documents, files, renewals, and deadlines in a single calm workspace.",
   },
   {
     icon: CalendarClock,
@@ -18,7 +17,7 @@ const trustPoints = [
   {
     icon: ShieldCheck,
     title: "Private by design",
-    description: "Your life-admin data is yours — scoped to your account only.",
+    description: "Your records are scoped to your account — never shared by default.",
   },
 ];
 
@@ -34,21 +33,28 @@ export function AuthShell({ children }: { children: ReactNode }) {
       <aside className="relative hidden flex-col justify-between overflow-hidden bg-brand-navy p-12 text-white lg:flex">
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 opacity-90 [background:radial-gradient(70%_55%_at_15%_0%,rgba(20,184,166,0.25),transparent_60%),radial-gradient(60%_50%_at_100%_100%,rgba(37,99,235,0.30),transparent_60%)]"
+          className="pointer-events-none absolute inset-0 opacity-90 [background:radial-gradient(70%_55%_at_12%_-5%,rgba(20,184,166,0.28),transparent_60%),radial-gradient(60%_55%_at_100%_105%,rgba(37,99,235,0.34),transparent_60%)]"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 opacity-[0.06] [background-image:linear-gradient(to_right,white_1px,transparent_1px),linear-gradient(to_bottom,white_1px,transparent_1px)] [background-size:56px_56px]"
         />
         <div className="relative">
           <Logo size="lg" onDark />
         </div>
 
         <div className="relative space-y-8">
-          <p className="max-w-md font-heading text-2xl leading-snug font-semibold">
+          <p className="max-w-md font-heading text-[1.7rem] leading-snug font-semibold">
             Bring calm to your documents, deadlines, and renewals.
           </p>
-          <ul className="space-y-5">
+          <ul className="space-y-3">
             {trustPoints.map((point) => {
               const Icon = point.icon;
               return (
-                <li key={point.title} className="flex gap-3">
+                <li
+                  key={point.title}
+                  className="flex gap-3 rounded-xl border border-white/10 bg-white/[0.04] p-3.5 backdrop-blur-sm"
+                >
                   <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-white/10 text-brand-teal ring-1 ring-white/15">
                     <Icon className="size-4" />
                   </span>
@@ -56,7 +62,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
                     <span className="block text-sm font-medium">
                       {point.title}
                     </span>
-                    <span className="block text-sm text-white/70">
+                    <span className="block text-sm text-white/65">
                       {point.description}
                     </span>
                   </span>
@@ -66,25 +72,18 @@ export function AuthShell({ children }: { children: ReactNode }) {
           </ul>
         </div>
 
-        <p className="relative text-sm text-white/60">
-          Documents, deadlines, and renewals in one secure workspace.
+        <p className="relative inline-flex items-center gap-2 text-sm text-white/55">
+          <Lock className="size-3.5" />
+          Built to be trusted with what matters.
         </p>
       </aside>
 
       {/* Form panel */}
-      <main className="flex flex-col items-center justify-center bg-muted/30 px-4 py-12">
+      <main className="flex flex-col items-center justify-center bg-background px-4 py-12">
         <div className="mb-8 lg:hidden">
           <Logo size="lg" />
         </div>
         {children}
-        <p className="mt-8 max-w-sm text-center text-xs text-muted-foreground">
-          By continuing you agree to keep your DueNest workspace secure. Need
-          help?{" "}
-          <Link href="/" className="font-medium text-foreground hover:underline">
-            Back to home
-          </Link>
-          .
-        </p>
       </main>
     </div>
   );
