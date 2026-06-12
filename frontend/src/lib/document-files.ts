@@ -5,7 +5,14 @@
 
 import { API_BASE_URL, ApiError, apiFetch } from "./api";
 import { getAccessToken } from "./auth";
-import type { DocumentFile } from "@/types/document-files";
+import type {
+  CreateShareLinkPayload,
+  CreatedDocumentFileShareLink,
+  DocumentFile,
+  DocumentFileActivity,
+  DocumentFileShareLink,
+  PublicSharedFileMetadata,
+} from "@/types/document-files";
 import type { Paginated } from "@/types/documents";
 
 // Frontend validation mirrors the backend rules (backend remains the source
@@ -20,6 +27,69 @@ export const ALLOWED_EXTENSIONS = [
   ".docx",
 ] as const;
 export const ACCEPT_ATTR = ALLOWED_EXTENSIONS.join(",");
+
+function getApiErrorMessage(data: unknown, fallback: string): string {
+  if (typeof data === "string" && data) return data;
+  if (data && typeof data === "object") {
+    const record = data as Record<string, unknown>;
+    if (typeof record.detail === "string") return record.detail;
+  }
+  return fallback;
+}
+
+async function fetchBlob(
+  path: string,
+  {
+    auth = false,
+    accessCode,
+    fallbackError,
+  }: {
+    auth?: boolean;
+    accessCode?: string;
+    fallbackError: string;
+  },
+): Promise<Blob> {
+  const headers = new Headers();
+  headers.set("Accept", "*/*");
+
+  if (auth) {
+    const token = getAccessToken();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+  }
+  if (accessCode) headers.set("X-Access-Code", accessCode);
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, { headers });
+  } catch {
+    throw new ApiError("Unable to reach the server. Please try again.", 0, null);
+  }
+
+  if (!response.ok) {
+    const isJson = response.headers
+      .get("content-type")
+      ?.includes("application/json");
+    const data: unknown = isJson ? await response.json() : null;
+    throw new ApiError(
+      getApiErrorMessage(data, fallbackError),
+      response.status,
+      data,
+    );
+  }
+
+  return response.blob();
+}
+
+function saveBlob(blob: Blob, filename: string) {
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(objectUrl);
+}
 
 export function getDocumentFiles(
   documentId: number,
@@ -70,34 +140,150 @@ export function getDocumentFileDownloadUrl(
   return `${API_BASE_URL}/documents/${documentId}/files/${fileId}/download/`;
 }
 
+export function getDocumentFilePreviewUrl(
+  documentId: number,
+  fileId: number,
+): string {
+  return `${API_BASE_URL}/documents/${documentId}/files/${fileId}/preview/`;
+}
+
+export function getDocumentFilePreviewBlob(
+  documentId: number,
+  fileId: number,
+): Promise<Blob> {
+  return fetchBlob(`/documents/${documentId}/files/${fileId}/preview/`, {
+    auth: true,
+    fallbackError: "Could not preview this file.",
+  });
+}
+
+export function getDocumentFileDownloadBlob(
+  documentId: number,
+  fileId: number,
+): Promise<Blob> {
+  return fetchBlob(`/documents/${documentId}/files/${fileId}/download/`, {
+    auth: true,
+    fallbackError: "Could not download this file.",
+  });
+}
+
 /**
  * Download a file through the authenticated endpoint and trigger a browser
  * "save" using its original filename.
  */
 export async function downloadDocumentFile(file: DocumentFile): Promise<void> {
-  const url = getDocumentFileDownloadUrl(file.document, file.id);
-  const token = getAccessToken();
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    });
-  } catch {
-    throw new ApiError("Unable to reach the server. Please try again.", 0, null);
-  }
-  if (!response.ok) {
-    throw new ApiError("Could not download this file.", response.status, null);
-  }
+  const blob = await getDocumentFileDownloadBlob(file.document, file.id);
+  saveBlob(blob, file.original_filename);
+}
 
-  const blob = await response.blob();
-  const objectUrl = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = objectUrl;
-  anchor.download = file.original_filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(objectUrl);
+export function isPreviewableDocumentFile(file: DocumentFile): boolean {
+  return Boolean(file.is_previewable);
+}
+
+// ---- Share links + activity ------------------------------------------------
+
+export function listDocumentFileShareLinks(
+  documentId: number,
+  fileId: number,
+): Promise<DocumentFileShareLink[]> {
+  return apiFetch<DocumentFileShareLink[]>(
+    `/documents/${documentId}/files/${fileId}/share-links/`,
+    { auth: true },
+  );
+}
+
+export function createDocumentFileShareLink(
+  documentId: number,
+  fileId: number,
+  payload: CreateShareLinkPayload,
+): Promise<CreatedDocumentFileShareLink> {
+  return apiFetch<CreatedDocumentFileShareLink>(
+    `/documents/${documentId}/files/${fileId}/share-links/`,
+    {
+      method: "POST",
+      body: payload,
+      auth: true,
+    },
+  );
+}
+
+export function revokeDocumentFileShareLink(
+  documentId: number,
+  fileId: number,
+  shareId: number,
+): Promise<DocumentFileShareLink> {
+  return apiFetch<DocumentFileShareLink>(
+    `/documents/${documentId}/files/${fileId}/share-links/${shareId}/revoke/`,
+    {
+      method: "POST",
+      auth: true,
+    },
+  );
+}
+
+export function getDocumentFileActivity(
+  documentId: number,
+  fileId: number,
+): Promise<DocumentFileActivity[]> {
+  return apiFetch<DocumentFileActivity[]>(
+    `/documents/${documentId}/files/${fileId}/activity/`,
+    { auth: true },
+  );
+}
+
+// ---- Public shared-file helpers -------------------------------------------
+
+export function getSharedFileMetadata(
+  token: string,
+  accessCode?: string,
+): Promise<PublicSharedFileMetadata> {
+  const headers = accessCode ? { "X-Access-Code": accessCode } : undefined;
+  return apiFetch<PublicSharedFileMetadata>(
+    `/share/files/${encodeURIComponent(token)}/`,
+    { headers },
+  );
+}
+
+export function verifySharedFileAccessCode(
+  token: string,
+  accessCode: string,
+): Promise<{ detail: string }> {
+  return apiFetch<{ detail: string }>(
+    `/share/files/${encodeURIComponent(token)}/verify-code/`,
+    {
+      method: "POST",
+      body: { access_code: accessCode },
+    },
+  );
+}
+
+export function getSharedFilePreviewBlob(
+  token: string,
+  accessCode?: string,
+): Promise<Blob> {
+  return fetchBlob(`/share/files/${encodeURIComponent(token)}/preview/`, {
+    accessCode,
+    fallbackError: "Could not preview this shared file.",
+  });
+}
+
+export function getSharedFileDownloadBlob(
+  token: string,
+  accessCode?: string,
+): Promise<Blob> {
+  return fetchBlob(`/share/files/${encodeURIComponent(token)}/download/`, {
+    accessCode,
+    fallbackError: "Could not download this shared file.",
+  });
+}
+
+export async function downloadSharedFile(
+  token: string,
+  filename: string,
+  accessCode?: string,
+): Promise<void> {
+  const blob = await getSharedFileDownloadBlob(token, accessCode);
+  saveBlob(blob, filename);
 }
 
 // ---- Display + validation helpers -----------------------------------------

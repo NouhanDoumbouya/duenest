@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, FileText, Loader2, Trash2 } from "lucide-react";
+import { Download, Eye, FileText, Loader2, Share2, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { fileExtension, formatFileSize } from "@/lib/document-files";
@@ -24,12 +24,16 @@ function EmptyState() {
 export function DocumentFilesList({
   files,
   downloadingId,
+  onPreview,
   onDownload,
+  onShare,
   onRequestDelete,
 }: {
   files: DocumentFile[];
   downloadingId: number | null;
+  onPreview: (file: DocumentFile) => void;
   onDownload: (file: DocumentFile) => void;
+  onShare: (file: DocumentFile) => void;
   onRequestDelete: (file: DocumentFile) => void;
 }) {
   if (files.length === 0) return <EmptyState />;
@@ -65,6 +69,16 @@ export function DocumentFilesList({
                 type="button"
                 variant="ghost"
                 size="sm"
+                onClick={() => onPreview(file)}
+                aria-label={`View ${file.original_filename}`}
+              >
+                <Eye className="size-3.5" />
+                <span className="hidden sm:inline">View</span>
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
                 onClick={() => onDownload(file)}
                 disabled={downloading}
                 aria-label={`Download ${file.original_filename}`}
@@ -75,6 +89,16 @@ export function DocumentFilesList({
                   <Download className="size-3.5" />
                 )}
                 <span className="hidden sm:inline">Download</span>
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => onShare(file)}
+                aria-label={`Share ${file.original_filename}`}
+              >
+                <Share2 className="size-3.5" />
+                <span className="hidden sm:inline">Share</span>
               </Button>
               <Button
                 type="button"

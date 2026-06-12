@@ -18,6 +18,11 @@ ALLOWED_CONTENT_TYPES = {
 # Allowed file extensions (lowercased, with the leading dot).
 ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".doc", ".docx"}
 
+# Types that can be previewed inline in the browser. DOC/DOCX are downloadable
+# but not previewable yet.
+PREVIEWABLE_CONTENT_TYPES = {"application/pdf", "image/jpeg", "image/png"}
+PREVIEWABLE_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png"}
+
 # TODO(security): the client-supplied content type is spoofable. A future
 # hardening pass should sniff the real type from the file's magic bytes
 # (e.g. python-magic) and run an antivirus scan (e.g. ClamAV) before the file

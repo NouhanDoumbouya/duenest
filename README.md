@@ -495,23 +495,35 @@ POST   /api/v1/documents/:id/files/                  # upload a file (multipart)
 GET    /api/v1/documents/:id/files/:file_id/         # file metadata
 DELETE /api/v1/documents/:id/files/:file_id/         # delete a file
 GET    /api/v1/documents/:id/files/:file_id/download/ # controlled download
+GET    /api/v1/documents/:id/files/:file_id/preview/  # controlled inline preview
+GET    /api/v1/documents/:id/files/:file_id/share-links/
+POST   /api/v1/documents/:id/files/:file_id/share-links/
+POST   /api/v1/documents/:id/files/:file_id/share-links/:share_id/revoke/
+GET    /api/v1/documents/:id/files/:file_id/activity/
+
+GET    /api/v1/share/files/:token/                   # public shared-file metadata
+POST   /api/v1/share/files/:token/verify-code/
+GET    /api/v1/share/files/:token/preview/
+GET    /api/v1/share/files/:token/download/
 ```
 
 The document API and its file attachments are strictly scoped to the
 authenticated owner. Uploads are validated (type + 10 MB limit) and stored
 under git-ignored local media in development; files are served only through the
-authenticated download endpoint, never as public static media.
+authenticated preview/download endpoints, never as public static media. Share
+links grant controlled access to one file only, enforce expiry/revocation and
+view-only/download permissions server-side, and can require hashed access codes.
 
 The next implementation focus is:
 
-* Frontend document file upload UI
 * Add expiry/renewal status automation
-* Build the document vault frontend page
+* Add search, filters, and attention-needed views
+* Continue polishing the document vault workspace
 
 The next backend branch after this foundation PR will be:
 
 ```txt
-backend/authentication
+backend/document-status-intelligence
 ```
 
 ---

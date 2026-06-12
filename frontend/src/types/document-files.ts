@@ -11,6 +11,75 @@ export interface DocumentFile {
   file_size: number;
   checksum: string;
   download_url: string | null;
+  preview_url: string | null;
+  is_previewable: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export type ShareLinkPermission = "view_only" | "download_allowed";
+export type ShareLinkStatus = "active" | "expired" | "revoked";
+
+export interface DocumentFileShareLink {
+  id: number;
+  token: string;
+  permission: ShareLinkPermission;
+  download_allowed: boolean;
+  status: ShareLinkStatus;
+  expires_at: string;
+  revoked_at: string | null;
+  access_code_required: boolean;
+  label: string;
+  recipient_email: string;
+  purpose: string;
+  created_at: string;
+  last_accessed_at: string | null;
+}
+
+export interface CreatedDocumentFileShareLink extends DocumentFileShareLink {
+  access_code?: string;
+}
+
+export interface CreateShareLinkPayload {
+  permission: ShareLinkPermission;
+  expires_at: string;
+  access_code_required: boolean;
+  access_code?: string;
+  label?: string;
+  recipient_email?: string;
+  purpose?: string;
+}
+
+export type DocumentFileActivityAction =
+  | "file_uploaded"
+  | "file_previewed"
+  | "file_downloaded"
+  | "share_created"
+  | "share_opened"
+  | "share_previewed"
+  | "share_downloaded"
+  | "share_revoked"
+  | "share_access_code_verified"
+  | "share_access_code_failed"
+  | "file_deleted";
+
+export interface DocumentFileActivity {
+  id: number;
+  action: DocumentFileActivityAction;
+  actor_type: "owner" | "shared_viewer" | "system";
+  share_link: number | null;
+  ip_address: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface PublicSharedFileMetadata {
+  file_name: string;
+  content_type: string;
+  file_size: number;
+  permission: ShareLinkPermission;
+  expires_at: string;
+  is_previewable: boolean;
+  download_allowed: boolean;
+  access_code_required: boolean;
 }

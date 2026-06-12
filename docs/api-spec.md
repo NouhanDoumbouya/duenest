@@ -642,6 +642,7 @@ require authentication.
 | `GET`    | `/api/v1/documents/:id/files/:file_id/`             | Retrieve file metadata            |
 | `DELETE` | `/api/v1/documents/:id/files/:file_id/`             | Delete the file (record + blob)   |
 | `GET`    | `/api/v1/documents/:id/files/:file_id/download/`    | Controlled download (owner only)  |
+| `GET`    | `/api/v1/documents/:id/files/:file_id/preview/`     | Inline preview for PDF/JPEG/PNG   |
 
 ### Upload Request
 
@@ -666,6 +667,8 @@ file: <binary>
   "file_size": 184213,
   "checksum": "9f86d0818988…",
   "download_url": "http://localhost:8000/api/v1/documents/12/files/1/download/",
+  "preview_url": "http://localhost:8000/api/v1/documents/12/files/1/preview/",
+  "is_previewable": true,
   "created_at": "2026-06-12T10:30:00Z",
   "updated_at": "2026-06-12T10:30:00Z"
 }
@@ -676,6 +679,7 @@ file: <binary>
 - Max size **10 MB**.
 - Allowed types: PDF, JPEG, PNG, DOC, DOCX (checked by extension **and** the
   client-reported content type).
+- Previewable types: PDF, JPEG, PNG only. DOC/DOCX remain download-only.
 - The parent document must belong to the authenticated user (otherwise `404`).
 
 ### Security notes
@@ -683,8 +687,112 @@ file: <binary>
 - `uploaded_by` is set from the request user, never the client.
 - The internal storage path is **never** exposed; clients use `download_url`,
   which is itself authenticated and ownership-checked.
+- `preview_url` is authenticated and ownership-checked exactly like download.
 - Accessing another user's file (list, retrieve, download, delete) returns
   `404 Not Found`.
+
+---
+
+# 13.7 Secure File Sharing and Activity API (implemented)
+
+Share links grant controlled access to **one specific document file**, not the
+owner's full vault. Owner management endpoints require authentication and verify
+that the parent document belongs to `request.user`.
+
+## Owner share-link endpoints
+
+| Method   | Path                                                                           | Description                  |
+| -------- | ------------------------------------------------------------------------------ | ---------------------------- |
+| `GET`    | `/api/v1/documents/:id/files/:file_id/share-links/`                            | List share links for a file  |
+| `POST`   | `/api/v1/documents/:id/files/:file_id/share-links/`                            | Create a file share link     |
+| `GET`    | `/api/v1/documents/:id/files/:file_id/share-links/:share_id/`                  | Retrieve one share link      |
+| `POST`   | `/api/v1/documents/:id/files/:file_id/share-links/:share_id/revoke/`           | Revoke a link immediately    |
+| `DELETE` | `/api/v1/documents/:id/files/:file_id/share-links/:share_id/`                  | Delete a share link record   |
+| `GET`    | `/api/v1/documents/:id/files/:file_id/activity/`                               | Owner-only file activity log |
+
+### Create share link request
+
+```json
+{
+  "permission": "view_only",
+  "expires_at": "2026-06-20T10:30:00Z",
+  "access_code_required": true,
+  "access_code": "482913",
+  "label": "University visa office",
+  "recipient_email": "visaoffice@example.edu",
+  "purpose": "Student pass renewal submission"
+}
+```
+
+`permission` is either `view_only` or `download_allowed`. If
+`access_code_required` is true and no code is provided, the backend generates a
+6-digit code and returns it only in the initial creation response. Access codes
+are stored hashed, never in plain text.
+
+### Owner response fields
+
+```json
+{
+  "id": 24,
+  "token": "unguessable-token",
+  "permission": "view_only",
+  "download_allowed": false,
+  "status": "active",
+  "expires_at": "2026-06-20T10:30:00Z",
+  "revoked_at": null,
+  "access_code_required": true,
+  "label": "University visa office",
+  "recipient_email": "visaoffice@example.edu",
+  "purpose": "Student pass renewal submission",
+  "created_at": "2026-06-12T10:30:00Z",
+  "last_accessed_at": null,
+  "access_code": "482913"
+}
+```
+
+Owner-facing labels, recipient email, and purpose notes are not exposed through
+public share endpoints.
+
+## Public share endpoints
+
+| Method | Path                                      | Description                             |
+| ------ | ----------------------------------------- | --------------------------------------- |
+| `GET`  | `/api/v1/share/files/:token/`             | Safe shared-file metadata               |
+| `POST` | `/api/v1/share/files/:token/verify-code/` | Verify an access-code protected link    |
+| `GET`  | `/api/v1/share/files/:token/preview/`     | Public inline preview for PDF/JPEG/PNG  |
+| `GET`  | `/api/v1/share/files/:token/download/`    | Public download when permission allows  |
+
+Access-code protected metadata, preview, and download requests must include:
+
+```http
+X-Access-Code: 482913
+```
+
+Public metadata returns only safe fields:
+
+```json
+{
+  "file_name": "passport.pdf",
+  "content_type": "application/pdf",
+  "file_size": 184213,
+  "permission": "view_only",
+  "expires_at": "2026-06-20T10:30:00Z",
+  "is_previewable": true,
+  "download_allowed": false,
+  "access_code_required": true
+}
+```
+
+Invalid links return `404`. Expired and revoked links return `410`. View-only
+links can preview supported files but cannot download. Correct access codes do
+not bypass expiry, revocation, or permission checks.
+
+## Activity log
+
+`GET /api/v1/documents/:id/files/:file_id/activity/` returns owner-only entries
+for upload, preview, download, share creation, public opens, shared preview,
+shared download, revocation, and access-code verification/failure. Public share
+viewers cannot access this log.
 
 ---
 
@@ -1629,13 +1737,10 @@ POST   /api/v1/documents/:id/files/
 GET    /api/v1/documents/:id/files/:file_id/
 DELETE /api/v1/documents/:id/files/:file_id/
 GET    /api/v1/documents/:id/files/:file_id/download/   # controlled, owner-only
+GET    /api/v1/documents/:id/files/:file_id/preview/    # controlled, owner-only inline preview
 ```
 
-### Preview / download — Planned MVP
-```txt
-GET    /api/v1/documents/:id/files/:file_id/preview/    # inline stream for PDF/image viewer
-```
-Preview must be authorized exactly like download (owner-only, no public path).
+Preview is authorized exactly like download (owner-only, no public path).
 
 ### Search / filter / calendar — Planned MVP
 ```txt
@@ -1658,13 +1763,18 @@ GET    /api/v1/documents/:id/checklist/
 PATCH  /api/v1/documents/:id/checklist/:item_id/
 ```
 
-### Share links — Future (Phase 3)
+### Share links — Implemented
 ```txt
-POST   /api/v1/documents/:id/files/:file_id/share-links/
 GET    /api/v1/documents/:id/files/:file_id/share-links/
-POST   /api/v1/share-links/:id/revoke/
-GET    /api/v1/share/:token/            # public, gated by token + expiry + revocation
-GET    /api/v1/share/:token/download/
+POST   /api/v1/documents/:id/files/:file_id/share-links/
+GET    /api/v1/documents/:id/files/:file_id/share-links/:share_id/
+POST   /api/v1/documents/:id/files/:file_id/share-links/:share_id/revoke/
+DELETE /api/v1/documents/:id/files/:file_id/share-links/:share_id/
+GET    /api/v1/documents/:id/files/:file_id/activity/
+GET    /api/v1/share/files/:token/
+POST   /api/v1/share/files/:token/verify-code/
+GET    /api/v1/share/files/:token/preview/
+GET    /api/v1/share/files/:token/download/
 ```
 
 ### OCR extraction — Future (Phase 4)

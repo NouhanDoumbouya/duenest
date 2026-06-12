@@ -1,10 +1,19 @@
 import os
+import secrets
 import uuid
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 from django.utils.text import slugify
+
+from .constants import PREVIEWABLE_CONTENT_TYPES, PREVIEWABLE_EXTENSIONS
+
+
+def generate_share_token() -> str:
+    """Unguessable, URL-safe token that reveals no internal ids."""
+    return secrets.token_urlsafe(32)
 
 
 def document_file_upload_to(instance, filename):
@@ -168,3 +177,155 @@ class DocumentFile(models.Model):
 
     def __str__(self):
         return f"{self.original_filename} ({self.document_id})"
+
+    @property
+    def is_previewable(self) -> bool:
+        """Whether this file can be previewed inline (PDF/JPEG/PNG)."""
+        ext = os.path.splitext(self.original_filename)[1].lower()
+        return (
+            self.content_type in PREVIEWABLE_CONTENT_TYPES
+            and ext in PREVIEWABLE_EXTENSIONS
+        )
+
+
+class DocumentFileShareLink(models.Model):
+    """
+    A revocable, time-limited link granting controlled access to ONE file.
+
+    A share link never exposes the owner's vault — only the single file, with
+    the permission the owner chose. Expiry and revocation are enforced on every
+    request; an optional access code adds a second factor.
+    """
+
+    class Permission(models.TextChoices):
+        VIEW_ONLY = "view_only", "View only"
+        DOWNLOAD_ALLOWED = "download_allowed", "View and download"
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="document_file_share_links",
+    )
+    document = models.ForeignKey(
+        Document,
+        on_delete=models.CASCADE,
+        related_name="file_share_links",
+    )
+    file = models.ForeignKey(
+        DocumentFile,
+        on_delete=models.CASCADE,
+        related_name="share_links",
+    )
+    token = models.CharField(
+        max_length=128, unique=True, db_index=True, default=generate_share_token
+    )
+    permission = models.CharField(
+        max_length=32,
+        choices=Permission.choices,
+        default=Permission.VIEW_ONLY,
+    )
+    expires_at = models.DateTimeField()
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    access_code_required = models.BooleanField(default=False)
+    # Hashed access code only — never stored or returned in plain text.
+    access_code_hash = models.CharField(max_length=255, blank=True)
+
+    # Owner-facing only — never exposed through public share endpoints.
+    label = models.CharField(max_length=120, blank=True)
+    recipient_email = models.EmailField(blank=True)
+    purpose = models.CharField(max_length=255, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_accessed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["file", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"ShareLink({self.token[:8]}… for file {self.file_id})"
+
+    @property
+    def is_revoked(self) -> bool:
+        return self.revoked_at is not None
+
+    @property
+    def is_expired(self) -> bool:
+        return timezone.now() >= self.expires_at
+
+    @property
+    def is_active(self) -> bool:
+        return not self.is_revoked and not self.is_expired
+
+    @property
+    def download_allowed(self) -> bool:
+        return self.permission == self.Permission.DOWNLOAD_ALLOWED
+
+
+class DocumentFileActivity(models.Model):
+    """
+    Owner-only activity trail for a file (preview, download, share, etc.).
+
+    Visible only to the owning user. Public share viewers never see it. Logging
+    must never break the main flow, and access codes are never logged.
+    """
+
+    class Action(models.TextChoices):
+        FILE_UPLOADED = "file_uploaded", "File uploaded"
+        FILE_PREVIEWED = "file_previewed", "File previewed"
+        FILE_DOWNLOADED = "file_downloaded", "File downloaded"
+        SHARE_CREATED = "share_created", "Share link created"
+        SHARE_OPENED = "share_opened", "Share link opened"
+        SHARE_PREVIEWED = "share_previewed", "Shared file previewed"
+        SHARE_DOWNLOADED = "share_downloaded", "Shared file downloaded"
+        SHARE_REVOKED = "share_revoked", "Share link revoked"
+        SHARE_CODE_VERIFIED = "share_access_code_verified", "Access code verified"
+        SHARE_CODE_FAILED = "share_access_code_failed", "Access code failed"
+        FILE_DELETED = "file_deleted", "File deleted"
+
+    class ActorType(models.TextChoices):
+        OWNER = "owner", "Owner"
+        SHARED_VIEWER = "shared_viewer", "Shared viewer"
+        SYSTEM = "system", "System"
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="document_file_activities",
+    )
+    document = models.ForeignKey(
+        Document,
+        on_delete=models.CASCADE,
+        related_name="file_activities",
+    )
+    file = models.ForeignKey(
+        DocumentFile,
+        on_delete=models.CASCADE,
+        related_name="activities",
+    )
+    share_link = models.ForeignKey(
+        DocumentFileShareLink,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="activities",
+    )
+    action = models.CharField(max_length=64, choices=Action.choices)
+    actor_type = models.CharField(max_length=32, choices=ActorType.choices)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["file", "created_at"]),
+            models.Index(fields=["owner", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.action} on file {self.file_id}"

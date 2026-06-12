@@ -1,6 +1,12 @@
 from django.contrib import admin
 
-from .models import Document, DocumentCategory, DocumentFile
+from .models import (
+    Document,
+    DocumentCategory,
+    DocumentFile,
+    DocumentFileActivity,
+    DocumentFileShareLink,
+)
 
 
 @admin.register(DocumentCategory)
@@ -43,4 +49,49 @@ class DocumentFileAdmin(admin.ModelAdmin):
     search_fields = ["original_filename", "uploaded_by__username"]
     raw_id_fields = ["document", "uploaded_by"]
     readonly_fields = ["file_size", "checksum", "created_at", "updated_at"]
+    date_hierarchy = "created_at"
+
+
+@admin.register(DocumentFileShareLink)
+class DocumentFileShareLinkAdmin(admin.ModelAdmin):
+    list_display = [
+        "id",
+        "file",
+        "owner",
+        "permission",
+        "access_code_required",
+        "expires_at",
+        "revoked_at",
+        "created_at",
+    ]
+    list_filter = ["permission", "access_code_required"]
+    search_fields = ["token", "owner__username", "label", "recipient_email"]
+    raw_id_fields = ["owner", "document", "file"]
+    readonly_fields = [
+        "token",
+        "access_code_hash",
+        "created_at",
+        "last_accessed_at",
+    ]
+    date_hierarchy = "created_at"
+
+
+@admin.register(DocumentFileActivity)
+class DocumentFileActivityAdmin(admin.ModelAdmin):
+    list_display = ["id", "file", "owner", "action", "actor_type", "created_at"]
+    list_filter = ["action", "actor_type"]
+    search_fields = ["owner__username", "action"]
+    raw_id_fields = ["owner", "document", "file", "share_link"]
+    readonly_fields = [
+        "owner",
+        "document",
+        "file",
+        "share_link",
+        "action",
+        "actor_type",
+        "ip_address",
+        "user_agent",
+        "metadata",
+        "created_at",
+    ]
     date_hierarchy = "created_at"

@@ -1080,7 +1080,7 @@ This allows DueNest to:
 - validate file ownership
 - support future S3 storage
 - support signed URLs
-- support document preview later
+- support controlled document preview
 - track file lifecycle events
 
 ---
@@ -1234,7 +1234,30 @@ branch. Every user-owned model is scoped to its owner and follows the existing
   `content_type`, `file_size`, `checksum`, timestamps.
 - **Relationships:** `document → Document` (cascade).
 - **Security:** ownership via parent document; private storage; controlled
-  download only.
+  download and preview only. `is_previewable` is derived from supported MIME
+  type plus extension (PDF/JPEG/PNG).
+
+### DocumentFileShareLink — *Implemented*
+- **Purpose:** revocable, time-limited public access to one specific
+  `DocumentFile`.
+- **Key fields:** `owner`, `document`, `file`, `token`, `permission`,
+  `expires_at`, `revoked_at`, `access_code_required`, `access_code_hash`,
+  `label`, `recipient_email`, `purpose`, `last_accessed_at`, timestamps.
+- **Relationships:** `owner → User`; `document → Document`;
+  `file → DocumentFile`.
+- **Security:** token is cryptographically random and unguessable; access is
+  file-level only; expiry and revocation are enforced on every public request;
+  access codes are hashed and never stored in plain text. Owner-facing labels,
+  recipient email, and purpose notes are not exposed publicly by default.
+
+### DocumentFileActivity — *Implemented*
+- **Purpose:** owner-only activity trail for sensitive file actions.
+- **Key fields:** `owner`, `document`, `file`, optional `share_link`, `action`,
+  `actor_type`, `ip_address`, `user_agent`, `metadata`, `created_at`.
+- **Relationships:** `owner → User`; `document → Document`;
+  `file → DocumentFile`; optional `share_link → DocumentFileShareLink`.
+- **Security:** visible only through owner-scoped file endpoints; public share
+  viewers never see the owner's activity log; access codes are never logged.
 
 ### DocumentTemplate — *MVP*
 - **Purpose:** document-type presets (default fields, suggested expiry window,
@@ -1270,21 +1293,6 @@ branch. Every user-owned model is scoped to its owner and follows the existing
   `notes`.
 - **Relationships:** `checklist → DocumentChecklist`.
 - **Security:** owner-scoped via checklist.
-
-### DocumentShareLink — *Future (Phase 3)*
-- **Purpose:** a revocable, time-limited link to one file.
-- **Key fields:** `file`, `owner`, `token` (unguessable), `permission`
-  (view/download), `password_hash` (optional), `expires_at`, `revoked_at`,
-  `view_count`.
-- **Relationships:** `file → DocumentFile`; `owner → User`.
-- **Security:** **highest sensitivity** — token unguessable; no access after
-  expiry/revocation; never exposes internal paths; access logged.
-
-### DocumentActivity — *Future (Phase 5)*
-- **Purpose:** activity timeline / audit log for a document.
-- **Key fields:** `document`, `actor`, `action`, `metadata` (JSON), `created_at`.
-- **Relationships:** `document → Document`.
-- **Security:** owner-readable; append-only; never edited.
 
 ### DocumentVersion — *Future (Phase 5)*
 - **Purpose:** version history for a re-issued file.
