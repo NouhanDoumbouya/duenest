@@ -520,24 +520,24 @@ A working frontend with landing page, auth pages, and dashboard shell.
 
 ## Sprint 4 — Document Vault
 
-**Status:** Not Started  
+**Status:** In Progress (backend metadata foundation complete)  
 **Target Date:** Jul 27 – Aug 16, 2026  
 **Goal:** Build the core document management module.
 
 ### Tasks
 
-- [ ] Create Document model
-- [ ] Create document serializer
-- [ ] Create document endpoints
+- [x] Create Document model (metadata only) + DocumentCategory model
+- [x] Create document serializer
+- [x] Create document endpoints (list/create/retrieve/update/delete)
 - [ ] Add file upload support
 - [ ] Add file validation
-- [ ] Add document listing
-- [ ] Add document detail endpoint
-- [ ] Add document update endpoint
-- [ ] Add document delete endpoint
+- [x] Add document listing
+- [x] Add document detail endpoint
+- [x] Add document update endpoint
+- [x] Add document delete endpoint
 - [ ] Add document download endpoint
-- [ ] Add expiry status logic
-- [ ] Add ownership tests
+- [ ] Add expiry status logic (auto-calculated)
+- [x] Add ownership tests
 - [ ] Build document vault frontend page
 
 ### Deliverable
