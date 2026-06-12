@@ -48,8 +48,7 @@ src/
 │   ├── (dashboard)/dashboard/documents/      # /dashboard/documents (list)
 │   │   ├── page.tsx                           #   list + delete
 │   │   ├── new/page.tsx                       #   /dashboard/documents/new
-│   │   ├── [id]/page.tsx                      #   /dashboard/documents/:id (detail + files)
-│   │   └── [id]/edit/page.tsx                 #   /dashboard/documents/:id/edit
+│   │   └── [id]/edit/page.tsx                 #   workspace: metadata form + attached files
 │   ├── layout.tsx                            # Root layout + fonts + metadata
 │   └── globals.css                          # Tailwind + DueNest theme tokens
 ├── components/
@@ -86,8 +85,10 @@ src/
 
 ### Document files
 
-- The document detail page (`/dashboard/documents/[id]`) shows the record plus
-  an **Attached files** section (upload, list, download, delete).
+- The document workspace (`/dashboard/documents/[id]/edit`) holds both the
+  metadata form **and** an **Attached files** section (upload, list, download,
+  delete) on one page. Creating a document redirects straight here so a file can
+  be attached immediately — no extra navigation.
 - File calls go through `src/lib/document-files.ts`. Uploads send `FormData`
   via `apiFetch` (which omits `Content-Type` for multipart so the browser sets
   the boundary). Downloads use an authenticated blob fetch + a temporary anchor,

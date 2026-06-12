@@ -6,6 +6,8 @@ import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Loader2 } from "lucide-react";
 
 import { DocumentForm } from "@/components/documents/document-form";
+import { DocumentFilesList } from "@/components/documents/document-files-list";
+import { DocumentFileUploader } from "@/components/documents/document-file-uploader";
 import {
   Card,
   CardContent,
@@ -13,9 +15,16 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ApiError } from "@/lib/api";
+import {
+  deleteDocumentFile,
+  downloadDocumentFile,
+  getDocumentFiles,
+} from "@/lib/document-files";
 import { getDocument, updateDocument } from "@/lib/documents";
 import type { CreateDocumentRequest, DocumentRecord } from "@/types/documents";
+import type { DocumentFile } from "@/types/document-files";
 
 export default function EditDocumentPage() {
   const router = useRouter();
@@ -28,13 +37,19 @@ export default function EditDocumentPage() {
     validId ? null : "Invalid document.",
   );
 
+  // Attached files
+  const [files, setFiles] = useState<DocumentFile[] | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<DocumentFile | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
+
   useEffect(() => {
     if (!validId) return;
     let active = true;
+
     getDocument(id)
-      .then((result) => {
-        if (active) setDoc(result);
-      })
+      .then((result) => active && setDoc(result))
       .catch((err) => {
         if (!active) return;
         if (err instanceof ApiError && err.status === 404) {
@@ -45,6 +60,11 @@ export default function EditDocumentPage() {
           );
         }
       });
+
+    getDocumentFiles(id)
+      .then((page) => active && setFiles(page.results))
+      .catch(() => active && setFiles([]));
+
     return () => {
       active = false;
     };
@@ -54,6 +74,44 @@ export default function EditDocumentPage() {
     await updateDocument(id, payload);
     router.push("/dashboard/documents");
     router.refresh();
+  }
+
+  function handleUploaded(file: DocumentFile) {
+    setFiles((prev) => [file, ...(prev ?? [])]);
+  }
+
+  async function handleDownload(file: DocumentFile) {
+    setFileError(null);
+    setDownloadingId(file.id);
+    try {
+      await downloadDocumentFile(file);
+    } catch (err) {
+      setFileError(
+        err instanceof ApiError ? err.message : "Could not download this file.",
+      );
+    } finally {
+      setDownloadingId(null);
+    }
+  }
+
+  async function handleConfirmDelete() {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    setFileError(null);
+    try {
+      await deleteDocumentFile(id, pendingDelete.id);
+      setFiles((prev) => (prev ?? []).filter((f) => f.id !== pendingDelete.id));
+      setPendingDelete(null);
+    } catch (err) {
+      setFileError(
+        err instanceof ApiError
+          ? err.message
+          : "Could not delete the file. Please try again.",
+      );
+      setPendingDelete(null);
+    } finally {
+      setDeleting(false);
+    }
   }
 
   return (
@@ -70,7 +128,7 @@ export default function EditDocumentPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-xl">Edit document</CardTitle>
+          <CardTitle className="text-xl">Document details</CardTitle>
           <CardDescription>Update the details and key dates.</CardDescription>
         </CardHeader>
         <CardContent>
@@ -95,6 +153,58 @@ export default function EditDocumentPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Attached files — available right here, no extra navigation */}
+      {doc !== null && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Attached files</CardTitle>
+            <CardDescription>
+              Upload scans and copies to keep them linked to this document.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <DocumentFileUploader documentId={id} onUploaded={handleUploaded} />
+
+            {fileError && (
+              <p
+                className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                role="alert"
+              >
+                {fileError}
+              </p>
+            )}
+
+            {files === null ? (
+              <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground">
+                <Loader2 className="size-5 animate-spin" />
+                <span>Loading files…</span>
+              </div>
+            ) : (
+              <DocumentFilesList
+                files={files}
+                downloadingId={downloadingId}
+                onDownload={handleDownload}
+                onRequestDelete={setPendingDelete}
+              />
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Delete file?"
+        description={
+          pendingDelete
+            ? `“${pendingDelete.original_filename}” will be permanently removed. This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete"
+        loading={deleting}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 }

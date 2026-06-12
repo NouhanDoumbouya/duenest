@@ -51,7 +51,7 @@ export function DocumentCard({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <Link
-              href={`/dashboard/documents/${doc.id}`}
+              href={`/dashboard/documents/${doc.id}/edit`}
               className="truncate font-heading text-base font-semibold hover:underline"
             >
               {doc.title}

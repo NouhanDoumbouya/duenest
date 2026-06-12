@@ -19,8 +19,9 @@ export default function NewDocumentPage() {
   const router = useRouter();
 
   async function handleCreate(payload: CreateDocumentRequest) {
-    await createDocument(payload);
-    router.push("/dashboard/documents");
+    // Land on the document workspace so files can be uploaded immediately.
+    const created = await createDocument(payload);
+    router.push(`/dashboard/documents/${created.id}/edit`);
     router.refresh();
   }
 
