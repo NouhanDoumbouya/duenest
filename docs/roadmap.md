@@ -529,16 +529,17 @@ A working frontend with landing page, auth pages, and dashboard shell.
 - [x] Create Document model (metadata only) + DocumentCategory model
 - [x] Create document serializer
 - [x] Create document endpoints (list/create/retrieve/update/delete)
-- [ ] Add file upload support
-- [ ] Add file validation
+- [x] Add file upload support (backend `DocumentFile` foundation)
+- [x] Add file validation (type + 10 MB size limit)
 - [x] Add document listing
 - [x] Add document detail endpoint
 - [x] Add document update endpoint
 - [x] Add document delete endpoint
-- [ ] Add document download endpoint
+- [x] Add document download endpoint (controlled, owner-only)
 - [ ] Add expiry status logic (auto-calculated)
 - [x] Add ownership tests
-- [ ] Build document vault frontend page
+- [x] Build document vault frontend page (metadata UI)
+- [ ] Build document file upload frontend UI
 
 ### Deliverable
 

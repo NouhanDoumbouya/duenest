@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Document, DocumentCategory
+from .models import Document, DocumentCategory, DocumentFile
 
 
 @admin.register(DocumentCategory)
@@ -26,4 +26,21 @@ class DocumentAdmin(admin.ModelAdmin):
     # category supports autocomplete via DocumentCategoryAdmin.search_fields.
     raw_id_fields = ["owner"]
     autocomplete_fields = ["category"]
+    date_hierarchy = "created_at"
+
+
+@admin.register(DocumentFile)
+class DocumentFileAdmin(admin.ModelAdmin):
+    list_display = [
+        "original_filename",
+        "document",
+        "uploaded_by",
+        "content_type",
+        "file_size",
+        "created_at",
+    ]
+    list_filter = ["content_type"]
+    search_fields = ["original_filename", "uploaded_by__username"]
+    raw_id_fields = ["document", "uploaded_by"]
+    readonly_fields = ["file_size", "checksum", "created_at", "updated_at"]
     date_hierarchy = "created_at"

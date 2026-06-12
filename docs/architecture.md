@@ -607,6 +607,21 @@ The database stores metadata and relationships. Actual document files should be 
 
 The database should not store large binary document files directly.
 
+### Implemented: local media storage (development)
+
+The `DocumentFile` model stores uploaded blobs on local disk under
+`MEDIA_ROOT` (`backend/media/`, git-ignored) using a structured, UUID-based
+path: `media/documents/user_<id>/document_<id>/<uuid><ext>`. The database keeps
+only metadata (original filename, content type, size, SHA-256 checksum) and the
+storage reference.
+
+Files are **not** served as public static media. They are returned only through
+an authenticated, ownership-checked download endpoint
+(`GET /api/v1/documents/:id/files/:file_id/download/`).
+
+**TODO (production):** replace local disk with a private object-storage backend
+(S3-compatible) and serve files via signed, time-limited URLs.
+
 ---
 
 ## 16. File Storage Architecture

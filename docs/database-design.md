@@ -340,6 +340,31 @@ are a shared controlled vocabulary, not user-owned.
 Implemented indexes: `(owner, status)` and `(owner, expiry_date)`; default
 ordering is `-created_at`.
 
+#### Implemented `DocumentFile` (file attachments)
+
+Files attached to a `Document` (metadata + a stored blob). Ownership is
+enforced through the parent document (`file.document.owner`).
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `id` | BigAutoField | Primary key |
+| `document` | ForeignKey(Document) | `related_name="files"`, `CASCADE` |
+| `uploaded_by` | ForeignKey(User) | Set from `request.user`, read-only via API |
+| `file` | FileField | Stored at `media/documents/user_<id>/document_<id>/<uuid><ext>` |
+| `original_filename` | CharField | Display only — never used to build the path |
+| `content_type` | CharField | Client-reported MIME type |
+| `file_size` | PositiveIntegerField | Bytes |
+| `checksum` | CharField(64) | SHA-256 hex of the uploaded bytes |
+| `created_at` / `updated_at` | DateTime | Timestamps |
+
+- Storage path uses a UUID filename (user-supplied names are not trusted for
+  paths). Index on `(document, created_at)`; ordering `-created_at`.
+- Local files live under `MEDIA_ROOT` (`backend/media/`, git-ignored). They are
+  served only through the authenticated download endpoint, never as public
+  static media.
+- **TODO (production):** move blobs to private object storage (S3-compatible)
+  with signed, time-limited access.
+
 > The table below is the **longer-term planned** design (file storage, UUIDs,
 > richer status calculation). It is kept for reference and will be folded into
 > the implemented model as file upload and related features land.

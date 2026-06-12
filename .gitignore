@@ -65,6 +65,10 @@ local_settings.py
 db.sqlite3
 db.sqlite3-journal
 
+# Uploaded media (user document files) — never commit
+backend/media/
+media/
+
 # Flask stuff:
 instance/
 .webassets-cache

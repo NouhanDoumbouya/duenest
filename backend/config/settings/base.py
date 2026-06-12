@@ -109,7 +109,12 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
-MEDIA_URL = "media/"
+# Local development media (uploaded document files). Files are served only
+# through authenticated, ownership-checked API endpoints — never as public
+# static media — so private documents are not exposed by URL.
+# TODO(production): switch to a private object-storage backend (e.g.
+# S3-compatible) with signed, time-limited access instead of local disk.
+MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

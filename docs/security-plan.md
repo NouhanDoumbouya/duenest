@@ -337,6 +337,28 @@ For v0.1, reject executable or script-like files, including:
 .html
 ```
 
+### Implemented: Document file upload (`DocumentFile`)
+
+The shipped file upload foundation enforces:
+
+- **Auth + ownership:** every file endpoint is `IsAuthenticated` and scoped to
+  the parent document's owner. Listing, retrieving, downloading, or deleting
+  another user's file returns `404`. Uploading to a document you don't own
+  returns `404`.
+- **Validation (allow-list):** max **10 MB**; extension must be one of
+  `.pdf .jpg .jpeg .png .doc .docx`; client content type must be one of the
+  matching MIME types. Frontend validation is never trusted.
+- **Safe storage paths:** filenames are replaced with a UUID; the original name
+  is stored for display only and never used to build the path. Files live under
+  `MEDIA_ROOT` and are **not** served as public static media.
+- **No path leakage:** API responses expose only a controlled `download_url`
+  (itself authenticated), never the internal storage path.
+- **`uploaded_by`** is set from the request user, read-only to clients.
+
+TODO (hardening): sniff real content type from magic bytes (the client MIME is
+spoofable) and add antivirus scanning before files are trusted. Production
+should use private object storage with signed URLs.
+
 User-uploaded SVG files should be rejected or heavily sanitized because SVG can contain scripts. Brand SVG assets committed by the developer are different from user-uploaded SVG files.
 
 ---
