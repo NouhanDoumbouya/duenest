@@ -5,17 +5,23 @@
 // redirect to /login if missing, and verify it by fetching /users/me/.
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  ArrowRight,
   CalendarClock,
   CreditCard,
   FileText,
-  Loader2,
+  FolderGit2,
+  Plus,
   RefreshCw,
+  Sparkles,
 } from "lucide-react";
 
 import { DashboardShell } from "@/components/layout/dashboard-shell";
-import { Badge } from "@/components/ui/badge";
+import { StatCard, type Stat } from "@/components/dashboard/stat-card";
+import { LogoMark } from "@/components/layout/logo";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -26,29 +32,57 @@ import {
 import { getAccessToken, getCurrentUser, logout } from "@/lib/auth";
 import type { User } from "@/types/auth";
 
-// Mock data — replaced by real API calls in a later milestone.
-const stats = [
-  { label: "Documents", value: 12, hint: "stored in your vault", icon: FileText },
-  { label: "Renewals", value: 4, hint: "tracked this quarter", icon: RefreshCw },
+// A new account starts empty — these are the metrics the user will build up.
+const stats: Stat[] = [
+  { label: "Documents", value: 0, hint: "No documents yet", icon: FileText, tone: "blue" },
+  { label: "Renewals", value: 0, hint: "Nothing tracked yet", icon: RefreshCw, tone: "teal" },
   {
     label: "Subscriptions",
-    value: 7,
-    hint: "active subscriptions",
+    value: 0,
+    hint: "Nothing tracked yet",
     icon: CreditCard,
+    tone: "slate",
   },
   {
     label: "Upcoming deadlines",
-    value: 3,
-    hint: "in the next 30 days",
+    value: 0,
+    hint: "None in the next 30 days",
     icon: CalendarClock,
+    tone: "amber",
   },
 ];
 
-const upcomingDeadlines = [
-  { name: "Passport renewal", due: "in 8 days", tone: "amber" as const },
-  { name: "Car insurance", due: "in 21 days", tone: "default" as const },
-  { name: "Domain registration", due: "in 28 days", tone: "default" as const },
+const comingSoon = [
+  {
+    icon: FileText,
+    title: "Document vault",
+    description: "Store and organize documents with expiry tracking.",
+  },
+  {
+    icon: RefreshCw,
+    title: "Renewal tracker",
+    description: "Track subscriptions, licenses, and recurring obligations.",
+  },
+  {
+    icon: FolderGit2,
+    title: "Application packs",
+    description: "Bundle documents to reuse across applications.",
+  },
+  {
+    icon: Sparkles,
+    title: "AI document support",
+    description: "Auto-extract dates and classify documents.",
+  },
 ];
+
+function DashboardSkeleton() {
+  return (
+    <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-muted/40">
+      <LogoMark size="lg" className="animate-pulse" />
+      <p className="text-sm text-muted-foreground">Loading your workspace…</p>
+    </div>
+  );
+}
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -84,85 +118,141 @@ export default function DashboardPage() {
   }, [router]);
 
   if (loading || !user) {
-    return (
-      <div className="flex min-h-dvh items-center justify-center bg-muted/40">
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <Loader2 className="size-5 animate-spin" />
-          <span>Loading your workspace…</span>
-        </div>
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
+  const fullName =
+    [user.first_name, user.last_name].filter(Boolean).join(" ").trim() ||
+    user.username;
   const greetingName = user.first_name?.trim() || user.username;
+  const today = new Date().toLocaleDateString(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
 
   return (
-    <DashboardShell>
+    <DashboardShell user={{ name: fullName, email: user.email }}>
       <div className="mx-auto w-full max-w-5xl space-y-8">
         {/* Welcome */}
         <div>
-          <h1 className="text-2xl font-semibold sm:text-3xl">
-            Welcome back, {greetingName}
+          <p className="text-sm text-muted-foreground">{today}</p>
+          <h1 className="mt-1 font-heading text-2xl font-semibold sm:text-3xl">
+            Welcome, {greetingName}
           </h1>
           <p className="mt-1 text-muted-foreground">
-            Here&apos;s a snapshot of your documents, renewals, and upcoming
-            deadlines.
+            This is your DueNest workspace. Document and renewal tracking is
+            rolling out next.
           </p>
         </div>
 
         {/* Stat cards */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {stats.map((stat) => {
-            const Icon = stat.icon;
-            return (
-              <Card key={stat.label}>
-                <CardHeader className="flex-row items-center justify-between gap-2 pb-2">
-                  <CardDescription>{stat.label}</CardDescription>
-                  <span className="flex size-9 items-center justify-center rounded-lg bg-accent text-accent-foreground">
-                    <Icon className="size-4" />
-                  </span>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-semibold">{stat.value}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">{stat.hint}</p>
-                </CardContent>
-              </Card>
-            );
-          })}
+          {stats.map((stat) => (
+            <StatCard key={stat.label} stat={stat} />
+          ))}
         </div>
 
-        {/* Upcoming deadlines */}
+        {/* Get started + deadlines */}
+        <div className="grid gap-6 lg:grid-cols-3">
+          {/* Empty-state primary action */}
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle className="text-lg">Get started</CardTitle>
+              <CardDescription>
+                Your workspace is ready. Document tools arrive in the next
+                release.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-border bg-muted/30 px-6 py-10 text-center">
+                <span className="flex size-12 items-center justify-center rounded-xl bg-accent text-accent-foreground">
+                  <FileText className="size-6" />
+                </span>
+                <div>
+                  <p className="font-medium">Add your first document</p>
+                  <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
+                    Soon you&apos;ll be able to store documents, set expiry
+                    dates, and let DueNest watch your deadlines for you.
+                  </p>
+                </div>
+                <Button disabled className="h-10" title="Coming soon">
+                  <Plus className="size-4" />
+                  Add document
+                  <span className="text-xs font-normal text-primary-foreground/70">
+                    (coming soon)
+                  </span>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Upcoming deadlines empty state */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Upcoming deadlines</CardTitle>
+              <CardDescription>The next dates to stay ahead of.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col items-center gap-3 py-8 text-center">
+                <span className="flex size-11 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                  <CalendarClock className="size-5" />
+                </span>
+                <p className="text-sm text-muted-foreground">
+                  No deadlines yet. Once you add documents, upcoming expiries and
+                  renewals will appear here.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Roadmap preview */}
         <Card>
           <CardHeader>
-            <CardTitle>Upcoming deadlines</CardTitle>
+            <CardTitle className="text-lg">Coming to DueNest</CardTitle>
             <CardDescription>
-              The next dates you&apos;ll want to stay ahead of.
+              A preview of the features rolling out to your workspace.
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            {upcomingDeadlines.map((item) => (
-              <div
-                key={item.name}
-                className="flex items-center justify-between rounded-lg border border-border px-4 py-3"
-              >
-                <div className="flex items-center gap-3">
-                  <CalendarClock className="size-4 text-muted-foreground" />
-                  <span className="font-medium">{item.name}</span>
-                </div>
-                <Badge
-                  variant={item.tone === "amber" ? "default" : "secondary"}
-                  className={
-                    item.tone === "amber"
-                      ? "bg-brand-amber text-brand-navy"
-                      : undefined
-                  }
+          <CardContent className="grid gap-4 sm:grid-cols-2">
+            {comingSoon.map((item) => {
+              const Icon = item.icon;
+              return (
+                <div
+                  key={item.title}
+                  className="flex items-start gap-3 rounded-lg border border-border/70 p-4"
                 >
-                  {item.due}
-                </Badge>
-              </div>
-            ))}
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand-navy text-brand-teal">
+                    <Icon className="size-4" />
+                  </span>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium">{item.title}</p>
+                      <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                        Soon
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-sm text-muted-foreground">
+                      {item.description}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
           </CardContent>
         </Card>
+
+        {/* Quiet link back to product story */}
+        <div className="flex items-center justify-center">
+          <Link
+            href="/#how"
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            See how DueNest works
+            <ArrowRight className="size-4" />
+          </Link>
+        </div>
       </div>
     </DashboardShell>
   );

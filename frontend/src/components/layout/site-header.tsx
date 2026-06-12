@@ -1,42 +1,35 @@
 import Link from "next/link";
 
+import { Logo } from "@/components/layout/logo";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-/** Small inline logo mark — a stylized nest using the brand teal. */
-function Logo() {
-  return (
-    <Link href="/" className="flex items-center gap-2">
-      <span
-        aria-hidden
-        className="flex size-8 items-center justify-center rounded-lg bg-brand-navy text-sm font-bold text-white"
-      >
-        <span className="text-brand-teal">D</span>
-      </span>
-      <span className="font-heading text-lg font-semibold tracking-tight">
-        DueNest
-      </span>
-    </Link>
-  );
-}
+const navLinks = [
+  { label: "Features", href: "#features" },
+  { label: "How it works", href: "#how" },
+  { label: "FAQ", href: "#faq" },
+];
 
 /** Top navigation for marketing pages. */
 export function SiteHeader() {
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur">
+    <header className="sticky top-0 z-40 border-b border-border/70 bg-background/80 backdrop-blur-md">
       <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4 sm:px-6">
         <Logo />
 
         <nav className="hidden items-center gap-8 text-sm text-muted-foreground md:flex">
-          <a href="#features" className="transition-colors hover:text-foreground">
-            Features
-          </a>
-          <a href="#how" className="transition-colors hover:text-foreground">
-            How it works
-          </a>
+          {navLinks.map((link) => (
+            <a
+              key={link.href}
+              href={link.href}
+              className="transition-colors hover:text-foreground"
+            >
+              {link.label}
+            </a>
+          ))}
         </nav>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           <Link
             href="/login"
             className={cn(buttonVariants({ variant: "ghost", size: "lg" }))}
@@ -45,7 +38,7 @@ export function SiteHeader() {
           </Link>
           <Link
             href="/register"
-            className={cn(buttonVariants({ size: "lg" }))}
+            className={cn(buttonVariants({ size: "lg" }), "shadow-sm")}
           >
             Get started
           </Link>

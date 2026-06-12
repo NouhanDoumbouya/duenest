@@ -4,6 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+import { AuthShell } from "@/components/auth/auth-shell";
+import { GoogleButton } from "@/components/auth/google-button";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -48,45 +50,31 @@ export default function RegisterPage() {
   }
 
   return (
-    <main className="flex min-h-dvh flex-col items-center justify-center bg-muted/40 px-4 py-12">
-      <Link
-        href="/"
-        className="mb-8 font-heading text-xl font-semibold tracking-tight"
-      >
-        DueNest
-      </Link>
-
-      <Card className="w-full max-w-md">
+    <AuthShell>
+      <Card className="w-full max-w-md p-2 shadow-xl shadow-foreground/5">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">Create your account</CardTitle>
           <CardDescription>
-            Start organizing your documents and deadlines
+            Start organizing your documents and deadlines — free to begin.
           </CardDescription>
         </CardHeader>
 
         <CardContent className="flex flex-col gap-5">
-          {/* TODO(google-auth): wire to POST /api/v1/auth/google/ once the Google
-              backend endpoint is merged. Disabled until then — we never fake it. */}
-          <Button
-            variant="outline"
-            size="lg"
-            className="w-full"
-            disabled
-            title="Google sign-in coming soon"
-          >
-            Continue with Google
-            <span className="ml-1 text-xs text-muted-foreground">
-              (coming soon)
-            </span>
-          </Button>
+          <GoogleButton />
 
           <div className="flex items-center gap-3">
             <Separator className="flex-1" />
-            <span className="text-xs text-muted-foreground">or</span>
+            <span className="text-xs text-muted-foreground">
+              or sign up with email
+            </span>
             <Separator className="flex-1" />
           </div>
 
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <form
+            onSubmit={handleSubmit}
+            className="flex flex-col gap-4"
+            noValidate
+          >
             <div className="flex flex-col gap-2">
               <Label htmlFor="username">Username</Label>
               <Input
@@ -94,6 +82,7 @@ export default function RegisterPage() {
                 name="username"
                 autoComplete="username"
                 required
+                className="h-11"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="yourname"
@@ -108,6 +97,7 @@ export default function RegisterPage() {
                 type="email"
                 autoComplete="email"
                 required
+                className="h-11"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
@@ -122,22 +112,29 @@ export default function RegisterPage() {
                 type="password"
                 autoComplete="new-password"
                 required
+                minLength={8}
+                className="h-11"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
+                placeholder="At least 8 characters"
               />
+              <p className="text-xs text-muted-foreground">
+                Use 8+ characters with a mix of letters and numbers.
+              </p>
             </div>
 
             {error && (
-              <p className="text-sm text-destructive" role="alert">
+              <p
+                className="rounded-lg bg-destructive/10 px-3 py-2.5 text-sm text-destructive"
+                role="alert"
+              >
                 {error}
               </p>
             )}
 
             <Button
               type="submit"
-              size="lg"
-              className="w-full"
+              className="h-11 w-full text-sm"
               disabled={submitting}
             >
               {submitting ? "Creating account…" : "Create account"}
@@ -146,12 +143,15 @@ export default function RegisterPage() {
 
           <p className="text-center text-sm text-muted-foreground">
             Already have an account?{" "}
-            <Link href="/login" className="font-medium text-primary hover:underline">
+            <Link
+              href="/login"
+              className="font-medium text-primary hover:underline"
+            >
               Sign in
             </Link>
           </p>
         </CardContent>
       </Card>
-    </main>
+    </AuthShell>
   );
 }

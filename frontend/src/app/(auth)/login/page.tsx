@@ -3,7 +3,10 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { CheckCircle2 } from "lucide-react";
 
+import { AuthShell } from "@/components/auth/auth-shell";
+import { GoogleButton } from "@/components/auth/google-button";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -48,7 +51,7 @@ function LoginForm() {
   }
 
   return (
-    <Card className="w-full max-w-md">
+    <Card className="w-full max-w-md p-2 shadow-xl shadow-foreground/5">
       <CardHeader className="text-center">
         <CardTitle className="text-2xl">Welcome back</CardTitle>
         <CardDescription>Sign in to your DueNest workspace</CardDescription>
@@ -56,33 +59,23 @@ function LoginForm() {
 
       <CardContent className="flex flex-col gap-5">
         {justRegistered && (
-          <p className="rounded-lg bg-accent px-3 py-2 text-sm text-accent-foreground">
+          <p className="flex items-center gap-2 rounded-lg bg-accent px-3 py-2.5 text-sm text-accent-foreground">
+            <CheckCircle2 className="size-4 shrink-0" />
             Account created. Please sign in to continue.
           </p>
         )}
 
-        {/* TODO(google-auth): wire to POST /api/v1/auth/google/ once the Google
-            backend endpoint is merged. Disabled until then — we never fake it. */}
-        <Button
-          variant="outline"
-          size="lg"
-          className="w-full"
-          disabled
-          title="Google sign-in coming soon"
-        >
-          Continue with Google
-          <span className="ml-1 text-xs text-muted-foreground">
-            (coming soon)
-          </span>
-        </Button>
+        <GoogleButton />
 
         <div className="flex items-center gap-3">
           <Separator className="flex-1" />
-          <span className="text-xs text-muted-foreground">or</span>
+          <span className="text-xs text-muted-foreground">
+            or continue with email
+          </span>
           <Separator className="flex-1" />
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
           <div className="flex flex-col gap-2">
             <Label htmlFor="username">Username</Label>
             <Input
@@ -90,6 +83,7 @@ function LoginForm() {
               name="username"
               autoComplete="username"
               required
+              className="h-11"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="yourname"
@@ -97,13 +91,19 @@ function LoginForm() {
           </div>
 
           <div className="flex flex-col gap-2">
-            <Label htmlFor="password">Password</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password">Password</Label>
+              <span className="text-xs text-muted-foreground">
+                Forgot? Support coming soon
+              </span>
+            </div>
             <Input
               id="password"
               name="password"
               type="password"
               autoComplete="current-password"
               required
+              className="h-11"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
@@ -111,19 +111,29 @@ function LoginForm() {
           </div>
 
           {error && (
-            <p className="text-sm text-destructive" role="alert">
+            <p
+              className="rounded-lg bg-destructive/10 px-3 py-2.5 text-sm text-destructive"
+              role="alert"
+            >
               {error}
             </p>
           )}
 
-          <Button type="submit" size="lg" className="w-full" disabled={submitting}>
+          <Button
+            type="submit"
+            className="h-11 w-full text-sm"
+            disabled={submitting}
+          >
             {submitting ? "Signing in…" : "Sign in"}
           </Button>
         </form>
 
         <p className="text-center text-sm text-muted-foreground">
           New to DueNest?{" "}
-          <Link href="/register" className="font-medium text-primary hover:underline">
+          <Link
+            href="/register"
+            className="font-medium text-primary hover:underline"
+          >
             Create an account
           </Link>
         </p>
@@ -134,16 +144,10 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <main className="flex min-h-dvh flex-col items-center justify-center bg-muted/40 px-4 py-12">
-      <Link
-        href="/"
-        className="mb-8 font-heading text-xl font-semibold tracking-tight"
-      >
-        DueNest
-      </Link>
+    <AuthShell>
       <Suspense>
         <LoginForm />
       </Suspense>
-    </main>
+    </AuthShell>
   );
 }
