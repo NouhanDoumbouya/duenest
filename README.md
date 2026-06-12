@@ -576,6 +576,7 @@ Implement secure user registration, login, token refresh, and current user profi
 * [x] Configure JWT login endpoint
 * [x] Configure JWT refresh endpoint
 * [x] Create protected current-user endpoint
+* [x] Add Google sign-in endpoint (ID-token verification)
 * [x] Add password validation
 * [x] Add authentication permissions
 * [x] Add authentication tests
