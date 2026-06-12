@@ -629,6 +629,65 @@ List responses are paginated using the standard pagination envelope
 
 ---
 
+# 13.6 Document Files API (implemented)
+
+Files attached to a document. Nested under the parent document and scoped to
+its owner: a user can only reach files for documents they own. All endpoints
+require authentication.
+
+| Method   | Path                                                | Description                       |
+| -------- | --------------------------------------------------- | --------------------------------- |
+| `GET`    | `/api/v1/documents/:id/files/`                      | List files for the document       |
+| `POST`   | `/api/v1/documents/:id/files/`                      | Upload a file (multipart)         |
+| `GET`    | `/api/v1/documents/:id/files/:file_id/`             | Retrieve file metadata            |
+| `DELETE` | `/api/v1/documents/:id/files/:file_id/`             | Delete the file (record + blob)   |
+| `GET`    | `/api/v1/documents/:id/files/:file_id/download/`    | Controlled download (owner only)  |
+
+### Upload Request
+
+`multipart/form-data` with a single `file` field:
+
+```http
+POST /api/v1/documents/12/files/
+Content-Type: multipart/form-data
+
+file: <binary>
+```
+
+### Response: `201 Created`
+
+```json
+{
+  "id": 1,
+  "document": 12,
+  "uploaded_by": 7,
+  "original_filename": "passport.pdf",
+  "content_type": "application/pdf",
+  "file_size": 184213,
+  "checksum": "9f86d0818988…",
+  "download_url": "http://localhost:8000/api/v1/documents/12/files/1/download/",
+  "created_at": "2026-06-12T10:30:00Z",
+  "updated_at": "2026-06-12T10:30:00Z"
+}
+```
+
+### Validation rules
+
+- Max size **10 MB**.
+- Allowed types: PDF, JPEG, PNG, DOC, DOCX (checked by extension **and** the
+  client-reported content type).
+- The parent document must belong to the authenticated user (otherwise `404`).
+
+### Security notes
+
+- `uploaded_by` is set from the request user, never the client.
+- The internal storage path is **never** exposed; clients use `download_url`,
+  which is itself authenticated and ownership-checked.
+- Accessing another user's file (list, retrieve, download, delete) returns
+  `404 Not Found`.
+
+---
+
 # 14. Dashboard API
 
 ## 14.1 Get Dashboard Summary

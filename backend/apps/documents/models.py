@@ -1,7 +1,25 @@
+import os
+import uuid
+
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.text import slugify
+
+
+def document_file_upload_to(instance, filename):
+    """
+    Build a structured, non-guessable storage path and never trust the
+    user-supplied filename for the path itself.
+
+    media/documents/user_<user_id>/document_<document_id>/<uuid><ext>
+    """
+    ext = os.path.splitext(filename)[1].lower()
+    safe_name = f"{uuid.uuid4().hex}{ext}"
+    return (
+        f"documents/user_{instance.uploaded_by_id}"
+        f"/document_{instance.document_id}/{safe_name}"
+    )
 
 
 class DocumentCategory(models.Model):
@@ -108,3 +126,45 @@ class Document(models.Model):
             raise ValidationError(
                 {"renewal_date": "Renewal date cannot be later than the expiry date."}
             )
+
+
+class DocumentFile(models.Model):
+    """
+    A file attached to a user-owned Document.
+
+    Ownership is enforced through the parent document: a file is accessible
+    only if `file.document.owner == request.user`. The stored path is internal
+    and is never exposed in API responses — clients use a controlled download
+    endpoint instead.
+    """
+
+    document = models.ForeignKey(
+        Document,
+        on_delete=models.CASCADE,
+        related_name="files",
+    )
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="uploaded_document_files",
+    )
+    file = models.FileField(upload_to=document_file_upload_to)
+
+    # Stored for display/validation only — never used to build storage paths.
+    original_filename = models.CharField(max_length=255)
+    content_type = models.CharField(max_length=120, blank=True)
+    file_size = models.PositiveIntegerField(default=0)
+    # SHA-256 hex digest of the uploaded bytes (integrity / dedupe aid).
+    checksum = models.CharField(max_length=64, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["document", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.original_filename} ({self.document_id})"

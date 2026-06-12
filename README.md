@@ -483,14 +483,22 @@ POST   /api/v1/documents/         # create document
 GET    /api/v1/documents/:id/     # retrieve document
 PATCH  /api/v1/documents/:id/     # update document
 DELETE /api/v1/documents/:id/     # delete document
+
+GET    /api/v1/documents/:id/files/                  # list a document's files
+POST   /api/v1/documents/:id/files/                  # upload a file (multipart)
+GET    /api/v1/documents/:id/files/:file_id/         # file metadata
+DELETE /api/v1/documents/:id/files/:file_id/         # delete a file
+GET    /api/v1/documents/:id/files/:file_id/download/ # controlled download
 ```
 
-The document API manages metadata only (no file upload yet) and is strictly
-scoped to the authenticated owner.
+The document API and its file attachments are strictly scoped to the
+authenticated owner. Uploads are validated (type + 10 MB limit) and stored
+under git-ignored local media in development; files are served only through the
+authenticated download endpoint, never as public static media.
 
 The next implementation focus is:
 
-* Add document file upload + validation
+* Frontend document file upload UI
 * Add expiry/renewal status automation
 * Build the document vault frontend page
 

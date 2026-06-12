@@ -1,6 +1,10 @@
-from rest_framework import serializers
+import os
 
-from .models import Document, DocumentCategory
+from rest_framework import serializers
+from rest_framework.reverse import reverse
+
+from .constants import ALLOWED_CONTENT_TYPES, ALLOWED_EXTENSIONS, MAX_FILE_SIZE
+from .models import Document, DocumentCategory, DocumentFile
 
 
 class DocumentCategorySerializer(serializers.ModelSerializer):
@@ -62,3 +66,66 @@ class DocumentSerializer(serializers.ModelSerializer):
                 {"renewal_date": "Renewal date cannot be later than the expiry date."}
             )
         return attrs
+
+
+class DocumentFileSerializer(serializers.ModelSerializer):
+    """Read representation of an attached file. Exposes no internal path."""
+
+    uploaded_by = serializers.PrimaryKeyRelatedField(read_only=True)
+    download_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DocumentFile
+        fields = [
+            "id",
+            "document",
+            "uploaded_by",
+            "original_filename",
+            "content_type",
+            "file_size",
+            "checksum",
+            "download_url",
+            "created_at",
+            "updated_at",
+        ]
+        # Everything is server-derived; nothing here is client-writable.
+        read_only_fields = fields
+
+    def get_download_url(self, obj):
+        request = self.context.get("request")
+        url = reverse(
+            "document-file-download",
+            kwargs={"document_id": obj.document_id, "pk": obj.pk},
+            request=request,
+        )
+        return url
+
+
+class DocumentFileUploadSerializer(serializers.Serializer):
+    """Validates an uploaded file (type + size) before it is stored."""
+
+    file = serializers.FileField(write_only=True)
+
+    def validate_file(self, uploaded):
+        if uploaded.size > MAX_FILE_SIZE:
+            max_mb = MAX_FILE_SIZE // (1024 * 1024)
+            raise serializers.ValidationError(
+                f"File is too large. Maximum size is {max_mb} MB."
+            )
+
+        ext = os.path.splitext(uploaded.name)[1].lower()
+        if ext not in ALLOWED_EXTENSIONS:
+            raise serializers.ValidationError(
+                "Unsupported file extension. Allowed: "
+                + ", ".join(sorted(ALLOWED_EXTENSIONS))
+                + "."
+            )
+
+        # content_type is client-reported (spoofable) — checked alongside the
+        # extension as a first line of defence. See constants.py TODO.
+        if uploaded.content_type not in ALLOWED_CONTENT_TYPES:
+            raise serializers.ValidationError(
+                "Unsupported file type. Allowed types: PDF, JPEG, PNG, DOC, DOCX."
+            )
+
+        return uploaded
