@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import {
+  CalendarClock,
   CheckCircle2,
   Loader2,
   Pencil,
@@ -55,6 +56,26 @@ export function DocumentCard({
   const expiryDays = daysUntil(doc.expiry_date);
   const expiryPast = expiryDays !== null && expiryDays < 0;
 
+  // Date-derived urgency, shown only when a document needs attention soon.
+  const urgency =
+    expiryDays === null
+      ? null
+      : expiryDays < 0
+        ? {
+            urgent: true,
+            label: `Expired ${Math.abs(expiryDays)} day${
+              Math.abs(expiryDays) === 1 ? "" : "s"
+            } ago`,
+          }
+        : expiryDays <= 30
+          ? {
+              urgent: false,
+              label: `Expires in ${expiryDays} day${
+                expiryDays === 1 ? "" : "s"
+              }`,
+            }
+          : null;
+
   // One-click upload straight from the card — no need to open the document.
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -102,6 +123,19 @@ export function DocumentCard({
                 {doc.title}
               </Link>
               <DocumentStatusBadge status={doc.status} />
+              {urgency && (
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
+                    urgency.urgent
+                      ? "bg-destructive/10 text-destructive"
+                      : "bg-brand-amber/15 text-brand-amber",
+                  )}
+                >
+                  <CalendarClock className="size-3" />
+                  {urgency.label}
+                </span>
+              )}
             </div>
             {meta && (
               <p className="mt-1 truncate text-sm text-muted-foreground">{meta}</p>

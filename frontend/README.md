@@ -119,6 +119,11 @@ src/
   (`sm` / default / `lg`) and tinted primary shadow.
 - **Patterns:** reusable section/card components live under `components/marketing`,
   `components/dashboard`, and `components/auth` to keep pages thin.
+- **Authenticated app conventions:** forms group fields into labelled sections
+  (a two-column `label / fields` layout) rather than a flat list; document
+  status uses `DocumentStatusBadge` (calm → urgent ring-tinted pills), and
+  date-derived urgency ("Expires in N days" / "Expired N days ago") is shown
+  on document cards and the dashboard "Needs attention" panel.
 
 ## Authentication (current state)
 

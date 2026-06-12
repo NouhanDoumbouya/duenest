@@ -98,13 +98,18 @@ export default function DashboardPage() {
     },
   ];
 
-  const upcoming = docs
-    .filter((d) => {
-      const days = daysUntil(d.expiry_date);
-      return days !== null && days >= 0;
-    })
-    .sort((a, b) => (daysUntil(a.expiry_date) ?? 0) - (daysUntil(b.expiry_date) ?? 0))
-    .slice(0, 5);
+  // Anything that needs a look soon: expired, marked renewal-due, or expiring
+  // within 30 days — ranked by urgency (most overdue first, then soonest).
+  const attention = docs
+    .map((doc) => ({ doc, days: daysUntil(doc.expiry_date) }))
+    .filter(
+      ({ doc, days }) =>
+        doc.status === "expired" ||
+        doc.status === "renewal_due" ||
+        (days !== null && days <= 30),
+    )
+    .sort((a, b) => (a.days ?? 99999) - (b.days ?? 99999))
+    .slice(0, 6);
 
   const loading = documents === null;
 
@@ -145,28 +150,39 @@ export default function DashboardPage() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {loading
           ? Array.from({ length: 4 }).map((_, i) => (
-              <Card key={i} className="h-[116px] animate-pulse" />
+              <Card key={i} className="h-[120px] animate-pulse" />
             ))
-          : stats.map((stat) => <StatCard key={stat.label} stat={stat} />)}
+          : stats.map((stat) => (
+              <Link
+                key={stat.label}
+                href="/dashboard/documents"
+                className="rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <StatCard stat={stat} />
+              </Link>
+            ))}
       </div>
 
       {!loading && total === 0 ? (
         /* Empty state */
         <Card>
-          <CardContent className="flex flex-col items-center gap-4 px-6 py-12 text-center">
+          <CardContent className="flex flex-col items-center gap-4 px-6 py-14 text-center">
             <span className="flex size-12 items-center justify-center rounded-xl bg-accent text-accent-foreground">
               <FileText className="size-6" />
             </span>
             <div>
-              <p className="font-medium">No documents yet</p>
-              <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-                Add your passport, visa, license, insurance, or certificates so
-                DueNest can help you stay ahead of renewals.
+              <p className="font-heading text-base font-semibold">
+                Your vault is ready
+              </p>
+              <p className="mx-auto mt-1.5 max-w-md text-sm leading-relaxed text-muted-foreground">
+                Your dashboard will come alive as you add documents, renewal
+                dates, and important files. Start with your passport, a visa, or
+                an insurance policy.
               </p>
             </div>
             <Link
               href="/dashboard/documents/new"
-              className={cn(buttonVariants({ size: "lg" }), "h-10")}
+              className={cn(buttonVariants({ size: "lg" }))}
             >
               <Plus className="size-4" />
               Add your first document
@@ -175,41 +191,52 @@ export default function DashboardPage() {
         </Card>
       ) : (
         !loading && (
-          /* Upcoming deadlines */
+          /* Needs attention */
           <Card>
             <CardHeader className="flex-row items-center justify-between">
               <div>
-                <CardTitle className="text-lg">Upcoming deadlines</CardTitle>
+                <CardTitle className="text-lg">Needs attention</CardTitle>
                 <CardDescription>
-                  The next dates you&apos;ll want to stay ahead of.
+                  Documents that are expiring, due for renewal, or already
+                  expired.
                 </CardDescription>
               </div>
               <Link
                 href="/dashboard/documents"
-                className="text-sm font-medium text-primary hover:underline"
+                className="shrink-0 text-sm font-medium text-primary hover:underline"
               >
                 View all
               </Link>
             </CardHeader>
             <CardContent>
-              {upcoming.length === 0 ? (
-                <div className="flex flex-col items-center gap-3 py-8 text-center">
-                  <span className="flex size-11 items-center justify-center rounded-full bg-muted text-muted-foreground">
+              {attention.length === 0 ? (
+                <div className="flex flex-col items-center gap-3 py-10 text-center">
+                  <span className="flex size-11 items-center justify-center rounded-full bg-brand-success/10 text-brand-success">
                     <FileWarning className="size-5" />
                   </span>
                   <p className="text-sm text-muted-foreground">
-                    No upcoming expiry dates. You&apos;re all caught up.
+                    You&apos;re all caught up — nothing needs attention right now.
                   </p>
                 </div>
               ) : (
-                <ul className="flex flex-col gap-2.5">
-                  {upcoming.map((doc) => {
-                    const days = daysUntil(doc.expiry_date);
+                <ul className="flex flex-col gap-2">
+                  {attention.map(({ doc, days }) => {
+                    const chip =
+                      days === null
+                        ? null
+                        : days < 0
+                          ? {
+                              urgent: true,
+                              label: `Expired ${Math.abs(days)}d ago`,
+                            }
+                          : days <= 30
+                            ? { urgent: false, label: `in ${days}d` }
+                            : null;
                     return (
                       <li key={doc.id}>
                         <Link
                           href={`/dashboard/documents/${doc.id}/edit`}
-                          className="flex items-center justify-between gap-3 rounded-lg border border-border/70 px-4 py-3 transition-colors hover:bg-muted/50"
+                          className="flex items-center justify-between gap-3 rounded-xl border border-border px-4 py-3 transition-colors hover:bg-muted/40"
                         >
                           <div className="flex min-w-0 items-center gap-3">
                             <CalendarClock className="size-4 shrink-0 text-muted-foreground" />
@@ -218,12 +245,27 @@ export default function DashboardPage() {
                                 {doc.title}
                               </span>
                               <span className="block text-xs text-muted-foreground">
-                                Expires {formatDate(doc.expiry_date)}
-                                {days !== null && ` · in ${days} day${days === 1 ? "" : "s"}`}
+                                {doc.expiry_date
+                                  ? `Expires ${formatDate(doc.expiry_date)}`
+                                  : "No expiry date set"}
                               </span>
                             </span>
                           </div>
-                          <DocumentStatusBadge status={doc.status} />
+                          <div className="flex shrink-0 items-center gap-2">
+                            {chip && (
+                              <span
+                                className={cn(
+                                  "rounded-full px-2 py-0.5 text-xs font-medium",
+                                  chip.urgent
+                                    ? "bg-destructive/10 text-destructive"
+                                    : "bg-brand-amber/15 text-brand-amber",
+                                )}
+                              >
+                                {chip.label}
+                              </span>
+                            )}
+                            <DocumentStatusBadge status={doc.status} />
+                          </div>
                         </Link>
                       </li>
                     );

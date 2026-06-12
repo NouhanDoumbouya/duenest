@@ -112,15 +112,18 @@ export default function DocumentsPage() {
               <FileText className="size-6" />
             </span>
             <div>
-              <p className="font-medium">No documents yet</p>
-              <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-                Add your passport, visa, license, insurance, or certificates so
-                DueNest can help you stay ahead of renewals.
+              <p className="font-heading text-base font-semibold">
+                Start your document vault
+              </p>
+              <p className="mx-auto mt-1.5 max-w-md text-sm leading-relaxed text-muted-foreground">
+                Track passports, visas, licenses, certificates, and important
+                records around the dates that matter. Add your first document to
+                begin.
               </p>
             </div>
             <Link
               href="/dashboard/documents/new"
-              className={cn(buttonVariants({ size: "lg" }), "h-10")}
+              className={cn(buttonVariants({ size: "lg" }))}
             >
               <Plus className="size-4" />
               Add your first document

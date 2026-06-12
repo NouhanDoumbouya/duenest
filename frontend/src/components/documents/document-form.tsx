@@ -180,7 +180,7 @@ export function DocumentForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6" noValidate>
+    <form onSubmit={handleSubmit} className="space-y-8" noValidate>
       {formError && (
         <p
           className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive"
@@ -190,128 +190,156 @@ export function DocumentForm({
         </p>
       )}
 
-      <Field
-        id="title"
-        label="Title"
-        required
-        error={fieldErrors.title}
+      <FormSection
+        title="Basic details"
+        description="What the document is and where it stands."
       >
-        <Input
-          id="title"
-          className="h-11"
-          value={form.title}
-          onChange={(e) => update("title", e.target.value)}
-          placeholder="e.g. Passport"
-          aria-invalid={!!fieldErrors.title}
-          required
-        />
-      </Field>
-
-      <div className="grid gap-6 sm:grid-cols-2">
-        <Field id="document_type" label="Document type" error={fieldErrors.document_type}>
+        <Field id="title" label="Title" required error={fieldErrors.title}>
           <Input
+            id="title"
+            className="h-11"
+            value={form.title}
+            onChange={(e) => update("title", e.target.value)}
+            placeholder="e.g. Passport"
+            aria-invalid={!!fieldErrors.title}
+            required
+          />
+        </Field>
+
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field
             id="document_type"
-            className="h-11"
-            value={form.document_type}
-            onChange={(e) => update("document_type", e.target.value)}
-            placeholder="passport, visa, insurance…"
-          />
-        </Field>
-        <Field id="status" label="Status" error={fieldErrors.status}>
-          <select
-            id="status"
-            className="h-11 w-full rounded-lg border border-input bg-transparent px-3 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-            value={form.status}
-            onChange={(e) => update("status", e.target.value as DocumentStatus)}
+            label="Document type"
+            error={fieldErrors.document_type}
           >
-            {STATUS_OPTIONS.map((status) => (
-              <option key={status} value={status}>
-                {STATUS_LABELS[status]}
-              </option>
-            ))}
-          </select>
-        </Field>
-      </div>
+            <Input
+              id="document_type"
+              className="h-11"
+              value={form.document_type}
+              onChange={(e) => update("document_type", e.target.value)}
+              placeholder="passport, visa, insurance…"
+            />
+          </Field>
+          <Field id="status" label="Status" error={fieldErrors.status}>
+            <select
+              id="status"
+              className="h-11 w-full rounded-lg border border-input bg-card px-3 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              value={form.status}
+              onChange={(e) => update("status", e.target.value as DocumentStatus)}
+            >
+              {STATUS_OPTIONS.map((status) => (
+                <option key={status} value={status}>
+                  {STATUS_LABELS[status]}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+      </FormSection>
 
-      <div className="grid gap-6 sm:grid-cols-2">
-        <Field id="issuer" label="Issuer" error={fieldErrors.issuer}>
-          <Input
-            id="issuer"
-            className="h-11"
-            value={form.issuer}
-            onChange={(e) => update("issuer", e.target.value)}
-            placeholder="Issuing authority"
-          />
-        </Field>
-        <Field id="country" label="Country" error={fieldErrors.country}>
-          <Input
-            id="country"
-            className="h-11"
-            value={form.country}
-            onChange={(e) => update("country", e.target.value)}
-            placeholder="Issuing country"
-          />
-        </Field>
-      </div>
-
-      <Field
-        id="reference_number"
-        label="Reference number"
-        error={fieldErrors.reference_number}
+      <FormSection
+        title="Issuer & reference"
+        description="Who issued it and any identifying number."
       >
-        <Input
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field id="issuer" label="Issuer" error={fieldErrors.issuer}>
+            <Input
+              id="issuer"
+              className="h-11"
+              value={form.issuer}
+              onChange={(e) => update("issuer", e.target.value)}
+              placeholder="Issuing authority"
+            />
+          </Field>
+          <Field id="country" label="Country" error={fieldErrors.country}>
+            <Input
+              id="country"
+              className="h-11"
+              value={form.country}
+              onChange={(e) => update("country", e.target.value)}
+              placeholder="Issuing country"
+            />
+          </Field>
+        </div>
+        <Field
           id="reference_number"
-          className="h-11"
-          value={form.reference_number}
-          onChange={(e) => update("reference_number", e.target.value)}
-          placeholder="Optional"
-        />
-      </Field>
-
-      <div className="grid gap-6 sm:grid-cols-3">
-        <Field id="issue_date" label="Issue date" error={fieldErrors.issue_date}>
+          label="Reference number"
+          error={fieldErrors.reference_number}
+        >
           <Input
-            id="issue_date"
-            type="date"
+            id="reference_number"
             className="h-11"
-            value={form.issue_date}
-            onChange={(e) => update("issue_date", e.target.value)}
+            value={form.reference_number}
+            onChange={(e) => update("reference_number", e.target.value)}
+            placeholder="Optional — e.g. document or policy number"
           />
         </Field>
-        <Field id="expiry_date" label="Expiry date" error={fieldErrors.expiry_date}>
-          <Input
+      </FormSection>
+
+      <FormSection
+        title="Important dates"
+        description="DueNest uses these to flag what needs attention. Leave blank if a date doesn’t apply."
+      >
+        <div className="grid gap-5 sm:grid-cols-3">
+          <Field id="issue_date" label="Issue date" error={fieldErrors.issue_date}>
+            <Input
+              id="issue_date"
+              type="date"
+              className="h-11"
+              value={form.issue_date}
+              onChange={(e) => update("issue_date", e.target.value)}
+            />
+          </Field>
+          <Field
             id="expiry_date"
-            type="date"
-            className="h-11"
-            value={form.expiry_date}
-            onChange={(e) => update("expiry_date", e.target.value)}
-            aria-invalid={!!fieldErrors.expiry_date}
-          />
-        </Field>
-        <Field id="renewal_date" label="Renewal date" error={fieldErrors.renewal_date}>
-          <Input
+            label="Expiry date"
+            error={fieldErrors.expiry_date}
+          >
+            <Input
+              id="expiry_date"
+              type="date"
+              className="h-11"
+              value={form.expiry_date}
+              onChange={(e) => update("expiry_date", e.target.value)}
+              aria-invalid={!!fieldErrors.expiry_date}
+            />
+          </Field>
+          <Field
             id="renewal_date"
-            type="date"
-            className="h-11"
-            value={form.renewal_date}
-            onChange={(e) => update("renewal_date", e.target.value)}
-            aria-invalid={!!fieldErrors.renewal_date}
+            label="Renewal date"
+            error={fieldErrors.renewal_date}
+          >
+            <Input
+              id="renewal_date"
+              type="date"
+              className="h-11"
+              value={form.renewal_date}
+              onChange={(e) => update("renewal_date", e.target.value)}
+              aria-invalid={!!fieldErrors.renewal_date}
+            />
+          </Field>
+        </div>
+      </FormSection>
+
+      <FormSection
+        title="Notes"
+        description="Anything you’ll want to remember at renewal time."
+      >
+        <Field id="notes" label="Notes" srLabel error={fieldErrors.notes}>
+          <Textarea
+            id="notes"
+            value={form.notes}
+            onChange={(e) => update("notes", e.target.value)}
+            placeholder="Renewal steps, where the original is kept, who to contact…"
           />
         </Field>
-      </div>
-
-      <Field id="notes" label="Notes" error={fieldErrors.notes}>
-        <Textarea
-          id="notes"
-          value={form.notes}
-          onChange={(e) => update("notes", e.target.value)}
-          placeholder="Anything you want to remember about this document."
-        />
-      </Field>
+      </FormSection>
 
       {attachFile && (
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="attach-file">Attach a file (optional)</Label>
+        <FormSection
+          title="Attach a file"
+          description="Attach the file connected to this document so it’s easier to find when renewal time comes."
+        >
           <input
             ref={fileInputRef}
             id="attach-file"
@@ -321,7 +349,7 @@ export function DocumentForm({
             disabled={submitting}
             className="hidden"
           />
-          <div className="flex items-center gap-3 rounded-lg border border-dashed border-border bg-muted/30 p-3">
+          <div className="flex items-center gap-3 rounded-xl border border-dashed border-border bg-muted/30 p-4">
             <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
               <UploadCloud className="size-5" />
             </span>
@@ -333,7 +361,7 @@ export function DocumentForm({
                 </p>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  PDF, JPG, PNG, DOC, DOCX · up to 10 MB
+                  Optional · PDF, JPG, PNG, DOC, DOCX · up to 10 MB
                 </p>
               )}
             </div>
@@ -364,17 +392,17 @@ export function DocumentForm({
               {fileError}
             </p>
           )}
-        </div>
+        </FormSection>
       )}
 
       <div className="flex items-center justify-end gap-3 border-t border-border pt-6">
         <Link
           href={cancelHref}
-          className={cn(buttonVariants({ variant: "outline", size: "lg" }), "h-10")}
+          className={cn(buttonVariants({ variant: "outline", size: "lg" }))}
         >
           Cancel
         </Link>
-        <Button type="submit" className="h-10" disabled={submitting}>
+        <Button type="submit" size="lg" disabled={submitting}>
           {submitting ? "Saving…" : submitLabel}
         </Button>
       </div>
@@ -382,22 +410,48 @@ export function DocumentForm({
   );
 }
 
+function FormSection({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="grid gap-5 border-t border-border pt-6 first:border-t-0 first:pt-0 sm:grid-cols-[200px_1fr]">
+      <div className="sm:pt-1">
+        <h3 className="font-heading text-sm font-semibold">{title}</h3>
+        {description && (
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            {description}
+          </p>
+        )}
+      </div>
+      <div className="space-y-5">{children}</div>
+    </section>
+  );
+}
+
 function Field({
   id,
   label,
   required,
+  srLabel,
   error,
   children,
 }: {
   id: string;
   label: string;
   required?: boolean;
+  srLabel?: boolean;
   error?: string;
   children: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-2">
-      <Label htmlFor={id}>
+      <Label htmlFor={id} className={cn(srLabel && "sr-only")}>
         {label}
         {required && <span className="text-destructive"> *</span>}
       </Label>
