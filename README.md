@@ -470,13 +470,29 @@ Expected response:
 }
 ```
 
+Implemented API endpoints so far:
+
+```txt
+POST   /api/v1/auth/register/     # username/password registration
+POST   /api/v1/auth/login/        # JWT login
+POST   /api/v1/auth/refresh/      # JWT refresh
+POST   /api/v1/auth/google/       # Google ID-token sign-in
+GET    /api/v1/users/me/          # current user
+GET    /api/v1/documents/         # list current user's documents
+POST   /api/v1/documents/         # create document
+GET    /api/v1/documents/:id/     # retrieve document
+PATCH  /api/v1/documents/:id/     # update document
+DELETE /api/v1/documents/:id/     # delete document
+```
+
+The document API manages metadata only (no file upload yet) and is strictly
+scoped to the authenticated owner.
+
 The next implementation focus is:
 
-* Build authentication endpoints
-* Add user registration
-* Add JWT login and refresh flow
-* Add protected current-user endpoint
-* Add authentication tests
+* Add document file upload + validation
+* Add expiry/renewal status automation
+* Build the document vault frontend page
 
 The next backend branch after this foundation PR will be:
 

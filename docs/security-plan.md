@@ -269,6 +269,21 @@ instead of:
 
 This avoids leaking whether another user’s resource exists.
 
+### Implemented: Document ownership enforcement
+
+The shipped `Document` API (`apps.documents`) follows these rules concretely:
+
+- `DocumentViewSet.permission_classes = [IsAuthenticated]` — anonymous requests
+  receive `401 Unauthorized`.
+- `get_queryset()` returns `Document.objects.filter(owner=self.request.user)`,
+  so list/retrieve/update/delete can only ever touch the caller's own rows.
+  Accessing another user's document id returns `404 Not Found` (it is simply not
+  in the queryset), matching the recommended behavior above.
+- `perform_create()` sets `owner=self.request.user`; the serializer marks
+  `owner` read-only, so a client cannot assign a document to another user.
+- This is verified by tests covering anonymous access, cross-user retrieve,
+  update, and delete attempts.
+
 ---
 
 ## 11. File Upload Security

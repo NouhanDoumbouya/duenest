@@ -299,7 +299,52 @@ Stores metadata for uploaded user documents.
 
 The actual file is stored outside the database. The database stores file reference information and metadata.
 
-### Model: `Document`
+### Implemented (v1 — metadata only)
+
+The first shipped version of this model (`apps.documents`) intentionally stores
+**metadata only**: there are no file fields, OCR, AI, or reminders yet. It also
+differs from the longer-term plan below in a few ways:
+
+- Primary keys are auto-increment integers (consistent with the existing
+  `users.User` model), not UUIDs — UUIDs can be revisited later.
+- The owner field is named `owner` (ForeignKey to `users.User`,
+  `related_name="documents"`).
+- `category` is a nullable ForeignKey to a new shared `DocumentCategory` model
+  (see below) rather than a free-text field.
+- Status choices are `active`, `expired`, `renewal_due`, `archived`.
+
+Implemented `Document` fields:
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `id` | BigAutoField | Yes | Primary key |
+| `owner` | ForeignKey(User) | Yes | Owner; set from `request.user`, read-only via API |
+| `category` | ForeignKey(DocumentCategory) | No | Nullable; `SET_NULL` on delete |
+| `title` | CharField | Yes | User-defined title |
+| `document_type` | CharField | No | Passport, visa, contract, etc. (free text) |
+| `issuer` | CharField | No | Issuing authority |
+| `country` | CharField | No | Issuing country |
+| `reference_number` | CharField | No | Nullable document/reference number |
+| `issue_date` | DateField | No | Optional |
+| `expiry_date` | DateField | No | Optional; not before `issue_date` |
+| `renewal_date` | DateField | No | Optional; not after `expiry_date` |
+| `notes` | TextField | No | User notes |
+| `status` | CharField | Yes | `active`, `expired`, `renewal_due`, `archived` (default `active`) |
+| `created_at` | DateTime | Yes | Record creation time |
+| `updated_at` | DateTime | Yes | Last update time |
+
+Implemented `DocumentCategory` fields: `id`, `name` (unique), `slug` (unique,
+auto-derived from name), `description`, `created_at`, `updated_at`. Categories
+are a shared controlled vocabulary, not user-owned.
+
+Implemented indexes: `(owner, status)` and `(owner, expiry_date)`; default
+ordering is `-created_at`.
+
+> The table below is the **longer-term planned** design (file storage, UUIDs,
+> richer status calculation). It is kept for reference and will be folded into
+> the implemented model as file upload and related features land.
+
+### Model: `Document` (planned)
 
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |

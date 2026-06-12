@@ -541,6 +541,94 @@ Required.
 
 ---
 
+# 13.5 Documents API (implemented)
+
+The first implemented core feature. Manages **document metadata only** — no
+file upload, OCR, AI extraction, or reminders yet. Every endpoint requires
+authentication, and all access is scoped to the authenticated user: a document
+that belongs to another user returns `404 Not Found`.
+
+Base path:
+
+```http
+/api/v1/documents/
+```
+
+| Method   | Path                      | Description                          |
+| -------- | ------------------------- | ------------------------------------ |
+| `GET`    | `/api/v1/documents/`      | List the current user's documents    |
+| `POST`   | `/api/v1/documents/`      | Create a document for the current user |
+| `GET`    | `/api/v1/documents/:id/`  | Retrieve one of the user's documents |
+| `PATCH`  | `/api/v1/documents/:id/`  | Update one of the user's documents   |
+| `DELETE` | `/api/v1/documents/:id/`  | Delete one of the user's documents   |
+
+### Authentication
+
+Required (`Authorization: Bearer <access_token>`).
+
+### Create Request
+
+```json
+{
+  "title": "My Passport",
+  "document_type": "passport",
+  "category": 1,
+  "issuer": "Immigration Department",
+  "country": "Guinea",
+  "reference_number": "X1234567",
+  "issue_date": "2020-01-01",
+  "expiry_date": "2030-01-01",
+  "renewal_date": "2029-10-01",
+  "notes": "Renew before travel.",
+  "status": "active"
+}
+```
+
+Only `title` is required. `owner` is **never** accepted from the client — it is
+set from the authenticated user. `category` is optional and references a
+`DocumentCategory` id.
+
+### Response: `201 Created`
+
+```json
+{
+  "id": 1,
+  "owner": 7,
+  "category": 1,
+  "category_name": "Passport",
+  "title": "My Passport",
+  "document_type": "passport",
+  "issuer": "Immigration Department",
+  "country": "Guinea",
+  "reference_number": "X1234567",
+  "issue_date": "2020-01-01",
+  "expiry_date": "2030-01-01",
+  "renewal_date": "2029-10-01",
+  "notes": "Renew before travel.",
+  "status": "active",
+  "created_at": "2026-06-12T10:30:00Z",
+  "updated_at": "2026-06-12T10:30:00Z"
+}
+```
+
+### Status values
+
+```txt
+active | expired | renewal_due | archived
+```
+
+### Validation rules
+
+- `title` is required.
+- `expiry_date` cannot be earlier than `issue_date` (when both are set).
+- `renewal_date` cannot be later than `expiry_date` (when both are set).
+- `owner`, `id`, `created_at`, `updated_at` are read-only.
+
+List responses are paginated using the standard pagination envelope
+(`count`, `next`, `previous`, `results`).
+
+---
+
 # 14. Dashboard API
 
 ## 14.1 Get Dashboard Summary
