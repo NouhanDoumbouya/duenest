@@ -101,12 +101,22 @@ src/
 
 ## Design system
 
-- **Fonts:** Inter (body) + Sora (display/headings), loaded via `next/font`.
+- **Fonts:** Inter (body) + Sora (display/headings), loaded via `next/font`,
+  with refined font-feature-settings and antialiasing for crisp type.
+- **Surfaces:** a soft cool-neutral canvas (`--background`) with white cards and
+  a white command sidebar, so surfaces layer with calm, premium depth.
 - **Brand tokens:** defined in `globals.css` from `brand/` — Trust Blue
   (`--primary`), Nest Teal, Due Amber, Soft Mint (`--accent`), Midnight Navy
   text, plus `brand-*` color utilities (e.g. `text-brand-teal`).
+- **Shadow scale:** `shadow-card` (resting surfaces), `shadow-elevated`
+  (hover / dialogs), `shadow-floating` (hero/marketing CTA) — defined as theme
+  tokens in `globals.css`. Prefer these over ad-hoc `shadow-*`.
+- **Background utilities:** `bg-grid` (subtle technical grid) and `mask-fade-b`
+  (fade an element toward its bottom edge) for hero/section backdrops.
 - **Components:** shadcn/ui "base-nova" primitives (built on `@base-ui`). Use
-  `buttonVariants()` on `next/link` for link-styled buttons.
+  `buttonVariants()` on `next/link` for link-styled buttons. The `Card`
+  primitive uses border + `shadow-card`; buttons have a 3-tier size scale
+  (`sm` / default / `lg`) and tinted primary shadow.
 - **Patterns:** reusable section/card components live under `components/marketing`,
   `components/dashboard`, and `components/auth` to keep pages thin.
 

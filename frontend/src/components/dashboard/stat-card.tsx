@@ -23,10 +23,12 @@ export interface Stat {
 export function StatCard({ stat }: { stat: Stat }) {
   const Icon = stat.icon;
   return (
-    <Card className="transition-shadow hover:shadow-md hover:shadow-foreground/5">
-      <CardContent className="py-2">
+    <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-elevated">
+      <CardContent>
         <div className="flex items-start justify-between gap-2">
-          <span className="text-sm text-muted-foreground">{stat.label}</span>
+          <span className="text-sm font-medium text-muted-foreground">
+            {stat.label}
+          </span>
           <span
             className={cn(
               "flex size-9 items-center justify-center rounded-lg",
@@ -36,10 +38,10 @@ export function StatCard({ stat }: { stat: Stat }) {
             <Icon className="size-4" />
           </span>
         </div>
-        <p className="mt-3 font-heading text-3xl font-semibold tracking-tight">
+        <p className="mt-4 font-heading text-[2rem] leading-none font-semibold tracking-tight">
           {stat.value}
         </p>
-        <p className="mt-1 text-sm text-muted-foreground">{stat.hint}</p>
+        <p className="mt-2 text-sm text-muted-foreground">{stat.hint}</p>
       </CardContent>
     </Card>
   );

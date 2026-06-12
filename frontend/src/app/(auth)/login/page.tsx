@@ -51,10 +51,12 @@ function LoginForm() {
   }
 
   return (
-    <Card className="w-full max-w-md p-2 shadow-xl shadow-foreground/5">
-      <CardHeader className="text-center">
+    <Card className="w-full max-w-md p-2 shadow-elevated">
+      <CardHeader className="items-center text-center">
         <CardTitle className="text-2xl">Welcome back</CardTitle>
-        <CardDescription>Sign in to your DueNest workspace</CardDescription>
+        <CardDescription className="text-[0.95rem]">
+          Sign in to your DueNest workspace
+        </CardDescription>
       </CardHeader>
 
       <CardContent className="flex flex-col gap-5">
