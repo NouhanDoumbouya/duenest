@@ -4,19 +4,19 @@ import type { DocumentStatus } from "@/types/documents";
 
 const styles: Record<DocumentStatus, { wrap: string; dot: string }> = {
   active: {
-    wrap: "bg-brand-success/10 text-brand-success",
+    wrap: "bg-brand-success/10 text-brand-success ring-1 ring-inset ring-brand-success/20",
     dot: "bg-brand-success",
   },
   renewal_due: {
-    wrap: "bg-brand-amber/15 text-brand-amber",
+    wrap: "bg-brand-amber/15 text-brand-amber ring-1 ring-inset ring-brand-amber/25",
     dot: "bg-brand-amber",
   },
   expired: {
-    wrap: "bg-destructive/10 text-destructive",
+    wrap: "bg-destructive/10 text-destructive ring-1 ring-inset ring-destructive/20",
     dot: "bg-destructive",
   },
   archived: {
-    wrap: "bg-muted text-muted-foreground",
+    wrap: "bg-muted text-muted-foreground ring-1 ring-inset ring-border",
     dot: "bg-muted-foreground",
   },
 };

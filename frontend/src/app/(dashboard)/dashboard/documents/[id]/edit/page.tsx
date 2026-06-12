@@ -8,6 +8,7 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 import { DocumentForm } from "@/components/documents/document-form";
 import { DocumentFilesList } from "@/components/documents/document-files-list";
 import { DocumentFileUploader } from "@/components/documents/document-file-uploader";
+import { DocumentStatusBadge } from "@/components/documents/status-badge";
 import {
   Card,
   CardContent,
@@ -115,7 +116,7 @@ export default function EditDocumentPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-6">
+    <div className="mx-auto w-full max-w-3xl space-y-6">
       <div>
         <Link
           href="/dashboard/documents"
@@ -126,10 +127,25 @@ export default function EditDocumentPage() {
         </Link>
       </div>
 
+      {/* Record header */}
+      <div>
+        <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+          Document
+        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-3">
+          <h1 className="font-heading text-2xl font-semibold tracking-tight sm:text-3xl">
+            {doc?.title ?? "Document"}
+          </h1>
+          {doc && <DocumentStatusBadge status={doc.status} />}
+        </div>
+      </div>
+
       <Card>
         <CardHeader>
-          <CardTitle className="text-xl">Document details</CardTitle>
-          <CardDescription>Update the details and key dates.</CardDescription>
+          <CardTitle className="text-lg">Details</CardTitle>
+          <CardDescription>
+            Keep the document’s information and key dates up to date.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {loadError ? (
