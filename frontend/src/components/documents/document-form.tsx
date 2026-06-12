@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
+import { Paperclip, UploadCloud } from "lucide-react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ApiError } from "@/lib/api";
+import { ACCEPT_ATTR, validateFile } from "@/lib/document-files";
 import { STATUS_LABELS } from "@/lib/documents";
 import { cn } from "@/lib/utils";
 import type {
@@ -57,17 +59,47 @@ export function DocumentForm({
   initial,
   submitLabel,
   cancelHref = "/dashboard/documents",
+  attachFile = false,
   onSubmit,
 }: {
   initial?: DocumentRecord;
   submitLabel: string;
   cancelHref?: string;
-  onSubmit: (payload: CreateDocumentRequest) => Promise<void>;
+  /** When true, show an optional file picker and pass the file to onSubmit. */
+  attachFile?: boolean;
+  onSubmit: (
+    payload: CreateDocumentRequest,
+    file?: File | null,
+  ) => Promise<void>;
 }) {
   const [form, setForm] = useState<FormState>(() => toFormState(initial));
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Optional file to attach on create (only used when attachFile is true).
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
+
+  function handleFileSelect(event: React.ChangeEvent<HTMLInputElement>) {
+    const selected = event.target.files?.[0] ?? null;
+    event.target.value = "";
+    if (!selected) return;
+    const validationError = validateFile(selected);
+    if (validationError) {
+      setFileError(validationError);
+      setFile(null);
+      return;
+    }
+    setFileError(null);
+    setFile(selected);
+  }
+
+  function clearFile() {
+    setFile(null);
+    setFileError(null);
+  }
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -121,7 +153,7 @@ export function DocumentForm({
 
     setSubmitting(true);
     try {
-      await onSubmit(payload);
+      await onSubmit(payload, attachFile ? file : undefined);
       // Navigation/refresh is handled by the caller on success.
     } catch (err) {
       if (err instanceof ApiError && err.data && typeof err.data === "object") {
@@ -276,6 +308,64 @@ export function DocumentForm({
           placeholder="Anything you want to remember about this document."
         />
       </Field>
+
+      {attachFile && (
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="attach-file">Attach a file (optional)</Label>
+          <input
+            ref={fileInputRef}
+            id="attach-file"
+            type="file"
+            accept={ACCEPT_ATTR}
+            onChange={handleFileSelect}
+            disabled={submitting}
+            className="hidden"
+          />
+          <div className="flex items-center gap-3 rounded-lg border border-dashed border-border bg-muted/30 p-3">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+              <UploadCloud className="size-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              {file ? (
+                <p className="flex items-center gap-1.5 truncate text-sm font-medium">
+                  <Paperclip className="size-3.5 shrink-0" />
+                  {file.name}
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  PDF, JPG, PNG, DOC, DOCX · up to 10 MB
+                </p>
+              )}
+            </div>
+            {file ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={clearFile}
+                disabled={submitting}
+              >
+                Remove
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={submitting}
+              >
+                Choose file
+              </Button>
+            )}
+          </div>
+          {fileError && (
+            <p className="text-sm text-destructive" role="alert">
+              {fileError}
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="flex items-center justify-end gap-3 border-t border-border pt-6">
         <Link
