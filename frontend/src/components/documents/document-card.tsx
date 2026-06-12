@@ -50,9 +50,12 @@ export function DocumentCard({
       <CardContent className="flex flex-col gap-4 py-1 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="truncate font-heading text-base font-semibold">
+            <Link
+              href={`/dashboard/documents/${doc.id}`}
+              className="truncate font-heading text-base font-semibold hover:underline"
+            >
               {doc.title}
-            </h3>
+            </Link>
             <DocumentStatusBadge status={doc.status} />
           </div>
           {meta && (

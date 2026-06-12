@@ -48,6 +48,7 @@ src/
 │   ├── (dashboard)/dashboard/documents/      # /dashboard/documents (list)
 │   │   ├── page.tsx                           #   list + delete
 │   │   ├── new/page.tsx                       #   /dashboard/documents/new
+│   │   ├── [id]/page.tsx                      #   /dashboard/documents/:id (detail + files)
 │   │   └── [id]/edit/page.tsx                 #   /dashboard/documents/:id/edit
 │   ├── layout.tsx                            # Root layout + fonts + metadata
 │   └── globals.css                          # Tailwind + DueNest theme tokens
@@ -56,16 +57,19 @@ src/
 │   ├── marketing/                           # app-preview, feature-card
 │   ├── auth/                                # auth-shell, google-button
 │   ├── dashboard/                           # stat-card, user-context
-│   ├── documents/                           # document-card, document-form, status-badge
+│   ├── documents/                           # document-card/form/status-badge,
+│   │                                        #   document-file-uploader, document-files-list
 │   └── ui/                                  # shadcn/ui primitives (+ textarea, confirm-dialog)
 ├── lib/
-│   ├── api.ts                               # fetch wrapper + ApiError
+│   ├── api.ts                               # fetch wrapper + ApiError (JSON + FormData)
 │   ├── auth.ts                              # login/register/logout + token helpers
 │   ├── documents.ts                         # documents API + date/status helpers
+│   ├── document-files.ts                    # document files API + size/validation helpers
 │   └── utils.ts                             # cn()
 └── types/
     ├── auth.ts                              # User / token / payload types
-    └── documents.ts                         # DocumentRecord / requests / category
+    ├── documents.ts                         # DocumentRecord / requests / category
+    └── document-files.ts                    # DocumentFile
 ```
 
 ## Documents management
@@ -79,6 +83,20 @@ src/
 - The dashboard summary cards are computed from real `GET /documents/` data.
 - Category selection is not yet available (the backend exposes no categories
   list endpoint); `category_name` is shown read-only when present.
+
+### Document files
+
+- The document detail page (`/dashboard/documents/[id]`) shows the record plus
+  an **Attached files** section (upload, list, download, delete).
+- File calls go through `src/lib/document-files.ts`. Uploads send `FormData`
+  via `apiFetch` (which omits `Content-Type` for multipart so the browser sets
+  the boundary). Downloads use an authenticated blob fetch + a temporary anchor,
+  because the controlled download endpoint requires the `Authorization` header.
+- Endpoints: `GET/POST /api/v1/documents/:id/files/`,
+  `DELETE /api/v1/documents/:id/files/:file_id/`,
+  `GET /api/v1/documents/:id/files/:file_id/download/`.
+- Client-side validation (type + 10 MB) is UX-only; the backend remains the
+  source of truth.
 
 ## Design system
 
