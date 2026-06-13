@@ -1186,3 +1186,25 @@ Deferred:
 - transactional email provider integration
 - production-grade public abuse detection beyond DRF scoped throttles
 - cohort segmentation beyond simple persona/status filters
+
+---
+
+## Shipped: premium sharing, bundles, Secure Rooms & Calendar V1
+
+Now implemented on `feature/premium-sharing-bundle-rooms-calendar`:
+
+- Access-code shared files fixed via a short-lived signed grant (raw code never
+  stored client-side).
+- Bundle file listing/preview/download, and real ZIP export (all + selected,
+  plus normal bulk file export) with a safe `bundle_manifest.json`.
+- One-time / limited-access share links, strong view-only enforcement, and
+  watermarking / privacy-screen screenshot **deterrence** (server-side download
+  blocking; no false "screenshots blocked" claims).
+- **Secure Rooms / Shared Packs** — controlled collection sharing with owner UI
+  (`/dashboard/share-rooms`) and a polished public page (`/rooms/:token`).
+- **DueNest Calendar V1** — internal, owner-scoped aggregation across documents,
+  reminders, bundles, appointments, proofs, shares, and rooms, with Month +
+  Upcoming views, a dashboard widget, and one-way `.ics` export.
+
+Still explicitly out of scope: Google/Outlook/two-way calendar sync, billing,
+AI agents, native mobile.

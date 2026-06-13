@@ -1112,3 +1112,42 @@ Deferred hardening:
 - production incident-response workflow
 - explicit consent-based support access
 - richer security-event taxonomy
+
+---
+
+## Premium sharing, Secure Rooms & Calendar security
+
+### Public access scoping
+
+Public share/room access is scoped to a single token. A link/room exposes only
+its one file (or its explicit items) — never the rest of the vault, the owner's
+identity, other documents, tokens, access-code hashes, or internal storage
+paths. Expiry, revocation, access-code verification, view-only download
+blocking, and one-time/limited access limits are **all enforced server-side**;
+frontend hiding is never the security boundary.
+
+### Access-code grants
+
+After a viewer verifies an access code, the server issues a short-lived (30 min)
+signed grant (`TimestampSigner`) bound to that single share/room token. The
+viewer presents the grant (query param) instead of re-sending the raw code, so
+the raw code is never stored in the browser, and a grant minted for one token
+cannot unlock another.
+
+### Screenshot deterrence (not prevention)
+
+DueNest discourages screenshots with dynamic watermarking, view-only controls,
+optional privacy-screen blur on tab blur, access limits, and activity logging.
+**Browsers cannot fully prevent OS-level screenshots** — the product never
+claims otherwise. View-only download blocking is enforced server-side. The
+recipient's email may appear inside the watermark (only when watermarking is
+enabled), as it marks the copy for the intended recipient; it is never otherwise
+exposed publicly.
+
+### Calendar privacy
+
+Calendar access is authenticated and owner-scoped: a user only ever sees their
+own events. Aggregation excludes other users' data, share tokens, access codes,
+internal file paths, and founder/operational data. The one-way `.ics` export
+uses safe `DueNest: …` titles only and omits tokens, codes, paths, and sensitive
+numbers. There is no Google/Outlook or two-way external calendar sync.
