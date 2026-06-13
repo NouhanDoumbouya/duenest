@@ -1218,3 +1218,25 @@ The system is designed to be:
 - realistic enough to demonstrate senior-level product engineering judgment
 
 The first goal is not to build a complex distributed system. The first goal is to build a clean, secure, reliable, and useful core product that can evolve into a serious SaaS platform.
+
+---
+
+## 33. Founder Console Architecture
+
+Founder Console V1 is implemented as part of the modular monolith:
+
+- Backend app: `apps.founder`
+- Frontend routes: `/dashboard/founder/*` and `/dashboard/feedback`
+- API prefix: `/api/v1/founder/`
+
+The module owns internal operations models (`ProductEvent`, `FeedbackItem`,
+`AppErrorLog`), the founder permission class, aggregate service functions,
+serializers, views, URLs, admin registration, and tests.
+
+It deliberately reuses existing document/user data instead of duplicating
+private records. Metrics are built from aggregate queries over users,
+documents, files, shares, reminders, checklists, bundles, exports, emergency
+packs, proof records, product events, feedback, and error logs.
+
+No background worker, billing system, analytics vendor, or support-data access
+service is introduced in this branch.

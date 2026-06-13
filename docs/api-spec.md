@@ -2599,3 +2599,49 @@ The first version should prioritize:
 - predictable response formats
 
 Advanced APIs such as AI extraction, secure sharing, team workspaces, and billing should be added only after the core MVP is working correctly.
+
+---
+
+# 26. Founder Console V1 API
+
+Founder Console V1 is implemented under `/api/v1/founder/` and is restricted
+to authenticated staff/superuser accounts. Normal authenticated users receive
+`403 Forbidden`.
+
+Public/user-facing operational endpoints:
+
+```txt
+POST /api/v1/feedback/
+POST /api/v1/errors/client/
+```
+
+Founder endpoints:
+
+```txt
+GET   /api/v1/founder/me/
+GET   /api/v1/founder/dashboard/
+GET   /api/v1/founder/activation-funnel/
+GET   /api/v1/founder/feature-adoption/
+GET   /api/v1/founder/feedback/
+GET   /api/v1/founder/feedback/:feedback_id/
+PATCH /api/v1/founder/feedback/:feedback_id/
+GET   /api/v1/founder/templates/checklists/
+POST  /api/v1/founder/templates/checklists/
+GET   /api/v1/founder/templates/checklists/:template_id/
+PATCH /api/v1/founder/templates/checklists/:template_id/
+DELETE /api/v1/founder/templates/checklists/:template_id/
+GET   /api/v1/founder/errors/
+GET   /api/v1/founder/errors/:error_id/
+PATCH /api/v1/founder/errors/:error_id/
+POST  /api/v1/founder/errors/:error_id/resolve/
+GET   /api/v1/founder/security-overview/
+GET   /api/v1/founder/security-events/
+GET   /api/v1/founder/users/
+GET   /api/v1/founder/users/:user_id/summary/
+```
+
+Privacy rule: founder endpoints return aggregate metrics and safe account
+metadata only. They must not expose document contents, raw OCR text, access
+codes, share tokens, internal file paths, private notes, or physical locations.
+
+See `docs/founder-console.md` for response intent and operational boundaries.

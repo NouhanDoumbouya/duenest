@@ -91,6 +91,31 @@ def _mark_onboarding(request, event: str) -> None:
         return
 
 
+def _track_product_event(
+    request,
+    event_type: str,
+    *,
+    user=None,
+    object_type: str = "",
+    object_id: int | str = "",
+    metadata: dict | None = None,
+) -> None:
+    """Best-effort product analytics marker for founder aggregates."""
+    try:
+        from apps.founder.services import track_product_event
+
+        track_product_event(
+            event_type=event_type,
+            user=user or getattr(request, "user", None),
+            request=request,
+            object_type=object_type,
+            object_id=object_id,
+            metadata=metadata,
+        )
+    except Exception:
+        return
+
+
 def _compute_checksum(uploaded) -> str:
     """SHA-256 of the uploaded bytes; rewinds the stream so it can still save."""
     digest = hashlib.sha256()
@@ -289,8 +314,25 @@ class DocumentViewSet(viewsets.ModelViewSet):
             description=document.title,
         )
         _mark_onboarding(self.request, "first_document_created")
+        _track_product_event(
+            self.request,
+            "document_created",
+            object_type="document",
+            object_id=document.id,
+            metadata={
+                "has_expiry_or_renewal": bool(
+                    document.expiry_date or document.renewal_date
+                )
+            },
+        )
         if document.expiry_date or document.renewal_date:
             _mark_onboarding(self.request, "first_expiry_date_added")
+            _track_product_event(
+                self.request,
+                "expiry_date_added",
+                object_type="document",
+                object_id=document.id,
+            )
 
     def update(self, request, *args, **kwargs):
         # Snapshot important fields before the change so we can record a version
@@ -317,6 +359,12 @@ class DocumentViewSet(viewsets.ModelViewSet):
             )
         if instance.expiry_date or instance.renewal_date:
             _mark_onboarding(request, "first_expiry_date_added")
+            _track_product_event(
+                request,
+                "expiry_date_added",
+                object_type="document",
+                object_id=instance.id,
+            )
         return response
 
     def destroy(self, request, *args, **kwargs):
@@ -356,6 +404,12 @@ class DocumentViewSet(viewsets.ModelViewSet):
         ]
         items.sort(key=attention_sort_key)
         serializer = self.get_serializer(items, many=True)
+        _track_product_event(
+            request,
+            "attention_needed_viewed",
+            object_type="document_attention",
+            metadata={"count": len(items)},
+        )
         return Response({"count": len(items), "items": serializer.data})
 
     @action(detail=False, methods=["get"], url_path="trash")
@@ -404,6 +458,13 @@ class DocumentViewSet(viewsets.ModelViewSet):
                 action=DocumentActivity.Action.DOCUMENT_RESTORED,
                 title="Restored from trash",
                 description=document.title,
+            )
+            _track_product_event(
+                request,
+                "trash_restore_used",
+                object_type="document",
+                object_id=document.id,
+                metadata={"target": "document"},
             )
         return Response(self.get_serializer(document).data)
 
@@ -500,6 +561,16 @@ class DocumentFileListCreateView(_DocumentScopedMixin, generics.ListCreateAPIVie
             change_summary=f"Uploaded file “{instance.original_filename}”",
         )
         _mark_onboarding(request, "first_file_uploaded")
+        _track_product_event(
+            request,
+            "file_uploaded",
+            object_type="document_file",
+            object_id=instance.id,
+            metadata={
+                "content_type": instance.content_type,
+                "file_size": instance.file_size,
+            },
+        )
         return Response(output.data, status=status.HTTP_201_CREATED)
 
 
@@ -579,6 +650,13 @@ class DocumentFilePreviewView(_DocumentScopedMixin, APIView):
             actor_type=DocumentFileActivity.ActorType.OWNER,
             request=request,
         )
+        _track_product_event(
+            request,
+            "file_previewed",
+            object_type="document_file",
+            object_id=instance.id,
+            metadata={"content_type": instance.content_type},
+        )
         return _inline_file_response(instance)
 
 
@@ -654,6 +732,16 @@ class DocumentFileShareLinkListCreateView(_FileScopedMixin, APIView):
         if plain_code is not None:
             payload["access_code"] = plain_code
         _mark_onboarding(request, "first_share_link_created")
+        _track_product_event(
+            request,
+            "share_link_created",
+            object_type="document_file_share_link",
+            object_id=link.id,
+            metadata={
+                "permission": link.permission,
+                "access_code_required": link.access_code_required,
+            },
+        )
         return Response(payload, status=status.HTTP_201_CREATED)
 
 
@@ -734,8 +822,15 @@ class DocumentReminderRuleListCreateView(
     """GET lists reminder rules; POST creates one for the owner-owned document."""
 
     def perform_create(self, serializer):
-        serializer.save(owner=self.request.user, document=self.get_document())
+        rule = serializer.save(owner=self.request.user, document=self.get_document())
         _mark_onboarding(self.request, "first_reminder_created")
+        _track_product_event(
+            self.request,
+            "reminder_created",
+            object_type="document_reminder_rule",
+            object_id=rule.id,
+            metadata={"trigger_type": rule.trigger_type},
+        )
 
 
 class DocumentReminderRuleDetailView(
@@ -779,7 +874,7 @@ class UpcomingDocumentRemindersView(APIView):
 # ---- Public share access ---------------------------------------------------
 
 
-def _resolve_share_link(token):
+def _resolve_share_link(token, request=None):
     """
     Return (link, error_response). error_response is None when the link is
     usable. Invalid/expired/revoked never reveal whether the file exists beyond
@@ -795,6 +890,17 @@ def _resolve_share_link(token):
             status=status.HTTP_404_NOT_FOUND,
         )
     if link.is_revoked:
+        _track_product_event(
+            request,
+            "security_event_recorded",
+            user=link.owner,
+            object_type="document_file_share_link",
+            object_id=link.id,
+            metadata={
+                "event_kind": "revoked_share_link_access",
+                "label": "Revoked share link access attempt",
+            },
+        )
         return None, Response(
             {
                 "detail": "This shared link is no longer available. "
@@ -804,6 +910,17 @@ def _resolve_share_link(token):
             status=status.HTTP_410_GONE,
         )
     if link.is_expired:
+        _track_product_event(
+            request,
+            "security_event_recorded",
+            user=link.owner,
+            object_type="document_file_share_link",
+            object_id=link.id,
+            metadata={
+                "event_kind": "expired_share_link_access",
+                "label": "Expired share link access attempt",
+            },
+        )
         return None, Response(
             {
                 "detail": "This shared link has expired.",
@@ -850,6 +967,17 @@ def _check_access_code(link, request):
             request=request,
             share_link=link,
         )
+        _track_product_event(
+            request,
+            "security_event_recorded",
+            user=link.owner,
+            object_type="document_file_share_link",
+            object_id=link.id,
+            metadata={
+                "event_kind": "wrong_share_code_attempt",
+                "label": "Wrong share access code attempt",
+            },
+        )
         return Response(
             {
                 "detail": "That code does not match. Check the code and try again.",
@@ -864,7 +992,7 @@ class PublicSharedFileMetadataView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, token):
-        link, err = _resolve_share_link(token)
+        link, err = _resolve_share_link(token, request=request)
         if err:
             return err
 
@@ -878,6 +1006,14 @@ class PublicSharedFileMetadataView(APIView):
             request=request,
             share_link=link,
         )
+        _track_product_event(
+            request,
+            "share_link_opened",
+            user=link.owner,
+            object_type="document_file_share_link",
+            object_id=link.id,
+            metadata={"access_code_required": link.access_code_required},
+        )
 
         code_err = _check_access_code(link, request)
         if code_err:
@@ -890,7 +1026,7 @@ class PublicSharedFileVerifyCodeView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request, token):
-        link, err = _resolve_share_link(token)
+        link, err = _resolve_share_link(token, request=request)
         if err:
             return err
         if not link.access_code_required:
@@ -914,6 +1050,17 @@ class PublicSharedFileVerifyCodeView(APIView):
             request=request,
             share_link=link,
         )
+        _track_product_event(
+            request,
+            "security_event_recorded",
+            user=link.owner,
+            object_type="document_file_share_link",
+            object_id=link.id,
+            metadata={
+                "event_kind": "wrong_share_code_attempt",
+                "label": "Wrong share access code attempt",
+            },
+        )
         return Response(
             {"detail": "Invalid access code.", "state": "wrong_code"},
             status=status.HTTP_400_BAD_REQUEST,
@@ -924,7 +1071,7 @@ class PublicSharedFilePreviewView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, token):
-        link, err = _resolve_share_link(token)
+        link, err = _resolve_share_link(token, request=request)
         if err:
             return err
         code_err = _check_access_code(link, request)
@@ -952,7 +1099,7 @@ class PublicSharedFileDownloadView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, token):
-        link, err = _resolve_share_link(token)
+        link, err = _resolve_share_link(token, request=request)
         if err:
             return err
         code_err = _check_access_code(link, request)
@@ -1044,8 +1191,15 @@ class DocumentChecklistListCreateView(
 
     def perform_create(self, serializer):
         document = self.get_document()
-        serializer.save(owner=self.request.user, document=document)
+        checklist = serializer.save(owner=self.request.user, document=document)
         _mark_onboarding(self.request, "first_checklist_created")
+        _track_product_event(
+            self.request,
+            "checklist_created",
+            object_type="document_checklist",
+            object_id=checklist.id,
+            metadata={"checklist_type": checklist.checklist_type},
+        )
 
 
 class DocumentChecklistFromTemplateView(_ChecklistScopedMixin, APIView):
@@ -1104,6 +1258,16 @@ class DocumentChecklistFromTemplateView(_ChecklistScopedMixin, APIView):
             checklist, context=self.get_serializer_context()
         )
         _mark_onboarding(request, "first_checklist_created")
+        _track_product_event(
+            request,
+            "checklist_created",
+            object_type="document_checklist",
+            object_id=checklist.id,
+            metadata={
+                "checklist_type": checklist.checklist_type,
+                "from_template": True,
+            },
+        )
         return Response(output.data, status=status.HTTP_201_CREATED)
 
     def get_serializer_context(self):
@@ -1181,6 +1345,14 @@ class DocumentChecklistItemDetailView(
         item.checklist.recalculate_progress()
         if item.checklist.status == DocumentChecklist.Status.COMPLETED:
             _mark_onboarding(self.request, "checklist_completed")
+        if item.status == DocumentChecklistItem.Status.COMPLETED:
+            _track_product_event(
+                self.request,
+                "checklist_item_completed",
+                object_type="document_checklist_item",
+                object_id=item.id,
+                metadata={"checklist_id": item.checklist_id},
+            )
 
     def perform_destroy(self, instance):
         checklist = instance.checklist
@@ -1219,7 +1391,14 @@ class DocumentBundleListCreateView(_BundleScopedMixin, generics.ListCreateAPIVie
         return queryset
 
     def perform_create(self, serializer):
-        serializer.save(owner=self.request.user)
+        bundle = serializer.save(owner=self.request.user)
+        _track_product_event(
+            self.request,
+            "bundle_created",
+            object_type="document_bundle",
+            object_id=bundle.id,
+            metadata={"bundle_type": bundle.bundle_type},
+        )
 
 
 class DocumentBundleDetailView(
@@ -1401,6 +1580,12 @@ class DocumentTimelineView(APIView):
             document_id=_int("document_id"),
             bundle_id=_int("bundle_id"),
         )
+        _track_product_event(
+            request,
+            "timeline_viewed",
+            object_type="document_timeline",
+            metadata={"event_type": event_type or "all", "count": len(events)},
+        )
         serializer = TimelineEventSerializer(events, many=True)
         return Response({"count": len(events), "items": serializer.data})
 
@@ -1454,6 +1639,16 @@ class DocumentExtractionListCreateView(
             confidence_score=result.confidence_score,
             provider=result.provider,
             error_message=result.error_message,
+        )
+        _track_product_event(
+            request,
+            "extraction_requested",
+            object_type="document_extraction",
+            object_id=extraction.id,
+            metadata={
+                "provider": extraction.provider,
+                "status": extraction.extraction_status,
+            },
         )
         return Response(
             self.get_serializer(extraction).data,
@@ -1536,6 +1731,15 @@ class DocumentExtractionApplyView(_ExtractionScopedMixin, APIView):
                 title="Extracted details applied",
                 description=", ".join(updated),
             )
+            if "expiry_date" in updated or "renewal_date" in updated:
+                _mark_onboarding(request, "first_expiry_date_added")
+                _track_product_event(
+                    request,
+                    "expiry_date_added",
+                    object_type="document",
+                    object_id=document.id,
+                    metadata={"source": "extraction_apply"},
+                )
 
         extraction.applied_at = timezone.now()
         extraction.extraction_status = DocumentExtraction.Status.COMPLETED
@@ -1619,6 +1823,13 @@ class DocumentFileRestoreView(_OwnedFileMixin, APIView):
                 title="File restored",
                 description=file.original_filename,
                 related_file=file,
+            )
+            _track_product_event(
+                request,
+                "trash_restore_used",
+                object_type="document_file",
+                object_id=file.id,
+                metadata={"target": "file"},
             )
         return Response(
             DocumentFileSerializer(file, context={"request": request}).data
@@ -1800,6 +2011,13 @@ class DocumentExportListCreateView(generics.ListCreateAPIView):
                 {"detail": "Export generation failed."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+        _track_product_event(
+            request,
+            "export_requested",
+            object_type="document_export",
+            object_id=export.id,
+            metadata={"export_type": export.export_type},
+        )
 
         return Response(
             DocumentExportRequestSerializer(
@@ -1893,6 +2111,13 @@ class EmergencyPackViewSet(viewsets.ModelViewSet):
             action=DocumentActivity.Action.EMERGENCY_PACK_CREATED,
             title="Emergency pack created",
             description=pack.title,
+        )
+        _track_product_event(
+            self.request,
+            "emergency_pack_created",
+            object_type="emergency_access_pack",
+            object_id=pack.id,
+            metadata={"access_mode": pack.access_mode},
         )
 
     def perform_update(self, serializer):
@@ -2136,6 +2361,13 @@ class ProofRecordViewSet(viewsets.ModelViewSet):
             description=proof.title,
             related_proof=proof,
             related_bundle=proof.bundle,
+        )
+        _track_product_event(
+            self.request,
+            "proof_record_created",
+            object_type="proof_record",
+            object_id=proof.id,
+            metadata={"proof_type": proof.proof_type},
         )
 
 

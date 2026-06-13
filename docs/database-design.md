@@ -1679,3 +1679,38 @@ The first version should prioritize:
 - safe file metadata handling
 
 The design intentionally avoids unnecessary complexity in v0.1 while leaving clear paths for AI extraction, secure sharing, team workspaces, audit logs, and SaaS billing later.
+
+---
+
+## 33. Founder Console Models
+
+Founder Console V1 adds a focused `apps.founder` backend module.
+
+### ProductEvent
+
+- **Purpose:** first-party, privacy-minimized product analytics events for
+  activation, adoption, activity, and security summaries.
+- **Key fields:** nullable `user`, `event_type`, `event_source`,
+  optional `object_type`/`object_id`, optional request metadata, sanitized
+  `metadata`, `created_at`.
+- **Security:** best-effort logging only. Metadata is sanitized and should not
+  include private document contents, OCR text, access codes, share tokens,
+  passwords, or file paths.
+
+### FeedbackItem
+
+- **Purpose:** user-submitted and founder-managed feedback.
+- **Key fields:** nullable `user`, optional `email`, `category`, `title`,
+  `message`, `status`, `priority`, `source`, `related_path`,
+  `related_feature`, `founder_notes`, review/close timestamps.
+- **Security:** feedback is not a document-support access channel. Users should
+  not be asked to submit private vault contents.
+
+### AppErrorLog
+
+- **Purpose:** lightweight error monitoring for private beta.
+- **Key fields:** nullable `user`, `severity`, `source`, `error_type`,
+  `message`, optional path/method/status, optional traceback, sanitized
+  `metadata`, `resolved`, `resolved_at`, `created_at`.
+- **Security:** stack traces are founder-only and returned only in debug mode.
+  Client metadata is sanitized before storage.

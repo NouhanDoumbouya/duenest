@@ -426,6 +426,7 @@ Uses AI to extract document type, expiry date, provider, amount, renewal date, a
 | Backend Authentication | ✅ Completed |
 | Frontend Foundation    | ✅ Completed |
 | Document Vault         | 🟡 In Progress |
+| Founder Console        | ✅ Foundation |
 | MVP Development        | 🟡 In Progress |
 | AI Features            | 🔵 Planned    |
 | Deployment             | 🔵 Planned    |
@@ -469,6 +470,9 @@ The current implementation includes:
 * Document onboarding checklist, labeled demo data, Trust Center, account data
   controls, metadata export requests, account deletion requests, and beta-ready
   security/privacy/terms drafts
+* Founder Console V1 with aggregate product metrics, activation funnel, feature
+  adoption, feedback board, checklist template management, error monitoring,
+  security overview, and privacy-safe user support metadata
 
 The health check endpoint is available at:
 
@@ -852,6 +856,7 @@ Detailed project documentation is maintained in the [`docs/`](./docs/) folder.
 | [Security Plan](./docs/security-plan.md)         | Security principles, risks, privacy controls, and protection strategy   | ✅ Completed |
 | [Roadmap](./docs/roadmap.md)                     | Sprint plan, feature prioritization, and release roadmap                | ✅ Completed |
 | [Document Vault Roadmap](./docs/document-vault-roadmap.md) | Documents-first implementation plan and sequencing                      | ✅ Completed |
+| [Founder Console](./docs/founder-console.md) | Solo-founder operations layer, privacy boundaries, and intentionally deferred features | ✅ Completed |
 | [Private Beta Launch Checklist](./docs/private-beta-launch-checklist.md) | Private beta readiness checklist and remaining launch gates             | ✅ Draft |
 | [Backend README](./backend/README.md)            | Backend setup, environment configuration, and local API health check    | ✅ Started   |
 | [Brand Guide](./brand/README.md)                 | Brand assets, logos, icons, colors, and messaging references            | ✅ Completed |

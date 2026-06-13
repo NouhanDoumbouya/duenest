@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -10,13 +10,16 @@ import {
   LayoutDashboard,
   ListChecks,
   LogOut,
+  MessageSquare,
   Package,
   Settings,
   ShieldCheck,
+  Wrench,
 } from "lucide-react";
 
 import { Logo } from "@/components/layout/logo";
 import { Button } from "@/components/ui/button";
+import { getFounderMe } from "@/lib/founder";
 import { logout } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
@@ -28,6 +31,7 @@ const navItems = [
   { label: "Timeline", href: "/dashboard/timeline", icon: CalendarClock },
   { label: "Trust", href: "/dashboard/trust", icon: ShieldCheck },
   { label: "Data", href: "/dashboard/settings/data", icon: Settings },
+  { label: "Feedback", href: "/dashboard/feedback", icon: MessageSquare },
   { label: "Subscriptions", href: "#", icon: CreditCard, soon: true },
 ];
 
@@ -42,7 +46,7 @@ function initials(name: string) {
   return letters.toUpperCase() || name.slice(0, 2).toUpperCase();
 }
 
-function NavLinks() {
+function NavLinks({ hasFounderAccess }: { hasFounderAccess: boolean }) {
   const pathname = usePathname();
 
   return (
@@ -85,43 +89,69 @@ function NavLinks() {
           </Link>
         );
       })}
+      {hasFounderAccess && (
+        <>
+          <p className="px-3 pb-2 pt-5 text-[0.7rem] font-semibold tracking-wider text-muted-foreground/70 uppercase">
+            Founder
+          </p>
+          <Link
+            href="/dashboard/founder"
+            aria-current={
+              pathname.startsWith("/dashboard/founder") ? "page" : undefined
+            }
+            className={cn(
+              "group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+              pathname.startsWith("/dashboard/founder")
+                ? "bg-accent text-accent-foreground"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground",
+            )}
+          >
+            <Wrench className="size-4" />
+            <span>Founder Console</span>
+          </Link>
+        </>
+      )}
     </nav>
   );
 }
 
-function MobileNavLinks() {
+function MobileNavLinks({ hasFounderAccess }: { hasFounderAccess: boolean }) {
   const pathname = usePathname();
+  const items = hasFounderAccess
+    ? [
+        ...navItems.filter((item) => !item.soon),
+        { label: "Founder", href: "/dashboard/founder", icon: Wrench },
+      ]
+    : navItems.filter((item) => !item.soon);
 
   return (
     <nav
       className="flex gap-2 overflow-x-auto border-b border-border bg-card px-4 py-2 md:hidden"
       aria-label="Dashboard"
     >
-      {navItems
-        .filter((item) => !item.soon)
-        .map((item) => {
-          const Icon = item.icon;
-          const active =
-            item.href === "/dashboard"
-              ? pathname === item.href
-              : pathname.startsWith(item.href);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              aria-current={active ? "page" : undefined}
-              className={cn(
-                "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium",
-                active
-                  ? "border-primary/20 bg-primary text-primary-foreground"
-                  : "border-border bg-card text-muted-foreground",
-              )}
-            >
-              <Icon className="size-4" />
-              {item.label}
-            </Link>
-          );
-        })}
+      {items.map((item) => {
+        const Icon = item.icon;
+        const active =
+          item.href === "/dashboard"
+            ? pathname === item.href
+            : pathname.startsWith(item.href);
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            aria-current={active ? "page" : undefined}
+            className={cn(
+              "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium",
+              active
+                ? "border-primary/20 bg-primary text-primary-foreground"
+                : "border-border bg-card text-muted-foreground",
+            )}
+          >
+            <Icon className="size-4" />
+            {item.label}
+          </Link>
+        );
+      })}
     </nav>
   );
 }
@@ -138,6 +168,21 @@ export function DashboardShell({
   user?: ShellUser;
 }) {
   const router = useRouter();
+  const [hasFounderAccess, setHasFounderAccess] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    getFounderMe()
+      .then(() => {
+        if (active) setHasFounderAccess(true);
+      })
+      .catch(() => {
+        if (active) setHasFounderAccess(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   function handleLogout() {
     logout();
@@ -152,7 +197,7 @@ export function DashboardShell({
           <Logo href="/dashboard" />
         </div>
 
-        <NavLinks />
+        <NavLinks hasFounderAccess={hasFounderAccess} />
 
         <div className="border-t border-border p-3">
           {user && (
@@ -188,7 +233,7 @@ export function DashboardShell({
             Sign out
           </Button>
         </header>
-        <MobileNavLinks />
+        <MobileNavLinks hasFounderAccess={hasFounderAccess} />
 
         <main className="flex-1 p-4 sm:p-6 lg:p-10">{children}</main>
       </div>

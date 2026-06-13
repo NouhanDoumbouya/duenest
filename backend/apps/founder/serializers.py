@@ -1,0 +1,331 @@
+from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.utils import timezone
+from django.utils.text import slugify
+from rest_framework import serializers
+
+from apps.documents.models import (
+    DocumentChecklistItemTemplate,
+    DocumentChecklistTemplate,
+)
+
+from .models import AppErrorLog, FeedbackItem, ProductEvent
+from .services import sanitize_metadata
+
+
+User = get_user_model()
+
+
+class FounderMeSerializer(serializers.Serializer):
+    is_founder = serializers.BooleanField()
+    user_id = serializers.IntegerField()
+    email = serializers.EmailField()
+
+
+class FeedbackCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FeedbackItem
+        fields = [
+            "id",
+            "email",
+            "category",
+            "title",
+            "message",
+            "related_path",
+            "related_feature",
+            "created_at",
+        ]
+        read_only_fields = ["id", "created_at"]
+
+    def validate_title(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("Title is required.")
+        return value
+
+    def validate_message(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("Message is required.")
+        return value
+
+
+class FounderFeedbackSerializer(serializers.ModelSerializer):
+    user_email = serializers.EmailField(source="user.email", read_only=True)
+
+    class Meta:
+        model = FeedbackItem
+        fields = [
+            "id",
+            "user",
+            "user_email",
+            "email",
+            "category",
+            "title",
+            "message",
+            "status",
+            "priority",
+            "source",
+            "related_path",
+            "related_feature",
+            "founder_notes",
+            "created_at",
+            "updated_at",
+            "reviewed_at",
+            "closed_at",
+        ]
+        read_only_fields = [
+            "id",
+            "user",
+            "user_email",
+            "email",
+            "category",
+            "title",
+            "message",
+            "source",
+            "related_path",
+            "related_feature",
+            "created_at",
+            "updated_at",
+            "reviewed_at",
+            "closed_at",
+        ]
+
+    def update(self, instance, validated_data):
+        old_status = instance.status
+        item = super().update(instance, validated_data)
+        updates = []
+        if old_status == FeedbackItem.Status.NEW and item.status != old_status:
+            item.reviewed_at = timezone.now()
+            updates.append("reviewed_at")
+        if item.status in {FeedbackItem.Status.CLOSED, FeedbackItem.Status.REJECTED}:
+            if item.closed_at is None:
+                item.closed_at = timezone.now()
+                updates.append("closed_at")
+        elif old_status in {FeedbackItem.Status.CLOSED, FeedbackItem.Status.REJECTED}:
+            item.closed_at = None
+            updates.append("closed_at")
+        if updates:
+            item.save(update_fields=[*updates, "updated_at"])
+        return item
+
+
+class ClientErrorCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AppErrorLog
+        fields = [
+            "id",
+            "severity",
+            "source",
+            "error_type",
+            "message",
+            "path",
+            "method",
+            "status_code",
+            "metadata",
+            "created_at",
+        ]
+        read_only_fields = ["id", "created_at"]
+
+    def validate_metadata(self, value):
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Expected an object.")
+        return sanitize_metadata(value)
+
+    def validate_source(self, value):
+        if value not in {
+            AppErrorLog.Source.FRONTEND,
+            AppErrorLog.Source.BACKEND,
+            AppErrorLog.Source.SYSTEM,
+        }:
+            raise serializers.ValidationError("Unsupported error source.")
+        return value
+
+
+class FounderAppErrorLogSerializer(serializers.ModelSerializer):
+    user_email = serializers.EmailField(source="user.email", read_only=True)
+    traceback = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AppErrorLog
+        fields = [
+            "id",
+            "user",
+            "user_email",
+            "severity",
+            "source",
+            "error_type",
+            "message",
+            "path",
+            "method",
+            "status_code",
+            "traceback",
+            "metadata",
+            "resolved",
+            "resolved_at",
+            "created_at",
+        ]
+        read_only_fields = [
+            "id",
+            "user",
+            "user_email",
+            "source",
+            "error_type",
+            "message",
+            "path",
+            "method",
+            "status_code",
+            "traceback",
+            "metadata",
+            "resolved_at",
+            "created_at",
+        ]
+
+    def get_traceback(self, obj):
+        return obj.traceback if settings.DEBUG else ""
+
+    def update(self, instance, validated_data):
+        resolved = validated_data.get("resolved", instance.resolved)
+        if resolved and not instance.resolved:
+            validated_data["resolved_at"] = timezone.now()
+        if not resolved:
+            validated_data["resolved_at"] = None
+        return super().update(instance, validated_data)
+
+
+class ProductEventSerializer(serializers.ModelSerializer):
+    user_email = serializers.EmailField(source="user.email", read_only=True)
+
+    class Meta:
+        model = ProductEvent
+        fields = [
+            "id",
+            "user",
+            "user_email",
+            "event_type",
+            "event_source",
+            "object_type",
+            "object_id",
+            "path",
+            "method",
+            "status_code",
+            "country",
+            "metadata",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+
+class ChecklistItemTemplateWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DocumentChecklistItemTemplate
+        fields = [
+            "id",
+            "title",
+            "description",
+            "is_required",
+            "sort_order",
+            "suggested_due_offset_days",
+            "metadata",
+        ]
+        read_only_fields = ["id"]
+
+
+class FounderChecklistTemplateSerializer(serializers.ModelSerializer):
+    items = ChecklistItemTemplateWriteSerializer(
+        source="item_templates",
+        many=True,
+        required=False,
+    )
+
+    class Meta:
+        model = DocumentChecklistTemplate
+        fields = [
+            "id",
+            "title",
+            "description",
+            "document_type",
+            "use_case",
+            "checklist_type",
+            "country",
+            "is_system_template",
+            "is_active",
+            "sort_order",
+            "slug",
+            "items",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+    def _unique_slug(self, title: str, instance=None) -> str:
+        base = slugify(title)[:120] or "checklist-template"
+        candidate = base
+        suffix = 2
+        queryset = DocumentChecklistTemplate.objects.all()
+        if instance is not None:
+            queryset = queryset.exclude(pk=instance.pk)
+        while queryset.filter(slug=candidate).exists():
+            candidate = f"{base[:110]}-{suffix}"
+            suffix += 1
+        return candidate
+
+    def create(self, validated_data):
+        item_data = validated_data.pop("item_templates", [])
+        validated_data.setdefault("is_system_template", True)
+        if not validated_data.get("slug"):
+            validated_data["slug"] = self._unique_slug(validated_data["title"])
+        template = DocumentChecklistTemplate.objects.create(**validated_data)
+        self._replace_items(template, item_data)
+        return template
+
+    def update(self, instance, validated_data):
+        item_data = validated_data.pop("item_templates", None)
+        if not validated_data.get("slug") and "title" in validated_data:
+            validated_data["slug"] = self._unique_slug(
+                validated_data["title"],
+                instance=instance,
+            )
+        template = super().update(instance, validated_data)
+        if item_data is not None:
+            self._replace_items(template, item_data)
+        return template
+
+    def _replace_items(self, template, item_data):
+        template.item_templates.all().delete()
+        items = [
+            DocumentChecklistItemTemplate(template=template, **item)
+            for item in item_data
+        ]
+        DocumentChecklistItemTemplate.objects.bulk_create(items)
+
+
+class FounderUserListSerializer(serializers.ModelSerializer):
+    document_count = serializers.IntegerField(read_only=True)
+    file_count = serializers.IntegerField(read_only=True)
+    reminder_count = serializers.IntegerField(read_only=True)
+    checklist_count = serializers.IntegerField(read_only=True)
+    bundle_count = serializers.IntegerField(read_only=True)
+    share_link_count = serializers.IntegerField(read_only=True)
+    feedback_count = serializers.IntegerField(read_only=True)
+    onboarding_completed = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "email",
+            "username",
+            "date_joined",
+            "last_login",
+            "is_staff",
+            "document_count",
+            "file_count",
+            "reminder_count",
+            "checklist_count",
+            "bundle_count",
+            "share_link_count",
+            "feedback_count",
+            "onboarding_completed",
+        ]
+        read_only_fields = fields
