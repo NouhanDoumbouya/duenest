@@ -818,13 +818,15 @@ stress**.
 18. Version history                                (backend foundation done)
 19. Emergency access pack                           (backend foundation done)
 20. Export and backup features                      (backend metadata export done)
+21. Document onboarding + trust launch polish       (done)
 ```
 
 Sharing (14) was implemented early as file-level sharing for the document vault.
 OCR, bundles, checklists, and the timeline now have working foundations. The
-newer vault-maturity items (17–20) have backend foundations and still need
-frontend product polish before they should be considered complete user-facing
-features.
+newer vault-maturity items (17–20) have backend foundations. The onboarding and
+trust branch adds the private-beta setup checklist, demo data, Trust Center,
+public security/privacy/terms drafts, and account data controls needed to make
+the Documents module demoable.
 
 ### Upcoming branches
 
@@ -835,7 +837,8 @@ backend/document-attention-inbox       frontend/document-attention-inbox      (d
 backend/document-reminder-rules        frontend/document-reminder-experience  (done)
 backend/document-checklists            frontend/document-checklists            (done)
 backend/document-ocr-foundation        frontend/document-ocr-review-ui         (done)
-backend/document-vault-maturity        frontend/document-vault-maturity        (backend in progress)
+backend/document-vault-maturity        frontend/document-vault-maturity        (backend foundation done)
+feature/document-onboarding-trust      onboarding/trust/data launch polish     (done)
 ```
 
 The **next implementation branch** should polish the frontend for vault maturity

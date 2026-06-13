@@ -466,6 +466,9 @@ The current implementation includes:
 * Document CRUD, file upload, preview/download, secure file sharing, activity,
   smart document intelligence, search/filter/sort, Attention Needed, and
   reminder-rule foundations
+* Document onboarding checklist, labeled demo data, Trust Center, account data
+  controls, metadata export requests, account deletion requests, and beta-ready
+  security/privacy/terms drafts
 
 The health check endpoint is available at:
 
@@ -848,6 +851,8 @@ Detailed project documentation is maintained in the [`docs/`](./docs/) folder.
 | [API Specification](./docs/api-spec.md)          | API endpoints, request/response formats, and backend contracts          | ✅ Completed |
 | [Security Plan](./docs/security-plan.md)         | Security principles, risks, privacy controls, and protection strategy   | ✅ Completed |
 | [Roadmap](./docs/roadmap.md)                     | Sprint plan, feature prioritization, and release roadmap                | ✅ Completed |
+| [Document Vault Roadmap](./docs/document-vault-roadmap.md) | Documents-first implementation plan and sequencing                      | ✅ Completed |
+| [Private Beta Launch Checklist](./docs/private-beta-launch-checklist.md) | Private beta readiness checklist and remaining launch gates             | ✅ Draft |
 | [Backend README](./backend/README.md)            | Backend setup, environment configuration, and local API health check    | ✅ Started   |
 | [Brand Guide](./brand/README.md)                 | Brand assets, logos, icons, colors, and messaging references            | ✅ Completed |
 

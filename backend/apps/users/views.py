@@ -1,12 +1,36 @@
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from rest_framework import generics, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from apps.documents.serializers import DocumentExportRequestSerializer
+
 from .google import GoogleAuthError, verify_google_id_token
-from .serializers import GoogleAuthSerializer, RegisterSerializer, UserSerializer
+from .serializers import (
+    AccountDeletionRequestCreateSerializer,
+    AccountDeletionRequestSerializer,
+    GoogleAuthSerializer,
+    RegisterSerializer,
+    UserOnboardingStateSerializer,
+    UserSerializer,
+)
+from .services import (
+    ExportGenerationError,
+    build_account_data_summary,
+    build_document_setup_checklist,
+    build_security_summary,
+    cancel_account_deletion,
+    clear_document_demo_data,
+    create_document_demo_data,
+    get_onboarding_state,
+    mark_metadata_timestamp,
+    request_account_data_export,
+    request_account_deletion,
+    sync_onboarding_state_from_documents,
+)
 
 User = get_user_model()
 
@@ -132,3 +156,180 @@ class GoogleAuthView(APIView):
         user.set_unusable_password()
         user.save()
         return user
+
+
+class OnboardingStateView(APIView):
+    """GET/PATCH the authenticated user's onboarding state."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        state = sync_onboarding_state_from_documents(request.user)
+        return Response(UserOnboardingStateSerializer(state).data)
+
+    def patch(self, request):
+        state = sync_onboarding_state_from_documents(request.user)
+        serializer = UserOnboardingStateSerializer(
+            state,
+            data=request.data,
+            partial=True,
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+
+class OnboardingCompleteView(APIView):
+    """Mark the document onboarding flow as completed."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        state = get_onboarding_state(request.user)
+        metadata = dict(state.metadata or {})
+        metadata["document_onboarding_completed_at"] = timezone.now().isoformat()
+        state.has_completed_document_onboarding = True
+        state.metadata = metadata
+        state.save(
+            update_fields=[
+                "has_completed_document_onboarding",
+                "metadata",
+                "updated_at",
+            ]
+        )
+        return Response(UserOnboardingStateSerializer(state).data)
+
+
+class OnboardingDismissView(APIView):
+    """Dismiss the onboarding card/wizard without marking setup complete."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        state = get_onboarding_state(request.user)
+        state.dismissed_onboarding_at = timezone.now()
+        state.save(update_fields=["dismissed_onboarding_at", "updated_at"])
+        return Response(UserOnboardingStateSerializer(state).data)
+
+
+class DocumentSetupChecklistView(APIView):
+    """Computed guided document setup checklist for the signed-in user."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response(build_document_setup_checklist(request.user))
+
+
+class OnboardingAttentionReviewedView(APIView):
+    """Record that the user reviewed the Attention Needed view."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        state = mark_metadata_timestamp(request.user, "attention_reviewed_at")
+        return Response(UserOnboardingStateSerializer(state).data)
+
+
+class OnboardingTrustReviewedView(APIView):
+    """Record that the user reviewed the Trust Center."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        state = mark_metadata_timestamp(request.user, "trust_center_reviewed_at")
+        return Response(UserOnboardingStateSerializer(state).data)
+
+
+class DemoDocumentDataCreateView(APIView):
+    """Create labeled, owner-scoped fake document module data."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        return Response(
+            create_document_demo_data(request.user),
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class DemoDocumentDataClearView(APIView):
+    """Clear only the caller's labeled demo document module data."""
+
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request):
+        return Response(clear_document_demo_data(request.user))
+
+
+class TrustSecuritySummaryView(APIView):
+    """Safe security capability summary for the signed-in user."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response(build_security_summary())
+
+
+class AccountDataSummaryView(APIView):
+    """Owner-scoped account data counts and request status."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response(build_account_data_summary(request.user))
+
+
+class AccountRequestDataExportView(APIView):
+    """Request a secret-free structured data export."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            export = request_account_data_export(request.user)
+        except ExportGenerationError:
+            return Response(
+                {"detail": "Export generation failed."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        return Response(
+            DocumentExportRequestSerializer(
+                export,
+                context={"request": request},
+            ).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class AccountRequestDeletionView(APIView):
+    """Create or return the active account deletion request."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = AccountDeletionRequestCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        deletion, created = request_account_deletion(
+            request.user,
+            reason=serializer.validated_data.get("reason", ""),
+        )
+        return Response(
+            AccountDeletionRequestSerializer(deletion).data,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+
+class AccountCancelDeletionView(APIView):
+    """Cancel a pending account deletion request."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        deletion = cancel_account_deletion(request.user)
+        if deletion is None:
+            return Response(
+                {"detail": "No pending deletion request is available to cancel."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(AccountDeletionRequestSerializer(deletion).data)

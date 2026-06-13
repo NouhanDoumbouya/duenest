@@ -1,11 +1,8 @@
 import hashlib
-import json
 import secrets
-from datetime import timedelta
 
 from django.contrib.auth.hashers import check_password, make_password
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.core.files.base import ContentFile
 from django.db.models import Count, Q
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
@@ -69,11 +66,11 @@ from .serializers import (
 from .services import (
     APPLICABLE_EXTRACTION_FIELDS,
     VERSIONED_FIELDS,
+    ExportGenerationError,
     attention_sort_key,
     bundle_readiness,
-    build_export_payload,
     build_timeline,
-    export_payload_to_csv,
+    create_document_export,
     extract_file_details,
     get_document_health,
     log_activity,
@@ -82,6 +79,16 @@ from .services import (
     reminder_date_for_rule,
     summarize_field_changes,
 )
+
+
+def _mark_onboarding(request, event: str) -> None:
+    """Best-effort onboarding progress marker for document workflows."""
+    try:
+        from apps.users.services import mark_onboarding_event
+
+        mark_onboarding_event(request.user, event)
+    except Exception:
+        return
 
 
 def _compute_checksum(uploaded) -> str:
@@ -281,6 +288,9 @@ class DocumentViewSet(viewsets.ModelViewSet):
             title="Document created",
             description=document.title,
         )
+        _mark_onboarding(self.request, "first_document_created")
+        if document.expiry_date or document.renewal_date:
+            _mark_onboarding(self.request, "first_expiry_date_added")
 
     def update(self, request, *args, **kwargs):
         # Snapshot important fields before the change so we can record a version
@@ -305,6 +315,8 @@ class DocumentViewSet(viewsets.ModelViewSet):
                 title="Document updated",
                 description=summary,
             )
+        if instance.expiry_date or instance.renewal_date:
+            _mark_onboarding(request, "first_expiry_date_added")
         return response
 
     def destroy(self, request, *args, **kwargs):
@@ -487,6 +499,7 @@ class DocumentFileListCreateView(_DocumentScopedMixin, generics.ListCreateAPIVie
             file=instance,
             change_summary=f"Uploaded file “{instance.original_filename}”",
         )
+        _mark_onboarding(request, "first_file_uploaded")
         return Response(output.data, status=status.HTTP_201_CREATED)
 
 
@@ -640,6 +653,7 @@ class DocumentFileShareLinkListCreateView(_FileScopedMixin, APIView):
         # The plaintext code is returned ONCE, only at creation.
         if plain_code is not None:
             payload["access_code"] = plain_code
+        _mark_onboarding(request, "first_share_link_created")
         return Response(payload, status=status.HTTP_201_CREATED)
 
 
@@ -721,6 +735,7 @@ class DocumentReminderRuleListCreateView(
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user, document=self.get_document())
+        _mark_onboarding(self.request, "first_reminder_created")
 
 
 class DocumentReminderRuleDetailView(
@@ -1030,6 +1045,7 @@ class DocumentChecklistListCreateView(
     def perform_create(self, serializer):
         document = self.get_document()
         serializer.save(owner=self.request.user, document=document)
+        _mark_onboarding(self.request, "first_checklist_created")
 
 
 class DocumentChecklistFromTemplateView(_ChecklistScopedMixin, APIView):
@@ -1087,6 +1103,7 @@ class DocumentChecklistFromTemplateView(_ChecklistScopedMixin, APIView):
         output = DocumentChecklistSerializer(
             checklist, context=self.get_serializer_context()
         )
+        _mark_onboarding(request, "first_checklist_created")
         return Response(output.data, status=status.HTTP_201_CREATED)
 
     def get_serializer_context(self):
@@ -1162,6 +1179,8 @@ class DocumentChecklistItemDetailView(
         _sync_item_completion(item)
         item.save(update_fields=["completed_at"])
         item.checklist.recalculate_progress()
+        if item.checklist.status == DocumentChecklist.Status.COMPLETED:
+            _mark_onboarding(self.request, "checklist_completed")
 
     def perform_destroy(self, instance):
         checklist = instance.checklist
@@ -1758,9 +1777,6 @@ class DocumentVersionRestoreMetadataView(_DocumentVersionScopedMixin, APIView):
 
 # ---- Export & backup -------------------------------------------------------
 
-EXPORT_TTL_DAYS = 7
-
-
 class DocumentExportListCreateView(generics.ListCreateAPIView):
     """GET lists the user's exports; POST requests (and generates) a new one."""
 
@@ -1775,46 +1791,16 @@ class DocumentExportListCreateView(generics.ListCreateAPIView):
         serializer.is_valid(raise_exception=True)
         export_type = serializer.validated_data["export_type"]
 
-        export = DocumentExportRequest.objects.create(
-            owner=request.user,
-            export_type=export_type,
-            status=DocumentExportRequest.Status.PROCESSING,
-        )
         # Generated synchronously (metadata only; small payloads). A future
         # branch can move heavy/full-archive exports to a background worker.
         try:
-            payload = build_export_payload(request.user, export_type)
-            if export_type == DocumentExportRequest.ExportType.DOCUMENTS_CSV:
-                content = export_payload_to_csv(payload).encode("utf-8")
-                ext, suffix = ".csv", "csv"
-            else:
-                content = json.dumps(payload, indent=2).encode("utf-8")
-                ext, suffix = ".json", "json"
-            export.file.save(
-                f"duenest-export-{export.id}-{suffix}{ext}",
-                ContentFile(content),
-                save=False,
-            )
-            export.status = DocumentExportRequest.Status.COMPLETED
-            export.completed_at = timezone.now()
-            export.expires_at = timezone.now() + timedelta(days=EXPORT_TTL_DAYS)
-            export.metadata = {"document_count": payload.get("document_count", 0)}
-            export.save()
-        except Exception as exc:  # noqa: BLE001 — surface failure, don't crash
-            export.status = DocumentExportRequest.Status.FAILED
-            export.error_message = "Export generation failed."
-            export.save(update_fields=["status", "error_message"])
+            export = create_document_export(request.user, export_type)
+        except ExportGenerationError:
             return Response(
-                {"detail": "Export generation failed.", "error": str(exc)[:200]},
+                {"detail": "Export generation failed."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        log_document_activity(
-            owner=request.user,
-            action=DocumentActivity.Action.EXPORT_REQUESTED,
-            title="Export requested",
-            description=export.get_export_type_display(),
-        )
         return Response(
             DocumentExportRequestSerializer(
                 export, context={"request": request}

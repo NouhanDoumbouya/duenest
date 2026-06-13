@@ -16,6 +16,7 @@ import {
 import { StatCard, type Stat } from "@/components/dashboard/stat-card";
 import { useDashboardUser } from "@/components/dashboard/user-context";
 import { DocumentStatusBadge } from "@/components/documents/status-badge";
+import { SetupChecklistCard } from "@/components/onboarding/setup-checklist-card";
 import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
@@ -24,10 +25,16 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { ApiError } from "@/lib/api";
 import { formatDate, getAttentionNeeded, getDocuments } from "@/lib/documents";
+import { getDocumentSetupChecklist, getOnboardingState } from "@/lib/onboarding";
 import { cn } from "@/lib/utils";
 import type { DocumentRecord } from "@/types/documents";
+import type {
+  DocumentSetupChecklist,
+  OnboardingState,
+} from "@/types/onboarding";
 
 interface DashboardSummary {
   total: number;
@@ -41,6 +48,10 @@ export default function DashboardPage() {
   const user = useDashboardUser();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [attention, setAttention] = useState<DocumentRecord[] | null>(null);
+  const [setupChecklist, setSetupChecklist] =
+    useState<DocumentSetupChecklist | null>(null);
+  const [onboardingState, setOnboardingState] =
+    useState<OnboardingState | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -51,8 +62,18 @@ export default function DashboardPage() {
       getDocuments({ computed_status: "renewal_due" }),
       getDocuments({ computed_status: "expired" }),
       getAttentionNeeded(),
+      getDocumentSetupChecklist(),
+      getOnboardingState(),
     ])
-      .then(([allDocs, expiringSoon, renewalDue, expired, attentionResult]) => {
+      .then(([
+        allDocs,
+        expiringSoon,
+        renewalDue,
+        expired,
+        attentionResult,
+        checklistResult,
+        onboardingResult,
+      ]) => {
         if (!active) return;
         setSummary({
           total: allDocs.count,
@@ -62,6 +83,8 @@ export default function DashboardPage() {
           expired: expired.count,
         });
         setAttention(attentionResult.items);
+        setSetupChecklist(checklistResult);
+        setOnboardingState(onboardingResult);
         setError(null);
       })
       .catch((err) => {
@@ -79,6 +102,8 @@ export default function DashboardPage() {
           expired: 0,
         });
         setAttention([]);
+        setSetupChecklist(null);
+        setOnboardingState(null);
       });
     return () => {
       active = false;
@@ -93,6 +118,11 @@ export default function DashboardPage() {
   });
 
   const loading = summary === null || attention === null;
+  const showSetupChecklist =
+    setupChecklist !== null &&
+    onboardingState !== null &&
+    !onboardingState.has_completed_document_onboarding &&
+    !onboardingState.dismissed_onboarding_at;
   const stats: Stat[] = summary
     ? [
         {
@@ -186,29 +216,25 @@ export default function DashboardPage() {
             ))}
       </div>
 
+      {showSetupChecklist && <SetupChecklistCard checklist={setupChecklist} />}
+
       {!loading && summary?.total === 0 ? (
         <Card>
-          <CardContent className="flex flex-col items-center gap-4 px-6 py-14 text-center">
-            <span className="flex size-12 items-center justify-center rounded-xl bg-accent text-accent-foreground">
-              <FileText className="size-6" />
-            </span>
-            <div>
-              <p className="font-heading text-base font-semibold">
-                Your vault is ready
-              </p>
-              <p className="mx-auto mt-1.5 max-w-md text-sm leading-relaxed text-muted-foreground">
-                Your dashboard will come alive as you add documents, renewal
-                dates, and important files. Start with your passport, a visa, or
-                an insurance policy.
-              </p>
-            </div>
-            <Link
-              href="/dashboard/documents/new"
-              className={cn(buttonVariants({ size: "lg" }))}
-            >
-              <Plus className="size-4" />
-              Add your first document
-            </Link>
+          <CardContent>
+            <EmptyState
+              icon={FileText}
+              title="Your vault is ready"
+              description="Your dashboard will come alive as you add documents, renewal dates, and important files. Start with your passport, a visa, or an insurance policy."
+              action={
+                <Link
+                  href="/dashboard/documents/new"
+                  className={cn(buttonVariants({ size: "lg" }))}
+                >
+                  <Plus className="size-4" />
+                  Add your first document
+                </Link>
+              }
+            />
           </CardContent>
         </Card>
       ) : (

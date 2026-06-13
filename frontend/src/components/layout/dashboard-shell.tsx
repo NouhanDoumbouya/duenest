@@ -8,8 +8,11 @@ import {
   CreditCard,
   FileText,
   LayoutDashboard,
+  ListChecks,
   LogOut,
   Package,
+  Settings,
+  ShieldCheck,
 } from "lucide-react";
 
 import { Logo } from "@/components/layout/logo";
@@ -19,9 +22,12 @@ import { cn } from "@/lib/utils";
 
 const navItems = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Setup", href: "/dashboard/onboarding", icon: ListChecks },
   { label: "Documents", href: "/dashboard/documents", icon: FileText },
   { label: "Bundles", href: "/dashboard/bundles", icon: Package },
   { label: "Timeline", href: "/dashboard/timeline", icon: CalendarClock },
+  { label: "Trust", href: "/dashboard/trust", icon: ShieldCheck },
+  { label: "Data", href: "/dashboard/settings/data", icon: Settings },
   { label: "Subscriptions", href: "#", icon: CreditCard, soon: true },
 ];
 
@@ -79,6 +85,43 @@ function NavLinks() {
           </Link>
         );
       })}
+    </nav>
+  );
+}
+
+function MobileNavLinks() {
+  const pathname = usePathname();
+
+  return (
+    <nav
+      className="flex gap-2 overflow-x-auto border-b border-border bg-card px-4 py-2 md:hidden"
+      aria-label="Dashboard"
+    >
+      {navItems
+        .filter((item) => !item.soon)
+        .map((item) => {
+          const Icon = item.icon;
+          const active =
+            item.href === "/dashboard"
+              ? pathname === item.href
+              : pathname.startsWith(item.href);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              aria-current={active ? "page" : undefined}
+              className={cn(
+                "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium",
+                active
+                  ? "border-primary/20 bg-primary text-primary-foreground"
+                  : "border-border bg-card text-muted-foreground",
+              )}
+            >
+              <Icon className="size-4" />
+              {item.label}
+            </Link>
+          );
+        })}
     </nav>
   );
 }
@@ -145,6 +188,7 @@ export function DashboardShell({
             Sign out
           </Button>
         </header>
+        <MobileNavLinks />
 
         <main className="flex-1 p-4 sm:p-6 lg:p-10">{children}</main>
       </div>

@@ -54,7 +54,11 @@ The first realistic paid MVP is a **beautiful, trustworthy document vault that t
 
 DueNest helps users **avoid expiry mistakes, lost-document chaos, and last-minute renewal stress**. A single missed passport, visa, insurance, or license deadline can cost money, delay an application, or block travel. The vault's value is not storage — it is *peace of mind that nothing important is quietly expiring*.
 
-What the MVP deliberately leaves out: OCR, sharing, bundles, version history, family vaults, and exports. Those are differentiators layered on a solid base — not part of the first paid release.
+What the MVP deliberately leaves out: family/dependent vaults, billing, native
+mobile, organization/team vaults, and full raw-file archive exports. OCR,
+sharing, bundles, version history, emergency packs, and metadata exports now
+exist at foundation level and must continue to be hardened rather than expanded
+recklessly.
 
 ---
 
@@ -187,19 +191,15 @@ This is the recommended sequence. It can be adjusted, but the first paid MVP sho
 14. Secure share links *(done: file-level links)*
 15. OCR-assisted extraction *(done: local PDF text + Tesseract OCR, review-gated; no third-party OCR)*
 16. Application/renewal bundles *(done: bundles + requirements + readiness score)*
-17. Activity timeline and audit log *(partially done: file activity)*
-18. Version history
-19. Emergency access pack
-20. Export and backup features
+17. Activity timeline and audit log *(done: document + file activity foundations)*
+18. Version history *(done: metadata snapshots + restore)*
+19. Emergency access pack *(done: backend foundation)*
+20. Export and backup features *(done: expiring metadata exports; no full raw-file archive yet)*
+21. Document onboarding, trust center, demo data, and account data controls *(done in `feature/document-onboarding-trust`)*
 
-> Steps 1–16 are implemented at foundation level (with notification sending and
-> version/emergency/export work still ahead). The **Document Renewal Workspace**
-> branch delivered renewal preparation checklists (with shared system
-> templates), application/renewal bundles with a readiness score and missing-
-> item detection, an aggregated calendar/timeline view, and a review-gated
-> OCR-assisted extraction foundation. Files are never sent to a third-party OCR
-> service, and extracted values are only ever applied after explicit owner
-> review.
+> Steps 1–21 are implemented at foundation level. Notification sending, full
+> raw-file archive exports, retention automation, trusted contacts, legal copy
+> review, and production token-storage hardening remain future work.
 
 ---
 
@@ -224,6 +224,8 @@ backend/document-timeline              # done in feature/document-renewal-worksp
 frontend/document-timeline             # done in feature/document-renewal-workspace
 backend/document-ocr-foundation        # done in feature/document-renewal-workspace (review-gated, no third-party OCR)
 frontend/document-ocr-review-ui        # done in feature/document-renewal-workspace
+backend/document-vault-maturity        # done in main (versions, exports, proof records, emergency packs, document activity)
+frontend/document-onboarding-trust     # done in feature/document-onboarding-trust
 ```
 
 ---

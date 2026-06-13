@@ -16,6 +16,7 @@ import { DocumentCard } from "@/components/documents/document-card";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { ApiError } from "@/lib/api";
 import { deleteDocument, getDocuments } from "@/lib/documents";
@@ -388,40 +389,36 @@ export default function DocumentsPage() {
         </div>
       ) : docs.length === 0 ? (
         <Card>
-          <CardContent className="flex flex-col items-center gap-4 px-6 py-14 text-center">
-            <span className="flex size-12 items-center justify-center rounded-xl bg-accent text-accent-foreground">
-              {filtersActive ? (
-                <Filter className="size-6" />
-              ) : (
-                <FileText className="size-6" />
-              )}
-            </span>
-            <div>
-              <p className="font-heading text-base font-semibold">
-                {filtersActive
+          <CardContent>
+            <EmptyState
+              icon={filtersActive ? Filter : FileText}
+              title={
+                filtersActive
                   ? "No documents match these filters"
-                  : "Start your document vault"}
-              </p>
-              <p className="mx-auto mt-1.5 max-w-md text-sm leading-relaxed text-muted-foreground">
-                {filtersActive
+                  : "Start your document vault"
+              }
+              description={
+                filtersActive
                   ? "Try clearing filters or adjusting your search."
-                  : "Track passports, visas, licenses, certificates, and important records around the dates that matter."}
-              </p>
-            </div>
-            {filtersActive ? (
-              <Button type="button" size="lg" onClick={clearFilters}>
-                <X className="size-4" />
-                Clear filters
-              </Button>
-            ) : (
-              <Link
-                href="/dashboard/documents/new"
-                className={cn(buttonVariants({ size: "lg" }))}
-              >
-                <Plus className="size-4" />
-                Add your first document
-              </Link>
-            )}
+                  : "Track passports, visas, licenses, certificates, and important records around the dates that matter."
+              }
+              action={
+                filtersActive ? (
+                  <Button type="button" size="lg" onClick={clearFilters}>
+                    <X className="size-4" />
+                    Clear filters
+                  </Button>
+                ) : (
+                  <Link
+                    href="/dashboard/documents/new"
+                    className={cn(buttonVariants({ size: "lg" }))}
+                  >
+                    <Plus className="size-4" />
+                    Add your first document
+                  </Link>
+                )
+              }
+            />
           </CardContent>
         </Card>
       ) : (

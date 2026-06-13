@@ -541,6 +541,129 @@ Required.
 
 ---
 
+# 13.3 Onboarding, Trust, Demo, and Account Controls API (implemented)
+
+These endpoints are user-owned support surfaces for the document module. They
+do not expose another user's records and all protected routes require
+`Authorization: Bearer <access_token>`.
+
+## 13.3.1 Document onboarding state
+
+`UserOnboardingState` is a one-to-one record for the authenticated user. It
+stores durable setup timestamps and lightweight metadata used by the frontend
+onboarding experience.
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/v1/onboarding/state/` | Retrieve or create the user's onboarding state |
+| `PATCH` | `/api/v1/onboarding/state/` | Update allowed state fields (`has_completed_document_onboarding`, `metadata`) |
+| `POST` | `/api/v1/onboarding/complete/` | Mark document onboarding complete |
+| `POST` | `/api/v1/onboarding/dismiss/` | Dismiss onboarding from the dashboard |
+| `POST` | `/api/v1/onboarding/attention-reviewed/` | Record that Attention Needed was reviewed |
+| `POST` | `/api/v1/onboarding/trust-reviewed/` | Record that the Trust Center was reviewed |
+
+Read-only progress fields include:
+
+```txt
+first_document_created_at
+first_file_uploaded_at
+first_expiry_date_added_at
+first_reminder_created_at
+first_share_link_created_at
+first_checklist_created_at
+checklist_completed_at
+dismissed_onboarding_at
+```
+
+Document, file, expiry, reminder, checklist, share-link, and checklist-complete
+events are marked from the real document workflows where practical. The state
+endpoint also backfills progress from existing owner-scoped data.
+
+## 13.3.2 Guided document setup checklist
+
+```http
+GET /api/v1/onboarding/document-setup-checklist/
+```
+
+Returns computed progress from real user data:
+
+- create first document
+- upload first file
+- add expiry or renewal date
+- review Attention Needed
+- create reminder rule
+- create renewal checklist
+- try secure sharing
+- review Trust Center
+
+Response shape:
+
+```json
+{
+  "is_complete": false,
+  "percent": 50,
+  "required_percent": 67,
+  "counts": {
+    "documents": 1,
+    "files": 1,
+    "attention_needed": 0,
+    "reminders": 1,
+    "checklists": 0,
+    "share_links": 0
+  },
+  "steps": [
+    {
+      "key": "create_first_document",
+      "title": "Create your first document",
+      "completed": true,
+      "status": "completed",
+      "is_required": true,
+      "href": "/dashboard/documents/new"
+    }
+  ]
+}
+```
+
+Step statuses are `completed`, `current`, `pending`, or `optional`.
+
+## 13.3.3 Demo document data
+
+Demo data is always fake, owner-scoped, and labeled with `[Demo]` plus the
+internal marker `DUENEST_DEMO_DATA`.
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/api/v1/demo/create-document-demo-data/` | Create sample passport, visa, insurance, bundle, checklist, reminder, file, and share-link data for the caller |
+| `DELETE` | `/api/v1/demo/clear-document-demo-data/` | Remove only the caller's labeled demo document data |
+
+The create endpoint clears existing demo data for that user first, making it
+safe to run repeatedly.
+
+## 13.3.4 Trust summary
+
+```http
+GET /api/v1/trust/security-summary/
+```
+
+Returns safe capability flags and beta limitations for the signed-in user. It
+must not include secrets, raw credentials, access-code hashes, internal storage
+paths, or environment values.
+
+## 13.3.5 Account data controls
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/v1/account/data-summary/` | Owner-scoped counts for documents, files, shares, reminders, checklists, bundles, proof records, emergency packs, exports, and active deletion request status |
+| `POST` | `/api/v1/account/request-data-export/` | Create a full-vault metadata export through the same export generator as `/document-exports/` |
+| `POST` | `/api/v1/account/request-account-deletion/` | Create or return the user's active deletion request |
+| `POST` | `/api/v1/account/cancel-account-deletion/` | Cancel a pending deletion request |
+
+Account deletion is request-based. The API does **not** delete accounts
+synchronously; a pending request can be cancelled while its status is
+`requested`.
+
+---
+
 # 13.5 Documents API (implemented)
 
 Manages user-owned document metadata and returns computed document intelligence
@@ -1286,6 +1409,9 @@ documents_json | documents_csv | full_vault_metadata
 
 `future_full_archive` is intentionally rejected until full file archives are
 implemented safely. Generated files expire after 7 days.
+
+`POST /api/v1/account/request-data-export/` uses the same generator with
+`full_vault_metadata` and returns the same export serializer shape.
 
 ## 13C.3 Emergency access packs
 

@@ -4,16 +4,19 @@ Activity logging must never break the main preview/download/share flow, so
 ``log_activity`` swallows its own errors. Access codes are never logged.
 """
 
+import json
 import logging
 import os
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
+from django.core.files.base import ContentFile
 from django.utils import timezone
 
 from .models import (
     Document,
     DocumentActivity,
+    DocumentExportRequest,
     DocumentFile,
     DocumentFileActivity,
     DocumentVersion,
@@ -22,6 +25,7 @@ from .models import (
 logger = logging.getLogger(__name__)
 
 EXPIRING_SOON_DAYS = 90
+EXPORT_TTL_DAYS = 7
 
 # Fields a reviewer may apply from an extraction back onto a Document.
 APPLICABLE_EXTRACTION_FIELDS = (
@@ -1136,7 +1140,7 @@ def build_export_payload(user, export_type: str) -> dict:
         "documents": [_document_export_row(d) for d in documents],
     }
 
-    if export_type == DocumentExportRequestType.DOCUMENTS_JSON:
+    if export_type == DocumentExportRequest.ExportType.DOCUMENTS_JSON:
         return payload
 
     # full_vault_metadata adds related summaries (still secret-free).
@@ -1224,8 +1228,50 @@ def export_payload_to_csv(payload: dict) -> str:
     return output.getvalue()
 
 
-# Local alias to avoid importing the model's TextChoices at module top.
-class DocumentExportRequestType:
-    DOCUMENTS_JSON = "documents_json"
-    DOCUMENTS_CSV = "documents_csv"
-    FULL_VAULT_METADATA = "full_vault_metadata"
+class ExportGenerationError(Exception):
+    """Raised when a structured export cannot be generated."""
+
+
+def create_document_export(user, export_type: str) -> DocumentExportRequest:
+    """
+    Create and synchronously generate a metadata export for one user.
+
+    The export payload comes from ``build_export_payload``, which deliberately
+    excludes raw files, internal storage paths, share tokens, and access codes.
+    """
+    export = DocumentExportRequest.objects.create(
+        owner=user,
+        export_type=export_type,
+        status=DocumentExportRequest.Status.PROCESSING,
+    )
+    try:
+        payload = build_export_payload(user, export_type)
+        if export_type == DocumentExportRequest.ExportType.DOCUMENTS_CSV:
+            content = export_payload_to_csv(payload).encode("utf-8")
+            ext, suffix = ".csv", "csv"
+        else:
+            content = json.dumps(payload, indent=2).encode("utf-8")
+            ext, suffix = ".json", "json"
+        export.file.save(
+            f"duenest-export-{export.id}-{suffix}{ext}",
+            ContentFile(content),
+            save=False,
+        )
+        export.status = DocumentExportRequest.Status.COMPLETED
+        export.completed_at = timezone.now()
+        export.expires_at = timezone.now() + timedelta(days=EXPORT_TTL_DAYS)
+        export.metadata = {"document_count": payload.get("document_count", 0)}
+        export.save()
+    except Exception as exc:  # noqa: BLE001 — caller surfaces the failure
+        export.status = DocumentExportRequest.Status.FAILED
+        export.error_message = "Export generation failed."
+        export.save(update_fields=["status", "error_message"])
+        raise ExportGenerationError("Export generation failed.") from exc
+
+    log_document_activity(
+        owner=user,
+        action=DocumentActivity.Action.EXPORT_REQUESTED,
+        title="Export requested",
+        description=export.get_export_type_display(),
+    )
+    return export

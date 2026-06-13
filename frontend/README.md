@@ -45,10 +45,17 @@ src/
 │   ├── (auth)/register/page.tsx              # /register
 │   ├── (dashboard)/layout.tsx                # Auth gate + shell + user context
 │   ├── (dashboard)/dashboard/page.tsx        # /dashboard (real document summary)
+│   ├── (dashboard)/dashboard/onboarding/     # setup checklist + demo controls
 │   ├── (dashboard)/dashboard/documents/      # /dashboard/documents (list)
 │   │   ├── page.tsx                           #   list + delete
 │   │   ├── new/page.tsx                       #   /dashboard/documents/new
 │   │   └── [id]/edit/page.tsx                 #   workspace: metadata form + attached files
+│   ├── (dashboard)/dashboard/trust/page.tsx   # Trust Center
+│   ├── (dashboard)/dashboard/settings/data/   # data export + deletion request controls
+│   ├── demo/page.tsx                          # public demo overview
+│   ├── security/page.tsx                      # public beta security draft
+│   ├── privacy/page.tsx                       # public beta privacy draft
+│   ├── terms/page.tsx                         # public beta terms draft
 │   ├── share/files/[token]/page.tsx          # Public shared-file viewer
 │   ├── layout.tsx                            # Root layout + fonts + metadata
 │   └── globals.css                          # Tailwind + DueNest theme tokens
@@ -59,17 +66,20 @@ src/
 │   ├── dashboard/                           # stat-card, user-context
 │   ├── documents/                           # document-card/form/status-badge,
 │   │                                        #   file UI, share dialog, reminder rules
+│   ├── onboarding/                          # setup checklist card
 │   └── ui/                                  # shadcn/ui primitives (+ textarea, confirm-dialog)
 ├── lib/
 │   ├── api.ts                               # fetch wrapper + ApiError (JSON + FormData)
 │   ├── auth.ts                              # login/register/logout + token helpers
 │   ├── documents.ts                         # documents API, search, attention, reminders
 │   ├── document-files.ts                    # files, preview, sharing, activity helpers
+│   ├── onboarding.ts                        # onboarding, demo, trust, data-control API helpers
 │   └── utils.ts                             # cn()
 └── types/
     ├── auth.ts                              # User / token / payload types
     ├── documents.ts                         # DocumentRecord / requests / category
-    └── document-files.ts                    # file/share/activity/public-share types
+    ├── document-files.ts                    # file/share/activity/public-share types
+    └── onboarding.ts                        # setup/trust/account-control types
 ```
 
 ## Documents management
@@ -94,6 +104,22 @@ src/
   `has_file`, `missing_file`, `missing_expiry_date`, and `needs_attention`.
 - Category selection is not yet available (the backend exposes no categories
   list endpoint); `category_name` is shown read-only when present.
+
+### Onboarding, trust, and data controls
+
+- The dashboard can show a `SetupChecklistCard` backed by
+  `GET /api/v1/onboarding/document-setup-checklist/` and
+  `GET /api/v1/onboarding/state/`.
+- `/dashboard/onboarding` provides a focused setup flow, plus fake/labeled demo
+  data controls using `/demo/create-document-demo-data/` and
+  `/demo/clear-document-demo-data/`.
+- `/dashboard/trust` renders the backend security capability summary and marks
+  Trust Center review for onboarding progress.
+- `/dashboard/settings/data` shows owner-scoped account data counts, creates a
+  metadata export request, and records/cancels account deletion requests.
+- Public `/demo`, `/security`, `/privacy`, and `/terms` pages are beta-ready
+  product drafts. Privacy and terms copy should receive legal review before
+  public launch.
 
 ### Document files
 
