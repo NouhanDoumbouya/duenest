@@ -9,7 +9,7 @@ import {
   FileText,
   LayoutDashboard,
   LogOut,
-  RefreshCw,
+  Package,
 } from "lucide-react";
 
 import { Logo } from "@/components/layout/logo";
@@ -20,9 +20,9 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Documents", href: "/dashboard/documents", icon: FileText },
-  { label: "Renewals", href: "#", icon: RefreshCw, soon: true },
+  { label: "Bundles", href: "/dashboard/bundles", icon: Package },
+  { label: "Timeline", href: "/dashboard/timeline", icon: CalendarClock },
   { label: "Subscriptions", href: "#", icon: CreditCard, soon: true },
-  { label: "Deadlines", href: "#", icon: CalendarClock, soon: true },
 ];
 
 export interface ShellUser {

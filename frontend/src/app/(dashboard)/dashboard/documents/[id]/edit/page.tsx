@@ -6,6 +6,8 @@ import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Loader2 } from "lucide-react";
 
 import { DocumentForm } from "@/components/documents/document-form";
+import { DocumentChecklists } from "@/components/documents/document-checklists";
+import { DocumentFileExtraction } from "@/components/documents/document-file-extraction";
 import { DocumentFileShareDialog } from "@/components/documents/document-file-share-dialog";
 import { DocumentFilesList } from "@/components/documents/document-files-list";
 import { DocumentFileUploader } from "@/components/documents/document-file-uploader";
@@ -216,6 +218,39 @@ export default function EditDocumentPage() {
                 onRequestDelete={setPendingDelete}
               />
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {doc !== null && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Renewal checklists</CardTitle>
+            <CardDescription>
+              Prepare everything you need before this document’s renewal or
+              application deadline.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <DocumentChecklists documentId={id} />
+          </CardContent>
+        </Card>
+      )}
+
+      {doc !== null && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Extracted details</CardTitle>
+            <CardDescription>
+              Read details from an attached file and review them before applying.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <DocumentFileExtraction
+              documentId={id}
+              files={files ?? []}
+              onApplied={(updated) => setDoc(updated)}
+            />
           </CardContent>
         </Card>
       )}

@@ -2,7 +2,14 @@ from django.contrib import admin
 
 from .models import (
     Document,
+    DocumentBundle,
+    DocumentBundleRequirement,
     DocumentCategory,
+    DocumentChecklist,
+    DocumentChecklistItem,
+    DocumentChecklistItemTemplate,
+    DocumentChecklistTemplate,
+    DocumentExtraction,
     DocumentFile,
     DocumentFileActivity,
     DocumentFileShareLink,
@@ -113,4 +120,105 @@ class DocumentReminderRuleAdmin(admin.ModelAdmin):
     search_fields = ["document__title", "owner__username", "owner__email"]
     raw_id_fields = ["owner", "document"]
     readonly_fields = ["created_at", "updated_at"]
+    date_hierarchy = "created_at"
+
+
+# ---- Renewal workspace ------------------------------------------------------
+
+
+class DocumentChecklistItemTemplateInline(admin.TabularInline):
+    model = DocumentChecklistItemTemplate
+    extra = 0
+
+
+@admin.register(DocumentChecklistTemplate)
+class DocumentChecklistTemplateAdmin(admin.ModelAdmin):
+    list_display = [
+        "title",
+        "checklist_type",
+        "document_type",
+        "is_system_template",
+        "is_active",
+        "sort_order",
+    ]
+    list_filter = ["checklist_type", "is_system_template", "is_active"]
+    search_fields = ["title", "document_type", "use_case", "slug"]
+    prepopulated_fields = {"slug": ("title",)}
+    inlines = [DocumentChecklistItemTemplateInline]
+
+
+class DocumentChecklistItemInline(admin.TabularInline):
+    model = DocumentChecklistItem
+    extra = 0
+    raw_id_fields = ["owner", "linked_document", "linked_file"]
+
+
+@admin.register(DocumentChecklist)
+class DocumentChecklistAdmin(admin.ModelAdmin):
+    list_display = [
+        "title",
+        "owner",
+        "checklist_type",
+        "status",
+        "progress_percent",
+        "due_date",
+        "created_at",
+    ]
+    list_filter = ["checklist_type", "status"]
+    search_fields = ["title", "owner__username"]
+    raw_id_fields = ["owner", "document", "bundle", "template"]
+    readonly_fields = ["progress_percent", "status", "created_at", "updated_at"]
+    inlines = [DocumentChecklistItemInline]
+    date_hierarchy = "created_at"
+
+
+class DocumentBundleRequirementInline(admin.TabularInline):
+    model = DocumentBundleRequirement
+    extra = 0
+    raw_id_fields = ["owner", "linked_document", "linked_file"]
+
+
+@admin.register(DocumentBundle)
+class DocumentBundleAdmin(admin.ModelAdmin):
+    list_display = [
+        "title",
+        "owner",
+        "bundle_type",
+        "status",
+        "readiness_score",
+        "target_date",
+        "created_at",
+    ]
+    list_filter = ["bundle_type", "status"]
+    search_fields = ["title", "owner__username", "authority_or_provider"]
+    raw_id_fields = ["owner"]
+    readonly_fields = ["readiness_score", "created_at", "updated_at"]
+    inlines = [DocumentBundleRequirementInline]
+    date_hierarchy = "created_at"
+
+
+@admin.register(DocumentExtraction)
+class DocumentExtractionAdmin(admin.ModelAdmin):
+    list_display = [
+        "id",
+        "owner",
+        "document",
+        "file",
+        "extraction_status",
+        "provider",
+        "applied_at",
+        "created_at",
+    ]
+    list_filter = ["extraction_status", "provider"]
+    search_fields = ["owner__username", "document__title"]
+    raw_id_fields = ["owner", "document", "file"]
+    readonly_fields = [
+        "raw_text",
+        "extracted_fields",
+        "confidence_score",
+        "reviewed_at",
+        "applied_at",
+        "created_at",
+        "updated_at",
+    ]
     date_hierarchy = "created_at"

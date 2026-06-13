@@ -902,6 +902,23 @@ Current backend health check:
 http://127.0.0.1:8000/api/v1/health/
 ```
 
+### Optional: document OCR
+
+The document renewal workspace can extract details from uploaded files. PDF
+**text-layer** extraction works out of the box (the `pypdf` dependency is in
+`backend/requirements.txt`).
+
+To additionally OCR **images and scanned PDFs**, install the system Tesseract
+engine (and poppler for scanned PDFs). On Debian/Ubuntu:
+
+```bash
+sudo apt-get install tesseract-ocr poppler-utils
+```
+
+Without Tesseract installed, image/scanned-PDF extraction degrades gracefully to
+a `needs_review` result — nothing breaks, and files are never sent to any
+third-party OCR service.
+
 Frontend, Docker, deployment, and production database setup instructions will be added during later implementation sprints.
 
 ---
