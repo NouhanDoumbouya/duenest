@@ -309,6 +309,27 @@ The shipped `Document` API (`apps.documents`) follows these rules concretely:
   do not expose internal file paths, storage keys, access-code hashes, or
   share-link internals.
 
+### Implemented: onboarding, trust, demo, and account controls
+
+- **Onboarding state** is a one-to-one user-owned record. Progress timestamps
+  are derived from real owner-scoped document workflows where practical and do
+  not grant access to document data.
+- **Guided setup checklist** is computed from the authenticated user's own
+  documents, files, reminders, checklists, and share links. It does not inspect
+  another user's records.
+- **Demo data** is fake, clearly labeled with `[Demo]` and
+  `DUENEST_DEMO_DATA`, and can be cleared only for the current user.
+- **Trust summary** returns safe capability flags and beta limitations only. It
+  must not return credentials, environment values, access-code hashes, internal
+  storage paths, or raw file contents.
+- **Account data summary** returns owner-scoped counts and active request
+  status only.
+- **Account data export** reuses the document metadata export generator, which
+  excludes raw files, raw OCR text, share tokens, access-code hashes, and
+  internal storage paths.
+- **Account deletion** is request-based and cancellable while pending. The API
+  does not delete accounts synchronously.
+
 ---
 
 ## 11. File Upload Security
@@ -958,6 +979,9 @@ not a later add-on.
 - **Exports** are generated on demand, owner-scoped, expiring, and currently
   metadata-only. They exclude raw files, raw OCR text, share tokens,
   access-code hashes, and internal storage paths.
+- **Account controls** expose owner-scoped data counts, route account export
+  through the same metadata export generator, and track deletion as a pending
+  request rather than deleting synchronously.
 
 ### Emergency access (implemented foundation, high risk)
 

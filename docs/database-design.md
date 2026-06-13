@@ -291,6 +291,57 @@ DueNest should use a custom user model from the beginning because changing the u
 
 ---
 
+## 7.5 User Onboarding and Account-Control Models
+
+### Model: `UserOnboardingState`
+
+Purpose: one-to-one owner-scoped setup state for the document onboarding
+experience. This stores progress signals only; it does not grant document
+access.
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `id` | BigAutoField | Yes | Primary key |
+| `user` | OneToOneField(User) | Yes | Related name `onboarding_state` |
+| `has_completed_document_onboarding` | BooleanField | Yes | Manual completion flag |
+| `first_document_created_at` | DateTime | No | First real document progress marker |
+| `first_file_uploaded_at` | DateTime | No | First real file progress marker |
+| `first_expiry_date_added_at` | DateTime | No | First expiry/renewal date marker |
+| `first_reminder_created_at` | DateTime | No | First reminder rule marker |
+| `first_share_link_created_at` | DateTime | No | First file share-link marker |
+| `first_checklist_created_at` | DateTime | No | First document checklist marker |
+| `checklist_completed_at` | DateTime | No | First completed checklist marker |
+| `dismissed_onboarding_at` | DateTime | No | Dashboard dismissal timestamp |
+| `metadata` | JSONField | No | Lightweight reviewed-at flags and UI metadata |
+| `created_at` / `updated_at` | DateTime | Yes | Standard timestamps |
+
+### Model: `AccountDeletionRequest`
+
+Purpose: records a cancellable account-deletion request. The application does
+not delete accounts synchronously from the API request.
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `id` | BigAutoField | Yes | Primary key |
+| `owner` | ForeignKey(User) | Yes | Related name `account_deletion_requests` |
+| `status` | CharField | Yes | `requested`, `processing`, `cancelled`, `completed` |
+| `requested_at` | DateTime | Yes | Defaults to current time |
+| `scheduled_for` | DateTime | No | Target processing time |
+| `cancelled_at` | DateTime | No | Set when user cancels |
+| `completed_at` | DateTime | No | Set by future deletion worker/process |
+| `reason` | TextField | No | Optional user-provided reason |
+| `metadata` | JSONField | No | Operational metadata |
+| `created_at` / `updated_at` | DateTime | Yes | Standard timestamps |
+
+Indexes:
+
+| Index | Purpose |
+| --- | --- |
+| `(owner, status)` | Find active deletion requests for a user |
+| `scheduled_for` | Future processing queue/order |
+
+---
+
 ## 8. Document Model
 
 ### Purpose

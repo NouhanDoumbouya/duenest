@@ -312,7 +312,7 @@ backend/
 
 | App | Responsibility |
 | --- | --- |
-| `users` | Custom user model, authentication-related profile data, account settings |
+| `users` | Custom user model, authentication, onboarding state, account settings, data/deletion request controls |
 | `documents` | Document metadata, upload handling, categories, expiry status |
 | `renewals` | Subscription and renewal tracking, costs, providers, recurring dates |
 | `reminders` | Reminder records, reminder scheduling, reminder rules |
@@ -361,6 +361,11 @@ apps/documents/
 For simple CRUD endpoints, DRF views and serializers may be enough. However, DueNest will eventually include workflows such as reminders, AI extraction, application pack exports, secure sharing, file lifecycle management, and audit logs.
 
 Using `services.py` and `selectors.py` helps keep complex business logic out of views and serializers.
+
+Current example: `apps.users.services` owns onboarding state synchronization,
+guided setup checklist computation, demo data creation/cleanup, trust summary,
+and account-control orchestration. It reuses `apps.documents.services` for the
+actual metadata export generation instead of duplicating export logic.
 
 ---
 
@@ -1096,6 +1101,12 @@ justifies extraction.
   structured metadata exports, emergency access packs, and a document-wide
   activity timeline. These are implemented inside the existing documents app
   and storage layer; no separate service or worker is introduced.
+- **Document onboarding and trust layer:** user-owned onboarding state,
+  computed setup checklist, labeled demo data, Trust Center summary, public
+  beta security/privacy/terms pages, and account data controls. Onboarding and
+  account-control orchestration live in `apps.users`; document-derived progress
+  is marked from document workflows and exports reuse the existing document
+  export service.
 
 ### Implemented intelligence layers
 
@@ -1155,6 +1166,7 @@ justifies extraction.
 | Audit / export | ✅ Document activity + metadata exports | Full archive/ZIP export later |
 | Trash / restore | ✅ Implemented for documents/files | Retention windows and purge jobs later |
 | Emergency packs / proof records | ✅ Implemented backend foundation | Trusted contacts and richer audit later |
+| Onboarding / trust / data controls | ✅ Implemented | Legal review, retention automation, richer account settings later |
 
 ---
 
