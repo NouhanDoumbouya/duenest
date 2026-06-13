@@ -6,15 +6,20 @@ import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Loader2 } from "lucide-react";
 
 import { DocumentForm } from "@/components/documents/document-form";
+import { DocumentAppointments } from "@/components/documents/document-appointments";
 import { DocumentChecklists } from "@/components/documents/document-checklists";
 import { DocumentFileExtraction } from "@/components/documents/document-file-extraction";
 import { DocumentFileShareDialog } from "@/components/documents/document-file-share-dialog";
 import { DocumentFilesList } from "@/components/documents/document-files-list";
 import { DocumentFileUploader } from "@/components/documents/document-file-uploader";
 import { DocumentFileViewer } from "@/components/documents/document-file-viewer";
+import { DocumentPayments } from "@/components/documents/document-payments";
 import { DocumentProofRecords } from "@/components/documents/document-proof-records";
 import { DocumentReminderRules } from "@/components/documents/document-reminder-rules";
+import { DocumentRenewalHistory } from "@/components/documents/document-renewal-history";
 import { DocumentTrashedFiles } from "@/components/documents/document-trashed-files";
+import { ConfidenceBreakdown } from "@/components/documents/confidence-indicator";
+import { LifecycleBadge } from "@/components/documents/lifecycle-badge";
 import { DocumentStatusBadge } from "@/components/documents/status-badge";
 import {
   Card,
@@ -23,6 +28,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { SectionCard } from "@/components/ui/section-card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ApiError } from "@/lib/api";
 import {
@@ -30,9 +36,34 @@ import {
   downloadDocumentFile,
   getDocumentFiles,
 } from "@/lib/document-files";
-import { getDocument, updateDocument } from "@/lib/documents";
+import { formatDate, getDocument, updateDocument } from "@/lib/documents";
+import { tagColorClass } from "@/lib/tags";
+import { cn } from "@/lib/utils";
 import type { CreateDocumentRequest, DocumentRecord } from "@/types/documents";
 import type { DocumentFile } from "@/types/document-files";
+
+const LSA_STYLES: Record<string, string> = {
+  passed: "bg-destructive/10 text-destructive",
+  approaching: "bg-amber-100 text-amber-800",
+  ok: "bg-brand-success/10 text-brand-success",
+  unknown: "bg-muted text-muted-foreground",
+};
+
+function lastSafeActionMessage(doc: DocumentRecord): string {
+  const days = doc.days_until_last_safe_action;
+  switch (doc.last_safe_action_status) {
+    case "passed":
+      return days === null
+        ? "The last safe action date has passed."
+        : `Last safe action date passed ${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"} ago.`;
+    case "approaching":
+      return `Act within ${days} day${days === 1 ? "" : "s"} — the last safe action date is ${formatDate(doc.last_safe_action_date)}.`;
+    case "ok":
+      return `On track — act by ${formatDate(doc.last_safe_action_date)}.`;
+    default:
+      return "Add a renewal or expiry date to estimate a last safe action date.";
+  }
+}
 
 export default function EditDocumentPage() {
   const router = useRouter();
@@ -146,13 +177,52 @@ export default function EditDocumentPage() {
             {doc?.title ?? "Document"}
           </h1>
           {doc && <DocumentStatusBadge status={doc.computed_status} />}
+          {doc && <LifecycleBadge status={doc.lifecycle_status} />}
         </div>
         {doc?.status_reason && (
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
             {doc.status_reason}
           </p>
         )}
+        {doc && doc.tags.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {doc.tags.map((tag) => (
+              <span
+                key={tag.id}
+                className={cn(
+                  "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+                  tagColorClass(tag.color),
+                )}
+              >
+                {tag.name}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
+
+      {/* Confidence + last safe action */}
+      {doc !== null && (
+        <SectionCard
+          title="Document confidence"
+          description="How complete and current this document is."
+        >
+          <ConfidenceBreakdown
+            score={doc.confidence_score}
+            label={doc.confidence_label}
+            reasons={doc.confidence_reasons}
+          />
+          <div
+            className={cn(
+              "mt-4 flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-sm",
+              LSA_STYLES[doc.last_safe_action_status] ?? LSA_STYLES.unknown,
+            )}
+          >
+            <span className="font-medium">Last safe action:</span>
+            <span>{lastSafeActionMessage(doc)}</span>
+          </div>
+        </SectionCard>
+      )}
 
       <Card>
         <CardHeader>
@@ -242,6 +312,33 @@ export default function EditDocumentPage() {
             <DocumentProofRecords documentId={id} />
           </CardContent>
         </Card>
+      )}
+
+      {doc !== null && (
+        <SectionCard
+          title="Renewal history"
+          description="A timeline of past renewals for this document."
+        >
+          <DocumentRenewalHistory documentId={id} />
+        </SectionCard>
+      )}
+
+      {doc !== null && (
+        <SectionCard
+          title="Appointments"
+          description="Appointments connected to this document."
+        >
+          <DocumentAppointments documentId={id} />
+        </SectionCard>
+      )}
+
+      {doc !== null && (
+        <SectionCard
+          title="Renewal &amp; application costs"
+          description="Track what renewing or applying for this document costs."
+        >
+          <DocumentPayments documentId={id} />
+        </SectionCard>
       )}
 
       {doc !== null && (

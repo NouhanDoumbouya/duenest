@@ -119,6 +119,7 @@ DueNest will be built in this order:
 | Frontend setup | Not Started |
 | MVP implementation | Not Started |
 | Documents module gaps (trash/restore, bundles, proof of submission, physical location, emergency access packs, plan limits foundation) | Completed |
+| Document intelligence polish (confidence score, what-is-missing scanner, health overview, last safe action date, tags, custom fields, lifecycle status, renewal history, appointments, cost tracking) | Completed |
 
 ---
 

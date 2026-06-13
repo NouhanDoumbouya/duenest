@@ -389,6 +389,10 @@ Implemented `Document` fields:
 | `renewal_date` | DateField | No | Optional; not after `expiry_date` |
 | `notes` | TextField | No | User notes |
 | `status` | CharField | Yes | `active`, `expired`, `renewal_due`, `archived` (default `active`) |
+| `lifecycle_status` | CharField | Yes | Owner-managed process stage: `draft`, `collected`, `submitted`, `under_review`, `approved`, `rejected`, `renewed`, `archived` (default `collected`). Separate from `computed_status`. |
+| `last_safe_action_date` | DateField | No | Manual override for the last-safe-action date. When blank it is computed from renewal/expiry. |
+| `custom_fields` | JSONField | No | Flat object of type-specific string fields (e.g. passport number). Validated server-side. |
+| `tags` | ManyToMany(DocumentTag) | No | Owner's private tags. |
 | `physical_location_label` | CharField | No | Owner-only location label for originals/copies |
 | `physical_location_details` | TextField | No | Owner-only storage details |
 | `original_available` | CharField | Yes | `yes`, `no`, `unknown` |
@@ -467,6 +471,32 @@ Reminder date calculation:
 
 Validation requires the relevant source date to exist. Rules are always scoped
 through an owner-owned parent document.
+
+#### Implemented intelligence-polish models
+
+These owner-scoped models support the document intelligence features
+(confidence, organisation, history, appointments, and costs). The confidence
+score, last-safe-action date, and missing/health scanners are **computed in
+service code** (`apps.documents.services`) — they are not stored columns.
+
+- **`DocumentTag`** — `id`, `owner` (FK User), `name`, `slug` (auto, unique per
+  owner via a `(owner, slug)` constraint), `color`, timestamps. Linked to
+  documents through the `Document.tags` M2M.
+- **`DocumentRenewalEvent`** — `id`, `owner`, `document` (FK, `CASCADE`),
+  `renewal_date`, `previous_expiry_date`, `new_expiry_date`, `cost` (Decimal),
+  `currency`, `notes`, optional `proof` (FK `ProofRecord`, `SET_NULL`),
+  timestamps. Renewal history for one document.
+- **`DocumentAppointment`** — `id`, `owner`, optional `document` (`CASCADE`) and
+  `bundle` (`SET_NULL`), `title`, `appointment_at` (DateTime), `location`,
+  `reference_number`, `notes`, `status` (`scheduled`/`completed`/`cancelled`/
+  `missed`), timestamps. At least one of document/bundle is required.
+- **`DocumentPayment`** — `id`, `owner`, optional `document` (`CASCADE`) and
+  `bundle` (`SET_NULL`), `label`, `expected_cost` / `actual_cost` (Decimal),
+  `currency`, `payment_status` (`pending`/`partial`/`paid`/`refunded`/`waived`),
+  `payment_date`, optional `proof` (FK), `notes`, timestamps.
+
+All four are owner-scoped, and any linked document/bundle/proof must belong to
+the same owner (enforced in the serializers).
 
 > The table below is the **longer-term planned** design (file storage, UUIDs,
 > richer status calculation). It is kept for reference and will be folded into

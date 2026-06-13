@@ -11,11 +11,13 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 
 from django.core.files.base import ContentFile
+from django.db.models import Count, Q
 from django.utils import timezone
 
 from .models import (
     Document,
     DocumentActivity,
+    DocumentBundle,
     DocumentExportRequest,
     DocumentFile,
     DocumentFileActivity,
@@ -215,6 +217,411 @@ def attention_sort_key(document: Document) -> tuple:
         health.days_until_expiry if health.days_until_expiry is not None else 99999,
         -document.updated_at.timestamp(),
     )
+
+
+# ---- Last safe action date -------------------------------------------------
+
+# Default lead time used when computing a last-safe-action date from an expiry.
+LAST_SAFE_ACTION_BUFFER_DAYS = 30
+# Warn when the last-safe-action date is within this many days.
+LAST_SAFE_ACTION_WARN_DAYS = 30
+
+
+@dataclass(frozen=True)
+class LastSafeAction:
+    date: date | None
+    days_until: int | None
+    status: str  # unknown | ok | approaching | passed
+    is_manual: bool
+
+    def as_dict(self) -> dict:
+        return {
+            "last_safe_action_date": self.date.isoformat() if self.date else None,
+            "days_until_last_safe_action": self.days_until,
+            "last_safe_action_status": self.status,
+            "last_safe_action_is_manual": self.is_manual,
+        }
+
+
+def compute_last_safe_action(document, *, today: date | None = None) -> LastSafeAction:
+    """
+    The last date the user can still safely act (renew/submit) before it's too
+    late. Uses the manual override when set, else derives it from the renewal
+    date, else from the expiry date minus a default buffer.
+    """
+    today = today or timezone.localdate()
+    if document.last_safe_action_date:
+        value, is_manual = document.last_safe_action_date, True
+    elif document.renewal_date:
+        value, is_manual = document.renewal_date, False
+    elif document.expiry_date:
+        value = document.expiry_date - timedelta(days=LAST_SAFE_ACTION_BUFFER_DAYS)
+        is_manual = False
+    else:
+        return LastSafeAction(None, None, "unknown", False)
+
+    days = (value - today).days
+    if days < 0:
+        status = "passed"
+    elif days <= LAST_SAFE_ACTION_WARN_DAYS:
+        status = "approaching"
+    else:
+        status = "ok"
+    return LastSafeAction(value, days, status, is_manual)
+
+
+# ---- Confidence / readiness score ------------------------------------------
+
+# A proof record only counts toward confidence once a document is in or past
+# submission — otherwise its absence shouldn't be treated as a gap.
+CONFIDENCE_RELEVANT_PROOF_LIFECYCLES = {
+    "submitted",
+    "under_review",
+    "approved",
+    "rejected",
+    "renewed",
+}
+
+LOW_CONFIDENCE_THRESHOLD = 55
+
+
+@dataclass(frozen=True)
+class DocumentConfidence:
+    score: int
+    label: str
+    reasons: list
+
+    def as_dict(self) -> dict:
+        return {
+            "confidence_score": self.score,
+            "confidence_label": self.label,
+            "confidence_reasons": self.reasons,
+        }
+
+
+def _confidence_label(score: int) -> str:
+    if score >= 85:
+        return "Strong"
+    if score >= 65:
+        return "Good"
+    if score >= 40:
+        return "Fair"
+    return "Low"
+
+
+def _has_active_reminder(document) -> bool:
+    prefetched = getattr(document, "_prefetched_objects_cache", {}).get(
+        "reminder_rules"
+    )
+    if prefetched is not None:
+        return any(r.is_enabled for r in prefetched)
+    return document.reminder_rules.filter(is_enabled=True).exists()
+
+
+def _has_proof(document) -> bool:
+    prefetched = getattr(document, "_prefetched_objects_cache", {}).get(
+        "proof_records"
+    )
+    if prefetched is not None:
+        return len(prefetched) > 0
+    return document.proof_records.exists()
+
+
+def compute_confidence(
+    document, *, health: DocumentHealth | None = None, today: date | None = None
+) -> DocumentConfidence:
+    """
+    A 0–100 readiness score derived from how complete and current a document is.
+    Weights sum to 100; proof is only required for documents in/after submission.
+    """
+    health = health or get_document_health(document, today=today)
+    reasons: list = []
+    score = 0
+
+    def factor(key, label, met, weight, hint=""):
+        nonlocal score
+        if met:
+            score += weight
+        reasons.append(
+            {
+                "key": key,
+                "label": label,
+                "met": bool(met),
+                "weight": weight,
+                "hint": hint,
+            }
+        )
+
+    factor("has_file", "File uploaded", health.has_file, 25, "Attach a scan or copy.")
+    factor(
+        "has_expiry",
+        "Expiry date set",
+        not health.missing_expiry_date,
+        15,
+        "Add the expiry date so renewals can be tracked.",
+    )
+    factor(
+        "has_reminder",
+        "Reminder active",
+        _has_active_reminder(document),
+        15,
+        "Add a reminder rule.",
+    )
+    factor(
+        "has_location",
+        "Physical location noted",
+        bool(document.physical_location_label or document.physical_location_details),
+        10,
+        "Record where the original is kept.",
+    )
+    factor(
+        "not_critical",
+        "Not expired",
+        not health.is_expired,
+        20,
+        "Renew or update this document.",
+    )
+    factor(
+        "no_warnings",
+        "No open warnings",
+        not health.needs_attention,
+        5,
+        "Resolve outstanding warnings.",
+    )
+
+    if document.lifecycle_status in CONFIDENCE_RELEVANT_PROOF_LIFECYCLES:
+        factor(
+            "has_proof",
+            "Proof recorded",
+            _has_proof(document),
+            10,
+            "Save a submission confirmation or receipt.",
+        )
+    else:
+        # Not relevant yet — award the points so absence isn't a penalty.
+        score += 10
+
+    score = max(0, min(100, score))
+    return DocumentConfidence(
+        score=score, label=_confidence_label(score), reasons=reasons
+    )
+
+
+# ---- What-is-missing scanner ----------------------------------------------
+
+
+def _missing_doc_summary(document, health: DocumentHealth) -> dict:
+    return {
+        "id": document.id,
+        "title": document.title,
+        "document_type": document.document_type,
+        "computed_status": health.computed_status,
+        "status_label": health.status_label,
+    }
+
+
+def scan_missing(user, *, today: date | None = None) -> dict:
+    """
+    Owner-scoped summary of what's missing or risky across the vault: documents
+    without files, without expiry dates, without reminders, low-confidence
+    documents, and bundles missing required items.
+    """
+    today = today or timezone.localdate()
+
+    documents = list(
+        Document.objects.filter(owner=user, is_trashed=False)
+        .exclude(status=Document.Status.ARCHIVED)
+        .annotate(
+            file_count=Count(
+                "files", filter=Q(files__is_trashed=False), distinct=True
+            )
+        )
+        .prefetch_related("reminder_rules", "proof_records")
+    )
+
+    missing_files: list = []
+    missing_expiry: list = []
+    without_reminders: list = []
+    low_confidence: list = []
+
+    for document in documents:
+        health = get_document_health(document, today=today)
+        summary = _missing_doc_summary(document, health)
+        if health.missing_file:
+            missing_files.append(summary)
+        if health.missing_expiry_date:
+            missing_expiry.append(summary)
+        if not _has_active_reminder(document):
+            without_reminders.append(summary)
+        confidence = compute_confidence(document, health=health, today=today)
+        if confidence.score < LOW_CONFIDENCE_THRESHOLD:
+            low_confidence.append({**summary, "confidence_score": confidence.score})
+
+    bundles_missing: list = []
+    bundles = DocumentBundle.objects.filter(owner=user).exclude(
+        status=DocumentBundle.Status.ARCHIVED
+    )
+    for bundle in bundles.prefetch_related("requirements"):
+        readiness = bundle_readiness(bundle)
+        if readiness.required_missing > 0:
+            bundles_missing.append(
+                {
+                    "id": bundle.id,
+                    "title": bundle.title,
+                    "missing_required_count": readiness.required_missing,
+                    "readiness_score": readiness.score,
+                }
+            )
+
+    groups = [
+        {
+            "key": "missing_files",
+            "label": "Documents missing files",
+            "hint": "Upload a scan or copy so the document is usable.",
+            "fix_target": "document",
+            "items": missing_files,
+        },
+        {
+            "key": "missing_expiry",
+            "label": "Documents missing an expiry date",
+            "hint": "Add an expiry date so renewals can be tracked.",
+            "fix_target": "document",
+            "items": missing_expiry,
+        },
+        {
+            "key": "without_reminders",
+            "label": "Documents without reminders",
+            "hint": "Add a reminder rule so nothing slips.",
+            "fix_target": "document",
+            "items": without_reminders,
+        },
+        {
+            "key": "low_confidence",
+            "label": "Low-confidence documents",
+            "hint": "Fill in the gaps to raise the confidence score.",
+            "fix_target": "document",
+            "items": low_confidence,
+        },
+        {
+            "key": "bundles_missing_required",
+            "label": "Bundles missing required items",
+            "hint": "Attach the required documents to complete the bundle.",
+            "fix_target": "bundle",
+            "items": bundles_missing,
+        },
+    ]
+
+    total = sum(len(group["items"]) for group in groups)
+    return {"total": total, "groups": groups}
+
+
+# ---- Health dashboard overview --------------------------------------------
+
+# Lifecycle states that mean "a human still needs to look at this".
+REVIEW_LIFECYCLES = {"under_review", "rejected"}
+
+
+def _shared_document_ids(user) -> set:
+    from .models import DocumentFileShareLink
+
+    now = timezone.now()
+    return set(
+        DocumentFileShareLink.objects.filter(
+            owner=user, revoked_at__isnull=True, expires_at__gt=now
+        ).values_list("document_id", flat=True)
+    )
+
+
+def _overview_summary(document, health, confidence) -> dict:
+    return {
+        "id": document.id,
+        "title": document.title,
+        "document_type": document.document_type,
+        "computed_status": health.computed_status,
+        "status_label": health.status_label,
+        "urgency_level": health.urgency_level,
+        "lifecycle_status": document.lifecycle_status,
+        "confidence_score": confidence.score,
+        "confidence_label": confidence.label,
+    }
+
+
+def build_health_overview(user, *, today: date | None = None) -> dict:
+    """
+    Group the user's documents into health sections for the dashboard. Status
+    buckets (expired/expiring/missing-info/needs-review/healthy) are primary and
+    mutually exclusive; shared-externally and low-confidence are cross-cutting.
+    """
+    today = today or timezone.localdate()
+
+    documents = list(
+        Document.objects.filter(owner=user, is_trashed=False)
+        .annotate(
+            file_count=Count(
+                "files", filter=Q(files__is_trashed=False), distinct=True
+            )
+        )
+        .prefetch_related("reminder_rules", "proof_records")
+    )
+    shared_ids = _shared_document_ids(user)
+
+    keys = [
+        "expired",
+        "expiring_soon",
+        "missing_info",
+        "needs_review",
+        "healthy",
+        "shared_externally",
+        "low_confidence",
+    ]
+    buckets: dict = {key: [] for key in keys}
+
+    for document in documents:
+        health = get_document_health(document, today=today)
+        confidence = compute_confidence(document, health=health, today=today)
+        summary = _overview_summary(document, health, confidence)
+        status = health.computed_status
+
+        if status == "archived":
+            # Archived documents are intentionally left out of the live overview.
+            pass
+        elif status == "expired":
+            buckets["expired"].append(summary)
+        elif status in ("expiring_soon", "renewal_due"):
+            buckets["expiring_soon"].append(summary)
+        elif status in ("missing_file", "missing_expiry_date"):
+            buckets["missing_info"].append(summary)
+        elif document.lifecycle_status in REVIEW_LIFECYCLES:
+            buckets["needs_review"].append(summary)
+        else:
+            buckets["healthy"].append(summary)
+
+        # Cross-cutting signals (a document can appear here and in a status bucket).
+        if document.id in shared_ids:
+            buckets["shared_externally"].append(summary)
+        if confidence.score < LOW_CONFIDENCE_THRESHOLD and status != "archived":
+            buckets["low_confidence"].append(summary)
+
+    labels = {
+        "expired": ("Expired", "Past their expiry date — act now."),
+        "expiring_soon": ("Expiring soon", "Coming up for renewal."),
+        "missing_info": ("Missing information", "Missing a file or expiry date."),
+        "needs_review": ("Needs review", "Under review or recently rejected."),
+        "healthy": ("Healthy", "Complete and up to date."),
+        "shared_externally": ("Shared externally", "Have an active share link."),
+        "low_confidence": ("Low confidence", "Could be more complete."),
+    }
+    groups = [
+        {
+            "key": key,
+            "label": labels[key][0],
+            "description": labels[key][1],
+            "count": len(buckets[key]),
+            "items": buckets[key],
+        }
+        for key in keys
+    ]
+    return {"total": len(documents), "groups": groups}
 
 
 def reminder_date_for_rule(rule) -> date | None:
