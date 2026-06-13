@@ -70,3 +70,32 @@ Deferred from this pass:
 - Aggregate ZIP file-count/byte caps and chunked ZIP writes.
 - Full route-level App Router `loading.tsx` / `error.tsx` coverage.
 - Browser-based visual QA screenshots across every dashboard and founder route.
+
+## Calendar UI Polish Notes
+
+Branch: `feature/calendar-ui-polish`
+
+Additional Calendar actions in this pass:
+
+- Rebuilt `/dashboard/calendar` around a clearer planning header, concise
+  private-calendar trust copy, and primary Add document / Export `.ics` actions.
+- Refined Calendar metrics so overdue and this-week states carry clearer
+  context and stronger urgency treatment.
+- Converted Upcoming into an agenda-style view with grouped sections, richer
+  event rows, type/urgency badges, and direct linked-resource actions.
+- Strengthened Month view with clearer cell boundaries, today highlighting,
+  category-colored event pills, more readable labels, and day selection.
+- Added a Day drawer that lists all events for a selected date, including an
+  intentional no-events state.
+- Expanded Event detail into a planning panel with why-it-matters copy, next
+  recommended action, linked-resource action, and `.ics` export.
+- Added a right-side planning summary with loaded/visible counts, range context,
+  next recommended review, and safe-summary trust signals.
+- Updated the dashboard upcoming-calendar widget to use the same planning
+  language and a bounded 90-day event range.
+
+Deferred from this pass:
+
+- Browser screenshot QA across desktop and mobile.
+- Automated frontend interaction tests for view switching, filter chips, and
+  day drawer behavior.

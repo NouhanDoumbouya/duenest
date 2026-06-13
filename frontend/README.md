@@ -193,8 +193,10 @@ src/
   plus `PageHeader`, then split complex pages into tabs, two-column layouts, or
   a right-side summary rail when that makes the primary task clearer. Bundle
   detail uses Requirements / Files / Timeline / Proofs / Exports tabs; Calendar
-  uses summary metrics plus Month / Upcoming views; Secure Rooms uses metrics,
-  a compact inventory, and a creation/trust side panel.
+  uses a planning header, compact trust copy, actionable metrics, Month /
+  Upcoming views, bounded date-range fetching, a right-side planning summary,
+  and day/event drawers; Secure Rooms uses metrics, a compact inventory, and a
+  creation/trust side panel.
 - **Authenticated app conventions:** forms group fields into labelled sections
   (a two-column `label / fields` layout) rather than a flat list; document
   status uses `DocumentStatusBadge` (calm → urgent ring-tinted pills), and
