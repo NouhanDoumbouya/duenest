@@ -248,11 +248,11 @@ export default function DocumentsPage() {
   const docs = documents ?? [];
 
   return (
-    <PageContainer>
+    <PageContainer width="wide">
       <PageHeader
-        eyebrow="Workspace"
-        title="Documents"
-        description="Your secure vault. Find passports, visas, licences, and important records by title, country, issuer, or reference number."
+        eyebrow="Vault"
+        title="Document vault"
+        description="A calm workspace for passports, visas, licences, certificates, policies, and the dates that make them risky."
         actions={
           <Link
             href="/dashboard/documents/new"
@@ -438,7 +438,7 @@ export default function DocumentsPage() {
               description={
                 filtersActive
                   ? "Try clearing filters or adjusting your search."
-                  : "Track passports, visas, licenses, certificates, and important records around the dates that matter."
+                  : "Track passports, visas, licences, certificates, and important records around the dates that matter."
               }
               action={
                 filtersActive ? (
@@ -478,7 +478,7 @@ export default function DocumentsPage() {
           </div>
           {total > docs.length && (
             <p className="text-center text-sm text-muted-foreground">
-              Showing {docs.length} of {total}. Pagination is coming soon.
+              Showing the first {docs.length} of {total} matching documents.
             </p>
           )}
         </>

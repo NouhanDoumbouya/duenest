@@ -33,8 +33,8 @@ export default function NewDocumentPage() {
         // workspace if this attachment failed (e.g. a transient network error).
       }
     }
-    // Land on the document workspace (metadata + files) for any follow-up.
-    router.push(`/dashboard/documents/${created.id}/edit`);
+    // Land on the document workspace for any follow-up.
+    router.push(`/dashboard/documents/${created.id}`);
     router.refresh();
   }
 

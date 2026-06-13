@@ -48,7 +48,7 @@ function relativeLabel(date: string): string {
 function eventHref(event: TimelineEvent): string | null {
   if (event.related_bundle) return `/dashboard/bundles/${event.related_bundle}`;
   if (event.related_document)
-    return `/dashboard/documents/${event.related_document}/edit`;
+    return `/dashboard/documents/${event.related_document}`;
   return null;
 }
 

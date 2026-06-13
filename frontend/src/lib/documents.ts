@@ -10,6 +10,7 @@ import type {
   DocumentListParams,
   DocumentReminderRule,
   CreateDocumentRequest,
+  DocumentActivityResponse,
   DocumentRecord,
   DocumentStatus,
   HealthOverviewResponse,
@@ -170,6 +171,15 @@ export function getMissingSummary(): Promise<MissingScanResponse> {
 /** Grouped health sections for the documents dashboard. */
 export function getHealthOverview(): Promise<HealthOverviewResponse> {
   return apiFetch<HealthOverviewResponse>("/documents/health-overview/", {
+    auth: true,
+  });
+}
+
+/** Merged, owner-only activity timeline for one document. */
+export function getDocumentActivity(
+  id: number,
+): Promise<DocumentActivityResponse> {
+  return apiFetch<DocumentActivityResponse>(`/documents/${id}/activity/`, {
     auth: true,
   });
 }
