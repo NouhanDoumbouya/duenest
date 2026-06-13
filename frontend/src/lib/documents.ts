@@ -3,16 +3,39 @@
 
 import { apiFetch } from "./api";
 import type {
+  AttentionNeededResponse,
+  CreateReminderRuleRequest,
+  DocumentComputedStatus,
+  DocumentListParams,
+  DocumentReminderRule,
   CreateDocumentRequest,
   DocumentRecord,
   DocumentStatus,
   Paginated,
+  ReminderTriggerType,
   UpdateDocumentRequest,
+  UpdateReminderRuleRequest,
+  UpcomingRemindersResponse,
 } from "@/types/documents";
 
-/** List the current user's documents (first page, newest first). */
-export function getDocuments(): Promise<Paginated<DocumentRecord>> {
-  return apiFetch<Paginated<DocumentRecord>>("/documents/", { auth: true });
+function toQueryString(params?: DocumentListParams): string {
+  if (!params) return "";
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === "") continue;
+    search.set(key, String(value));
+  }
+  const query = search.toString();
+  return query ? `?${query}` : "";
+}
+
+/** List the current user's documents with backend-owned search/filter/sort. */
+export function getDocuments(
+  params?: DocumentListParams,
+): Promise<Paginated<DocumentRecord>> {
+  return apiFetch<Paginated<DocumentRecord>>(`/documents/${toQueryString(params)}`, {
+    auth: true,
+  });
 }
 
 /** Retrieve a single document the current user owns. */
@@ -48,6 +71,66 @@ export function deleteDocument(id: number): Promise<void> {
   });
 }
 
+export function getAttentionNeeded(): Promise<AttentionNeededResponse> {
+  return apiFetch<AttentionNeededResponse>("/documents/attention-needed/", {
+    auth: true,
+  });
+}
+
+export function getDocumentReminderRules(
+  documentId: number,
+): Promise<DocumentReminderRule[]> {
+  return apiFetch<DocumentReminderRule[]>(
+    `/documents/${documentId}/reminder-rules/`,
+    { auth: true },
+  );
+}
+
+export function createDocumentReminderRule(
+  documentId: number,
+  payload: CreateReminderRuleRequest,
+): Promise<DocumentReminderRule> {
+  return apiFetch<DocumentReminderRule>(
+    `/documents/${documentId}/reminder-rules/`,
+    {
+      method: "POST",
+      body: payload,
+      auth: true,
+    },
+  );
+}
+
+export function updateDocumentReminderRule(
+  documentId: number,
+  ruleId: number,
+  payload: UpdateReminderRuleRequest,
+): Promise<DocumentReminderRule> {
+  return apiFetch<DocumentReminderRule>(
+    `/documents/${documentId}/reminder-rules/${ruleId}/`,
+    {
+      method: "PATCH",
+      body: payload,
+      auth: true,
+    },
+  );
+}
+
+export function deleteDocumentReminderRule(
+  documentId: number,
+  ruleId: number,
+): Promise<void> {
+  return apiFetch<void>(`/documents/${documentId}/reminder-rules/${ruleId}/`, {
+    method: "DELETE",
+    auth: true,
+  });
+}
+
+export function getUpcomingDocumentReminders(): Promise<UpcomingRemindersResponse> {
+  return apiFetch<UpcomingRemindersResponse>("/documents/reminders/upcoming/", {
+    auth: true,
+  });
+}
+
 // ---- Display helpers -------------------------------------------------------
 
 export const STATUS_LABELS: Record<DocumentStatus, string> = {
@@ -55,6 +138,23 @@ export const STATUS_LABELS: Record<DocumentStatus, string> = {
   expired: "Expired",
   renewal_due: "Renewal due",
   archived: "Archived",
+};
+
+export const COMPUTED_STATUS_LABELS: Record<DocumentComputedStatus, string> = {
+  active: "Active",
+  expiring_soon: "Expiring soon",
+  renewal_due: "Renewal due",
+  expired: "Expired",
+  missing_file: "Missing file",
+  missing_expiry_date: "Missing expiry date",
+  needs_attention: "Needs attention",
+  archived: "Archived",
+};
+
+export const REMINDER_TRIGGER_LABELS: Record<ReminderTriggerType, string> = {
+  before_expiry: "Before expiry",
+  before_renewal_date: "Before renewal date",
+  on_expiry: "On expiry day",
 };
 
 /** Format an ISO date (YYYY-MM-DD) for display; returns "—" when empty. */
@@ -80,8 +180,7 @@ export function daysUntil(value: string | null | undefined): number | null {
   return Math.round((date.getTime() - today.getTime()) / 86_400_000);
 }
 
-/** A document is "expiring soon" if it expires within the next 30 days. */
+/** The backend owns the 90-day expiry intelligence. */
 export function isExpiringSoon(doc: DocumentRecord): boolean {
-  const days = daysUntil(doc.expiry_date);
-  return days !== null && days >= 0 && days <= 30;
+  return doc.is_expiring_soon || doc.computed_status === "expiring_soon";
 }

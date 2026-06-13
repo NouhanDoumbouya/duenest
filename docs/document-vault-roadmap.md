@@ -176,11 +176,11 @@ This is the recommended sequence. It can be adjusted, but the first paid MVP sho
 3. Frontend document upload UI *(done)*
 4. Backend secure preview/download access *(done)*
 5. Frontend in-app document preview *(done)*
-6. Smart status and expiry intelligence
-7. Search, filter, and sort
-8. Missing-information detection
-9. "Attention Needed" inbox
-10. Renewal reminder rules
+6. Smart status and expiry intelligence *(done: computed document health)*
+7. Search, filter, and sort *(done)*
+8. Missing-information detection *(done: missing file / missing expiry flags)*
+9. "Attention Needed" inbox *(done)*
+10. Renewal reminder rules *(done: rules + calculated upcoming dates; no sending yet)*
 11. Renewal preparation checklists
 12. Document detail page upgrade
 13. Calendar/timeline view
@@ -192,9 +192,11 @@ This is the recommended sequence. It can be adjusted, but the first paid MVP sho
 19. Emergency access pack
 20. Export and backup features
 
-> Steps 1–5 are implemented, and file-level secure sharing from step 14 has
-> also landed early. The **next implementation branch** should return to step 6
-> (status intelligence), unless the share-link UX needs a dedicated polish pass.
+> Steps 1–10 are implemented at foundation level, and file-level secure sharing
+> from step 14 has also landed early. Reminder rules calculate upcoming dates
+> but do not send notifications yet. The next implementation branch should move
+> to renewal preparation checklists or calendar/timeline work, unless the
+> intelligence UI needs a dedicated polish pass.
 
 ---
 
@@ -203,14 +205,14 @@ This is the recommended sequence. It can be adjusted, but the first paid MVP sho
 Realistic, focused branches (backend before its matching frontend):
 
 ```txt
-backend/document-status-intelligence   # auto status + expiry derivation + missing-info flags
-frontend/document-status-polish        # status/urgency presentation
-backend/document-search-filter         # search, filter, sort, pagination
-frontend/document-search-filter        # vault search UI
-backend/document-attention-inbox       # attention-needed query endpoint
-frontend/document-attention-inbox      # attention inbox UI
-backend/document-reminder-rules        # reminder rule model + evaluation
-frontend/document-reminder-experience  # reminder setup + surfacing
+backend/document-status-intelligence   # done in feature/document-intelligence-foundation
+frontend/document-status-polish        # done in feature/document-intelligence-foundation
+backend/document-search-filter         # done in feature/document-intelligence-foundation
+frontend/document-search-filter        # done in feature/document-intelligence-foundation
+backend/document-attention-inbox       # done in feature/document-intelligence-foundation
+frontend/document-attention-inbox      # done in feature/document-intelligence-foundation
+backend/document-reminder-rules        # done in feature/document-intelligence-foundation
+frontend/document-reminder-experience  # done in feature/document-intelligence-foundation
 backend/document-checklists            # checklist templates + per-document items
 frontend/document-checklists           # checklist UI
 backend/document-ocr-foundation        # OCR worker + extraction results (review-gated)

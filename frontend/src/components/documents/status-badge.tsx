@@ -1,11 +1,17 @@
-import { STATUS_LABELS } from "@/lib/documents";
+import { COMPUTED_STATUS_LABELS, STATUS_LABELS } from "@/lib/documents";
 import { cn } from "@/lib/utils";
-import type { DocumentStatus } from "@/types/documents";
+import type { DocumentComputedStatus, DocumentStatus } from "@/types/documents";
 
-const styles: Record<DocumentStatus, { wrap: string; dot: string }> = {
+type BadgeStatus = DocumentStatus | DocumentComputedStatus;
+
+const styles: Record<DocumentComputedStatus, { wrap: string; dot: string }> = {
   active: {
     wrap: "bg-brand-success/10 text-brand-success ring-1 ring-inset ring-brand-success/20",
     dot: "bg-brand-success",
+  },
+  expiring_soon: {
+    wrap: "bg-brand-amber/15 text-brand-amber ring-1 ring-inset ring-brand-amber/25",
+    dot: "bg-brand-amber",
   },
   renewal_due: {
     wrap: "bg-brand-amber/15 text-brand-amber ring-1 ring-inset ring-brand-amber/25",
@@ -19,10 +25,27 @@ const styles: Record<DocumentStatus, { wrap: string; dot: string }> = {
     wrap: "bg-muted text-muted-foreground ring-1 ring-inset ring-border",
     dot: "bg-muted-foreground",
   },
+  missing_file: {
+    wrap: "bg-primary/10 text-primary ring-1 ring-inset ring-primary/20",
+    dot: "bg-primary",
+  },
+  missing_expiry_date: {
+    wrap: "bg-brand-teal/10 text-brand-teal ring-1 ring-inset ring-brand-teal/20",
+    dot: "bg-brand-teal",
+  },
+  needs_attention: {
+    wrap: "bg-destructive/10 text-destructive ring-1 ring-inset ring-destructive/20",
+    dot: "bg-destructive",
+  },
 };
 
-export function DocumentStatusBadge({ status }: { status: DocumentStatus }) {
-  const style = styles[status];
+export function DocumentStatusBadge({ status }: { status: BadgeStatus }) {
+  const computedStatus = status as DocumentComputedStatus;
+  const style = styles[computedStatus] ?? styles.active;
+  const label =
+    COMPUTED_STATUS_LABELS[computedStatus] ??
+    STATUS_LABELS[status as DocumentStatus] ??
+    "Active";
   return (
     <span
       className={cn(
@@ -31,7 +54,7 @@ export function DocumentStatusBadge({ status }: { status: DocumentStatus }) {
       )}
     >
       <span className={cn("size-1.5 rounded-full", style.dot)} />
-      {STATUS_LABELS[status]}
+      {label}
     </span>
   );
 }

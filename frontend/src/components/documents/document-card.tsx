@@ -20,7 +20,7 @@ import {
   uploadDocumentFile,
   validateFile,
 } from "@/lib/document-files";
-import { daysUntil, formatDate } from "@/lib/documents";
+import { formatDate } from "@/lib/documents";
 import { cn } from "@/lib/utils";
 import type { DocumentRecord } from "@/types/documents";
 
@@ -53,28 +53,9 @@ export function DocumentCard({
   const meta = [doc.document_type, doc.issuer, doc.country]
     .filter(Boolean)
     .join(" · ");
-  const expiryDays = daysUntil(doc.expiry_date);
-  const expiryPast = expiryDays !== null && expiryDays < 0;
-
-  // Date-derived urgency, shown only when a document needs attention soon.
-  const urgency =
-    expiryDays === null
-      ? null
-      : expiryDays < 0
-        ? {
-            urgent: true,
-            label: `Expired ${Math.abs(expiryDays)} day${
-              Math.abs(expiryDays) === 1 ? "" : "s"
-            } ago`,
-          }
-        : expiryDays <= 30
-          ? {
-              urgent: false,
-              label: `Expires in ${expiryDays} day${
-                expiryDays === 1 ? "" : "s"
-              }`,
-            }
-          : null;
+  const expiryPast = doc.is_expired;
+  const attentionIsUrgent =
+    doc.urgency_level === "critical" || doc.urgency_level === "high";
 
   // One-click upload straight from the card — no need to open the document.
   const inputRef = useRef<HTMLInputElement>(null);
@@ -122,23 +103,21 @@ export function DocumentCard({
               >
                 {doc.title}
               </Link>
-              <DocumentStatusBadge status={doc.status} />
-              {urgency && (
-                <span
-                  className={cn(
-                    "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
-                    urgency.urgent
-                      ? "bg-destructive/10 text-destructive"
-                      : "bg-brand-amber/15 text-brand-amber",
-                  )}
-                >
-                  <CalendarClock className="size-3" />
-                  {urgency.label}
-                </span>
-              )}
+              <DocumentStatusBadge status={doc.computed_status} />
             </div>
             {meta && (
               <p className="mt-1 truncate text-sm text-muted-foreground">{meta}</p>
+            )}
+            {doc.needs_attention && (
+              <p
+                className={cn(
+                  "mt-2 flex items-start gap-1.5 text-xs leading-relaxed",
+                  attentionIsUrgent ? "text-destructive" : "text-muted-foreground",
+                )}
+              >
+                <CalendarClock className="mt-0.5 size-3.5 shrink-0" />
+                <span>{doc.status_reason}</span>
+              </p>
             )}
             {doc.category_name && (
               <span className="mt-2 inline-block rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">

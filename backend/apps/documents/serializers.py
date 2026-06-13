@@ -11,7 +11,9 @@ from .models import (
     DocumentFile,
     DocumentFileActivity,
     DocumentFileShareLink,
+    DocumentReminderRule,
 )
+from .services import get_document_health, reminder_date_for_rule
 
 
 class DocumentCategorySerializer(serializers.ModelSerializer):
@@ -28,6 +30,19 @@ class DocumentSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(
         source="category.name", read_only=True, default=None
     )
+    computed_status = serializers.SerializerMethodField()
+    status_label = serializers.SerializerMethodField()
+    status_reason = serializers.SerializerMethodField()
+    urgency_level = serializers.SerializerMethodField()
+    days_until_expiry = serializers.SerializerMethodField()
+    days_until_renewal = serializers.SerializerMethodField()
+    is_expired = serializers.SerializerMethodField()
+    is_expiring_soon = serializers.SerializerMethodField()
+    is_renewal_due = serializers.SerializerMethodField()
+    has_file = serializers.SerializerMethodField()
+    missing_expiry_date = serializers.SerializerMethodField()
+    missing_file = serializers.SerializerMethodField()
+    needs_attention = serializers.SerializerMethodField()
 
     class Meta:
         model = Document
@@ -46,10 +61,85 @@ class DocumentSerializer(serializers.ModelSerializer):
             "renewal_date",
             "notes",
             "status",
+            "computed_status",
+            "status_label",
+            "status_reason",
+            "urgency_level",
+            "days_until_expiry",
+            "days_until_renewal",
+            "is_expired",
+            "is_expiring_soon",
+            "is_renewal_due",
+            "has_file",
+            "missing_expiry_date",
+            "missing_file",
+            "needs_attention",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "owner", "created_at", "updated_at"]
+        read_only_fields = [
+            "id",
+            "owner",
+            "computed_status",
+            "status_label",
+            "status_reason",
+            "urgency_level",
+            "days_until_expiry",
+            "days_until_renewal",
+            "is_expired",
+            "is_expiring_soon",
+            "is_renewal_due",
+            "has_file",
+            "missing_expiry_date",
+            "missing_file",
+            "needs_attention",
+            "created_at",
+            "updated_at",
+        ]
+
+    def _health(self, obj):
+        if not hasattr(obj, "_document_health_cache"):
+            obj._document_health_cache = get_document_health(obj)
+        return obj._document_health_cache
+
+    def get_computed_status(self, obj):
+        return self._health(obj).computed_status
+
+    def get_status_label(self, obj):
+        return self._health(obj).status_label
+
+    def get_status_reason(self, obj):
+        return self._health(obj).status_reason
+
+    def get_urgency_level(self, obj):
+        return self._health(obj).urgency_level
+
+    def get_days_until_expiry(self, obj):
+        return self._health(obj).days_until_expiry
+
+    def get_days_until_renewal(self, obj):
+        return self._health(obj).days_until_renewal
+
+    def get_is_expired(self, obj):
+        return self._health(obj).is_expired
+
+    def get_is_expiring_soon(self, obj):
+        return self._health(obj).is_expiring_soon
+
+    def get_is_renewal_due(self, obj):
+        return self._health(obj).is_renewal_due
+
+    def get_has_file(self, obj):
+        return self._health(obj).has_file
+
+    def get_missing_expiry_date(self, obj):
+        return self._health(obj).missing_expiry_date
+
+    def get_missing_file(self, obj):
+        return self._health(obj).missing_file
+
+    def get_needs_attention(self, obj):
+        return self._health(obj).needs_attention
 
     def validate(self, attrs):
         """
@@ -207,6 +297,101 @@ class DocumentFileActivitySerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = fields
+
+
+class DocumentReminderRuleSerializer(serializers.ModelSerializer):
+    """Owner-facing reminder rule with calculated next reminder date."""
+
+    owner = serializers.PrimaryKeyRelatedField(read_only=True)
+    document = serializers.PrimaryKeyRelatedField(read_only=True)
+    upcoming_reminder_date = serializers.SerializerMethodField()
+    date_source = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DocumentReminderRule
+        fields = [
+            "id",
+            "owner",
+            "document",
+            "trigger_type",
+            "days_before",
+            "is_enabled",
+            "upcoming_reminder_date",
+            "date_source",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "owner",
+            "document",
+            "upcoming_reminder_date",
+            "date_source",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_upcoming_reminder_date(self, obj):
+        reminder_date = reminder_date_for_rule(obj)
+        return reminder_date.isoformat() if reminder_date else None
+
+    def get_date_source(self, obj):
+        if obj.trigger_type == DocumentReminderRule.TriggerType.BEFORE_RENEWAL_DATE:
+            return "renewal_date"
+        return "expiry_date"
+
+    def validate(self, attrs):
+        document = self.context.get("document") or getattr(
+            self.instance, "document", None
+        )
+        trigger_type = attrs.get(
+            "trigger_type",
+            getattr(self.instance, "trigger_type", DocumentReminderRule.TriggerType.BEFORE_EXPIRY),
+        )
+        days_before = attrs.get(
+            "days_before", getattr(self.instance, "days_before", 30)
+        )
+
+        if trigger_type == DocumentReminderRule.TriggerType.ON_EXPIRY:
+            attrs["days_before"] = 0
+            days_before = 0
+
+        if days_before < 0:
+            raise serializers.ValidationError(
+                {"days_before": "Days before cannot be negative."}
+            )
+
+        if document is not None:
+            if (
+                trigger_type
+                == DocumentReminderRule.TriggerType.BEFORE_RENEWAL_DATE
+                and document.renewal_date is None
+            ):
+                raise serializers.ValidationError(
+                    {
+                        "trigger_type": (
+                            "Add a renewal date before creating renewal "
+                            "reminders."
+                        )
+                    }
+                )
+            if (
+                trigger_type
+                in {
+                    DocumentReminderRule.TriggerType.BEFORE_EXPIRY,
+                    DocumentReminderRule.TriggerType.ON_EXPIRY,
+                }
+                and document.expiry_date is None
+            ):
+                raise serializers.ValidationError(
+                    {
+                        "trigger_type": (
+                            "Add an expiry date before creating expiry "
+                            "reminders."
+                        )
+                    }
+                )
+        return attrs
 
 
 class DocumentFileUploadSerializer(serializers.Serializer):

@@ -284,6 +284,26 @@ The shipped `Document` API (`apps.documents`) follows these rules concretely:
 - This is verified by tests covering anonymous access, cross-user retrieve,
   update, and delete attempts.
 
+### Implemented: document intelligence and reminder-rule ownership
+
+- Document intelligence is calculated only for the authenticated user's own
+  documents.
+- Reminder rules are owner-only.
+- Attention Needed does not expose shared/public documents.
+- Frontend filters are convenience only; backend querysets enforce ownership.
+- Search/filter/sort starts from `Document.objects.filter(owner=request.user)`,
+  so filters cannot widen the result set to another user's records.
+- `GET /api/v1/documents/attention-needed/` excludes another user's documents
+  and excludes manually archived documents.
+- Reminder-rule endpoints resolve rules through a parent document owned by
+  `request.user`; users cannot create, list, update, or delete rules for
+  another user's document.
+- Upcoming reminder calculations only include enabled rules owned by the
+  authenticated user.
+- Intelligence responses expose document metadata and computed fields only; they
+  do not expose internal file paths, storage keys, access-code hashes, or
+  share-link internals.
+
 ---
 
 ## 11. File Upload Security
@@ -639,10 +659,17 @@ AI results should not overwrite user-confirmed data unless the user approves it.
 
 Reminders and notifications must also respect user ownership.
 
+### Implemented: document reminder rules
+
+Document reminder rules are stored owner-only and nested under owner-owned
+documents. The current implementation calculates upcoming reminder dates but
+does not send email, push, SMS, WhatsApp, Telegram, or in-app notifications yet.
+
 ### Rules
 
 - Users can only see their own reminders.
 - Users can only see their own notifications.
+- Users can only manage reminder rules for documents they own.
 - Background jobs must scope queries correctly.
 - Notification messages should not expose unnecessary sensitive data.
 - Email reminders should avoid attaching sensitive documents.

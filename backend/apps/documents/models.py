@@ -329,3 +329,47 @@ class DocumentFileActivity(models.Model):
 
     def __str__(self):
         return f"{self.action} on file {self.file_id}"
+
+
+class DocumentReminderRule(models.Model):
+    """
+    Owner-scoped rule for calculating reminder dates.
+
+    This stores user intent only. It does not send notifications; later
+    notification workers can evaluate enabled rules and create/send reminders.
+    """
+
+    class TriggerType(models.TextChoices):
+        BEFORE_EXPIRY = "before_expiry", "Before expiry"
+        BEFORE_RENEWAL_DATE = "before_renewal_date", "Before renewal date"
+        ON_EXPIRY = "on_expiry", "On expiry"
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="document_reminder_rules",
+    )
+    document = models.ForeignKey(
+        Document,
+        on_delete=models.CASCADE,
+        related_name="reminder_rules",
+    )
+    trigger_type = models.CharField(
+        max_length=32,
+        choices=TriggerType.choices,
+        default=TriggerType.BEFORE_EXPIRY,
+    )
+    days_before = models.PositiveIntegerField(default=30)
+    is_enabled = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["days_before", "-created_at"]
+        indexes = [
+            models.Index(fields=["owner", "is_enabled"]),
+            models.Index(fields=["document", "trigger_type"]),
+        ]
+
+    def __str__(self):
+        return f"{self.get_trigger_type_display()} for {self.document_id}"

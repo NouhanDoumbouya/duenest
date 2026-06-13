@@ -58,12 +58,12 @@ src/
 │   ├── auth/                                # auth-shell, google-button
 │   ├── dashboard/                           # stat-card, user-context
 │   ├── documents/                           # document-card/form/status-badge,
-│   │                                        #   document-file-uploader/list/viewer/share-dialog
+│   │                                        #   file UI, share dialog, reminder rules
 │   └── ui/                                  # shadcn/ui primitives (+ textarea, confirm-dialog)
 ├── lib/
 │   ├── api.ts                               # fetch wrapper + ApiError (JSON + FormData)
 │   ├── auth.ts                              # login/register/logout + token helpers
-│   ├── documents.ts                         # documents API + date/status helpers
+│   ├── documents.ts                         # documents API, search, attention, reminders
 │   ├── document-files.ts                    # files, preview, sharing, activity helpers
 │   └── utils.ts                             # cn()
 └── types/
@@ -77,10 +77,21 @@ src/
 - Routes live under `/dashboard/documents` (list, `new`, `[id]/edit`).
 - All document calls go through `src/lib/documents.ts`, which uses the shared
   `apiFetch` with `auth: true` (so the access token + error handling stay in one
-  place). Endpoints: `GET/POST/PATCH/DELETE /api/v1/documents/`.
+  place). Endpoints: `GET/POST/PATCH/DELETE /api/v1/documents/`, plus
+  `/documents/attention-needed/`, nested reminder-rule endpoints, and
+  `/documents/reminders/upcoming/`.
 - The `(dashboard)/layout.tsx` performs the client-side auth gate once and
   exposes the user via `useDashboardUser()`; pages no longer re-check auth.
-- The dashboard summary cards are computed from real `GET /documents/` data.
+- The dashboard summary cards and Needs attention panel are computed from real
+  document-intelligence API responses (`GET /documents/` with computed filters
+  and `GET /documents/attention-needed/`).
+- The documents page supports backend-owned search, quick status filters,
+  type/country/issuer filters, expiry range filters, sorting, clearing filters,
+  and a no-results state. Frontend filters are UX only; the backend remains the
+  security boundary and scopes every query to the authenticated owner.
+- Document cards and the edit workspace show backend-computed health fields:
+  `computed_status`, `status_reason`, `urgency_level`, `days_until_expiry`,
+  `has_file`, `missing_file`, `missing_expiry_date`, and `needs_attention`.
 - Category selection is not yet available (the backend exposes no categories
   list endpoint); `category_name` is shown read-only when present.
 
@@ -110,6 +121,16 @@ src/
   `localStorage`.
 - Client-side validation (type + 10 MB) is UX-only; the backend remains the
   source of truth.
+
+### Document reminder rules
+
+- Reminder rules live on the document workspace
+  (`/dashboard/documents/[id]/edit`) below the file section.
+- Users can create, pause/enable, and delete rules such as 90, 60, 30, or 7
+  days before expiry, on expiry day, or before renewal date when that source
+  date exists.
+- The backend calculates `upcoming_reminder_date`; this frontend does not send
+  email, push, SMS, WhatsApp, Telegram, or in-app notifications yet.
 
 ## Design system
 

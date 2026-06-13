@@ -424,8 +424,9 @@ Uses AI to extract document type, expiry date, provider, amount, renewal date, a
 | Product Documentation  | ✅ Completed   |
 | Backend Foundation     | ✅ Completed   |
 | Backend Authentication | ✅ Completed |
-| Frontend               | ⚪ Not Started |
-| MVP Development        | 🔵 Planned    |
+| Frontend Foundation    | ✅ Completed |
+| Document Vault         | 🟡 In Progress |
+| MVP Development        | 🟡 In Progress |
 | AI Features            | 🔵 Planned    |
 | Deployment             | 🔵 Planned    |
 
@@ -443,9 +444,11 @@ Uses AI to extract document type, expiry date, provider, amount, renewal date, a
 
 ## Current Focus
 
-The project foundation, planning phase, branding, documentation, and initial backend foundation are now in place.
+The project foundation, branding, documentation, backend foundation,
+authentication, frontend foundation, and the first document-vault workflows are
+now in place.
 
-The Django REST Framework backend foundation has been started with:
+The current implementation includes:
 
 * Django project setup
 * Split settings structure
@@ -458,7 +461,11 @@ The Django REST Framework backend foundation has been started with:
 * Token blacklist support
 * Custom user model foundation
 * Core health check endpoint
-* Backend README
+* Backend-owned JWT authentication
+* Next.js frontend with landing, auth, dashboard, and document vault routes
+* Document CRUD, file upload, preview/download, secure file sharing, activity,
+  smart document intelligence, search/filter/sort, Attention Needed, and
+  reminder-rule foundations
 
 The health check endpoint is available at:
 
@@ -489,6 +496,7 @@ POST   /api/v1/documents/         # create document
 GET    /api/v1/documents/:id/     # retrieve document
 PATCH  /api/v1/documents/:id/     # update document
 DELETE /api/v1/documents/:id/     # delete document
+GET    /api/v1/documents/attention-needed/ # action-focused document inbox
 
 GET    /api/v1/documents/:id/files/                  # list a document's files
 POST   /api/v1/documents/:id/files/                  # upload a file (multipart)
@@ -501,6 +509,13 @@ POST   /api/v1/documents/:id/files/:file_id/share-links/
 POST   /api/v1/documents/:id/files/:file_id/share-links/:share_id/revoke/
 GET    /api/v1/documents/:id/files/:file_id/activity/
 
+GET    /api/v1/documents/:id/reminder-rules/
+POST   /api/v1/documents/:id/reminder-rules/
+GET    /api/v1/documents/:id/reminder-rules/:rule_id/
+PATCH  /api/v1/documents/:id/reminder-rules/:rule_id/
+DELETE /api/v1/documents/:id/reminder-rules/:rule_id/
+GET    /api/v1/documents/reminders/upcoming/
+
 GET    /api/v1/share/files/:token/                   # public shared-file metadata
 POST   /api/v1/share/files/:token/verify-code/
 GET    /api/v1/share/files/:token/preview/
@@ -510,20 +525,23 @@ GET    /api/v1/share/files/:token/download/
 The document API and its file attachments are strictly scoped to the
 authenticated owner. Uploads are validated (type + 10 MB limit) and stored
 under git-ignored local media in development; files are served only through the
-authenticated preview/download endpoints, never as public static media. Share
-links grant controlled access to one file only, enforce expiry/revocation and
-view-only/download permissions server-side, and can require hashed access codes.
+authenticated preview/download endpoints, never as public static media.
+Computed document health is derived from dates, files, and archive state without
+overwriting user data. Search/filter/sort, Attention Needed, and reminder rules
+remain backend-scoped to the authenticated owner. Share links grant controlled
+access to one file only, enforce expiry/revocation and view-only/download
+permissions server-side, and can require hashed access codes.
 
 The next implementation focus is:
 
-* Add expiry/renewal status automation
-* Add search, filters, and attention-needed views
+* Add renewal preparation checklists
+* Consider a calendar/timeline view for document and renewal actions
 * Continue polishing the document vault workspace
 
 The next backend branch after this foundation PR will be:
 
 ```txt
-backend/document-status-intelligence
+backend/document-checklists
 ```
 
 ---

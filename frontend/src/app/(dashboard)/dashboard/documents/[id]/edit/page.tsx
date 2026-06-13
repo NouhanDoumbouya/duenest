@@ -10,6 +10,7 @@ import { DocumentFileShareDialog } from "@/components/documents/document-file-sh
 import { DocumentFilesList } from "@/components/documents/document-files-list";
 import { DocumentFileUploader } from "@/components/documents/document-file-uploader";
 import { DocumentFileViewer } from "@/components/documents/document-file-viewer";
+import { DocumentReminderRules } from "@/components/documents/document-reminder-rules";
 import { DocumentStatusBadge } from "@/components/documents/status-badge";
 import {
   Card,
@@ -140,8 +141,13 @@ export default function EditDocumentPage() {
           <h1 className="font-heading text-2xl font-semibold tracking-tight sm:text-3xl">
             {doc?.title ?? "Document"}
           </h1>
-          {doc && <DocumentStatusBadge status={doc.status} />}
+          {doc && <DocumentStatusBadge status={doc.computed_status} />}
         </div>
+        {doc?.status_reason && (
+          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+            {doc.status_reason}
+          </p>
+        )}
       </div>
 
       <Card>
@@ -210,6 +216,20 @@ export default function EditDocumentPage() {
                 onRequestDelete={setPendingDelete}
               />
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {doc !== null && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Reminder rules</CardTitle>
+            <CardDescription>
+              Calculate renewal and expiry reminders for this document.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <DocumentReminderRules document={doc} />
           </CardContent>
         </Card>
       )}

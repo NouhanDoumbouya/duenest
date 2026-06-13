@@ -2,10 +2,13 @@ import hashlib
 import secrets
 
 from django.contrib.auth.hashers import check_password, make_password
+from django.db.models import Count, Q
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from django.utils.http import content_disposition_header
+from rest_framework.decorators import action
 from rest_framework import generics, status, viewsets
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -17,17 +20,19 @@ from .models import (
     DocumentFile,
     DocumentFileActivity,
     DocumentFileShareLink,
+    DocumentReminderRule,
 )
 from .serializers import (
     DocumentFileActivitySerializer,
     DocumentFileSerializer,
     DocumentFileShareLinkSerializer,
     DocumentFileUploadSerializer,
+    DocumentReminderRuleSerializer,
     DocumentSerializer,
     PublicSharedFileSerializer,
     ShareLinkCreateSerializer,
 )
-from .services import log_activity
+from .services import attention_sort_key, get_document_health, log_activity, reminder_date_for_rule
 
 
 def _compute_checksum(uploaded) -> str:
@@ -84,13 +89,137 @@ class DocumentViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         # Owner-scoped queryset — never expose other users' documents.
         # select_related avoids an extra query for each document's category.
-        return Document.objects.filter(owner=self.request.user).select_related(
-            "category"
+        queryset = (
+            Document.objects.filter(owner=self.request.user)
+            .select_related("category")
+            .annotate(file_count=Count("files", distinct=True))
         )
+        if self.action != "list":
+            return queryset
+
+        params = self.request.query_params
+        search = params.get("search", "").strip()
+        if search:
+            queryset = queryset.filter(
+                Q(title__icontains=search)
+                | Q(document_type__icontains=search)
+                | Q(issuer__icontains=search)
+                | Q(country__icontains=search)
+                | Q(reference_number__icontains=search)
+                | Q(notes__icontains=search)
+            )
+
+        if params.get("status"):
+            queryset = queryset.filter(status=params["status"])
+        if params.get("category"):
+            category = params["category"].strip()
+            if category.isdigit():
+                queryset = queryset.filter(category_id=int(category))
+            else:
+                queryset = queryset.filter(category__slug=category)
+        if params.get("document_type"):
+            queryset = queryset.filter(document_type__icontains=params["document_type"])
+        if params.get("country"):
+            queryset = queryset.filter(country__icontains=params["country"])
+        if params.get("issuer"):
+            queryset = queryset.filter(issuer__icontains=params["issuer"])
+
+        expiry_from = parse_date(params.get("expiry_from", ""))
+        if expiry_from:
+            queryset = queryset.filter(expiry_date__gte=expiry_from)
+        expiry_to = parse_date(params.get("expiry_to", ""))
+        if expiry_to:
+            queryset = queryset.filter(expiry_date__lte=expiry_to)
+
+        ordering = params.get("ordering", "-created_at")
+        allowed = {
+            "expiry_date",
+            "-expiry_date",
+            "created_at",
+            "-created_at",
+            "updated_at",
+            "-updated_at",
+            "title",
+            "-title",
+        }
+        if ordering not in allowed:
+            ordering = "-created_at"
+        return queryset.order_by(ordering)
+
+    def _bool_param(self, name):
+        value = self.request.query_params.get(name)
+        if value is None:
+            return None
+        return value.lower() in {"1", "true", "yes", "on"}
+
+    def _apply_health_filters(self, documents):
+        params = self.request.query_params
+        computed_status = params.get("computed_status")
+        has_file = self._bool_param("has_file")
+        missing_file = self._bool_param("missing_file")
+        missing_expiry_date = self._bool_param("missing_expiry_date")
+        needs_attention = self._bool_param("needs_attention")
+        expiring_within_days = params.get("expiring_within_days")
+        try:
+            expiring_within_days = (
+                int(expiring_within_days)
+                if expiring_within_days not in {None, ""}
+                else None
+            )
+        except ValueError:
+            expiring_within_days = None
+
+        filtered = []
+        for document in documents:
+            health = get_document_health(document)
+            if computed_status and health.computed_status != computed_status:
+                continue
+            if has_file is not None and health.has_file != has_file:
+                continue
+            if missing_file is not None and health.missing_file != missing_file:
+                continue
+            if (
+                missing_expiry_date is not None
+                and health.missing_expiry_date != missing_expiry_date
+            ):
+                continue
+            if needs_attention is not None and health.needs_attention != needs_attention:
+                continue
+            if expiring_within_days is not None and (
+                health.days_until_expiry is None
+                or health.days_until_expiry < 0
+                or health.days_until_expiry > expiring_within_days
+            ):
+                continue
+            filtered.append(document)
+        return filtered
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        documents = self._apply_health_filters(list(queryset))
+        page = self.paginate_queryset(documents)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(documents, many=True)
+        return Response(serializer.data)
 
     def perform_create(self, serializer):
         # Owner comes from the authenticated request, not the request body.
         serializer.save(owner=self.request.user)
+
+    @action(detail=False, methods=["get"], url_path="attention-needed")
+    def attention_needed(self, request):
+        documents = list(self.get_queryset().exclude(status=Document.Status.ARCHIVED))
+        items = [
+            document
+            for document in documents
+            if get_document_health(document).needs_attention
+        ]
+        items.sort(key=attention_sort_key)
+        serializer = self.get_serializer(items, many=True)
+        return Response({"count": len(items), "items": serializer.data})
 
 
 class _DocumentScopedMixin:
@@ -331,6 +460,78 @@ class DocumentFileActivityView(_FileScopedMixin, APIView):
         file = self.get_file()
         activities = file.activities.all()
         return Response(DocumentFileActivitySerializer(activities, many=True).data)
+
+
+# ---- Owner reminder-rule management ---------------------------------------
+
+
+class _ReminderRuleScopedMixin:
+    """Resolve reminder rules through an owner-owned parent document."""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = DocumentReminderRuleSerializer
+
+    def get_document(self):
+        return get_object_or_404(
+            Document, pk=self.kwargs["document_id"], owner=self.request.user
+        )
+
+    def get_queryset(self):
+        return DocumentReminderRule.objects.filter(
+            document_id=self.kwargs["document_id"],
+            document__owner=self.request.user,
+        ).select_related("document")
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["document"] = self.get_document()
+        return context
+
+
+class DocumentReminderRuleListCreateView(
+    _ReminderRuleScopedMixin, generics.ListCreateAPIView
+):
+    """GET lists reminder rules; POST creates one for the owner-owned document."""
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user, document=self.get_document())
+
+
+class DocumentReminderRuleDetailView(
+    _ReminderRuleScopedMixin, generics.RetrieveUpdateDestroyAPIView
+):
+    """GET/PATCH/DELETE one owner-scoped reminder rule."""
+
+    lookup_url_kwarg = "rule_id"
+
+
+class UpcomingDocumentRemindersView(APIView):
+    """Calculated upcoming reminders; no notifications are sent here."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        today = timezone.localdate()
+        rows = []
+        rules = (
+            DocumentReminderRule.objects.filter(
+                owner=request.user,
+                is_enabled=True,
+            )
+            .select_related("document")
+            .annotate(file_count=Count("document__files", distinct=True))
+        )
+        for rule in rules:
+            reminder_date = reminder_date_for_rule(rule)
+            if reminder_date is None or reminder_date < today:
+                continue
+            rows.append((reminder_date, rule))
+        rows.sort(key=lambda row: (row[0], row[1].document.title.lower()))
+        serializer = DocumentReminderRuleSerializer(
+            [rule for _, rule in rows],
+            many=True,
+        )
+        return Response({"count": len(rows), "items": serializer.data})
 
 
 # ---- Public share access ---------------------------------------------------

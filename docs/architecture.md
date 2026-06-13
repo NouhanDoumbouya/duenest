@@ -476,6 +476,10 @@ Example endpoints:
 
 /api/v1/documents/
 /api/v1/documents/{id}/
+/api/v1/documents/attention-needed/
+/api/v1/documents/{id}/reminder-rules/
+/api/v1/documents/{id}/reminder-rules/{rule_id}/
+/api/v1/documents/reminders/upcoming/
 
 /api/v1/renewals/
 /api/v1/renewals/{id}/
@@ -622,6 +626,27 @@ an authenticated, ownership-checked download endpoint
 **TODO (production):** replace local disk with a private object-storage backend
 (S3-compatible) and serve files via signed, time-limited URLs.
 
+### Implemented: document intelligence and reminder rules
+
+The documents app now derives smart document health in `apps.documents.services`
+and exposes it through `DocumentSerializer` fields such as
+`computed_status`, `status_reason`, `urgency_level`, `days_until_expiry`,
+`has_file`, and `needs_attention`. This keeps intelligence read-only and avoids
+storing duplicated status columns that could drift from source data.
+
+`GET /api/v1/documents/` supports owner-scoped search, filtering, and sorting.
+Some filters are database-backed (`search`, `status`, category/date fields);
+computed-health filters are applied after calculating health for the
+authenticated user's queryset.
+
+`GET /api/v1/documents/attention-needed/` returns non-archived documents that
+need action, sorted by urgency and dates.
+
+`DocumentReminderRule` stores user-owned reminder preferences and calculates
+upcoming reminder dates from `expiry_date` or `renewal_date`. This is a
+foundation only: no Celery task, notification record, email, push, SMS, or
+messaging delivery is sent by this branch.
+
 ---
 
 ## 16. File Storage Architecture
@@ -675,9 +700,10 @@ flowchart LR
 
 ### Background Jobs in v0.1
 
-- Create reminder records
-- Check upcoming reminders
-- Generate notification records
+- Planned: create reminder/notification records when notification delivery is
+  introduced.
+- Current implementation: document reminder rules and upcoming reminder dates
+  are calculated synchronously by authenticated API endpoints.
 
 ### Future Background Jobs
 
@@ -1066,15 +1092,15 @@ justifies extraction.
 - **Owner-only activity log:** records upload, preview, download, share access,
   revocation, and access-code events without exposing logs to public viewers.
 
-### Near-term (MVP layers)
+### Implemented intelligence layers
 
 - **Status & expiry intelligence:** server-side derivation of status, expiry
   urgency, and missing-information flags (pure functions over existing data —
   no new infrastructure).
 - **Search/filter layer:** query params + indexing on the documents table.
 - **Attention inbox:** a focused query endpoint composed from status intel.
-- **Reminder engine:** rule storage + a scheduled evaluation pass (starts as a
-  simple periodic job; in-app surfacing first, email later).
+- **Reminder rules:** owner-owned rule storage plus synchronous upcoming date
+  calculation. No scheduled notification delivery yet.
 
 ### Mid-term (Phase 3–4)
 
@@ -1095,8 +1121,10 @@ justifies extraction.
 | Document + file CRUD | ✅ Implemented | — |
 | Private storage + controlled download | ✅ Implemented (local) | Object storage + signed URLs |
 | In-app preview | ✅ Implemented for PDF/JPEG/PNG | More file types later |
-| Status/expiry intelligence | Planned MVP | — |
-| Reminders | Planned MVP (periodic job) | Notification service |
+| Status/expiry intelligence | ✅ Implemented | More document-type-specific rules later |
+| Search/filter/sort | ✅ Implemented | Saved views / pagination UX later |
+| Attention Needed | ✅ Implemented | Dedicated inbox/timeline later |
+| Reminder rules | ✅ Implemented (calculated dates) | Notification service + scheduled jobs |
 | Sharing | ✅ Implemented file-level links | Email delivery, watermarking, redaction later |
 | OCR | — | Async worker, review-gated |
 | Audit / export | ✅ File activity log | Document-wide audit + export service |
