@@ -283,7 +283,7 @@ export default function DashboardPage() {
                 {attentionItems.map((doc) => (
                   <li key={doc.id}>
                     <Link
-                      href={`/dashboard/documents/${doc.id}/edit`}
+                      href={`/dashboard/documents/${doc.id}`}
                       className="flex items-center justify-between gap-3 py-3 transition-colors hover:text-primary"
                     >
                       <div className="min-w-0">
@@ -334,7 +334,7 @@ export default function DashboardPage() {
                   {reminders.map((rule) => (
                     <li key={rule.id}>
                       <Link
-                        href={`/dashboard/documents/${rule.document}/edit`}
+                        href={`/dashboard/documents/${rule.document}`}
                         className="flex items-center justify-between gap-2 text-sm transition-colors hover:text-primary"
                       >
                         <span className="min-w-0 truncate">
@@ -366,7 +366,7 @@ export default function DashboardPage() {
                   {recent.map((doc) => (
                     <li key={doc.id}>
                       <Link
-                        href={`/dashboard/documents/${doc.id}/edit`}
+                        href={`/dashboard/documents/${doc.id}`}
                         className="flex items-center justify-between gap-2 text-sm transition-colors hover:text-primary"
                       >
                         <span className="min-w-0 truncate">{doc.title}</span>

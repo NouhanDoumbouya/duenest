@@ -213,6 +213,27 @@ export interface MissingScanResponse {
   groups: MissingScanGroup[];
 }
 
+/** GET /api/v1/documents/:id/activity/ — merged document + file/share events. */
+export interface DocumentActivityEvent {
+  id: string;
+  action: string;
+  title: string;
+  description: string;
+  actor_type: string;
+  timestamp: string;
+  related_file: number | null;
+  related_share: number | null;
+  related_checklist: number | null;
+  related_bundle: number | null;
+  related_proof: number | null;
+  metadata: Record<string, unknown>;
+}
+
+export interface DocumentActivityResponse {
+  count: number;
+  items: DocumentActivityEvent[];
+}
+
 /** GET /api/v1/documents/health-overview/ */
 export interface HealthOverviewItem {
   id: number;

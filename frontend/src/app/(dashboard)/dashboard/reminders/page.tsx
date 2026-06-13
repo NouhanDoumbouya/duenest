@@ -107,7 +107,7 @@ export default function RemindersPage() {
               return (
                 <li key={rule.id}>
                   <Link
-                    href={`/dashboard/documents/${rule.document}/edit`}
+                    href={`/dashboard/documents/${rule.document}?tab=renewal`}
                     className="flex items-center justify-between gap-3 py-3 transition-colors hover:text-primary"
                   >
                     <div className="flex min-w-0 items-start gap-3">
