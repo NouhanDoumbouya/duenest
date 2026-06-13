@@ -1271,6 +1271,423 @@ def build_timeline(
     return events
 
 
+# ---- Calendar aggregation --------------------------------------------------
+
+
+@dataclass
+class CalendarEvent:
+    id: str
+    source_type: str
+    source_id: int
+    title: str
+    description: str
+    event_type: str
+    date: date
+    urgency: str
+    category: str
+    linked_resource_type: str
+    linked_resource_id: int | None
+    linked_resource_url: str
+    status: str = ""
+    end_date: date | None = None
+    metadata: dict = field(default_factory=dict)
+
+
+# event_type -> filter category (the ?type= query groups).
+CALENDAR_CATEGORIES = {
+    "document_expiry": "documents",
+    "renewal_due": "documents",
+    "last_safe_action": "documents",
+    "reminder": "reminders",
+    "bundle_deadline": "bundles",
+    "appointment": "appointments",
+    "proof_submission": "proofs",
+    "share_expiry": "shares",
+    "room_expiry": "rooms",
+    "emergency_pack_expiry": "emergency",
+}
+
+CALENDAR_EVENT_TYPES = tuple(CALENDAR_CATEGORIES.keys())
+
+
+def calendar_urgency(event_date: date, today: date) -> str:
+    """Normalized urgency label for the calendar (overdue…normal)."""
+    days = (event_date - today).days
+    if days < 0:
+        return "overdue"
+    if days <= 3:
+        return "critical"
+    if days <= 14:
+        return "soon"
+    if days <= 30:
+        return "upcoming"
+    return "normal"
+
+
+def build_calendar_events(
+    user,
+    *,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    types: set | None = None,
+    urgencies: set | None = None,
+    search: str | None = None,
+) -> list:
+    """
+    Aggregate the authenticated user's date-based events for the calendar.
+
+    Strictly owner-scoped. Pulls from documents, reminders, bundles,
+    appointments, proofs, share links, secure rooms, and emergency packs, and
+    normalizes them into a single CalendarEvent shape. No tokens, access codes,
+    or internal paths are ever included.
+    """
+    from .models import (
+        DocumentAppointment,
+        DocumentBundle,
+        DocumentFileShareLink,
+        DocumentReminderRule,
+        EmergencyAccessPack,
+        ProofRecord,
+        ShareRoom,
+    )
+
+    today = timezone.localdate()
+    events: list[CalendarEvent] = []
+    search_lower = (search or "").strip().lower()
+
+    def in_range(value) -> bool:
+        if value is None:
+            return False
+        if start_date and value < start_date:
+            return False
+        if end_date and value > end_date:
+            return False
+        return True
+
+    def wants(event_type: str) -> bool:
+        if types and CALENDAR_CATEGORIES.get(event_type) not in types:
+            return False
+        return True
+
+    def add(
+        *,
+        event_type,
+        source_type,
+        source_id,
+        title,
+        description,
+        when,
+        linked_type,
+        linked_id,
+        url,
+        status="",
+        metadata=None,
+    ):
+        if not wants(event_type) or not in_range(when):
+            return
+        urgency = calendar_urgency(when, today)
+        if urgencies and urgency not in urgencies:
+            return
+        if search_lower and search_lower not in title.lower():
+            return
+        events.append(
+            CalendarEvent(
+                id=f"{event_type}:{source_id}",
+                source_type=source_type,
+                source_id=source_id,
+                title=title,
+                description=description,
+                event_type=event_type,
+                date=when,
+                urgency=urgency,
+                category=CALENDAR_CATEGORIES[event_type],
+                linked_resource_type=linked_type,
+                linked_resource_id=linked_id,
+                linked_resource_url=url,
+                status=status,
+                metadata=metadata or {},
+            )
+        )
+
+    # Documents: expiry, renewal, last safe action.
+    documents = Document.objects.filter(owner=user, is_trashed=False).exclude(
+        status=Document.Status.ARCHIVED
+    )
+    for doc in documents:
+        url = f"/dashboard/documents/{doc.pk}"
+        add(
+            event_type="document_expiry",
+            source_type="document",
+            source_id=doc.pk,
+            title=f"{doc.title} expires",
+            description=f"{doc.title} expires on this date.",
+            when=doc.expiry_date,
+            linked_type="document",
+            linked_id=doc.pk,
+            url=url,
+            metadata={"document_type": doc.document_type},
+        )
+        add(
+            event_type="renewal_due",
+            source_type="document",
+            source_id=doc.pk,
+            title=f"Renew {doc.title}",
+            description=f"Renewal due for {doc.title}.",
+            when=doc.renewal_date,
+            linked_type="document",
+            linked_id=doc.pk,
+            url=url,
+            metadata={"document_type": doc.document_type},
+        )
+        add(
+            event_type="last_safe_action",
+            source_type="document",
+            source_id=doc.pk,
+            title=f"Act on {doc.title}",
+            description=f"Last safe action date for {doc.title}.",
+            when=doc.last_safe_action_date,
+            linked_type="document",
+            linked_id=doc.pk,
+            url=url,
+        )
+
+    # Reminders.
+    rules = (
+        DocumentReminderRule.objects.filter(owner=user, is_enabled=True)
+        .exclude(document__is_trashed=True)
+        .select_related("document")
+    )
+    for rule in rules:
+        add(
+            event_type="reminder",
+            source_type="reminder_rule",
+            source_id=rule.pk,
+            title=f"Reminder: {rule.document.title}",
+            description=rule.get_trigger_type_display(),
+            when=reminder_date_for_rule(rule),
+            linked_type="document",
+            linked_id=rule.document_id,
+            url=f"/dashboard/documents/{rule.document_id}",
+            metadata={"days_before": rule.days_before},
+        )
+
+    # Bundle deadlines.
+    bundles = DocumentBundle.objects.filter(owner=user).exclude(
+        status=DocumentBundle.Status.ARCHIVED
+    )
+    for bundle in bundles:
+        add(
+            event_type="bundle_deadline",
+            source_type="bundle",
+            source_id=bundle.pk,
+            title=f"{bundle.title} deadline",
+            description=f"Target date for the “{bundle.title}” pack.",
+            when=bundle.target_date,
+            linked_type="bundle",
+            linked_id=bundle.pk,
+            url=f"/dashboard/bundles/{bundle.pk}",
+            status=bundle.status,
+            metadata={"bundle_type": bundle.bundle_type},
+        )
+
+    # Appointments.
+    appointments = (
+        DocumentAppointment.objects.filter(owner=user)
+        .exclude(document__is_trashed=True)
+        .select_related("document")
+    )
+    for appt in appointments:
+        appt_date = appt.appointment_at.date() if appt.appointment_at else None
+        add(
+            event_type="appointment",
+            source_type="appointment",
+            source_id=appt.pk,
+            title=appt.title,
+            description=f"Appointment ({appt.get_status_display()}).",
+            when=appt_date,
+            linked_type="document" if appt.document_id else "bundle",
+            linked_id=appt.document_id or appt.bundle_id,
+            url=(
+                f"/dashboard/documents/{appt.document_id}"
+                if appt.document_id
+                else f"/dashboard/bundles/{appt.bundle_id}"
+                if appt.bundle_id
+                else "/dashboard/calendar"
+            ),
+            status=appt.status,
+        )
+
+    # Proof submissions.
+    proofs = (
+        ProofRecord.objects.filter(owner=user)
+        .exclude(document__is_trashed=True)
+        .select_related("document", "bundle")
+    )
+    for proof in proofs:
+        proof_date = proof.submitted_at.date() if proof.submitted_at else None
+        add(
+            event_type="proof_submission",
+            source_type="proof",
+            source_id=proof.pk,
+            title=proof.title,
+            description=f"Proof / submission ({proof.get_status_display()}).",
+            when=proof_date,
+            linked_type="document" if proof.document_id else "bundle",
+            linked_id=proof.document_id or proof.bundle_id,
+            url=(
+                f"/dashboard/documents/{proof.document_id}"
+                if proof.document_id
+                else f"/dashboard/bundles/{proof.bundle_id}"
+                if proof.bundle_id
+                else "/dashboard/calendar"
+            ),
+            status=proof.status,
+        )
+
+    # Share link expiries (active links only).
+    links = (
+        DocumentFileShareLink.objects.filter(owner=user, revoked_at__isnull=True)
+        .exclude(file__is_trashed=True)
+        .select_related("file")
+    )
+    for link in links:
+        add(
+            event_type="share_expiry",
+            source_type="share_link",
+            source_id=link.pk,
+            title=f"Share expires: {link.file.original_filename}",
+            description="A shared file link expires on this date.",
+            when=link.expires_at.date() if link.expires_at else None,
+            linked_type="document",
+            linked_id=link.document_id,
+            url=f"/dashboard/documents/{link.document_id}",
+        )
+
+    # Secure room expiries (active rooms only).
+    rooms = ShareRoom.objects.filter(owner=user, revoked_at__isnull=True)
+    for room in rooms:
+        add(
+            event_type="room_expiry",
+            source_type="share_room",
+            source_id=room.pk,
+            title=f"Room expires: {room.title}",
+            description="A secure room expires on this date.",
+            when=room.expires_at.date() if room.expires_at else None,
+            linked_type="room",
+            linked_id=room.pk,
+            url=f"/dashboard/share-rooms/{room.pk}",
+        )
+
+    # Emergency pack expiries.
+    packs = EmergencyAccessPack.objects.filter(owner=user)
+    for pack in packs:
+        add(
+            event_type="emergency_pack_expiry",
+            source_type="emergency_pack",
+            source_id=pack.pk,
+            title=f"Emergency pack expires: {pack.title}",
+            description="An emergency access pack expires on this date.",
+            when=pack.expires_at.date() if pack.expires_at else None,
+            linked_type="emergency_pack",
+            linked_id=pack.pk,
+            url="/dashboard/emergency",
+        )
+
+    events.sort(key=lambda e: (e.date, e.title.lower()))
+    return events
+
+
+def calendar_summary(user) -> dict:
+    """High-level counts + next key dates for the calendar header/widget."""
+    today = timezone.localdate()
+    all_events = build_calendar_events(user)
+
+    def next_date(event_type):
+        for ev in all_events:
+            if ev.event_type == event_type and ev.date >= today:
+                return ev.date.isoformat()
+        return None
+
+    overdue = [e for e in all_events if e.urgency == "overdue"]
+    due_today = [e for e in all_events if e.date == today]
+    week = [e for e in all_events if today <= e.date <= today + timedelta(days=7)]
+    month = [e for e in all_events if today <= e.date <= today + timedelta(days=30)]
+
+    return {
+        "due_today": len(due_today),
+        "overdue": len(overdue),
+        "next_7_days": len(week),
+        "next_30_days": len(month),
+        "next_expiry": next_date("document_expiry"),
+        "next_renewal": next_date("renewal_due"),
+        "next_bundle_deadline": next_date("bundle_deadline"),
+        "next_share_expiry": next_date("share_expiry"),
+        "next_room_expiry": next_date("room_expiry"),
+    }
+
+
+def calendar_events_summary(events: list, today: date | None = None) -> dict:
+    """Per-response summary counts for a list of calendar events."""
+    today = today or timezone.localdate()
+    by_category: dict = {}
+    for e in events:
+        by_category[e.category] = by_category.get(e.category, 0) + 1
+    return {
+        "total_events": len(events),
+        "overdue_count": sum(1 for e in events if e.urgency == "overdue"),
+        "due_today_count": sum(1 for e in events if e.date == today),
+        "due_this_week_count": sum(
+            1 for e in events if today <= e.date <= today + timedelta(days=7)
+        ),
+        "expiring_this_month_count": sum(
+            1 for e in events if today <= e.date <= today + timedelta(days=30)
+        ),
+        "document_events_count": by_category.get("documents", 0),
+        "reminder_events_count": by_category.get("reminders", 0),
+        "bundle_events_count": by_category.get("bundles", 0),
+        "share_events_count": by_category.get("shares", 0),
+        "room_events_count": by_category.get("rooms", 0),
+    }
+
+
+def build_calendar_ics(events: list, *, calendar_name: str = "DueNest") -> str:
+    """
+    Render calendar events as a one-way .ics document.
+
+    Safe titles only — no tokens, access codes, file paths, or document numbers.
+    """
+    lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//DueNest//Calendar V1//EN",
+        f"X-WR-CALNAME:{calendar_name}",
+    ]
+    stamp = timezone.now().strftime("%Y%m%dT%H%M%SZ")
+
+    def esc(text: str) -> str:
+        return (
+            (text or "")
+            .replace("\\", "\\\\")
+            .replace(";", "\\;")
+            .replace(",", "\\,")
+            .replace("\n", "\\n")
+        )
+
+    for ev in events:
+        date_str = ev.date.strftime("%Y%m%d")
+        lines += [
+            "BEGIN:VEVENT",
+            f"UID:{ev.id}@duenest",
+            f"DTSTAMP:{stamp}",
+            f"DTSTART;VALUE=DATE:{date_str}",
+            f"SUMMARY:{esc('DueNest: ' + ev.title)}",
+            f"DESCRIPTION:{esc(ev.description)}",
+            "END:VEVENT",
+        ]
+    lines.append("END:VCALENDAR")
+    return "\r\n".join(lines) + "\r\n"
+
+
 # ---- OCR-assisted extraction (pluggable provider) --------------------------
 
 # Cap how much we ever read/OCR from one file — protects the request from

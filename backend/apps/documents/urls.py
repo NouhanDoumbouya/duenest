@@ -18,6 +18,9 @@ from .views import (
     DocumentBundleExportSelectedFilesView,
     DocumentBundleFilesView,
     DocumentBundleListCreateView,
+    CalendarEventsView,
+    CalendarIcsExportView,
+    CalendarSummaryView,
     DocumentFilesExportSelectedView,
     PublicShareRoomFileDownloadView,
     PublicShareRoomFilePreviewView,
@@ -379,6 +382,22 @@ urlpatterns = [
         "document-bundles/<int:bundle_id>/requirements/<int:requirement_id>/link-file/",
         BundleRequirementLinkFileView.as_view(),
         name="document-bundle-requirement-link-file",
+    ),
+    # ---- Calendar V1 -------------------------------------------------------
+    path(
+        "calendar/events/",
+        CalendarEventsView.as_view(),
+        name="calendar-events",
+    ),
+    path(
+        "calendar/summary/",
+        CalendarSummaryView.as_view(),
+        name="calendar-summary",
+    ),
+    path(
+        "calendar/export.ics",
+        CalendarIcsExportView.as_view(),
+        name="calendar-export-ics",
     ),
     # ---- Secure rooms (owner) ----------------------------------------------
     path(

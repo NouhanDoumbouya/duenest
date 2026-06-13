@@ -1010,6 +1010,24 @@ class TimelineEventSerializer(serializers.Serializer):
     metadata = serializers.DictField()
 
 
+class CalendarEventSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    source_type = serializers.CharField()
+    source_id = serializers.IntegerField()
+    title = serializers.CharField()
+    description = serializers.CharField()
+    event_type = serializers.CharField()
+    date = serializers.DateField()
+    end_date = serializers.DateField(allow_null=True)
+    status = serializers.CharField()
+    urgency = serializers.CharField()
+    category = serializers.CharField()
+    linked_resource_type = serializers.CharField()
+    linked_resource_id = serializers.IntegerField(allow_null=True)
+    linked_resource_url = serializers.CharField()
+    metadata = serializers.DictField()
+
+
 # ---- Extraction ------------------------------------------------------------
 
 

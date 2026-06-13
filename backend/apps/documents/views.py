@@ -6,7 +6,7 @@ from django.core import signing
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError
 from django.db.models import Count, Exists, F, OuterRef, Q
-from django.http import FileResponse
+from django.http import FileResponse, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -72,6 +72,7 @@ from .serializers import (
     EmergencyAccessPackSerializer,
     ExtractionApplySerializer,
     ProofRecordSerializer,
+    CalendarEventSerializer,
     PublicEmergencyPackSerializer,
     PublicShareRoomSerializer,
     PublicSharedFileSerializer,
@@ -94,6 +95,10 @@ from .services import (
     build_bundle_zip,
     build_documents_zip,
     bundle_readiness,
+    build_calendar_events,
+    build_calendar_ics,
+    calendar_events_summary,
+    calendar_summary,
     collect_bundle_files,
     collect_room_files,
     build_room_zip,
@@ -3617,3 +3622,78 @@ class PublicShareRoomZipView(APIView):
         )
         _consume_room_download(room)
         return _zip_response(spooled, filename, summary)
+
+
+# ---- Calendar V1 -----------------------------------------------------------
+
+
+def _parse_calendar_filters(request):
+    """Shared parsing of start/end/type/urgency/search query params."""
+    params = request.query_params
+    start = parse_date(params.get("start", "")) if params.get("start") else None
+    end = parse_date(params.get("end", "")) if params.get("end") else None
+    types = (
+        {t.strip() for t in params.get("type", "").split(",") if t.strip()}
+        or None
+    )
+    urgencies = (
+        {u.strip() for u in params.get("urgency", "").split(",") if u.strip()}
+        or None
+    )
+    search = params.get("search") or None
+    return start, end, types, urgencies, search
+
+
+class CalendarEventsView(APIView):
+    """Owner-scoped aggregated calendar events + a per-response summary."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        start, end, types, urgencies, search = _parse_calendar_filters(request)
+        events = build_calendar_events(
+            request.user,
+            start_date=start,
+            end_date=end,
+            types=types,
+            urgencies=urgencies,
+            search=search,
+        )
+        return Response(
+            {
+                "events": CalendarEventSerializer(events, many=True).data,
+                "summary": calendar_events_summary(events),
+            }
+        )
+
+
+class CalendarSummaryView(APIView):
+    """Owner-scoped high-level calendar summary (counts + next key dates)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response(calendar_summary(request.user))
+
+
+class CalendarIcsExportView(APIView):
+    """One-way .ics export of the owner's calendar (no tokens/codes/paths)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        start, end, types, urgencies, search = _parse_calendar_filters(request)
+        events = build_calendar_events(
+            request.user,
+            start_date=start,
+            end_date=end,
+            types=types,
+            urgencies=urgencies,
+            search=search,
+        )
+        ics = build_calendar_ics(events)
+        response = HttpResponse(ics, content_type="text/calendar; charset=utf-8")
+        response["Content-Disposition"] = (
+            'attachment; filename="duenest-calendar.ics"'
+        )
+        return response
