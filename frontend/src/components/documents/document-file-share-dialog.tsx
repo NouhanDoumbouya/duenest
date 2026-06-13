@@ -18,11 +18,12 @@ import {
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ApiError } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import {
   createDocumentFileShareLink,
   formatFileSize,
@@ -79,6 +80,56 @@ function formatDateTime(value: string | null): string {
 function shareUrl(token: string): string {
   if (typeof window === "undefined") return `/share/files/${token}`;
   return `${window.location.origin}/share/files/${token}`;
+}
+
+const SENSITIVE_KEYWORDS = [
+  "passport",
+  "visa",
+  "id",
+  "identity",
+  "bank",
+  "statement",
+  "certificate",
+  "contract",
+  "insurance",
+  "license",
+  "licence",
+  "ssn",
+  "tax",
+];
+
+function looksSensitive(filename: string): boolean {
+  const lower = filename.toLowerCase();
+  return SENSITIVE_KEYWORDS.some((word) => lower.includes(word));
+}
+
+function expiryCountdown(value: string): string {
+  const ms = new Date(value).getTime() - Date.now();
+  if (ms <= 0) {
+    const overdue = Math.ceil(-ms / 86_400_000);
+    return `Expired ${overdue} day${overdue === 1 ? "" : "s"} ago`;
+  }
+  const days = Math.floor(ms / 86_400_000);
+  if (days >= 1) return `Expires in ${days} day${days === 1 ? "" : "s"}`;
+  const hours = Math.max(1, Math.floor(ms / 3_600_000));
+  return `Expires in ${hours} hour${hours === 1 ? "" : "s"}`;
+}
+
+/** A small Weak/Safer/Strong indicator from how many protections are enabled. */
+function shareQuality(opts: {
+  accessCodeRequired: boolean;
+  viewOnly: boolean;
+  watermark: boolean;
+  limited: boolean;
+}): { label: "Weak" | "Safer" | "Strong"; tone: string } {
+  const score =
+    (opts.accessCodeRequired ? 1 : 0) +
+    (opts.viewOnly ? 1 : 0) +
+    (opts.watermark ? 1 : 0) +
+    (opts.limited ? 1 : 0);
+  if (score >= 3) return { label: "Strong", tone: "text-brand-success" };
+  if (score >= 1) return { label: "Safer", tone: "text-amber-600" };
+  return { label: "Weak", tone: "text-muted-foreground" };
 }
 
 function statusVariant(status: ShareLinkStatus) {
@@ -400,7 +451,9 @@ export function DocumentFileShareDialog({
                     onClick={() =>
                       handleCopy(
                         shareUrl(visibleCreatedLink.token),
-                        "Share link copied.",
+                        `Secure link copied. ${expiryCountdown(
+                          visibleCreatedLink.expires_at,
+                        )}.`,
                       )
                     }
                   >
@@ -408,6 +461,15 @@ export function DocumentFileShareDialog({
                     Copy
                   </Button>
                 </div>
+                <a
+                  href={shareUrl(visibleCreatedLink.token)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                >
+                  <Eye className="size-3.5" />
+                  Preview as recipient
+                </a>
                 {visibleCreatedLink.access_code && (
                   <div className="mt-3 rounded-lg border border-border bg-card p-3">
                     <p className="text-xs text-muted-foreground">
@@ -647,6 +709,63 @@ export function DocumentFileShareDialog({
               />
             </Field>
 
+            {looksSensitive(file.original_filename) && (
+              <p className="rounded-lg border border-amber-300/50 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+                This may contain sensitive information. Consider view-only
+                access, watermarking, an access code, and an expiry date.
+              </p>
+            )}
+
+            <div className="rounded-xl border border-border bg-muted/30 p-4 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="font-medium">Sharing setup</span>
+                {(() => {
+                  const quality = shareQuality({
+                    accessCodeRequired,
+                    viewOnly: permission === "view_only",
+                    watermark: watermarkEnabled,
+                    limited: accessLimitType !== "unlimited",
+                  });
+                  return (
+                    <span className={cn("font-semibold", quality.tone)}>
+                      {quality.label}
+                    </span>
+                  );
+                })()}
+              </div>
+              <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground">
+                <li>
+                  {permission === "view_only"
+                    ? "View-only (download blocked)"
+                    : "View and download"}
+                </li>
+                <li>
+                  Expiry:{" "}
+                  {expiryPreset === "24h"
+                    ? "24 hours"
+                    : expiryPreset === "7d"
+                      ? "7 days"
+                      : expiryPreset === "30d"
+                        ? "30 days"
+                        : "custom date"}
+                </li>
+                <li>
+                  {accessCodeRequired
+                    ? "Access code required"
+                    : "No access code"}
+                </li>
+                <li>{watermarkEnabled ? "Watermarked" : "No watermark"}</li>
+                <li>
+                  {accessLimitType === "unlimited"
+                    ? "Unlimited access"
+                    : accessLimitType === "one_time"
+                      ? "One-time view"
+                      : `Up to ${maxViews || "?"} views`}
+                </li>
+                {recipientEmail.trim() && <li>For {recipientEmail.trim()}</li>}
+              </ul>
+            </div>
+
             <div className="flex justify-end border-t border-border pt-5">
               <Button type="submit" disabled={creating}>
                 {creating ? (
@@ -692,8 +811,10 @@ export function DocumentFileShareDialog({
                             {link.label || file.original_filename}
                           </p>
                           <p className="mt-1 text-xs text-muted-foreground">
-                            {permissionCopy[link.permission]} · Expires{" "}
-                            {formatDateTime(link.expires_at)}
+                            {permissionCopy[link.permission]} ·{" "}
+                            {link.status === "active"
+                              ? expiryCountdown(link.expires_at)
+                              : `Expired ${formatDateTime(link.expires_at)}`}
                           </p>
                         </div>
                         <Badge
@@ -732,12 +853,30 @@ export function DocumentFileShareDialog({
                           variant="outline"
                           size="sm"
                           onClick={() =>
-                            handleCopy(shareUrl(link.token), "Share link copied.")
+                            handleCopy(
+                              shareUrl(link.token),
+                              link.status === "active"
+                                ? `Secure link copied. ${expiryCountdown(link.expires_at)}.`
+                                : "Share link copied.",
+                            )
                           }
                         >
                           <Copy className="size-3.5" />
                           Copy
                         </Button>
+                        {link.status === "active" && (
+                          <a
+                            href={shareUrl(link.token)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={cn(
+                              buttonVariants({ variant: "outline", size: "sm" }),
+                            )}
+                          >
+                            <Eye className="size-3.5" />
+                            Preview
+                          </a>
+                        )}
                         <Button
                           type="button"
                           variant="destructive"
