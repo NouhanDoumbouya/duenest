@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 
 class ProductEvent(models.Model):
@@ -47,6 +48,15 @@ class ProductEvent(models.Model):
         TIMELINE_VIEWED = "timeline_viewed", "Timeline viewed"
         TRASH_RESTORE_USED = "trash_restore_used", "Trash restore used"
         EXTRACTION_REQUESTED = "extraction_requested", "Extraction requested"
+        WAITLIST_JOINED = "waitlist_joined", "Waitlist joined"
+        INVITE_CREATED = "invite_created", "Invite created"
+        INVITE_SENT_OR_COPIED = "invite_sent_or_copied", "Invite sent or copied"
+        INVITE_VALIDATED = "invite_validated", "Invite validated"
+        INVITE_USED = "invite_used", "Invite used"
+        PRIVATE_BETA_SIGNUP_COMPLETED = (
+            "private_beta_signup_completed",
+            "Private beta signup completed",
+        )
 
     class Source(models.TextChoices):
         BACKEND = "backend", "Backend"
@@ -230,6 +240,171 @@ class AppErrorLog(models.Model):
 
     def __str__(self):
         return f"{self.severity}: {self.error_type}"
+
+
+class WaitlistEntry(models.Model):
+    """Public private-beta waitlist entry, visible only to founders/admins."""
+
+    class Persona(models.TextChoices):
+        INTERNATIONAL_STUDENT = "international_student", "International student"
+        VISA_HOLDER = "visa_holder", "Visa holder"
+        SCHOLARSHIP_APPLICANT = "scholarship_applicant", "Scholarship applicant"
+        FREELANCER = "freelancer", "Freelancer"
+        FAMILY_DOCUMENTS = "family_documents", "Family documents"
+        TRAVELER = "traveler", "Traveler"
+        STUDENT_LEADER = "student_leader", "Student leader"
+        OTHER = "other", "Other"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        INVITED = "invited", "Invited"
+        ACCEPTED = "accepted", "Accepted"
+        REJECTED = "rejected", "Rejected"
+
+    full_name = models.CharField(max_length=140)
+    email = models.EmailField()
+    persona = models.CharField(max_length=40, choices=Persona.choices)
+    country = models.CharField(max_length=80, blank=True)
+    message = models.TextField(blank=True)
+    referral_source = models.CharField(max_length=160, blank=True)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    founder_notes = models.TextField(blank=True)
+    invite_code = models.ForeignKey(
+        "InviteCode",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="waitlist_entries",
+    )
+    invited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="waitlist_invitations_sent",
+    )
+    accepted_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="accepted_waitlist_entries",
+    )
+    invited_at = models.DateTimeField(null=True, blank=True)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["email", "status"]),
+            models.Index(fields=["status", "created_at"]),
+            models.Index(fields=["persona", "created_at"]),
+            models.Index(fields=["country", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.email} ({self.status})"
+
+
+class InviteCode(models.Model):
+    """Founder-created private-beta invite code."""
+
+    code = models.CharField(max_length=40, unique=True)
+    label = models.CharField(max_length=140)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_invite_codes",
+    )
+    max_uses = models.PositiveIntegerField(default=1)
+    used_count = models.PositiveIntegerField(default=0)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    persona_target = models.CharField(
+        max_length=40,
+        choices=WaitlistEntry.Persona.choices,
+        blank=True,
+    )
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["code"]),
+            models.Index(fields=["is_active", "expires_at"]),
+            models.Index(fields=["persona_target", "created_at"]),
+        ]
+
+    @property
+    def is_expired(self):
+        return bool(self.expires_at and self.expires_at <= timezone.now())
+
+    @property
+    def remaining_uses(self):
+        return max(0, self.max_uses - self.used_count)
+
+    @property
+    def status_label(self):
+        if not self.is_active:
+            return "disabled"
+        if self.is_expired:
+            return "expired"
+        if self.remaining_uses <= 0:
+            return "used_up"
+        return "active"
+
+    def can_be_used(self):
+        return self.status_label == "active"
+
+    def __str__(self):
+        return self.code
+
+
+class InviteCodeUse(models.Model):
+    """Audit trail of successful invite-code use during signup."""
+
+    invite_code = models.ForeignKey(
+        InviteCode,
+        on_delete=models.CASCADE,
+        related_name="uses",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="invite_code_uses",
+    )
+    waitlist_entry = models.ForeignKey(
+        WaitlistEntry,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="invite_uses",
+    )
+    email = models.EmailField()
+    metadata = models.JSONField(default=dict, blank=True)
+    used_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-used_at"]
+        indexes = [
+            models.Index(fields=["email", "used_at"]),
+            models.Index(fields=["invite_code", "used_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.email} used {self.invite_code_id}"
 
 
 class FeatureCompletionItem(models.Model):

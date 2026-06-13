@@ -1161,3 +1161,28 @@ Deferred:
 - AI analytics assistant
 - retention/churn analytics
 - full incident response center
+
+---
+
+## 21. Waitlist and Invite System
+
+Private beta access control is implemented.
+
+Delivered:
+
+- public `/waitlist` page and waitlist submission API
+- public `/invite/:code` page and invite validation API
+- `PRIVATE_BETA_ENABLED` backend setting
+- invite-code enforcement for password registration when private beta is enabled
+- invite-code enforcement for first-time Google account creation when private beta is enabled
+- founder `/founder/waitlist` review workflow
+- founder `/founder/invites` invite-code management workflow
+- invite code limits, expiry, disabled status, use logging, and accepted-user tracking
+- private beta metrics in Founder Console
+- backend tests for access control, invite enforcement, waitlist submission, and invite lifecycle
+
+Deferred:
+
+- transactional email provider integration
+- production-grade public abuse detection beyond DRF scoped throttles
+- cohort segmentation beyond simple persona/status filters

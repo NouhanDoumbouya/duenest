@@ -957,6 +957,7 @@ ALLOWED_HOSTS=
 CORS_ALLOWED_ORIGINS=
 JWT_ACCESS_TOKEN_LIFETIME=
 JWT_REFRESH_TOKEN_LIFETIME=
+PRIVATE_BETA_ENABLED=
 MEDIA_STORAGE_BACKEND=
 S3_BUCKET_NAME=
 S3_ACCESS_KEY_ID=
@@ -1231,17 +1232,38 @@ Founder Console V1 is implemented as part of the modular monolith:
 - API prefix: `/api/v1/founder/`
 
 The module owns internal operations models (`ProductEvent`, `FeedbackItem`,
-`AppErrorLog`, `FeatureCompletionItem`, `LaunchChecklistItem`,
-`BetaUserProfile`, `FounderAuditLog`), the founder permission class, aggregate
-service functions, serializers, views, URLs, admin registration, and tests.
+`AppErrorLog`, `WaitlistEntry`, `InviteCode`, `InviteCodeUse`,
+`FeatureCompletionItem`, `LaunchChecklistItem`, `BetaUserProfile`,
+`FounderAuditLog`), the founder permission class, aggregate service functions,
+serializers, views, URLs, admin registration, and tests.
 
 It deliberately reuses existing document/user data instead of duplicating
 private records. Metrics are built from aggregate queries over users,
 documents, files, shares, reminders, checklists, bundles, exports, emergency
-packs, proof records, product events, feedback, beta metadata, launch
-checklist items, feature completion rows, country-level product-event metadata,
-and error logs.
+packs, proof records, product events, feedback, waitlist entries, invite-code
+uses, beta metadata, launch checklist items, feature completion rows,
+country-level product-event metadata, and error logs.
 
 Charts use lightweight first-party SVG/CSS components. No background worker,
 billing system, analytics vendor, heavy map dependency, or support-data access
 service is introduced for Founder Console V1.
+
+## 34. Private Beta Waitlist and Invite Architecture
+
+Private beta access is implemented inside the existing modular monolith.
+
+- Public routes: `/waitlist` and `/invite/:code`
+- Registration route: `/register?invite=:code`
+- Founder routes: `/founder/waitlist` and `/founder/invites`
+- Public API: `/api/v1/waitlist/`, `/api/v1/invites/validate/`,
+  `/api/v1/private-beta/status/`
+- Founder API: `/api/v1/founder/waitlist/`, `/api/v1/founder/invites/`,
+  and `/api/v1/founder/private-beta/`
+
+`PRIVATE_BETA_ENABLED` controls whether new password registration and first-time
+Google account creation require a valid invite code. Existing users can still
+log in, and existing accounts can still be linked to Google.
+
+Invite code enforcement happens on the backend. The frontend invite field is a
+UX affordance only; the backend checks active status, expiry, and max-use limits
+before creating the user account.

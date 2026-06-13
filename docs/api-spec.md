@@ -323,10 +323,12 @@ POST /api/v1/auth/register/
 
 ```json
 {
-  "full_name": "Nouhan Doumbouya",
+  "username": "nouhan",
   "email": "nouhan@example.com",
+  "first_name": "Nouhan",
+  "last_name": "Doumbouya",
   "password": "StrongPassword123!",
-  "password_confirm": "StrongPassword123!"
+  "invite_code": "DN-ABCDE-12345"
 }
 ```
 
@@ -334,20 +336,22 @@ POST /api/v1/auth/register/
 
 ```json
 {
-  "data": {
-    "id": "7b9c0c30-12e2-4f5a-a7ab-62e9f4fd7c11",
-    "full_name": "Nouhan Doumbouya",
-    "email": "nouhan@example.com",
-    "date_joined": "2026-06-05T10:30:00Z"
-  }
+  "id": 12,
+  "username": "nouhan",
+  "email": "nouhan@example.com",
+  "first_name": "Nouhan",
+  "last_name": "Doumbouya",
+  "plan": "free"
 }
 ```
 
 ### Validation Rules
 
-- Email must be unique.
+- Username and email must be unique enough for Django user creation.
 - Password must meet minimum security requirements.
-- `password` and `password_confirm` must match.
+- When `PRIVATE_BETA_ENABLED=true`, `invite_code` is required.
+- Invite codes must be active, unexpired, and below their max-use limit.
+- Existing users are not blocked from logging in when private beta mode is enabled.
 
 ---
 
@@ -2740,7 +2744,60 @@ Advanced APIs such as AI extraction, secure sharing, team workspaces, and billin
 
 ---
 
-# 26. Founder Console V1 API
+# 26. Private Beta Waitlist and Invites API
+
+Public endpoints:
+
+```txt
+GET  /api/v1/private-beta/status/
+POST /api/v1/waitlist/
+POST /api/v1/invites/validate/
+```
+
+`POST /api/v1/waitlist/` accepts:
+
+```json
+{
+  "full_name": "Amina Yusuf",
+  "email": "amina@example.com",
+  "persona": "international_student",
+  "country": "Malaysia",
+  "message": "I need help tracking visa renewals.",
+  "referral_source": "campus"
+}
+```
+
+Waitlist entries are public-create only. Listing, searching, notes, and status
+changes are founder-only.
+
+Founder endpoints:
+
+```txt
+GET   /api/v1/founder/private-beta/
+GET   /api/v1/founder/waitlist/
+GET   /api/v1/founder/waitlist/:entry_id/
+PATCH /api/v1/founder/waitlist/:entry_id/
+POST  /api/v1/founder/waitlist/:entry_id/create-invite/
+GET   /api/v1/founder/invites/
+POST  /api/v1/founder/invites/
+GET   /api/v1/founder/invites/:invite_id/
+PATCH /api/v1/founder/invites/:invite_id/
+POST  /api/v1/founder/invites/:invite_id/disable/
+```
+
+Invite codes have `code`, `label`, `created_by`, `max_uses`, `used_count`,
+`expires_at`, `is_active`, optional `persona_target`, notes, and timestamps.
+The backend enforces inactive, expired, and max-use limits during signup.
+Successful private-beta signup creates an invite-use log and increments
+`used_count`.
+
+When private beta mode is enabled, password registration and first-time Google
+account creation require a valid invite code. Existing users can still log in,
+and existing accounts can still be linked to Google without a new invite.
+
+---
+
+# 27. Founder Console V1 API
 
 Founder Console V1 is implemented under `/api/v1/founder/` and is restricted
 to authenticated staff/superuser accounts. Normal authenticated users receive
@@ -2751,6 +2808,8 @@ Public/user-facing operational endpoints:
 ```txt
 POST /api/v1/feedback/
 POST /api/v1/errors/client/
+POST /api/v1/waitlist/
+POST /api/v1/invites/validate/
 ```
 
 Founder endpoints:
@@ -2759,6 +2818,14 @@ Founder endpoints:
 GET   /api/v1/founder/me/
 GET   /api/v1/founder/dashboard/?range=7d|30d|90d|all
 GET   /api/v1/founder/analytics/?range=7d|30d|90d|all
+GET   /api/v1/founder/private-beta/
+GET   /api/v1/founder/waitlist/
+PATCH /api/v1/founder/waitlist/:entry_id/
+POST  /api/v1/founder/waitlist/:entry_id/create-invite/
+GET   /api/v1/founder/invites/
+POST  /api/v1/founder/invites/
+PATCH /api/v1/founder/invites/:invite_id/
+POST  /api/v1/founder/invites/:invite_id/disable/
 GET   /api/v1/founder/activation-funnel/
 GET   /api/v1/founder/feature-adoption/
 GET   /api/v1/founder/feature-completion/

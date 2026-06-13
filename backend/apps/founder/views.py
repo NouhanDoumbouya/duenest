@@ -1,10 +1,12 @@
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 from django.db.models import Count, Exists, OuterRef, Q
 from django.utils import timezone
-from rest_framework import generics
+from rest_framework import generics, status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from apps.documents.models import DocumentChecklistTemplate
@@ -17,8 +19,10 @@ from .models import (
     FeatureCompletionItem,
     FeedbackItem,
     FounderAuditLog,
+    InviteCode,
     LaunchChecklistItem,
     ProductEvent,
+    WaitlistEntry,
 )
 from .permissions import IsFounderUser
 from .serializers import (
@@ -26,13 +30,18 @@ from .serializers import (
     ClientErrorCreateSerializer,
     FeatureCompletionItemSerializer,
     FeedbackCreateSerializer,
+    FounderInviteCodeSerializer,
     FounderAppErrorLogSerializer,
     FounderAuditLogSerializer,
     FounderChecklistTemplateSerializer,
     FounderFeedbackSerializer,
     FounderMeSerializer,
+    FounderWaitlistEntrySerializer,
     FounderUserListSerializer,
     LaunchChecklistItemSerializer,
+    InviteValidateSerializer,
+    PrivateBetaStatusSerializer,
+    WaitlistCreateSerializer,
     ProductEventSerializer,
 )
 from .services import (
@@ -43,7 +52,9 @@ from .services import (
     build_founder_analytics,
     build_founder_dashboard,
     build_founder_user_summary,
+    build_private_beta_metrics,
     build_security_overview,
+    create_invite_code,
     ensure_beta_profiles_for_users,
     ensure_feature_completion_defaults,
     ensure_launch_checklist_defaults,
@@ -52,6 +63,9 @@ from .services import (
     launch_readiness_summary,
     log_founder_action,
     sanitize_metadata,
+    get_usable_invite_code,
+    InviteCodeError,
+    send_waitlist_confirmation_email,
     track_product_event,
 )
 
@@ -71,6 +85,82 @@ class FounderMeView(APIView):
                     "email": request.user.email,
                 }
             ).data
+        )
+
+
+class PrivateBetaStatusView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        return Response(
+            PrivateBetaStatusSerializer(
+                {"private_beta_enabled": settings.PRIVATE_BETA_ENABLED}
+            ).data
+        )
+
+
+class WaitlistCreateView(generics.CreateAPIView):
+    """Public private-beta waitlist submission endpoint."""
+
+    permission_classes = [AllowAny]
+    serializer_class = WaitlistCreateSerializer
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "waitlist"
+
+    def perform_create(self, serializer):
+        entry = serializer.save()
+        send_waitlist_confirmation_email(entry)
+        track_product_event(
+            event_type=ProductEvent.EventType.WAITLIST_JOINED,
+            request=self.request,
+            object_type="waitlist_entry",
+            object_id=entry.id,
+            metadata={
+                "persona": entry.persona,
+                "country": entry.country,
+                "referral_source": entry.referral_source,
+            },
+        )
+
+
+class InviteValidateView(APIView):
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "invite_validate"
+
+    def post(self, request):
+        serializer = InviteValidateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        code = serializer.validated_data["code"]
+        try:
+            invite = get_usable_invite_code(code)
+        except InviteCodeError as exc:
+            track_product_event(
+                event_type=ProductEvent.EventType.INVITE_VALIDATED,
+                request=request,
+                metadata={"valid": False},
+            )
+            return Response(
+                {"valid": False, "detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        track_product_event(
+            event_type=ProductEvent.EventType.INVITE_VALIDATED,
+            request=request,
+            object_type="invite_code",
+            object_id=invite.id,
+            metadata={"valid": True, "persona_target": invite.persona_target},
+        )
+        return Response(
+            {
+                "valid": True,
+                "code": invite.code,
+                "label": invite.label,
+                "persona_target": invite.persona_target,
+                "expires_at": invite.expires_at,
+                "remaining_uses": invite.remaining_uses,
+            }
         )
 
 
@@ -135,6 +225,159 @@ class FounderAnalyticsView(APIView):
     def get(self, request):
         log_founder_action(request=request, action="founder_viewed_analytics")
         return Response(build_founder_analytics(request.query_params.get("range")))
+
+
+class FounderPrivateBetaMetricsView(APIView):
+    permission_classes = [IsFounderUser]
+
+    def get(self, request):
+        log_founder_action(request=request, action="founder_viewed_private_beta_metrics")
+        return Response(build_private_beta_metrics())
+
+
+class FounderWaitlistListView(generics.ListAPIView):
+    permission_classes = [IsFounderUser]
+    serializer_class = FounderWaitlistEntrySerializer
+
+    def get_queryset(self):
+        queryset = WaitlistEntry.objects.select_related(
+            "invite_code",
+            "invited_by",
+            "accepted_user",
+        )
+        params = self.request.query_params
+        if params.get("status"):
+            queryset = queryset.filter(status=params["status"])
+        if params.get("persona"):
+            queryset = queryset.filter(persona=params["persona"])
+        if params.get("country"):
+            queryset = queryset.filter(country__icontains=params["country"].strip())
+        search = params.get("search", "").strip()
+        if search:
+            queryset = queryset.filter(
+                Q(email__icontains=search)
+                | Q(full_name__icontains=search)
+                | Q(message__icontains=search)
+            )
+        return queryset
+
+    def list(self, request, *args, **kwargs):
+        log_founder_action(request=request, action="founder_viewed_waitlist")
+        return super().list(request, *args, **kwargs)
+
+
+class FounderWaitlistDetailView(generics.RetrieveUpdateAPIView):
+    permission_classes = [IsFounderUser]
+    serializer_class = FounderWaitlistEntrySerializer
+    lookup_url_kwarg = "entry_id"
+
+    def get_queryset(self):
+        return WaitlistEntry.objects.select_related(
+            "invite_code",
+            "invited_by",
+            "accepted_user",
+        )
+
+    def perform_update(self, serializer):
+        entry = serializer.save()
+        log_founder_action(
+            request=self.request,
+            action="founder_updated_waitlist_entry",
+            object_type="waitlist_entry",
+            object_id=entry.id,
+            metadata={"status": entry.status, "persona": entry.persona},
+        )
+
+
+class FounderWaitlistCreateInviteView(APIView):
+    permission_classes = [IsFounderUser]
+
+    def post(self, request, entry_id):
+        entry = get_object_or_404(WaitlistEntry, pk=entry_id)
+        serializer = FounderInviteCodeSerializer(
+            data={
+                **request.data,
+                "label": request.data.get("label")
+                or f"Invite for {entry.full_name}",
+                "waitlist_entry_id": entry.id,
+                "persona_target": request.data.get("persona_target") or entry.persona,
+            },
+            context={"request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+        invite = serializer.save()
+        return Response(
+            FounderInviteCodeSerializer(invite).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class FounderInviteCodeListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsFounderUser]
+    serializer_class = FounderInviteCodeSerializer
+
+    def get_queryset(self):
+        queryset = InviteCode.objects.select_related("created_by").prefetch_related(
+            "uses__user",
+            "uses__waitlist_entry",
+        )
+        params = self.request.query_params
+        if params.get("is_active") is not None:
+            queryset = queryset.filter(
+                is_active=params["is_active"].lower() in {"1", "true", "yes"}
+            )
+        if params.get("persona_target"):
+            queryset = queryset.filter(persona_target=params["persona_target"])
+        search = params.get("search", "").strip()
+        if search:
+            queryset = queryset.filter(
+                Q(code__icontains=search)
+                | Q(label__icontains=search)
+                | Q(notes__icontains=search)
+            )
+        return queryset
+
+    def list(self, request, *args, **kwargs):
+        log_founder_action(request=request, action="founder_viewed_invites")
+        return super().list(request, *args, **kwargs)
+
+
+class FounderInviteCodeDetailView(generics.RetrieveUpdateAPIView):
+    permission_classes = [IsFounderUser]
+    serializer_class = FounderInviteCodeSerializer
+    lookup_url_kwarg = "invite_id"
+
+    def get_queryset(self):
+        return InviteCode.objects.select_related("created_by").prefetch_related(
+            "uses__user",
+            "uses__waitlist_entry",
+        )
+
+    def perform_update(self, serializer):
+        invite = serializer.save()
+        log_founder_action(
+            request=self.request,
+            action="founder_updated_invite",
+            object_type="invite_code",
+            object_id=invite.id,
+            metadata={"is_active": invite.is_active, "max_uses": invite.max_uses},
+        )
+
+
+class FounderInviteCodeDisableView(APIView):
+    permission_classes = [IsFounderUser]
+
+    def post(self, request, invite_id):
+        invite = get_object_or_404(InviteCode, pk=invite_id)
+        invite.is_active = False
+        invite.save(update_fields=["is_active", "updated_at"])
+        log_founder_action(
+            request=request,
+            action="founder_disabled_invite",
+            object_type="invite_code",
+            object_id=invite.id,
+        )
+        return Response(FounderInviteCodeSerializer(invite).data)
 
 
 class FounderActivationFunnelView(APIView):

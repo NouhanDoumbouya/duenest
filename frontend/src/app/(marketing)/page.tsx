@@ -92,7 +92,7 @@ const trustPoints = [
 const faqs = [
   {
     q: "Is DueNest free to start?",
-    a: "Yes. You can create an account and start organizing your documents, files, and deadlines for free.",
+    a: "DueNest is in private beta. Join the waitlist and invited users can start organizing documents, files, and deadlines for free during the beta.",
   },
   {
     q: "Who is DueNest for?",
@@ -145,13 +145,13 @@ export default function LandingPage() {
 
               <div className="mt-9 flex flex-col gap-3 sm:flex-row">
                 <Link
-                  href="/register"
+                  href="/waitlist"
                   className={cn(
                     buttonVariants({ size: "lg" }),
                     "h-12 px-7 text-base",
                   )}
                 >
-                  Create your free account
+                  Join the private beta
                   <ArrowRight className="size-4" />
                 </Link>
                 <Link
@@ -177,7 +177,7 @@ export default function LandingPage() {
                 </span>
                 <span className="hidden text-border sm:inline">•</span>
                 <span className="inline-flex items-center gap-1.5">
-                  No credit card required
+                  Invite-only private beta
                 </span>
               </div>
             </div>
@@ -351,17 +351,17 @@ export default function LandingPage() {
                 Bring calm to your documents and deadlines
               </h2>
               <p className="text-pretty text-white/70">
-                Create your free DueNest workspace and add your first document in
-                under a minute.
+                Join the waitlist for a focused private beta built around real
+                document and deadline workflows.
               </p>
               <Link
-                href="/register"
+                href="/waitlist"
                 className={cn(
                   buttonVariants({ size: "lg" }),
                   "h-12 bg-white px-7 text-base text-brand-navy shadow-sm hover:bg-white/90",
                 )}
               >
-                Get started — it’s free
+                Request beta access
                 <ArrowRight className="size-4" />
               </Link>
             </div>

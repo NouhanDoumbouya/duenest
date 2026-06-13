@@ -1,8 +1,13 @@
 from unittest.mock import patch
+from datetime import timedelta
 
 from django.contrib.auth import get_user_model
+from django.test import override_settings
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
+
+from apps.founder.models import InviteCode, InviteCodeUse
 
 
 User = get_user_model()
@@ -122,6 +127,68 @@ class AuthenticationAPITests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
+    @override_settings(PRIVATE_BETA_ENABLED=True)
+    def test_private_beta_registration_requires_invite_code(self):
+        response = self.client.post(
+            "/api/v1/auth/register/",
+            {
+                "username": "blockeduser",
+                "email": "blocked@example.com",
+                "password": "StrongPassword123!DueNest",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("invite_code", response.data)
+        self.assertFalse(User.objects.filter(username="blockeduser").exists())
+
+    @override_settings(PRIVATE_BETA_ENABLED=True)
+    def test_private_beta_registration_consumes_valid_invite_code(self):
+        invite = InviteCode.objects.create(
+            code="DN-VALID-12345",
+            label="Beta cohort",
+            max_uses=2,
+        )
+
+        response = self.client.post(
+            "/api/v1/auth/register/",
+            {
+                "username": "inviteduser",
+                "email": "invited@example.com",
+                "password": "StrongPassword123!DueNest",
+                "invite_code": "dn-valid-12345",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        invite.refresh_from_db()
+        self.assertEqual(invite.used_count, 1)
+        self.assertEqual(InviteCodeUse.objects.get().email, "invited@example.com")
+
+    @override_settings(PRIVATE_BETA_ENABLED=True)
+    def test_private_beta_registration_rejects_expired_invite_code(self):
+        InviteCode.objects.create(
+            code="DN-EXPIRED-1",
+            label="Expired",
+            expires_at=timezone.now() - timedelta(days=1),
+        )
+
+        response = self.client.post(
+            "/api/v1/auth/register/",
+            {
+                "username": "expireduser",
+                "email": "expired@example.com",
+                "password": "StrongPassword123!DueNest",
+                "invite_code": "DN-EXPIRED-1",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(User.objects.filter(username="expireduser").exists())
+
 
 # Where verify_google_id_token is *used* (the views module), so patching here
 # replaces the real Google call without ever needing a network request.
@@ -231,3 +298,51 @@ class GoogleAuthAPITests(APITestCase):
         response = self.client.post(self.url, {}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    @override_settings(PRIVATE_BETA_ENABLED=True)
+    @patch(GOOGLE_VERIFY)
+    def test_private_beta_google_signup_requires_invite_for_new_user(self, mock_verify):
+        mock_verify.return_value = google_claims()
+
+        response = self.client.post(
+            self.url, {"id_token": "fake-token"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(User.objects.filter(email="googleuser@gmail.com").exists())
+
+    @override_settings(PRIVATE_BETA_ENABLED=True)
+    @patch(GOOGLE_VERIFY)
+    def test_private_beta_google_signup_consumes_invite(self, mock_verify):
+        InviteCode.objects.create(code="DN-GOOGLE-1", label="Google invite")
+        mock_verify.return_value = google_claims()
+
+        response = self.client.post(
+            self.url,
+            {"id_token": "fake-token", "invite_code": "dn-google-1"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(InviteCodeUse.objects.get().email, "googleuser@gmail.com")
+
+    @override_settings(PRIVATE_BETA_ENABLED=True)
+    @patch(GOOGLE_VERIFY)
+    def test_private_beta_google_login_existing_user_does_not_require_invite(
+        self,
+        mock_verify,
+    ):
+        existing = User.objects.create_user(
+            username="existinggoogle",
+            email="googleuser@gmail.com",
+            password="StrongPassword123!DueNest",
+        )
+        mock_verify.return_value = google_claims()
+
+        response = self.client.post(
+            self.url, {"id_token": "fake-token"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["user"]["id"], existing.id)
+        self.assertEqual(InviteCodeUse.objects.count(), 0)

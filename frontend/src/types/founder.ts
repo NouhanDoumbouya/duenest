@@ -1,3 +1,5 @@
+import type { WaitlistPersona, WaitlistStatus } from "@/types/private-beta";
+
 export interface Paginated<T> {
   count: number;
   next: string | null;
@@ -52,6 +54,11 @@ export interface FounderDashboard {
   security_events_in_range: number;
   beta_users: number;
   active_beta_users: number;
+  total_waitlist_entries: number;
+  pending_waitlist_entries: number;
+  accepted_waitlist_entries: number;
+  active_invite_codes: number;
+  invite_conversion_percent: number;
   launch_readiness_percent: number;
   feature_completion_percent: number;
   recent_activity_summary: RecentActivitySummary[];
@@ -423,4 +430,76 @@ export interface CountryActivityResponse {
   range_days: number | null;
   countries: CountryActivityItem[];
   privacy_note: string;
+}
+
+export interface FounderWaitlistEntry {
+  id: number;
+  full_name: string;
+  email: string;
+  persona: WaitlistPersona;
+  country: string;
+  message: string;
+  referral_source: string;
+  status: WaitlistStatus;
+  founder_notes: string;
+  invite_code: number | null;
+  invite_code_value: string;
+  invited_by: number | null;
+  invited_by_email: string | null;
+  accepted_user: number | null;
+  accepted_user_email: string | null;
+  invited_at: string | null;
+  accepted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type InviteCodeStatus = "active" | "disabled" | "expired" | "used_up";
+
+export interface FounderInviteCodeUse {
+  id: number;
+  user: number | null;
+  user_email: string | null;
+  waitlist_entry: number | null;
+  email: string;
+  used_at: string;
+}
+
+export interface FounderInviteCode {
+  id: number;
+  code: string;
+  label: string;
+  created_by: number | null;
+  created_by_email: string | null;
+  max_uses: number;
+  used_count: number;
+  remaining_uses: number;
+  expires_at: string | null;
+  is_active: boolean;
+  is_expired: boolean;
+  status_label: InviteCodeStatus;
+  persona_target: WaitlistPersona | "";
+  notes: string;
+  uses: FounderInviteCodeUse[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PrivateBetaMetrics {
+  total_waitlist_entries: number;
+  pending_waitlist_entries: number;
+  invited_waitlist_entries: number;
+  accepted_waitlist_entries: number;
+  rejected_waitlist_entries: number;
+  waitlist_by_persona: FounderBreakdownItem[];
+  active_invite_codes: number;
+  expired_invite_codes: number;
+  disabled_invite_codes: number;
+  used_invite_codes: number;
+  total_invite_uses: number;
+  invite_conversion_percent: number;
+  recent_waitlist_entries: Pick<
+    FounderWaitlistEntry,
+    "id" | "full_name" | "email" | "persona" | "status" | "country" | "created_at"
+  >[];
 }

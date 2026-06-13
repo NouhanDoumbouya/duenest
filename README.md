@@ -498,6 +498,9 @@ POST   /api/v1/auth/login/        # JWT login
 POST   /api/v1/auth/refresh/      # JWT refresh
 POST   /api/v1/auth/google/       # Google ID-token sign-in
 GET    /api/v1/users/me/          # current user
+GET    /api/v1/private-beta/status/ # private beta mode status
+POST   /api/v1/waitlist/          # public private beta waitlist submission
+POST   /api/v1/invites/validate/  # public invite-code validation
 GET    /api/v1/documents/         # list current user's documents
 POST   /api/v1/documents/         # create document
 GET    /api/v1/documents/:id/     # retrieve document
@@ -528,6 +531,10 @@ POST   /api/v1/share/files/:token/verify-code/
 GET    /api/v1/share/files/:token/preview/
 GET    /api/v1/share/files/:token/download/
 ```
+
+Founder-only private beta operations also exist under `/api/v1/founder/` for
+waitlist review, invite-code management, private beta metrics, and the Founder
+Console.
 
 The document API and its file attachments are strictly scoped to the
 authenticated owner. Uploads are validated (type + 10 MB limit) and stored

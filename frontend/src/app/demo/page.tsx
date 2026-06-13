@@ -42,8 +42,8 @@ export default function DemoPage() {
               information.
             </p>
             <div className="mt-7 flex flex-wrap gap-3">
-              <Link href="/register" className={cn(buttonVariants({ size: "lg" }))}>
-                Create account
+              <Link href="/waitlist" className={cn(buttonVariants({ size: "lg" }))}>
+                Join waitlist
               </Link>
               <Link
                 href="/login"

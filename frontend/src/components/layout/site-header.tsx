@@ -9,6 +9,7 @@ const navLinks = [
   { label: "How it works", href: "#how" },
   { label: "Demo", href: "/demo" },
   { label: "Security", href: "/security" },
+  { label: "Waitlist", href: "/waitlist" },
   { label: "FAQ", href: "#faq" },
 ];
 
@@ -39,10 +40,10 @@ export function SiteHeader() {
             Sign in
           </Link>
           <Link
-            href="/register"
+            href="/waitlist"
             className={cn(buttonVariants({ size: "lg" }), "shadow-sm")}
           >
-            Get started
+            Join waitlist
           </Link>
         </div>
       </div>

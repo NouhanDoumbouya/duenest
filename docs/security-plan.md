@@ -502,6 +502,7 @@ DJANGO_SECRET_KEY=
 DATABASE_URL=
 REDIS_URL=
 JWT_SIGNING_KEY=
+PRIVATE_BETA_ENABLED=
 EMAIL_HOST_PASSWORD=
 S3_ACCESS_KEY_ID=
 S3_SECRET_ACCESS_KEY=
@@ -1081,11 +1082,17 @@ Access control:
   founder access.
 - The active frontend entry point is `/founder`, which uses a separate founder
   shell instead of the normal dashboard chrome.
+- Waitlist and invite management endpoints under `/api/v1/founder/` are
+  founder-only.
+- Public waitlist submission and invite validation never expose the waitlist
+  list, founder notes, registered-user state, or invite management metadata.
 
 Privacy boundaries:
 
 - Founder dashboard, activation, adoption, security, and support views use
   aggregate metrics or safe metadata.
+- Public waitlist responses return only the submitted entry confirmation.
+- Invite validation returns code health and safe invite metadata only.
 - User support summaries intentionally exclude document titles, filenames, raw
   OCR text, private notes, physical locations, access codes, share tokens, and
   internal file paths.
@@ -1100,7 +1107,8 @@ Privacy boundaries:
 
 Deferred hardening:
 
-- rate limits for feedback and client error intake
+- production-grade rate limits for feedback, waitlist, invite validation, and
+  client error intake
 - production incident-response workflow
 - explicit consent-based support access
 - richer security-event taxonomy

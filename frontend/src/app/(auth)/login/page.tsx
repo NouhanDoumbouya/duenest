@@ -133,10 +133,10 @@ function LoginForm() {
         <p className="text-center text-sm text-muted-foreground">
           New to DueNest?{" "}
           <Link
-            href="/register"
+            href="/waitlist"
             className="font-medium text-primary hover:underline"
           >
-            Create an account
+            Join the waitlist
           </Link>
         </p>
       </CardContent>
