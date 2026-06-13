@@ -1064,6 +1064,7 @@ class TimelineEvent:
     related_document: int | None = None
     related_bundle: int | None = None
     related_checklist: int | None = None
+    related_subscription: int | None = None
     metadata: dict = field(default_factory=dict)
 
 
@@ -1075,6 +1076,9 @@ TIMELINE_EVENT_TYPES = (
     "checklist_item_due",
     "bundle_target_date",
     "bundle_requirement_due",
+    "subscription_renewal",
+    "subscription_cancellation_deadline",
+    "subscription_trial_ending",
 )
 
 
@@ -1267,6 +1271,29 @@ def build_timeline(
                     )
                 )
 
+    # Subscription renewal / cancellation-deadline / trial-ending dates.
+    # Owner-scoped and free of sensitive payment data (handled in the source).
+    if document_id is None and bundle_id is None:
+        from apps.subscriptions.services import subscription_events
+
+        for sub_event in subscription_events(user, today=today):
+            if not wants(sub_event.event_type):
+                continue
+            if not in_range(sub_event.date):
+                continue
+            events.append(
+                TimelineEvent(
+                    id=f"{sub_event.event_type}:{sub_event.subscription_id}",
+                    event_type=sub_event.event_type,
+                    title=sub_event.title,
+                    description=sub_event.description,
+                    date=sub_event.date,
+                    urgency_level=_timeline_urgency(sub_event.date, today),
+                    related_subscription=sub_event.subscription_id,
+                    metadata=sub_event.metadata,
+                )
+            )
+
     events.sort(key=lambda e: (e.date, e.title.lower()))
     return events
 
@@ -1305,6 +1332,9 @@ CALENDAR_CATEGORIES = {
     "share_expiry": "shares",
     "room_expiry": "rooms",
     "emergency_pack_expiry": "emergency",
+    "subscription_renewal": "subscriptions",
+    "subscription_cancellation_deadline": "subscriptions",
+    "subscription_trial_ending": "subscriptions",
 }
 
 CALENDAR_EVENT_TYPES = tuple(CALENDAR_CATEGORIES.keys())
@@ -1591,6 +1621,24 @@ def build_calendar_events(
             linked_type="emergency_pack",
             linked_id=pack.pk,
             url="/dashboard/emergency",
+        )
+
+    # Subscription renewals, cancellation deadlines, and trial endings. The
+    # source already excludes sensitive payment data (card labels, emails).
+    from apps.subscriptions.services import subscription_events
+
+    for sub_event in subscription_events(user, today=today):
+        add(
+            event_type=sub_event.event_type,
+            source_type="subscription",
+            source_id=sub_event.subscription_id,
+            title=sub_event.title,
+            description=sub_event.description,
+            when=sub_event.date,
+            linked_type="subscription",
+            linked_id=sub_event.subscription_id,
+            url=f"/dashboard/subscriptions/{sub_event.subscription_id}",
+            metadata=sub_event.metadata,
         )
 
     events.sort(key=lambda e: (e.date, e.title.lower()))

@@ -12,6 +12,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 
+import { SubscriptionAttentionSection } from "@/components/subscriptions/subscription-attention-section";
 import { ConfidencePill } from "@/components/documents/confidence-indicator";
 import { DocumentStatusBadge } from "@/components/documents/status-badge";
 import { UrgencyBadge } from "@/components/documents/urgency-badge";
@@ -292,6 +293,10 @@ export default function AttentionPage() {
           </div>
         </>
       )}
+
+      {/* Subscription renewals/deadlines that need a decision. Renders nothing
+          when no subscriptions need attention. */}
+      <SubscriptionAttentionSection />
     </PageContainer>
   );
 }

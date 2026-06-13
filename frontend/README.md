@@ -232,3 +232,17 @@ npm run build   # production build
 npm run lint    # eslint
 npm run start   # serve production build
 ```
+
+## Subscriptions
+
+The Subscription / Recurring Renewal Tracker lives under:
+
+- `/dashboard/subscriptions` — command center (metrics, search, filters, list)
+- `/dashboard/subscriptions/new` — add a subscription
+- `/dashboard/subscriptions/[id]` — detail workspace (Overview / Payments / Reminders / Activity + planning rail)
+- `/dashboard/subscriptions/[id]/edit` — edit
+
+It tracks the user's *own* recurring payments (this is not DueNest billing).
+Renewals, cancellation deadlines, and trial endings also surface in Calendar,
+Timeline, Attention, and the dashboard "Upcoming renewals" widget. API client:
+`src/lib/subscriptions.ts`; types: `src/types/subscriptions.ts`.

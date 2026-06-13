@@ -10,6 +10,7 @@ import {
   DoorClosed,
   FileText,
   Package,
+  RefreshCw,
   Share2,
   ShieldAlert,
 } from "lucide-react";
@@ -44,6 +45,7 @@ const CATEGORY_ICON: Record<CalendarCategory, LucideIcon> = {
   shares: Share2,
   rooms: DoorClosed,
   emergency: ShieldAlert,
+  subscriptions: RefreshCw,
 };
 
 const CATEGORY_LABEL: Record<CalendarCategory, string> = {
@@ -55,6 +57,7 @@ const CATEGORY_LABEL: Record<CalendarCategory, string> = {
   shares: "Shared link",
   rooms: "Secure room",
   emergency: "Emergency",
+  subscriptions: "Subscription",
 };
 
 function startOfDay(date: Date) {

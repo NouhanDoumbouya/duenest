@@ -27,6 +27,7 @@ RESOURCE_BUNDLES = "bundles"
 RESOURCE_REMINDERS = "reminders"
 RESOURCE_SHARE_LINKS = "active_share_links"
 RESOURCE_EMERGENCY_PACKS = "emergency_packs"
+RESOURCE_SUBSCRIPTIONS = "subscriptions"
 
 # Human-friendly labels for each tracked resource (used in error messages/UI).
 RESOURCE_LABELS = {
@@ -36,6 +37,7 @@ RESOURCE_LABELS = {
     RESOURCE_REMINDERS: "reminders",
     RESOURCE_SHARE_LINKS: "active share links",
     RESOURCE_EMERGENCY_PACKS: "emergency access packs",
+    RESOURCE_SUBSCRIPTIONS: "subscriptions",
 }
 
 # Storage is reported but not hard-enforced on its own (the file count limit is
@@ -51,6 +53,7 @@ PLAN_LIMITS = {
         RESOURCE_REMINDERS: 40,
         RESOURCE_SHARE_LINKS: 5,
         RESOURCE_EMERGENCY_PACKS: 1,
+        RESOURCE_SUBSCRIPTIONS: 10,
         "storage_bytes": FREE_STORAGE_BYTES,
     },
     PLAN_PRO_PLACEHOLDER: {
@@ -60,6 +63,7 @@ PLAN_LIMITS = {
         RESOURCE_REMINDERS: None,
         RESOURCE_SHARE_LINKS: None,
         RESOURCE_EMERGENCY_PACKS: None,
+        RESOURCE_SUBSCRIPTIONS: None,
         "storage_bytes": None,
     },
 }
@@ -72,6 +76,7 @@ ENFORCED_RESOURCES = (
     RESOURCE_REMINDERS,
     RESOURCE_SHARE_LINKS,
     RESOURCE_EMERGENCY_PACKS,
+    RESOURCE_SUBSCRIPTIONS,
 )
 
 

@@ -2969,3 +2969,86 @@ existing models (no duplicate table), owner-scoped, and carry a
 `linked_resource_url` back to the right workspace page. The `.ics` export is
 one-way and uses safe `DueNest: …` titles only — no tokens, access codes,
 internal paths, or sensitive numbers. **No Google/Outlook/two-way sync exists.**
+
+# 29. Subscription / Recurring Renewal Tracker V1
+
+A user-facing tracker for the user's **own** recurring payments and renewals
+(streaming, software, domains, hosting, insurance, telecom, gym, memberships,
+etc.). This is **not** DueNest SaaS billing: there is no Stripe, no payment
+checkout, no bank/card integration, and no DueNest paid-plan subscription here.
+
+All endpoints are authenticated and strictly owner-scoped. `owner` is always set
+from the request and never trusted from the client; another user's subscriptions
+are simply never in the queryset (so cross-user access returns `404`).
+
+## 29.1 Endpoints
+
+```
+GET    /api/v1/subscription-categories/                     # system categories (read-only)
+
+GET    /api/v1/subscriptions/                               # list (paginated, filters below)
+POST   /api/v1/subscriptions/                               # create
+GET    /api/v1/subscriptions/{id}/                          # retrieve
+PATCH  /api/v1/subscriptions/{id}/                          # update
+DELETE /api/v1/subscriptions/{id}/                          # delete (hard)
+
+POST   /api/v1/subscriptions/{id}/archive/                  # soft archive
+POST   /api/v1/subscriptions/{id}/restore/                  # restore archived
+POST   /api/v1/subscriptions/{id}/mark-cancelled/           # status -> cancelled, auto_renew off
+POST   /api/v1/subscriptions/{id}/mark-paid/                # log a payment + roll next_billing_date
+POST   /api/v1/subscriptions/{id}/skip-next-renewal/        # roll next_billing_date by one cycle
+
+GET    /api/v1/subscriptions/summary/                       # owner roll-up (costs, windows, top renewals)
+GET    /api/v1/subscriptions/attention/                     # subscriptions needing attention + reasons
+
+GET    /api/v1/subscriptions/{id}/payments/                 # list payment records
+POST   /api/v1/subscriptions/{id}/payments/                 # create a payment record
+GET    /api/v1/subscriptions/{id}/payments/{payment_id}/    # retrieve
+PATCH  /api/v1/subscriptions/{id}/payments/{payment_id}/    # update
+DELETE /api/v1/subscriptions/{id}/payments/{payment_id}/    # delete
+```
+
+## 29.2 List filters & ordering
+
+`status`, `category` (id or slug), `billing_cycle`, `auto_renew` (bool),
+`currency`, `renews_within_days` (int), `search` (name/provider/plan/notes),
+`archived` (bool — show archived instead of active). `ordering`:
+`next_billing_date | -next_billing_date | amount | -amount | name | -name |
+created_at | -created_at`. Lists are paginated.
+
+## 29.3 Cost & recurrence logic
+
+Monthly equivalent = `amount / cycle_months`, where one cycle spans:
+weekly `12/52`, monthly `1`, quarterly `3`, yearly `12` months; custom uses
+`count × unit_months` (days `1/30`, weeks `1/4.345`, months `1`, years `12`).
+Yearly equivalent = monthly × 12. **No live currency conversion** — summary
+totals are grouped by currency. A custom cycle without a count/unit is excluded
+from cost totals and reported under `cost_unestimable_count`.
+
+Urgency: `overdue` (past, active/trial), `renews_today`, `renews_soon` (≤7d),
+`upcoming` (≤30d), else `normal`. Plus `cancellation_deadline_soon` (≤7d) and
+`trial_ending_soon` (trial + ≤7d).
+
+## 29.4 Calendar & Timeline integration
+
+Subscriptions appear in the existing Calendar and Timeline aggregators
+(owner-scoped, no sensitive payment data). New event types:
+`subscription_renewal`, `subscription_cancellation_deadline`,
+`subscription_trial_ending`. The calendar groups these under a new
+`subscriptions` category; timeline events carry `related_subscription` and link
+to `/dashboard/subscriptions/{id}`.
+
+## 29.5 Plan/usage
+
+Subscriptions are a tracked resource: Free plan caps at **10** subscriptions
+(Pro placeholder: unlimited), enforced on create via the shared plan-limit
+helper and reported through the existing plan usage endpoint.
+
+## 29.6 Privacy & limitations
+
+* No full card numbers, CVV, or banking credentials are stored.
+  `payment_method_label` is a human label only (e.g. "Visa ending 1234") and a
+  validator rejects values that look like a full card number.
+* **Deferred in V1:** receipt *file* uploads (payment records are metadata-only),
+  founder-console subscription metrics, automatic cancellation, live FX, and
+  email/push reminder delivery (reminders are in-app via Calendar/Timeline only).

@@ -68,6 +68,12 @@ def count_resource(user, resource: str) -> int:
         return _active_share_links(user).count()
     if resource == plans.RESOURCE_EMERGENCY_PACKS:
         return EmergencyAccessPack.objects.filter(owner=user).count()
+    if resource == plans.RESOURCE_SUBSCRIPTIONS:
+        # Lazy import keeps the documents app independent of the subscriptions
+        # app at load time (no import cycle).
+        from apps.subscriptions.models import Subscription
+
+        return Subscription.objects.filter(owner=user, is_archived=False).count()
     return 0
 
 

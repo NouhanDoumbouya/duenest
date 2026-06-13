@@ -1208,3 +1208,19 @@ Now implemented on `feature/premium-sharing-bundle-rooms-calendar`:
 
 Still explicitly out of scope: Google/Outlook/two-way calendar sync, billing,
 AI agents, native mobile.
+
+### Subscription / Recurring Renewal Tracker V1 (shipped)
+
+Users can track their own recurring payments and renewals (streaming, software,
+domains, hosting, insurance, telecom, gym, memberships, …): owner-scoped CRUD
+with search/filter/sort, monthly/yearly cost summaries grouped by currency,
+mark-paid/mark-cancelled/archive/skip actions, metadata-only payment records, a
+detail workspace, and a "Add subscription" form. Renewals, cancellation
+deadlines, and trial endings flow into Calendar, Timeline, Attention Needed, and
+a dashboard "Upcoming renewals" widget. Free plan caps subscriptions at 10.
+
+Explicitly out of scope (this is **not** DueNest billing): Stripe / paid-plan
+checkout, bank/card integrations, storing card or banking details, live currency
+conversion, automatic cancellation, AI, and email/push reminder delivery
+(reminders are in-app via Calendar/Timeline). Deferred: receipt file uploads and
+founder-console subscription metrics.
