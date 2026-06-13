@@ -2,17 +2,29 @@ import { apiFetch } from "./api";
 import type {
   ActivationFunnel,
   AppErrorLog,
+  BetaInviteStatus,
+  BetaPersona,
+  BetaUserProfile,
   ChecklistTemplate,
   ChecklistTemplateItem,
+  CountryActivityResponse,
+  FeatureCompletionItem,
+  FeatureCompletionResponse,
   FeatureAdoption,
   FeedbackCategory,
   FeedbackItem,
   FeedbackPriority,
   FeedbackStatus,
+  FounderAnalytics,
   FounderDashboard,
+  FounderRange,
   FounderMe,
+  FounderPriority,
+  FounderAuditLog,
   FounderUserListItem,
   FounderUserSummary,
+  LaunchChecklistItem,
+  LaunchReadinessResponse,
   Paginated,
   SecurityOverview,
   SubmitFeedbackRequest,
@@ -32,8 +44,20 @@ export function getFounderMe(): Promise<FounderMe> {
   return apiFetch<FounderMe>("/founder/me/", { auth: true });
 }
 
-export function getFounderDashboard(): Promise<FounderDashboard> {
-  return apiFetch<FounderDashboard>("/founder/dashboard/", { auth: true });
+export function getFounderDashboard(params?: {
+  range?: FounderRange;
+}): Promise<FounderDashboard> {
+  return apiFetch<FounderDashboard>(`/founder/dashboard/${query(params)}`, {
+    auth: true,
+  });
+}
+
+export function getFounderAnalytics(params?: {
+  range?: FounderRange;
+}): Promise<FounderAnalytics> {
+  return apiFetch<FounderAnalytics>(`/founder/analytics/${query(params)}`, {
+    auth: true,
+  });
 }
 
 export function getActivationFunnel(): Promise<ActivationFunnel> {
@@ -44,6 +68,39 @@ export function getActivationFunnel(): Promise<ActivationFunnel> {
 
 export function getFeatureAdoption(): Promise<FeatureAdoption> {
   return apiFetch<FeatureAdoption>("/founder/feature-adoption/", {
+    auth: true,
+  });
+}
+
+export function getFeatureCompletion(params?: {
+  status?: string;
+  module?: string;
+}): Promise<FeatureCompletionResponse> {
+  return apiFetch<FeatureCompletionResponse>(
+    `/founder/feature-completion/${query(params)}`,
+    { auth: true },
+  );
+}
+
+export function updateFeatureCompletion(
+  id: number,
+  payload: Partial<
+    Pick<
+      FeatureCompletionItem,
+      | "backend_done"
+      | "frontend_done"
+      | "tests_done"
+      | "docs_done"
+      | "polished"
+      | "status"
+      | "priority"
+      | "notes"
+    >
+  >,
+): Promise<FeatureCompletionItem> {
+  return apiFetch<FeatureCompletionItem>(`/founder/feature-completion/${id}/`, {
+    method: "PATCH",
+    body: payload,
     auth: true,
   });
 }
@@ -141,6 +198,12 @@ export function getFounderErrors(params?: {
   });
 }
 
+export function getFounderAuditLogs(): Promise<Paginated<FounderAuditLog>> {
+  return apiFetch<Paginated<FounderAuditLog>>("/founder/audit-logs/", {
+    auth: true,
+  });
+}
+
 export function updateFounderError(
   id: number,
   payload: Pick<AppErrorLog, "resolved">,
@@ -172,3 +235,65 @@ export function getFounderUserSummary(id: number): Promise<FounderUserSummary> {
     auth: true,
   });
 }
+
+export function getBetaUsers(params?: {
+  search?: string;
+  invite_status?: BetaInviteStatus | "";
+  persona?: BetaPersona | "";
+}): Promise<Paginated<BetaUserProfile>> {
+  return apiFetch<Paginated<BetaUserProfile>>(
+    `/founder/beta-users/${query(params)}`,
+    { auth: true },
+  );
+}
+
+export function updateBetaUser(
+  id: number,
+  payload: Partial<
+    Pick<
+      BetaUserProfile,
+      "invite_status" | "persona" | "tags" | "notes" | "last_contacted_at"
+    >
+  >,
+): Promise<BetaUserProfile> {
+  return apiFetch<BetaUserProfile>(`/founder/beta-users/${id}/`, {
+    method: "PATCH",
+    body: payload,
+    auth: true,
+  });
+}
+
+export function getLaunchReadiness(): Promise<LaunchReadinessResponse> {
+  return apiFetch<LaunchReadinessResponse>("/founder/launch-readiness/", {
+    auth: true,
+  });
+}
+
+export function updateLaunchReadinessItem(
+  id: number,
+  payload: Partial<
+    Pick<LaunchChecklistItem, "is_complete" | "priority" | "notes">
+  >,
+): Promise<LaunchChecklistItem> {
+  return apiFetch<LaunchChecklistItem>(`/founder/launch-readiness/${id}/`, {
+    method: "PATCH",
+    body: payload,
+    auth: true,
+  });
+}
+
+export function getCountryActivity(params?: {
+  range?: FounderRange;
+}): Promise<CountryActivityResponse> {
+  return apiFetch<CountryActivityResponse>(
+    `/founder/country-activity/${query(params)}`,
+    { auth: true },
+  );
+}
+
+export const FOUNDER_PRIORITY_LABELS: Record<FounderPriority, string> = {
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+  critical: "Critical",
+};

@@ -2757,9 +2757,12 @@ Founder endpoints:
 
 ```txt
 GET   /api/v1/founder/me/
-GET   /api/v1/founder/dashboard/
+GET   /api/v1/founder/dashboard/?range=7d|30d|90d|all
+GET   /api/v1/founder/analytics/?range=7d|30d|90d|all
 GET   /api/v1/founder/activation-funnel/
 GET   /api/v1/founder/feature-adoption/
+GET   /api/v1/founder/feature-completion/
+PATCH /api/v1/founder/feature-completion/:item_id/
 GET   /api/v1/founder/feedback/
 GET   /api/v1/founder/feedback/:feedback_id/
 PATCH /api/v1/founder/feedback/:feedback_id/
@@ -2774,12 +2777,22 @@ PATCH /api/v1/founder/errors/:error_id/
 POST  /api/v1/founder/errors/:error_id/resolve/
 GET   /api/v1/founder/security-overview/
 GET   /api/v1/founder/security-events/
+GET   /api/v1/founder/audit-logs/
 GET   /api/v1/founder/users/
 GET   /api/v1/founder/users/:user_id/summary/
+GET   /api/v1/founder/beta-users/
+PATCH /api/v1/founder/beta-users/:profile_id/
+GET   /api/v1/founder/launch-readiness/
+PATCH /api/v1/founder/launch-readiness/:item_id/
+GET   /api/v1/founder/country-activity/?range=7d|30d|90d|all
 ```
 
 Privacy rule: founder endpoints return aggregate metrics and safe account
 metadata only. They must not expose document contents, raw OCR text, access
 codes, share tokens, internal file paths, private notes, or physical locations.
+
+Founder analytics and country activity are aggregate-first. Country activity
+uses approximate country metadata only and does not return raw IP addresses,
+GPS data, street-level location, or city-level drilldowns.
 
 See `docs/founder-console.md` for response intent and operational boundaries.

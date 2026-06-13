@@ -161,10 +161,10 @@ function NavLinks({
           <NavLink
             item={{
               label: "Founder console",
-              href: "/dashboard/founder",
+              href: "/founder",
               icon: Wrench,
             }}
-            active={pathname.startsWith("/dashboard/founder")}
+            active={pathname.startsWith("/founder")}
             onNavigate={onNavigate}
           />
         </div>

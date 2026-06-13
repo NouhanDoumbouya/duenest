@@ -9,7 +9,15 @@ from apps.documents.models import (
     DocumentChecklistTemplate,
 )
 
-from .models import AppErrorLog, FeedbackItem, ProductEvent
+from .models import (
+    AppErrorLog,
+    BetaUserProfile,
+    FeatureCompletionItem,
+    FeedbackItem,
+    FounderAuditLog,
+    LaunchChecklistItem,
+    ProductEvent,
+)
 from .services import sanitize_metadata
 
 
@@ -214,6 +222,159 @@ class ProductEventSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = fields
+
+
+class FounderAuditLogSerializer(serializers.ModelSerializer):
+    actor_email = serializers.EmailField(source="actor.email", read_only=True)
+
+    class Meta:
+        model = FounderAuditLog
+        fields = [
+            "id",
+            "actor",
+            "actor_email",
+            "action",
+            "object_type",
+            "object_id",
+            "path",
+            "method",
+            "metadata",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+
+class FeatureCompletionItemSerializer(serializers.ModelSerializer):
+    completion_percent = serializers.SerializerMethodField()
+
+    class Meta:
+        model = FeatureCompletionItem
+        fields = [
+            "id",
+            "key",
+            "feature_name",
+            "module",
+            "backend_done",
+            "frontend_done",
+            "tests_done",
+            "docs_done",
+            "polished",
+            "status",
+            "priority",
+            "notes",
+            "sort_order",
+            "completion_percent",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "key", "created_at", "updated_at"]
+
+    def get_completion_percent(self, obj):
+        flags = [
+            obj.backend_done,
+            obj.frontend_done,
+            obj.tests_done,
+            obj.docs_done,
+            obj.polished,
+        ]
+        return round((sum(1 for flag in flags if flag) / len(flags)) * 100)
+
+
+class LaunchChecklistItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LaunchChecklistItem
+        fields = [
+            "id",
+            "key",
+            "label",
+            "description",
+            "is_complete",
+            "priority",
+            "notes",
+            "sort_order",
+            "completed_at",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "key",
+            "label",
+            "description",
+            "sort_order",
+            "completed_at",
+            "created_at",
+            "updated_at",
+        ]
+
+    def update(self, instance, validated_data):
+        if "is_complete" in validated_data:
+            is_complete = validated_data["is_complete"]
+            if is_complete and not instance.is_complete:
+                validated_data["completed_at"] = timezone.now()
+            elif not is_complete:
+                validated_data["completed_at"] = None
+        return super().update(instance, validated_data)
+
+
+class BetaUserProfileSerializer(serializers.ModelSerializer):
+    user_email = serializers.EmailField(source="user.email", read_only=True)
+    username = serializers.CharField(source="user.username", read_only=True)
+    date_joined = serializers.DateTimeField(source="user.date_joined", read_only=True)
+    last_login = serializers.DateTimeField(source="user.last_login", read_only=True)
+    document_count = serializers.IntegerField(read_only=True)
+    file_count = serializers.IntegerField(read_only=True)
+    reminder_count = serializers.IntegerField(read_only=True)
+    bundle_count = serializers.IntegerField(read_only=True)
+    feedback_count = serializers.IntegerField(read_only=True)
+    onboarding_completed = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = BetaUserProfile
+        fields = [
+            "id",
+            "user",
+            "user_email",
+            "username",
+            "date_joined",
+            "last_login",
+            "invite_status",
+            "persona",
+            "tags",
+            "notes",
+            "invited_at",
+            "activated_at",
+            "last_contacted_at",
+            "document_count",
+            "file_count",
+            "reminder_count",
+            "bundle_count",
+            "feedback_count",
+            "onboarding_completed",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "user",
+            "user_email",
+            "username",
+            "date_joined",
+            "last_login",
+            "document_count",
+            "file_count",
+            "reminder_count",
+            "bundle_count",
+            "feedback_count",
+            "onboarding_completed",
+            "created_at",
+            "updated_at",
+        ]
+
+    def validate_tags(self, value):
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Tags must be a list.")
+        return [str(item)[:80] for item in value[:12]]
 
 
 class ChecklistItemTemplateWriteSerializer(serializers.ModelSerializer):

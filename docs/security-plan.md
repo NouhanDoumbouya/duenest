@@ -1079,6 +1079,8 @@ Access control:
 - Normal authenticated users receive `403 Forbidden`.
 - The frontend only shows Founder Console navigation after the backend confirms
   founder access.
+- The active frontend entry point is `/founder`, which uses a separate founder
+  shell instead of the normal dashboard chrome.
 
 Privacy boundaries:
 
@@ -1088,7 +1090,11 @@ Privacy boundaries:
   OCR text, private notes, physical locations, access codes, share tokens, and
   internal file paths.
 - Product events and error metadata are sanitized before storage.
-- Raw IP addresses are not shown in ordinary founder UI.
+- Feature completion, launch readiness, beta profiles, and founder audit logs
+  store operational metadata only.
+- Country activity is aggregate-only, uses approximate country metadata, and
+  does not expose GPS, street-level location, city-level drilldowns, or raw IP
+  addresses in ordinary founder UI.
 - Future sensitive support access must require explicit user consent and
   audit logging before it is implemented.
 

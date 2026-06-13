@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
+from django.db.models import Count, Exists, OuterRef, Q
 from django.utils import timezone
 from rest_framework import generics
 from rest_framework.permissions import AllowAny
@@ -8,26 +9,48 @@ from rest_framework.views import APIView
 
 from apps.documents.models import DocumentChecklistTemplate
 
-from .models import AppErrorLog, FeedbackItem, ProductEvent
+from apps.users.models import UserOnboardingState
+
+from .models import (
+    AppErrorLog,
+    BetaUserProfile,
+    FeatureCompletionItem,
+    FeedbackItem,
+    FounderAuditLog,
+    LaunchChecklistItem,
+    ProductEvent,
+)
 from .permissions import IsFounderUser
 from .serializers import (
+    BetaUserProfileSerializer,
     ClientErrorCreateSerializer,
+    FeatureCompletionItemSerializer,
     FeedbackCreateSerializer,
     FounderAppErrorLogSerializer,
+    FounderAuditLogSerializer,
     FounderChecklistTemplateSerializer,
     FounderFeedbackSerializer,
     FounderMeSerializer,
     FounderUserListSerializer,
+    LaunchChecklistItemSerializer,
     ProductEventSerializer,
 )
 from .services import (
     active_checklist_templates,
     build_activation_funnel,
+    build_country_activity,
     build_feature_adoption,
+    build_founder_analytics,
     build_founder_dashboard,
     build_founder_user_summary,
     build_security_overview,
+    ensure_beta_profiles_for_users,
+    ensure_feature_completion_defaults,
+    ensure_launch_checklist_defaults,
+    feature_completion_summary,
     founder_user_queryset,
+    launch_readiness_summary,
+    log_founder_action,
     sanitize_metadata,
     track_product_event,
 )
@@ -102,7 +125,16 @@ class FounderDashboardView(APIView):
     permission_classes = [IsFounderUser]
 
     def get(self, request):
-        return Response(build_founder_dashboard())
+        log_founder_action(request=request, action="founder_viewed_dashboard")
+        return Response(build_founder_dashboard(request.query_params.get("range")))
+
+
+class FounderAnalyticsView(APIView):
+    permission_classes = [IsFounderUser]
+
+    def get(self, request):
+        log_founder_action(request=request, action="founder_viewed_analytics")
+        return Response(build_founder_analytics(request.query_params.get("range")))
 
 
 class FounderActivationFunnelView(APIView):
@@ -117,6 +149,52 @@ class FounderFeatureAdoptionView(APIView):
 
     def get(self, request):
         return Response(build_feature_adoption())
+
+
+class FounderFeatureCompletionListView(generics.ListAPIView):
+    permission_classes = [IsFounderUser]
+    serializer_class = FeatureCompletionItemSerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        ensure_feature_completion_defaults()
+        queryset = FeatureCompletionItem.objects.all()
+        status_filter = self.request.query_params.get("status")
+        module = self.request.query_params.get("module")
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        if module:
+            queryset = queryset.filter(module=module)
+        return queryset
+
+    def list(self, request, *args, **kwargs):
+        response = super().list(request, *args, **kwargs)
+        return Response(
+            {
+                "summary": feature_completion_summary(),
+                "items": response.data,
+            }
+        )
+
+
+class FounderFeatureCompletionDetailView(generics.RetrieveUpdateAPIView):
+    permission_classes = [IsFounderUser]
+    serializer_class = FeatureCompletionItemSerializer
+    lookup_url_kwarg = "item_id"
+
+    def get_queryset(self):
+        ensure_feature_completion_defaults()
+        return FeatureCompletionItem.objects.all()
+
+    def perform_update(self, serializer):
+        item = serializer.save()
+        log_founder_action(
+            request=self.request,
+            action="founder_updated_feature_completion",
+            object_type="feature_completion",
+            object_id=item.id,
+            metadata={"key": item.key, "status": item.status},
+        )
 
 
 class FounderFeedbackListView(generics.ListAPIView):
@@ -145,6 +223,16 @@ class FounderFeedbackDetailView(generics.RetrieveUpdateAPIView):
 
     def get_queryset(self):
         return FeedbackItem.objects.select_related("user")
+
+    def perform_update(self, serializer):
+        item = serializer.save()
+        log_founder_action(
+            request=self.request,
+            action="founder_reviewed_feedback",
+            object_type="feedback",
+            object_id=item.id,
+            metadata={"status": item.status, "priority": item.priority},
+        )
 
 
 class FounderChecklistTemplateListCreateView(generics.ListCreateAPIView):
@@ -176,7 +264,24 @@ class FounderChecklistTemplateDetailView(generics.RetrieveUpdateDestroyAPIView):
         template = self.get_object()
         template.is_active = False
         template.save(update_fields=["is_active", "updated_at"])
+        log_founder_action(
+            request=request,
+            action="founder_changed_template",
+            object_type="checklist_template",
+            object_id=template.id,
+            metadata={"action": "deactivate"},
+        )
         return Response(self.get_serializer(template).data)
+
+    def perform_update(self, serializer):
+        template = serializer.save()
+        log_founder_action(
+            request=self.request,
+            action="founder_changed_template",
+            object_type="checklist_template",
+            object_id=template.id,
+            metadata={"action": "update"},
+        )
 
 
 class FounderErrorLogListView(generics.ListAPIView):
@@ -227,6 +332,14 @@ class FounderSecurityEventListView(generics.ListAPIView):
         )
 
 
+class FounderAuditLogListView(generics.ListAPIView):
+    permission_classes = [IsFounderUser]
+    serializer_class = FounderAuditLogSerializer
+
+    def get_queryset(self):
+        return FounderAuditLog.objects.select_related("actor")
+
+
 class FounderUserListView(generics.ListAPIView):
     permission_classes = [IsFounderUser]
     serializer_class = FounderUserListSerializer
@@ -244,7 +357,153 @@ class FounderUserSummaryView(APIView):
 
     def get(self, request, user_id):
         user = get_object_or_404(User, pk=user_id)
+        log_founder_action(
+            request=request,
+            action="founder_viewed_beta_user_summary",
+            object_type="user",
+            object_id=user.id,
+        )
         return Response(build_founder_user_summary(user))
+
+
+class FounderBetaUserListView(generics.ListAPIView):
+    permission_classes = [IsFounderUser]
+    serializer_class = BetaUserProfileSerializer
+
+    def get_queryset(self):
+        ensure_beta_profiles_for_users()
+        onboarding = UserOnboardingState.objects.filter(
+            user=OuterRef("user_id"),
+            has_completed_document_onboarding=True,
+        )
+        queryset = BetaUserProfile.objects.select_related("user").annotate(
+            document_count=Count(
+                "user__documents",
+                filter=Q(user__documents__is_trashed=False),
+                distinct=True,
+            ),
+            file_count=Count(
+                "user__documents__files",
+                filter=Q(
+                    user__documents__is_trashed=False,
+                    user__documents__files__is_trashed=False,
+                ),
+                distinct=True,
+            ),
+            reminder_count=Count("user__document_reminder_rules", distinct=True),
+            bundle_count=Count("user__document_bundles", distinct=True),
+            feedback_count=Count("user__feedback_items", distinct=True),
+            onboarding_completed=Exists(onboarding),
+        ).order_by("user__email")
+        status_filter = self.request.query_params.get("invite_status")
+        persona = self.request.query_params.get("persona")
+        search = self.request.query_params.get("search", "").strip()
+        if status_filter:
+            queryset = queryset.filter(invite_status=status_filter)
+        if persona:
+            queryset = queryset.filter(persona=persona)
+        if search:
+            queryset = queryset.filter(
+                Q(user__email__icontains=search)
+                | Q(user__username__icontains=search)
+            )
+        return queryset
+
+    def list(self, request, *args, **kwargs):
+        log_founder_action(request=request, action="founder_viewed_beta_users")
+        return super().list(request, *args, **kwargs)
+
+
+class FounderBetaUserDetailView(generics.RetrieveUpdateAPIView):
+    permission_classes = [IsFounderUser]
+    serializer_class = BetaUserProfileSerializer
+    lookup_url_kwarg = "profile_id"
+
+    def get_queryset(self):
+        ensure_beta_profiles_for_users()
+        onboarding = UserOnboardingState.objects.filter(
+            user=OuterRef("user_id"),
+            has_completed_document_onboarding=True,
+        )
+        return BetaUserProfile.objects.select_related("user").annotate(
+            document_count=Count(
+                "user__documents",
+                filter=Q(user__documents__is_trashed=False),
+                distinct=True,
+            ),
+            file_count=Count(
+                "user__documents__files",
+                filter=Q(
+                    user__documents__is_trashed=False,
+                    user__documents__files__is_trashed=False,
+                ),
+                distinct=True,
+            ),
+            reminder_count=Count("user__document_reminder_rules", distinct=True),
+            bundle_count=Count("user__document_bundles", distinct=True),
+            feedback_count=Count("user__feedback_items", distinct=True),
+            onboarding_completed=Exists(onboarding),
+        ).order_by("user__email")
+
+    def perform_update(self, serializer):
+        profile = serializer.save()
+        log_founder_action(
+            request=self.request,
+            action="founder_updated_beta_user",
+            object_type="beta_profile",
+            object_id=profile.id,
+            metadata={
+                "invite_status": profile.invite_status,
+                "persona": profile.persona,
+            },
+        )
+
+
+class FounderLaunchReadinessListView(generics.ListAPIView):
+    permission_classes = [IsFounderUser]
+    serializer_class = LaunchChecklistItemSerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        ensure_launch_checklist_defaults()
+        return LaunchChecklistItem.objects.all()
+
+    def list(self, request, *args, **kwargs):
+        response = super().list(request, *args, **kwargs)
+        return Response(
+            {
+                "summary": launch_readiness_summary(),
+                "items": response.data,
+            }
+        )
+
+
+class FounderLaunchReadinessDetailView(generics.RetrieveUpdateAPIView):
+    permission_classes = [IsFounderUser]
+    serializer_class = LaunchChecklistItemSerializer
+    lookup_url_kwarg = "item_id"
+
+    def get_queryset(self):
+        ensure_launch_checklist_defaults()
+        return LaunchChecklistItem.objects.all()
+
+    def perform_update(self, serializer):
+        item = serializer.save()
+        log_founder_action(
+            request=self.request,
+            action="founder_updated_launch_readiness",
+            object_type="launch_checklist",
+            object_id=item.id,
+            metadata={"key": item.key, "is_complete": item.is_complete},
+        )
+
+
+class FounderCountryActivityView(APIView):
+    permission_classes = [IsFounderUser]
+
+    def get(self, request):
+        log_founder_action(request=request, action="founder_viewed_country_activity")
+        return Response(build_country_activity(request.query_params.get("range")))
 
 
 class FounderErrorResolveView(APIView):

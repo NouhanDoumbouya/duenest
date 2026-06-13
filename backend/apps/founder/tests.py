@@ -16,7 +16,15 @@ from apps.documents.models import (
     DocumentReminderRule,
 )
 
-from .models import AppErrorLog, FeedbackItem, ProductEvent
+from .models import (
+    AppErrorLog,
+    BetaUserProfile,
+    FeatureCompletionItem,
+    FeedbackItem,
+    FounderAuditLog,
+    LaunchChecklistItem,
+    ProductEvent,
+)
 
 
 User = get_user_model()
@@ -44,13 +52,19 @@ class FounderConsoleAPITests(APITestCase):
         urls = [
             "/api/v1/founder/me/",
             "/api/v1/founder/dashboard/",
+            "/api/v1/founder/analytics/",
             "/api/v1/founder/activation-funnel/",
             "/api/v1/founder/feature-adoption/",
+            "/api/v1/founder/feature-completion/",
             "/api/v1/founder/feedback/",
             "/api/v1/founder/templates/checklists/",
             "/api/v1/founder/errors/",
             "/api/v1/founder/security-overview/",
+            "/api/v1/founder/audit-logs/",
             "/api/v1/founder/users/",
+            "/api/v1/founder/beta-users/",
+            "/api/v1/founder/launch-readiness/",
+            "/api/v1/founder/country-activity/",
         ]
 
         for url in urls:
@@ -67,6 +81,13 @@ class FounderConsoleAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["total_users"], 2)
         self.assertEqual(response.data["total_documents"], 1)
+        self.assertIn("launch_readiness_percent", response.data)
+        self.assertIn("feature_completion_percent", response.data)
+        self.assertTrue(
+            FounderAuditLog.objects.filter(
+                action="founder_viewed_dashboard"
+            ).exists()
+        )
 
     def test_dashboard_metrics_do_not_expose_sensitive_document_data(self):
         Document.objects.create(
@@ -84,6 +105,31 @@ class FounderConsoleAPITests(APITestCase):
         self.assertNotIn("Secret Passport Title", content)
         self.assertNotIn("private document notes", content)
         self.assertNotIn("home safe", content)
+
+    def test_analytics_endpoint_is_aggregate_and_privacy_safe(self):
+        Document.objects.create(
+            owner=self.user,
+            title="Secret Visa Title",
+            notes="raw private notes",
+            physical_location_details="home safe",
+        )
+        ProductEvent.objects.create(
+            user=self.user,
+            event_type=ProductEvent.EventType.DOCUMENT_CREATED,
+            country="Malaysia",
+            metadata={"document_title": "Secret Visa Title"},
+        )
+
+        self.authenticate(self.founder)
+        response = self.client.get("/api/v1/founder/analytics/?range=30d")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("series", response.data)
+        self.assertIn("attention_breakdown", response.data)
+        content = str(response.data)
+        self.assertNotIn("raw private notes", content)
+        self.assertNotIn("home safe", content)
+        self.assertNotIn("Secret Visa Title", content)
 
     def test_activation_funnel_calculates_from_real_data(self):
         document = Document.objects.create(
@@ -146,6 +192,103 @@ class FounderConsoleAPITests(APITestCase):
         feature_keys = {item["feature_key"] for item in response.data["features"]}
         self.assertIn("preview", feature_keys)
         self.assertEqual(response.data["preview_used_count"], 1)
+
+    def test_feature_completion_tracker_is_editable_and_audited(self):
+        self.authenticate(self.founder)
+        response = self.client.get("/api/v1/founder/feature-completion/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertGreaterEqual(response.data["summary"]["total"], 1)
+
+        item_id = response.data["items"][0]["id"]
+        updated = self.client.patch(
+            f"/api/v1/founder/feature-completion/{item_id}/",
+            {"status": "ready", "polished": True, "notes": "Ready for beta."},
+            format="json",
+        )
+
+        self.assertEqual(updated.status_code, status.HTTP_200_OK)
+        self.assertEqual(updated.data["status"], FeatureCompletionItem.Status.READY)
+        self.assertTrue(
+            FounderAuditLog.objects.filter(
+                action="founder_updated_feature_completion"
+            ).exists()
+        )
+
+    def test_launch_readiness_tracker_is_editable_and_summarized(self):
+        self.authenticate(self.founder)
+        response = self.client.get("/api/v1/founder/launch-readiness/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertGreaterEqual(response.data["summary"]["total"], 1)
+
+        item_id = response.data["items"][0]["id"]
+        updated = self.client.patch(
+            f"/api/v1/founder/launch-readiness/{item_id}/",
+            {"is_complete": True, "priority": "critical", "notes": "Verified."},
+            format="json",
+        )
+
+        self.assertEqual(updated.status_code, status.HTTP_200_OK)
+        self.assertTrue(updated.data["is_complete"])
+        self.assertIsNotNone(updated.data["completed_at"])
+        self.assertEqual(LaunchChecklistItem.objects.filter(is_complete=True).count(), 1)
+
+    def test_beta_user_profiles_are_founder_only_and_privacy_safe(self):
+        document = Document.objects.create(
+            owner=self.user,
+            title="Private Passport",
+            notes="private note",
+        )
+        DocumentFile.objects.create(
+            document=document,
+            uploaded_by=self.user,
+            file="documents/private-passport.pdf",
+            original_filename="private-passport.pdf",
+        )
+
+        self.authenticate(self.founder)
+        response = self.client.get("/api/v1/founder/beta-users/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertGreaterEqual(response.data["count"], 2)
+
+        profile = BetaUserProfile.objects.get(user=self.user)
+        updated = self.client.patch(
+            f"/api/v1/founder/beta-users/{profile.id}/",
+            {
+                "invite_status": "active",
+                "persona": "visa_holder",
+                "tags": ["visa_holder", "traveler"],
+                "notes": "Good beta candidate.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(updated.status_code, status.HTTP_200_OK)
+        content = str(response.data) + str(updated.data)
+        self.assertNotIn("Private Passport", content)
+        self.assertNotIn("private-passport.pdf", content)
+        self.assertNotIn("private note", content)
+
+    def test_country_activity_uses_aggregate_country_metadata_only(self):
+        ProductEvent.objects.create(
+            user=self.user,
+            event_type=ProductEvent.EventType.USER_SIGNED_UP,
+            country="Malaysia",
+            ip_address="203.0.113.10",
+        )
+        ProductEvent.objects.create(
+            user=self.user,
+            event_type=ProductEvent.EventType.DOCUMENT_CREATED,
+            country="Malaysia",
+            ip_address="203.0.113.10",
+        )
+
+        self.authenticate(self.founder)
+        response = self.client.get("/api/v1/founder/country-activity/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["countries"][0]["country"], "Malaysia")
+        self.assertEqual(response.data["countries"][0]["documents_created"], 1)
+        self.assertNotIn("203.0.113.10", str(response.data))
 
     def test_feedback_submission_and_founder_update(self):
         self.authenticate(self.user)
