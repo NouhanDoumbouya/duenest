@@ -83,6 +83,8 @@ from .services import (
     ExportGenerationError,
     attention_sort_key,
     build_health_overview,
+    build_bundle_zip,
+    build_documents_zip,
     bundle_readiness,
     collect_bundle_files,
     build_timeline,
@@ -1560,6 +1562,134 @@ class DocumentBundleFilesView(APIView):
                 },
             }
         )
+
+
+def _zip_response(spooled, filename, summary):
+    """Stream a built ZIP back as an attachment with a safe summary header."""
+    response = FileResponse(
+        spooled,
+        as_attachment=True,
+        filename=filename,
+        content_type="application/zip",
+    )
+    # Expose a small, non-sensitive summary so the client can confirm contents.
+    response["X-Export-Files-Count"] = str(summary.get("files_count", 0))
+    response["X-Export-Skipped-Count"] = str(summary.get("skipped_count", 0))
+    return response
+
+
+def _parse_file_ids(request):
+    """Return a clean list of int file ids from the request body, or None."""
+    raw = request.data.get("file_ids")
+    if not isinstance(raw, (list, tuple)) or not raw:
+        return None
+    ids = []
+    for value in raw:
+        try:
+            ids.append(int(value))
+        except (TypeError, ValueError):
+            continue
+    return ids or None
+
+
+class DocumentBundleExportFilesView(APIView):
+    """POST → stream a ZIP of every available file in an owner-owned bundle."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, bundle_id):
+        bundle = get_object_or_404(
+            DocumentBundle, pk=bundle_id, owner=request.user
+        )
+        spooled, filename, summary = build_bundle_zip(request.user, bundle)
+        if summary["files_count"] == 0:
+            spooled.close()
+            return Response(
+                {
+                    "detail": "This bundle has no files to export yet.",
+                    "state": "no_files",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        _track_product_event(
+            request,
+            "export_requested",
+            object_type="document_bundle",
+            object_id=bundle.id,
+            metadata={"scope": "bundle_zip", "files": summary["files_count"]},
+        )
+        return _zip_response(spooled, filename, summary)
+
+
+class DocumentBundleExportSelectedFilesView(APIView):
+    """POST {file_ids:[…]} → stream a ZIP of the selected bundle files."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, bundle_id):
+        bundle = get_object_or_404(
+            DocumentBundle, pk=bundle_id, owner=request.user
+        )
+        file_ids = _parse_file_ids(request)
+        if file_ids is None:
+            return Response(
+                {"detail": "Select at least one file to export."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        spooled, filename, summary = build_bundle_zip(
+            request.user, bundle, file_ids=file_ids
+        )
+        if summary["files_count"] == 0:
+            spooled.close()
+            return Response(
+                {
+                    "detail": "None of the selected files are available to export.",
+                    "state": "no_files",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        _track_product_event(
+            request,
+            "export_requested",
+            object_type="document_bundle",
+            object_id=bundle.id,
+            metadata={
+                "scope": "bundle_zip_selected",
+                "files": summary["files_count"],
+            },
+        )
+        return _zip_response(spooled, filename, summary)
+
+
+class DocumentFilesExportSelectedView(APIView):
+    """POST {file_ids:[…]} → stream a ZIP of selected owned document files."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        file_ids = _parse_file_ids(request)
+        if file_ids is None:
+            return Response(
+                {"detail": "Select at least one file to export."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        spooled, filename, summary = build_documents_zip(request.user, file_ids)
+        if summary["files_count"] == 0:
+            spooled.close()
+            return Response(
+                {
+                    "detail": "None of the selected files are available to export.",
+                    "state": "no_files",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        _track_product_event(
+            request,
+            "export_requested",
+            object_type="document_file",
+            metadata={"scope": "documents_zip", "files": summary["files_count"]},
+        )
+        return _zip_response(spooled, filename, summary)
 
 
 class _BundleRequirementScopedMixin:

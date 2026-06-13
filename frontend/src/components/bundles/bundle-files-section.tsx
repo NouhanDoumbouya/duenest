@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import {
   AlertTriangle,
+  CheckCircle2,
   Download,
   Eye,
+  FileArchive,
   FileText,
   FolderOpen,
   Loader2,
@@ -26,7 +28,11 @@ import {
   getDocumentFilePreviewBlob,
 } from "@/lib/document-files";
 import { formatDate } from "@/lib/documents";
-import { getBundleFiles } from "@/lib/renewal-workspace";
+import {
+  exportBundleFilesZip,
+  exportSelectedBundleFilesZip,
+  getBundleFiles,
+} from "@/lib/renewal-workspace";
 import type {
   BundleFile,
   BundleFilesResponse,
@@ -46,6 +52,10 @@ export function BundleFilesSection({ bundleId }: { bundleId: number }) {
   const [busyFileId, setBusyFileId] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [exporting, setExporting] = useState<"all" | "selected" | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [exportDone, setExportDone] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -73,6 +83,48 @@ export function BundleFilesSection({ bundleId }: { bundleId: number }) {
     setError(null);
     setLoading(true);
     setReloadKey((key) => key + 1);
+  }
+
+  function toggleSelected(id: number) {
+    setExportDone(null);
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function runExport(mode: "all" | "selected") {
+    if (!data) return;
+    setExportError(null);
+    setExportDone(null);
+    setExporting(mode);
+    try {
+      if (mode === "all") {
+        await exportBundleFilesZip(bundleId);
+        setExportDone(
+          `Prepared a ZIP of all ${data.summary.total_files} file${
+            data.summary.total_files === 1 ? "" : "s"
+          }.`,
+        );
+      } else {
+        await exportSelectedBundleFilesZip(bundleId, [...selected]);
+        setExportDone(
+          `Prepared a ZIP of ${selected.size} selected file${
+            selected.size === 1 ? "" : "s"
+          }.`,
+        );
+      }
+    } catch (err) {
+      setExportError(
+        err instanceof ApiError
+          ? err.message
+          : "We could not prepare this ZIP. Please try again.",
+      );
+    } finally {
+      setExporting(null);
+    }
   }
 
   async function handlePreview(file: BundleFile) {
@@ -121,11 +173,25 @@ export function BundleFilesSection({ bundleId }: { bundleId: number }) {
           </CardDescription>
         </div>
         {data && data.summary.total_files > 0 && (
-          <Badge variant="secondary">
-            {data.summary.total_files} file
-            {data.summary.total_files === 1 ? "" : "s"} ·{" "}
-            {formatFileSize(data.summary.total_size)}
-          </Badge>
+          <div className="flex flex-col items-end gap-2">
+            <Badge variant="secondary">
+              {data.summary.total_files} file
+              {data.summary.total_files === 1 ? "" : "s"} ·{" "}
+              {formatFileSize(data.summary.total_size)}
+            </Badge>
+            <Button
+              size="sm"
+              onClick={() => runExport("all")}
+              disabled={exporting !== null}
+            >
+              {exporting === "all" ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <FileArchive className="size-4" />
+              )}
+              {exporting === "all" ? "Preparing ZIP…" : "Download ZIP"}
+            </Button>
+          </div>
         )}
       </CardHeader>
       <CardContent className="space-y-4">
@@ -151,6 +217,20 @@ export function BundleFilesSection({ bundleId }: { bundleId: number }) {
             {actionError && (
               <p className="text-sm text-destructive" role="alert">
                 {actionError}
+              </p>
+            )}
+            {exportError && (
+              <p className="text-sm text-destructive" role="alert">
+                {exportError}
+              </p>
+            )}
+            {exportDone && (
+              <p
+                className="flex items-center gap-2 text-sm text-brand-success"
+                role="status"
+              >
+                <CheckCircle2 className="size-4" />
+                {exportDone}
               </p>
             )}
 
@@ -181,16 +261,56 @@ export function BundleFilesSection({ bundleId }: { bundleId: number }) {
                 </p>
               </div>
             ) : (
-              <ul className="divide-y divide-border rounded-lg border border-border">
-                {data.files.map((file) => (
-                  <li
-                    key={file.id}
-                    className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="flex min-w-0 items-center gap-3">
-                      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
-                        <FileText className="size-4" />
-                      </span>
+              <>
+                {selected.size > 0 && (
+                  <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/30 p-3 sm:flex-row sm:items-center sm:justify-between">
+                    <span className="text-sm font-medium">
+                      {selected.size} file{selected.size === 1 ? "" : "s"}{" "}
+                      selected
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSelected(new Set())}
+                        disabled={exporting !== null}
+                      >
+                        Clear
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => runExport("selected")}
+                        disabled={exporting !== null}
+                      >
+                        {exporting === "selected" ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                          <FileArchive className="size-4" />
+                        )}
+                        {exporting === "selected"
+                          ? "Preparing ZIP…"
+                          : "Download selected"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                <ul className="divide-y divide-border rounded-lg border border-border">
+                  {data.files.map((file) => (
+                    <li
+                      key={file.id}
+                      className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <input
+                          type="checkbox"
+                          className="size-4 shrink-0 rounded border-input"
+                          checked={selected.has(file.id)}
+                          onChange={() => toggleSelected(file.id)}
+                          aria-label={`Select ${file.original_filename} for export`}
+                        />
+                        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+                          <FileText className="size-4" />
+                        </span>
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium">
                           {file.original_filename}
@@ -229,8 +349,9 @@ export function BundleFilesSection({ bundleId }: { bundleId: number }) {
                       </Button>
                     </div>
                   </li>
-                ))}
-              </ul>
+                  ))}
+                </ul>
+              </>
             )}
           </>
         )}

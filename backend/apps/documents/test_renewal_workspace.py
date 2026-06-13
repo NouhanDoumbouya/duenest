@@ -543,6 +543,183 @@ class BundleFilesTests(RenewalWorkspaceBaseTest):
         self.assertEqual(resp.data["summary"]["total_files"], 1)
 
 
+@override_settings(MEDIA_ROOT=_TEMP_MEDIA)
+class BundleZipExportTests(RenewalWorkspaceBaseTest):
+    """ZIP export of bundle files + manifest."""
+
+    def _read_zip(self, response):
+        import io
+        import zipfile
+
+        content = self.read_stream(response)
+        return zipfile.ZipFile(io.BytesIO(content))
+
+    def _setup_bundle(self):
+        bundle = DocumentBundle.objects.create(
+            owner=self.alice, title="Visa Application Pack", bundle_type="application"
+        )
+        f1 = DocumentFile.objects.create(
+            document=self.alice_doc,
+            uploaded_by=self.alice,
+            file=make_pdf(name="passport.pdf", content=b"%PDF passport bytes"),
+            original_filename="passport.pdf",
+            content_type="application/pdf",
+            file_size=18,
+        )
+        f2 = DocumentFile.objects.create(
+            document=self.alice_doc,
+            uploaded_by=self.alice,
+            file=make_pdf(name="receipt.pdf", content=b"%PDF receipt bytes"),
+            original_filename="receipt.pdf",
+            content_type="application/pdf",
+            file_size=17,
+        )
+        DocumentBundleRequirement.objects.create(
+            owner=self.alice, bundle=bundle, title="Passport", linked_file=f1
+        )
+        DocumentBundleRequirement.objects.create(
+            owner=self.alice, bundle=bundle, title="Receipt", linked_file=f2
+        )
+        return bundle, f1, f2
+
+    def test_owner_exports_all_files_as_zip_with_manifest(self):
+        bundle, _, _ = self._setup_bundle()
+        self.auth(self.alice)
+        resp = self.client.post(
+            f"/api/v1/document-bundles/{bundle.id}/export-files/"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp["Content-Type"], "application/zip")
+        self.assertIn("visa_application_pack", resp["Content-Disposition"].lower())
+        zf = self._read_zip(resp)
+        names = zf.namelist()
+        self.assertTrue(any(n.endswith("passport.pdf") for n in names))
+        self.assertTrue(any(n.endswith("receipt.pdf") for n in names))
+        self.assertTrue(any(n.endswith("bundle_manifest.json") for n in names))
+
+    def test_manifest_has_no_secrets(self):
+        bundle, f1, _ = self._setup_bundle()
+        DocumentFileShareLink.objects.create(
+            owner=self.alice,
+            document=self.alice_doc,
+            file=f1,
+            expires_at=timezone.now() + timedelta(days=1),
+            access_code_required=True,
+            access_code_hash="hash-must-not-export",
+        )
+        self.auth(self.alice)
+        resp = self.client.post(
+            f"/api/v1/document-bundles/{bundle.id}/export-files/"
+        )
+        zf = self._read_zip(resp)
+        manifest_name = next(
+            n for n in zf.namelist() if n.endswith("bundle_manifest.json")
+        )
+        manifest = zf.read(manifest_name).decode("utf-8")
+        self.assertNotIn("hash-must-not-export", manifest)
+        self.assertNotIn("access_code", manifest)
+        # No internal media storage path leaks into the manifest.
+        self.assertNotIn("/media/", manifest)
+
+    def test_selected_export_includes_only_selected(self):
+        bundle, f1, f2 = self._setup_bundle()
+        self.auth(self.alice)
+        resp = self.client.post(
+            f"/api/v1/document-bundles/{bundle.id}/export-selected-files/",
+            {"file_ids": [f1.id]},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        names = self._read_zip(resp).namelist()
+        self.assertTrue(any(n.endswith("passport.pdf") for n in names))
+        self.assertFalse(any(n.endswith("receipt.pdf") for n in names))
+
+    def test_selected_export_requires_ids(self):
+        bundle, _, _ = self._setup_bundle()
+        self.auth(self.alice)
+        resp = self.client.post(
+            f"/api/v1/document-bundles/{bundle.id}/export-selected-files/",
+            {"file_ids": []},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_empty_bundle_returns_400(self):
+        bundle = DocumentBundle.objects.create(
+            owner=self.alice, title="Empty pack", bundle_type="custom"
+        )
+        self.auth(self.alice)
+        resp = self.client.post(
+            f"/api/v1/document-bundles/{bundle.id}/export-files/"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_non_owner_cannot_export(self):
+        bundle, _, _ = self._setup_bundle()
+        self.auth(self.bob)
+        resp = self.client.post(
+            f"/api/v1/document-bundles/{bundle.id}/export-files/"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+
+@override_settings(MEDIA_ROOT=_TEMP_MEDIA)
+class DocumentFilesBulkExportTests(RenewalWorkspaceBaseTest):
+    """ZIP export of selected normal document files (outside a bundle)."""
+
+    def _read_zip(self, response):
+        import io
+        import zipfile
+
+        return zipfile.ZipFile(io.BytesIO(self.read_stream(response)))
+
+    def test_owner_exports_selected_files(self):
+        f1 = DocumentFile.objects.create(
+            document=self.alice_doc,
+            uploaded_by=self.alice,
+            file=make_pdf(name="a.pdf"),
+            original_filename="a.pdf",
+            content_type="application/pdf",
+            file_size=10,
+        )
+        f2 = DocumentFile.objects.create(
+            document=self.alice_doc,
+            uploaded_by=self.alice,
+            file=make_pdf(name="b.pdf"),
+            original_filename="b.pdf",
+            content_type="application/pdf",
+            file_size=10,
+        )
+        self.auth(self.alice)
+        resp = self.client.post(
+            "/api/v1/documents/files/export-selected/",
+            {"file_ids": [f1.id, f2.id]},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        names = self._read_zip(resp).namelist()
+        self.assertTrue(any(n.endswith("a.pdf") for n in names))
+        self.assertTrue(any(n.endswith("b.pdf") for n in names))
+
+    def test_cannot_export_another_users_file(self):
+        bob_file = DocumentFile.objects.create(
+            document=self.bob_doc,
+            uploaded_by=self.bob,
+            file=make_pdf(name="bob.pdf"),
+            original_filename="bob.pdf",
+            content_type="application/pdf",
+            file_size=10,
+        )
+        self.auth(self.alice)
+        resp = self.client.post(
+            "/api/v1/documents/files/export-selected/",
+            {"file_ids": [bob_file.id]},
+            format="json",
+        )
+        # None of the requested ids belong to Alice → nothing to export.
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+
 class TimelineTests(RenewalWorkspaceBaseTest):
     def test_timeline_only_returns_own_events(self):
         # Bob has an expiring document too.

@@ -14,8 +14,11 @@ from .views import (
     DocumentActivityTimelineView,
     DocumentAppointmentViewSet,
     DocumentBundleDetailView,
+    DocumentBundleExportFilesView,
+    DocumentBundleExportSelectedFilesView,
     DocumentBundleFilesView,
     DocumentBundleListCreateView,
+    DocumentFilesExportSelectedView,
     DocumentBundleRequirementCreateView,
     DocumentBundleRequirementDetailView,
     DocumentHealthOverviewView,
@@ -107,6 +110,11 @@ urlpatterns = [
         f"{file_base}/<int:pk>/preview/",
         DocumentFilePreviewView.as_view(),
         name="document-file-preview",
+    ),
+    path(
+        "documents/files/export-selected/",
+        DocumentFilesExportSelectedView.as_view(),
+        name="documents-files-export-selected",
     ),
     path(
         f"{file_base}/<int:file_id>/trash/",
@@ -315,6 +323,16 @@ urlpatterns = [
         "document-bundles/<int:bundle_id>/files/",
         DocumentBundleFilesView.as_view(),
         name="document-bundle-files",
+    ),
+    path(
+        "document-bundles/<int:bundle_id>/export-files/",
+        DocumentBundleExportFilesView.as_view(),
+        name="document-bundle-export-files",
+    ),
+    path(
+        "document-bundles/<int:bundle_id>/export-selected-files/",
+        DocumentBundleExportSelectedFilesView.as_view(),
+        name="document-bundle-export-selected-files",
     ),
     path(
         "document-bundles/<int:bundle_id>/exports/",

@@ -2106,3 +2106,262 @@ def create_bundle_export(user, bundle, export_type: str) -> DocumentExportReques
         metadata={"export_type": export.export_type, "bundle_id": bundle.id},
     )
     return export
+
+
+# ---- File ZIP exports -------------------------------------------------------
+
+
+def _safe_path_component(name: str, fallback: str = "file") -> str:
+    """Sanitize a single ZIP path segment (no separators, no traversal)."""
+    import re
+
+    cleaned = re.sub(r"[^\w\-. ]", "_", (name or "").strip(), flags=re.UNICODE)
+    cleaned = cleaned.strip(". ").strip()
+    return cleaned or fallback
+
+
+def _slugify_filename(name: str, fallback: str = "export") -> str:
+    import re
+
+    slug = re.sub(r"[^\w]+", "_", (name or "").strip().lower(), flags=re.UNICODE)
+    return slug.strip("_") or fallback
+
+
+def _dedupe_arcname(arcname: str, used: set) -> str:
+    """Return a unique arcname, appending ' (2)', ' (3)', … before the suffix."""
+    if arcname not in used:
+        used.add(arcname)
+        return arcname
+    directory, _, filename = arcname.rpartition("/")
+    stem, dot, ext = filename.rpartition(".")
+    counter = 2
+    while True:
+        if dot:
+            candidate_name = f"{stem} ({counter}).{ext}"
+        else:
+            candidate_name = f"{filename} ({counter})"
+        candidate = f"{directory}/{candidate_name}" if directory else candidate_name
+        if candidate not in used:
+            used.add(candidate)
+            return candidate
+        counter += 1
+
+
+def _write_file_to_zip(zf, arcname, document_file) -> bool:
+    """Stream one file into the archive. Returns False if it is missing."""
+    import zipfile
+
+    try:
+        with document_file.file.open("rb") as fh:
+            zf.writestr(
+                zipfile.ZipInfo(arcname), fh.read(), zipfile.ZIP_DEFLATED
+            )
+    except (FileNotFoundError, OSError, ValueError):
+        return False
+    return True
+
+
+def build_bundle_manifest(
+    user, bundle, included_files: list, missing: list, warnings: list
+) -> dict:
+    """
+    Build the bundle_manifest.json payload that travels inside the ZIP.
+
+    Reuses the safe metadata export (no internal paths, tokens, or access codes)
+    and adds the concrete list of files that were packaged.
+    """
+    payload = build_bundle_export_payload(
+        user, bundle, DocumentExportRequest.ExportType.BUNDLE_METADATA_JSON
+    )
+    included_documents = sorted(
+        {f["document"] for f in included_files if f.get("document")}
+    )
+    return {
+        "bundle_name": bundle.title,
+        "bundle_type": bundle.bundle_type,
+        "deadline": bundle.target_date.isoformat() if bundle.target_date else "",
+        "readiness_score": payload["readiness"]["score"],
+        "exported_at": timezone.now().isoformat(),
+        "included_documents": included_documents,
+        "included_files": included_files,
+        "missing_required_items": payload["readiness"]["missing_required_titles"],
+        "missing_files": [
+            {
+                "requirement": m.requirement_title,
+                "document": m.document_title,
+                "reason": m.reason,
+            }
+            for m in missing
+        ],
+        "proof_records_summary": {
+            "total": payload["counts"]["proof_records"],
+        },
+        "checklist_progress_summary": [
+            {
+                "title": c["title"],
+                "progress_percent": c["progress_percent"],
+                "status": c["status"],
+            }
+            for c in payload["checklists"]
+        ],
+        "warnings": warnings,
+    }
+
+
+def build_bundle_zip(user, bundle, *, file_ids=None):
+    """
+    Build a streamable ZIP of a bundle's files plus a manifest.
+
+    Returns ``(spooled_file, zip_filename, summary)``. Trashed/unavailable files
+    are never included; selected exports keep only owned files in ``file_ids``;
+    physically-missing files are skipped and reported in the manifest warnings.
+    No internal storage path is ever exposed.
+    """
+    import tempfile
+    import zipfile
+
+    result = collect_bundle_files(bundle)
+    entries = result.files
+    if file_ids is not None:
+        wanted = {int(fid) for fid in file_ids}
+        entries = [e for e in entries if e.file.id in wanted]
+
+    root = _safe_path_component(bundle.title, "bundle")
+    used_arcnames: set = set()
+    included_files: list = []
+    warnings: list = []
+    skipped = 0
+
+    spooled = tempfile.SpooledTemporaryFile(max_size=8 * 1024 * 1024)
+    with zipfile.ZipFile(spooled, "w", zipfile.ZIP_DEFLATED) as zf:
+        for entry in entries:
+            folder = _safe_path_component(
+                entry.requirement_title or entry.document_title, "files"
+            )
+            filename = _safe_path_component(
+                entry.file.original_filename, f"file-{entry.file.id}"
+            )
+            arcname = _dedupe_arcname(f"{root}/{folder}/{filename}", used_arcnames)
+            if not _write_file_to_zip(zf, arcname, entry.file):
+                skipped += 1
+                warnings.append(
+                    f"“{entry.file.original_filename}” was missing from storage "
+                    "and was skipped."
+                )
+                continue
+            included_files.append(
+                {
+                    "path": arcname,
+                    "filename": entry.file.original_filename,
+                    "document": entry.document_title,
+                    "requirement": entry.requirement_title,
+                    "size": entry.file.file_size,
+                    "content_type": entry.file.content_type,
+                }
+            )
+
+        # Warn about expired documents that were included.
+        today = timezone.localdate()
+        doc_ids = {e.document_id for e in entries}
+        for doc in Document.objects.filter(
+            id__in=doc_ids, owner=user, expiry_date__lt=today
+        ):
+            warnings.append(f"“{doc.title}” is expired.")
+
+        manifest = build_bundle_manifest(
+            user, bundle, included_files, result.missing, warnings
+        )
+        zf.writestr(
+            f"{root}/bundle_manifest.json", json.dumps(manifest, indent=2)
+        )
+
+    spooled.seek(0)
+    zip_filename = (
+        f"{_slugify_filename(bundle.title, 'bundle')}_{today.isoformat()}.zip"
+    )
+    summary = {
+        "documents_count": len(
+            {f["document"] for f in included_files if f.get("document")}
+        ),
+        "files_count": len(included_files),
+        "missing_count": len(result.missing),
+        "skipped_count": skipped,
+    }
+
+    log_document_activity(
+        owner=user,
+        action=DocumentActivity.Action.EXPORT_REQUESTED,
+        title="Bundle files exported (ZIP)",
+        description=bundle.title,
+        related_bundle=bundle,
+        metadata={"scope": "bundle_zip", "bundle_id": bundle.id, **summary},
+    )
+    return spooled, zip_filename, summary
+
+
+def build_documents_zip(user, file_ids):
+    """
+    Build a streamable ZIP of selected owned document files (outside any bundle).
+
+    Only the caller's own, non-trashed files are included. Files are grouped by
+    their document title. Returns ``(spooled_file, zip_filename, summary)``.
+    """
+    import tempfile
+    import zipfile
+
+    files = list(
+        DocumentFile.objects.filter(
+            id__in=[int(f) for f in file_ids],
+            document__owner=user,
+            is_trashed=False,
+            document__is_trashed=False,
+        ).select_related("document")
+    )
+
+    root = "DueNest_Files"
+    used_arcnames: set = set()
+    included_files: list = []
+    warnings: list = []
+    skipped = 0
+
+    spooled = tempfile.SpooledTemporaryFile(max_size=8 * 1024 * 1024)
+    with zipfile.ZipFile(spooled, "w", zipfile.ZIP_DEFLATED) as zf:
+        for f in files:
+            folder = _safe_path_component(f.document.title, "Document")
+            filename = _safe_path_component(f.original_filename, f"file-{f.id}")
+            arcname = _dedupe_arcname(f"{root}/{folder}/{filename}", used_arcnames)
+            if not _write_file_to_zip(zf, arcname, f):
+                skipped += 1
+                warnings.append(
+                    f"“{f.original_filename}” was missing from storage and was skipped."
+                )
+                continue
+            included_files.append(
+                {
+                    "path": arcname,
+                    "filename": f.original_filename,
+                    "document": f.document.title,
+                    "size": f.file_size,
+                    "content_type": f.content_type,
+                }
+            )
+        manifest = {
+            "exported_at": timezone.now().isoformat(),
+            "scope": "documents",
+            "included_files": included_files,
+            "warnings": warnings,
+        }
+        zf.writestr(f"{root}/manifest.json", json.dumps(manifest, indent=2))
+
+    spooled.seek(0)
+    zip_filename = f"duenest_files_{timezone.localdate().isoformat()}.zip"
+    summary = {"files_count": len(included_files), "skipped_count": skipped}
+
+    log_document_activity(
+        owner=user,
+        action=DocumentActivity.Action.EXPORT_REQUESTED,
+        title="Document files exported (ZIP)",
+        description=f"{len(included_files)} file(s)",
+        metadata={"scope": "documents_zip", **summary},
+    )
+    return spooled, zip_filename, summary
