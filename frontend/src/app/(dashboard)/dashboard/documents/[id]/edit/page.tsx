@@ -12,7 +12,9 @@ import { DocumentFileShareDialog } from "@/components/documents/document-file-sh
 import { DocumentFilesList } from "@/components/documents/document-files-list";
 import { DocumentFileUploader } from "@/components/documents/document-file-uploader";
 import { DocumentFileViewer } from "@/components/documents/document-file-viewer";
+import { DocumentProofRecords } from "@/components/documents/document-proof-records";
 import { DocumentReminderRules } from "@/components/documents/document-reminder-rules";
+import { DocumentTrashedFiles } from "@/components/documents/document-trashed-files";
 import { DocumentStatusBadge } from "@/components/documents/status-badge";
 import {
   Card,
@@ -218,6 +220,26 @@ export default function EditDocumentPage() {
                 onRequestDelete={setPendingDelete}
               />
             )}
+
+            <DocumentTrashedFiles
+              documentId={id}
+              onRestored={(file) => setFiles((prev) => [file, ...(prev ?? [])])}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {doc !== null && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Proof of submission</CardTitle>
+            <CardDescription>
+              Record confirmations, receipts, and tracking numbers tied to this
+              document.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <DocumentProofRecords documentId={id} />
           </CardContent>
         </Card>
       )}
@@ -271,13 +293,13 @@ export default function EditDocumentPage() {
 
       <ConfirmDialog
         open={pendingDelete !== null}
-        title="Delete file?"
+        title="Move file to trash?"
         description={
           pendingDelete
-            ? `“${pendingDelete.original_filename}” will be permanently removed. This cannot be undone.`
+            ? `“${pendingDelete.original_filename}” will be moved to trash and any share links will stop working. You can restore it from this document’s trashed files.`
             : ""
         }
-        confirmLabel="Delete"
+        confirmLabel="Move to trash"
         loading={deleting}
         onConfirm={handleConfirmDelete}
         onCancel={() => setPendingDelete(null)}

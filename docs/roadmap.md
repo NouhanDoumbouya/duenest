@@ -118,6 +118,7 @@ DueNest will be built in this order:
 | Backend setup | Not Started |
 | Frontend setup | Not Started |
 | MVP implementation | Not Started |
+| Documents module gaps (trash/restore, bundles, proof of submission, physical location, emergency access packs, plan limits foundation) | Completed |
 
 ---
 

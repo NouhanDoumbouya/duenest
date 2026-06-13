@@ -64,8 +64,34 @@ export function updateDocument(
   });
 }
 
+/**
+ * Move a document to trash (soft delete). DELETE on a document is a soft delete
+ * on the backend — the record is hidden, recoverable, and can be permanently
+ * removed later from the Trash.
+ */
 export function deleteDocument(id: number): Promise<void> {
   return apiFetch<void>(`/documents/${id}/`, {
+    method: "DELETE",
+    auth: true,
+  });
+}
+
+/** List the current user's trashed documents. */
+export function getTrashedDocuments(): Promise<Paginated<DocumentRecord>> {
+  return apiFetch<Paginated<DocumentRecord>>("/documents/trash/", { auth: true });
+}
+
+/** Restore a trashed document back to the active vault. */
+export function restoreDocument(id: number): Promise<DocumentRecord> {
+  return apiFetch<DocumentRecord>(`/documents/${id}/restore/`, {
+    method: "POST",
+    auth: true,
+  });
+}
+
+/** Permanently delete a trashed document. Irreversible. */
+export function permanentlyDeleteDocument(id: number): Promise<void> {
+  return apiFetch<void>(`/documents/${id}/permanent-delete/`, {
     method: "DELETE",
     auth: true,
   });

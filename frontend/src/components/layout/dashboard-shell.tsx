@@ -8,6 +8,7 @@ import {
   CreditCard,
   FileText,
   LayoutDashboard,
+  LifeBuoy,
   ListChecks,
   LogOut,
   Menu,
@@ -15,6 +16,7 @@ import {
   Package,
   Settings,
   ShieldCheck,
+  Trash2,
   Wrench,
   X,
 } from "lucide-react";
@@ -25,16 +27,25 @@ import { getFounderMe } from "@/lib/founder";
 import { logout } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
-const navItems = [
+interface NavItem {
+  label: string;
+  href: string;
+  icon: typeof LayoutDashboard;
+  soon?: boolean;
+}
+
+const navItems: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Setup", href: "/dashboard/onboarding", icon: ListChecks },
   { label: "Documents", href: "/dashboard/documents", icon: FileText },
   { label: "Bundles", href: "/dashboard/bundles", icon: Package },
+  { label: "Emergency access", href: "/dashboard/emergency", icon: LifeBuoy },
   { label: "Timeline", href: "/dashboard/timeline", icon: CalendarClock },
+  { label: "Trash", href: "/dashboard/trash", icon: Trash2 },
   { label: "Trust", href: "/dashboard/trust", icon: ShieldCheck },
+  { label: "Plan & usage", href: "/dashboard/settings/plan", icon: CreditCard },
   { label: "Data", href: "/dashboard/settings/data", icon: Settings },
   { label: "Feedback", href: "/dashboard/feedback", icon: MessageSquare },
-  { label: "Subscriptions", href: "#", icon: CreditCard, soon: true },
 ];
 
 export interface ShellUser {

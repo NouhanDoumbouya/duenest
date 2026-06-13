@@ -14,11 +14,18 @@ import { STATUS_LABELS } from "@/lib/documents";
 import { cn } from "@/lib/utils";
 import type {
   CreateDocumentRequest,
+  DocumentAvailability,
   DocumentRecord,
   DocumentStatus,
 } from "@/types/documents";
 
 const STATUS_OPTIONS = Object.keys(STATUS_LABELS) as DocumentStatus[];
+
+const AVAILABILITY_OPTIONS: { value: DocumentAvailability; label: string }[] = [
+  { value: "unknown", label: "Not sure" },
+  { value: "yes", label: "Yes" },
+  { value: "no", label: "No" },
+];
 
 type FieldErrors = Partial<Record<keyof CreateDocumentRequest, string>>;
 
@@ -33,6 +40,12 @@ interface FormState {
   expiry_date: string;
   renewal_date: string;
   notes: string;
+  physical_location_label: string;
+  physical_location_details: string;
+  original_available: DocumentAvailability;
+  certified_copy_available: DocumentAvailability;
+  translation_available: DocumentAvailability;
+  notes_about_original: string;
 }
 
 function toFormState(doc?: Partial<DocumentRecord>): FormState {
@@ -47,6 +60,12 @@ function toFormState(doc?: Partial<DocumentRecord>): FormState {
     expiry_date: doc?.expiry_date ?? "",
     renewal_date: doc?.renewal_date ?? "",
     notes: doc?.notes ?? "",
+    physical_location_label: doc?.physical_location_label ?? "",
+    physical_location_details: doc?.physical_location_details ?? "",
+    original_available: doc?.original_available ?? "unknown",
+    certified_copy_available: doc?.certified_copy_available ?? "unknown",
+    translation_available: doc?.translation_available ?? "unknown",
+    notes_about_original: doc?.notes_about_original ?? "",
   };
 }
 
@@ -149,6 +168,12 @@ export function DocumentForm({
       expiry_date: nullable(form.expiry_date),
       renewal_date: nullable(form.renewal_date),
       notes: form.notes.trim(),
+      physical_location_label: form.physical_location_label.trim(),
+      physical_location_details: form.physical_location_details.trim(),
+      original_available: form.original_available,
+      certified_copy_available: form.certified_copy_available,
+      translation_available: form.translation_available,
+      notes_about_original: form.notes_about_original.trim(),
     };
 
     setSubmitting(true);
@@ -335,6 +360,77 @@ export function DocumentForm({
         </Field>
       </FormSection>
 
+      <FormSection
+        title="Where is the original?"
+        description="Track the physical document so you can find the original — or know what you’re missing — when it’s needed in person."
+      >
+        <Field
+          id="physical_location_label"
+          label="Physical location"
+          error={fieldErrors.physical_location_label}
+        >
+          <Input
+            id="physical_location_label"
+            className="h-11"
+            value={form.physical_location_label}
+            onChange={(e) => update("physical_location_label", e.target.value)}
+            placeholder="e.g. Home safe, filing cabinet, with solicitor…"
+          />
+        </Field>
+
+        <div className="grid gap-5 sm:grid-cols-3">
+          <Field id="original_available" label="Have the original?">
+            <AvailabilitySelect
+              id="original_available"
+              value={form.original_available}
+              onChange={(v) => update("original_available", v)}
+            />
+          </Field>
+          <Field id="certified_copy_available" label="Certified copy?">
+            <AvailabilitySelect
+              id="certified_copy_available"
+              value={form.certified_copy_available}
+              onChange={(v) => update("certified_copy_available", v)}
+            />
+          </Field>
+          <Field id="translation_available" label="Translation?">
+            <AvailabilitySelect
+              id="translation_available"
+              value={form.translation_available}
+              onChange={(v) => update("translation_available", v)}
+            />
+          </Field>
+        </div>
+
+        <Field
+          id="physical_location_details"
+          label="Location details"
+          error={fieldErrors.physical_location_details}
+        >
+          <Textarea
+            id="physical_location_details"
+            value={form.physical_location_details}
+            onChange={(e) =>
+              update("physical_location_details", e.target.value)
+            }
+            placeholder="Exact spot, who holds it, how to retrieve it…"
+          />
+        </Field>
+
+        <Field
+          id="notes_about_original"
+          label="Notes about the original"
+          error={fieldErrors.notes_about_original}
+        >
+          <Textarea
+            id="notes_about_original"
+            value={form.notes_about_original}
+            onChange={(e) => update("notes_about_original", e.target.value)}
+            placeholder="Condition, certification details, anything to remember…"
+          />
+        </Field>
+      </FormSection>
+
       {attachFile && (
         <FormSection
           title="Attach a file"
@@ -407,6 +503,31 @@ export function DocumentForm({
         </Button>
       </div>
     </form>
+  );
+}
+
+function AvailabilitySelect({
+  id,
+  value,
+  onChange,
+}: {
+  id: string;
+  value: DocumentAvailability;
+  onChange: (value: DocumentAvailability) => void;
+}) {
+  return (
+    <select
+      id={id}
+      className="h-11 w-full rounded-lg border border-input bg-card px-3 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+      value={value}
+      onChange={(e) => onChange(e.target.value as DocumentAvailability)}
+    >
+      {AVAILABILITY_OPTIONS.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
   );
 }
 

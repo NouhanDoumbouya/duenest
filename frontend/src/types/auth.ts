@@ -1,5 +1,8 @@
 // Shared auth-related types for the DueNest frontend.
 
+/** Billing/plan placeholder — drives internal usage limits, no real payments. */
+export type UserPlan = "free" | "pro_placeholder";
+
 /** A DueNest user as returned by GET /api/v1/users/me/. */
 export interface User {
   id: number;
@@ -7,6 +10,7 @@ export interface User {
   email: string;
   first_name: string;
   last_name: string;
+  plan: UserPlan;
 }
 
 /** The access/refresh pair returned by SimpleJWT. */
