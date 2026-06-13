@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   Download,
@@ -14,6 +14,10 @@ import {
 
 import { Logo } from "@/components/layout/logo";
 import { Button } from "@/components/ui/button";
+import {
+  FilePreviewDialog,
+  type FilePreviewState,
+} from "@/components/ui/file-preview-dialog";
 import { Input } from "@/components/ui/input";
 import { ApiError } from "@/lib/api";
 import { formatFileSize } from "@/lib/document-files";
@@ -100,6 +104,23 @@ export default function PublicRoomPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [zipping, setZipping] = useState(false);
   const [tabHidden, setTabHidden] = useState(false);
+  const [previewFile, setPreviewFile] = useState<PublicRoomFile | null>(null);
+  const [previewFetch, setPreviewFetch] = useState<{
+    url: string | null;
+    loading: boolean;
+    error: string | null;
+  }>({ url: null, loading: false, error: null });
+  const previewUrlRef = useRef<string | null>(null);
+
+  function revokePreviewUrl() {
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+    }
+  }
+
+  // Release the object URL when the component unmounts.
+  useEffect(() => () => revokePreviewUrl(), []);
 
   const key = `${token}:${grant}`;
   const loading = loadKey !== key;
@@ -173,7 +194,10 @@ export default function PublicRoomPage() {
 
   async function handlePreview(file: PublicRoomFile) {
     setActionError(null);
-    setBusyFileId(file.file_id);
+    revokePreviewUrl();
+    // Open the in-app preview immediately in a loading state.
+    setPreviewFile(file);
+    setPreviewFetch({ url: null, loading: true, error: null });
     try {
       const blob = await getPublicRoomFilePreviewBlob(
         token,
@@ -181,15 +205,22 @@ export default function PublicRoomPage() {
         grant || undefined,
       );
       const url = URL.createObjectURL(blob);
-      window.open(url, "_blank", "noopener,noreferrer");
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      previewUrlRef.current = url;
+      setPreviewFetch({ url, loading: false, error: null });
     } catch (err) {
-      setActionError(
-        err instanceof ApiError ? err.message : "Could not preview this file.",
-      );
-    } finally {
-      setBusyFileId(null);
+      setPreviewFetch({
+        url: null,
+        loading: false,
+        error:
+          err instanceof ApiError ? err.message : "Could not preview this file.",
+      });
     }
+  }
+
+  function closePreview() {
+    revokePreviewUrl();
+    setPreviewFile(null);
+    setPreviewFetch({ url: null, loading: false, error: null });
   }
 
   async function handleDownload(file: PublicRoomFile) {
@@ -225,8 +256,24 @@ export default function PublicRoomPage() {
     }
   }
 
+  const preview: FilePreviewState | null = previewFile
+    ? {
+        fileName: previewFile.name,
+        contentType: previewFile.content_type,
+        url: previewFetch.url,
+        loading: previewFetch.loading,
+        error: previewFetch.error,
+        // Only offer download inside the preview when the room allows it.
+        onDownload: metadata?.download_allowed
+          ? () => handleDownload(previewFile)
+          : undefined,
+        downloading: busyFileId === previewFile.file_id,
+      }
+    : null;
+
   return (
     <main className="min-h-screen bg-background">
+      <FilePreviewDialog preview={preview} onClose={closePreview} />
       <div className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-4 py-6 sm:px-6 lg:px-8">
         <header className="flex items-center justify-between">
           <Logo href="/" size="md" />
