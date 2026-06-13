@@ -1062,3 +1062,36 @@ The first version should focus on:
 The long-term security strategy should evolve toward secure sharing, audit logs, stronger authentication, encrypted storage, and privacy controls.
 
 The goal is not to overengineer security in v0.1, but to build the foundation correctly so DueNest can grow into a trustworthy SaaS product.
+
+---
+
+## 30. Founder Console Security Rules
+
+Founder Console V1 is an internal operations layer, not a staff vault browser.
+
+Access control:
+
+- All `/api/v1/founder/` endpoints require authentication.
+- Founder endpoints require `is_staff` or `is_superuser`.
+- Normal authenticated users receive `403 Forbidden`.
+- The frontend only shows Founder Console navigation after the backend confirms
+  founder access.
+
+Privacy boundaries:
+
+- Founder dashboard, activation, adoption, security, and support views use
+  aggregate metrics or safe metadata.
+- User support summaries intentionally exclude document titles, filenames, raw
+  OCR text, private notes, physical locations, access codes, share tokens, and
+  internal file paths.
+- Product events and error metadata are sanitized before storage.
+- Raw IP addresses are not shown in ordinary founder UI.
+- Future sensitive support access must require explicit user consent and
+  audit logging before it is implemented.
+
+Deferred hardening:
+
+- rate limits for feedback and client error intake
+- production incident-response workflow
+- explicit consent-based support access
+- richer security-event taxonomy

@@ -10,6 +10,7 @@ from .views import (
     DemoDocumentDataCreateView,
     DocumentSetupChecklistView,
     GoogleAuthView,
+    LoginView,
     OnboardingAttentionReviewedView,
     OnboardingCompleteView,
     OnboardingDismissView,
@@ -18,11 +19,11 @@ from .views import (
     RegisterView,
     TrustSecuritySummaryView,
 )
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from rest_framework_simplejwt.views import TokenRefreshView
 
 urlpatterns = [
     path("auth/register/", RegisterView.as_view(), name="auth-register"),
-    path("auth/login/", TokenObtainPairView.as_view(), name="auth-login"),
+    path("auth/login/", LoginView.as_view(), name="auth-login"),
     path("auth/refresh/", TokenRefreshView.as_view(), name="auth-refresh"),
     path("auth/google/", GoogleAuthView.as_view(), name="auth-google"),
     path("users/me/", CurrentUserView.as_view(), name="users-me"),

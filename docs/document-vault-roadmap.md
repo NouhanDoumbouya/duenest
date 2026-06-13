@@ -196,8 +196,9 @@ This is the recommended sequence. It can be adjusted, but the first paid MVP sho
 19. Emergency access pack *(done: backend foundation)*
 20. Export and backup features *(done: expiring metadata exports; no full raw-file archive yet)*
 21. Document onboarding, trust center, demo data, and account data controls *(done in `feature/document-onboarding-trust`)*
+22. Founder Console V1 *(done in `feature/founder-console-v1`: founder dashboard, activation, adoption, feedback board, checklist template management, error monitoring, security overview, and privacy-safe support metadata)*
 
-> Steps 1–21 are implemented at foundation level. Notification sending, full
+> Steps 1–22 are implemented at foundation level. Notification sending, full
 > raw-file archive exports, retention automation, trusted contacts, legal copy
 > review, and production token-storage hardening remain future work.
 

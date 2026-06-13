@@ -5,6 +5,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenObtainPairView
 
 from apps.documents.serializers import DocumentExportRequestSerializer
 
@@ -35,9 +36,73 @@ from .services import (
 User = get_user_model()
 
 
+def _track_product_event(
+    request,
+    event_type: str,
+    *,
+    user=None,
+    object_type: str = "",
+    object_id: int | str = "",
+    metadata: dict | None = None,
+) -> None:
+    try:
+        from apps.founder.services import track_product_event
+
+        track_product_event(
+            event_type=event_type,
+            user=user or getattr(request, "user", None),
+            request=request,
+            object_type=object_type,
+            object_id=object_id,
+            metadata=metadata,
+        )
+    except Exception:
+        return
+
+
 class RegisterView(generics.CreateAPIView):
     serializer_class = RegisterSerializer
     permission_classes = [AllowAny]
+
+    def perform_create(self, serializer):
+        user = serializer.save()
+        _track_product_event(
+            self.request,
+            "user_signed_up",
+            user=user,
+            object_type="user",
+            object_id=user.id,
+            metadata={"method": "password"},
+        )
+
+
+class LoginView(TokenObtainPairView):
+    """SimpleJWT login with best-effort product/security event tracking."""
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        try:
+            serializer.is_valid(raise_exception=True)
+        except Exception:
+            _track_product_event(
+                request,
+                "security_event_recorded",
+                metadata={
+                    "event_kind": "failed_login_attempt",
+                    "label": "Failed login attempt",
+                },
+            )
+            raise
+        user = serializer.user
+        _track_product_event(
+            request,
+            "user_logged_in",
+            user=user,
+            object_type="user",
+            object_id=user.id,
+            metadata={"method": "password"},
+        )
+        return Response(serializer.validated_data, status=status.HTTP_200_OK)
 
 
 class CurrentUserView(APIView):
@@ -112,7 +177,24 @@ class GoogleAuthView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        user = self._get_or_create_user(claims, google_id, email)
+        user, created = self._get_or_create_user(claims, google_id, email)
+        if created:
+            _track_product_event(
+                request,
+                "user_signed_up",
+                user=user,
+                object_type="user",
+                object_id=user.id,
+                metadata={"method": "google"},
+            )
+        _track_product_event(
+            request,
+            "user_logged_in",
+            user=user,
+            object_type="user",
+            object_id=user.id,
+            metadata={"method": "google"},
+        )
 
         refresh = RefreshToken.for_user(user)
         return Response(
@@ -132,7 +214,7 @@ class GoogleAuthView(APIView):
         # 1) Already linked to this Google account -> just log them in.
         user = User.objects.filter(google_id=google_id).first()
         if user is not None:
-            return user
+            return user, False
 
         # 2) An existing password account shares this email -> link it.
         user = User.objects.filter(email__iexact=email).first()
@@ -141,7 +223,7 @@ class GoogleAuthView(APIView):
             if not user.avatar_url:
                 user.avatar_url = avatar_url
             user.save(update_fields=["google_id", "avatar_url"])
-            return user
+            return user, False
 
         # 3) Brand new user -> create one with an unusable password, since
         #    authentication will always happen through Google for this account.
@@ -155,7 +237,7 @@ class GoogleAuthView(APIView):
         )
         user.set_unusable_password()
         user.save()
-        return user
+        return user, True
 
 
 class OnboardingStateView(APIView):
@@ -197,6 +279,12 @@ class OnboardingCompleteView(APIView):
                 "updated_at",
             ]
         )
+        _track_product_event(
+            request,
+            "onboarding_completed",
+            object_type="onboarding_state",
+            object_id=state.id,
+        )
         return Response(UserOnboardingStateSerializer(state).data)
 
 
@@ -228,6 +316,13 @@ class OnboardingAttentionReviewedView(APIView):
 
     def post(self, request):
         state = mark_metadata_timestamp(request.user, "attention_reviewed_at")
+        _track_product_event(
+            request,
+            "attention_needed_viewed",
+            object_type="onboarding_state",
+            object_id=state.id,
+            metadata={"source": "onboarding_attention_reviewed"},
+        )
         return Response(UserOnboardingStateSerializer(state).data)
 
 
@@ -293,6 +388,13 @@ class AccountRequestDataExportView(APIView):
                 {"detail": "Export generation failed."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+        _track_product_event(
+            request,
+            "export_requested",
+            object_type="document_export",
+            object_id=export.id,
+            metadata={"export_type": export.export_type},
+        )
         return Response(
             DocumentExportRequestSerializer(
                 export,
@@ -314,6 +416,13 @@ class AccountRequestDeletionView(APIView):
             request.user,
             reason=serializer.validated_data.get("reason", ""),
         )
+        if created:
+            _track_product_event(
+                request,
+                "account_deletion_requested",
+                object_type="account_deletion_request",
+                object_id=deletion.id,
+            )
         return Response(
             AccountDeletionRequestSerializer(deletion).data,
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,

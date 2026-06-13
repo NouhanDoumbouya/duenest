@@ -19,6 +19,7 @@ not a public production launch checklist.
 - [x] Demo data create/clear controls using clearly labeled fake records.
 - [x] Trust Center, public security page, privacy draft, and terms draft.
 - [x] Account data summary, metadata export request, deletion request, and cancellation.
+- [x] Founder Console V1 for aggregate product health, activation, adoption, feedback, templates, errors, security, and privacy-safe user support metadata.
 
 ## Security Gates
 
@@ -28,6 +29,7 @@ not a public production launch checklist.
 - [x] Share access codes are stored hashed and returned only when newly generated where applicable.
 - [x] Demo data is fake, labeled, owner-scoped, and removable.
 - [x] Account deletion is request-based and cancellable while pending.
+- [x] Founder endpoints are staff/superuser-only and avoid document contents, raw OCR text, access codes, share tokens, internal file paths, private notes, and physical locations.
 - [ ] Review production token storage strategy before broader launch.
 - [ ] Add production object storage with private buckets and signed/proxied file access.
 - [ ] Add malware/content scanning strategy before accepting broad public uploads.
@@ -39,6 +41,7 @@ not a public production launch checklist.
 - [x] Backend tests cover onboarding state ownership, setup checklist progress, demo owner scope, account summary/deletion, trust summary, and account export scoping.
 - [ ] Full backend test suite should pass before merging.
 - [ ] Run `python manage.py migrate` after pulling changes locally or deploying.
+- [x] Backend tests cover Founder Console access control, dashboard privacy, activation, adoption, feedback, template mutation, error logs, security overview, support metadata, and product-event sanitization.
 
 ## Frontend Checks
 
@@ -49,6 +52,7 @@ not a public production launch checklist.
 - [x] `/demo`, `/security`, `/privacy`, and `/terms` public pages.
 - [x] Mobile dashboard navigation exposes the new dashboard routes.
 - [ ] Frontend lint and production build should pass before merging.
+- [x] `/dashboard/founder` operational console routes and `/dashboard/feedback` user feedback form are implemented.
 
 ## Known Limitations
 
@@ -57,3 +61,4 @@ not a public production launch checklist.
 - Notification sending for reminder rules is not implemented.
 - Public legal pages are beta drafts and need review.
 - Local development token storage remains a known production-hardening item.
+- Founder Console V1 does not implement billing analytics, global activity maps, advanced segmentation, consent-based sensitive support access, AI analytics, churn prediction, or a full incident response center.
