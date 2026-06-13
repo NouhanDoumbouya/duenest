@@ -1413,6 +1413,28 @@ implemented safely. Generated files expire after 7 days.
 `POST /api/v1/account/request-data-export/` uses the same generator with
 `full_vault_metadata` and returns the same export serializer shape.
 
+Bundle exports are generated from the bundle endpoint so the scope is explicit.
+They include bundle metadata, readiness, requirements, linked document/file
+summaries, checklist progress, and proof-record summaries. They do not include
+raw uploaded files, raw OCR text, share tokens, access-code hashes, access
+codes, or internal storage paths.
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/v1/document-bundles/:bundle_id/exports/` | List export requests for one owner-owned bundle |
+| `POST` | `/api/v1/document-bundles/:bundle_id/exports/` | Generate a bundle metadata export |
+| `GET` | `/api/v1/document-bundles/:bundle_id/exports/:export_id/` | Retrieve bundle export metadata |
+| `GET` | `/api/v1/document-bundles/:bundle_id/exports/:export_id/download/` | Download a completed, unexpired bundle export |
+
+Supported bundle `export_type` values:
+
+```txt
+bundle_metadata_json | bundle_requirements_csv
+```
+
+Bundle export types are rejected by `/api/v1/document-exports/`; vault-wide
+export types are rejected by the bundle export endpoint.
+
 ## 13C.3 Emergency access packs
 
 Emergency packs are owner-selected document/file collections. A pack never

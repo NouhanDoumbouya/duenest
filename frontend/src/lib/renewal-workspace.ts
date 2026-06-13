@@ -3,11 +3,14 @@
 // extraction foundation. All calls go through the shared `apiFetch` so token
 // and error handling stay in one place.
 
-import { apiFetch } from "./api";
+import { API_BASE_URL, ApiError, apiFetch } from "./api";
+import { getAccessToken } from "./auth";
 import type { Paginated } from "@/types/documents";
 import type {
   ApplyExtractionResponse,
   Bundle,
+  BundleExportRequest,
+  BundleExportType,
   BundleReadiness,
   BundleRequirement,
   Checklist,
@@ -226,6 +229,96 @@ export function linkRequirementFile(
     `/document-bundles/${bundleId}/requirements/${requirementId}/link-file/`,
     { method: "POST", body: { file: fileId }, auth: true },
   );
+}
+
+// ---- Bundle exports --------------------------------------------------------
+
+export function getBundleExports(
+  bundleId: number,
+): Promise<Paginated<BundleExportRequest>> {
+  return apiFetch<Paginated<BundleExportRequest>>(
+    `/document-bundles/${bundleId}/exports/`,
+    { auth: true },
+  );
+}
+
+export function createBundleExport(
+  bundleId: number,
+  exportType: BundleExportType,
+): Promise<BundleExportRequest> {
+  return apiFetch<BundleExportRequest>(
+    `/document-bundles/${bundleId}/exports/`,
+    {
+      method: "POST",
+      body: { export_type: exportType },
+      auth: true,
+    },
+  );
+}
+
+function getApiErrorMessage(data: unknown, fallback: string): string {
+  if (typeof data === "string" && data) return data;
+  if (data && typeof data === "object") {
+    const record = data as Record<string, unknown>;
+    if (typeof record.detail === "string") return record.detail;
+  }
+  return fallback;
+}
+
+async function getBundleExportBlob(
+  bundleId: number,
+  exportId: number,
+): Promise<Blob> {
+  const headers = new Headers();
+  headers.set("Accept", "*/*");
+
+  const token = getAccessToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  let response: Response;
+  try {
+    response = await fetch(
+      `${API_BASE_URL}/document-bundles/${bundleId}/exports/${exportId}/download/`,
+      { headers },
+    );
+  } catch {
+    throw new ApiError("Unable to reach the server. Please try again.", 0, null);
+  }
+
+  if (!response.ok) {
+    const isJson = response.headers
+      .get("content-type")
+      ?.includes("application/json");
+    const data: unknown = isJson ? await response.json() : null;
+    throw new ApiError(
+      getApiErrorMessage(data, "Could not download this export."),
+      response.status,
+      data,
+    );
+  }
+
+  return response.blob();
+}
+
+function saveBlob(blob: Blob, filename: string) {
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(objectUrl);
+}
+
+export async function downloadBundleExport(
+  bundleId: number,
+  exportRequest: BundleExportRequest,
+): Promise<void> {
+  const blob = await getBundleExportBlob(bundleId, exportRequest.id);
+  const ext =
+    exportRequest.export_type === "bundle_requirements_csv" ? "csv" : "json";
+  saveBlob(blob, `duenest-bundle-${bundleId}-export.${ext}`);
 }
 
 // ---- Timeline --------------------------------------------------------------

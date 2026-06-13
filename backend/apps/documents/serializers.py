@@ -994,6 +994,39 @@ class DocumentExportRequestSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "Full file archive export is not available yet."
             )
+        if value in {
+            DocumentExportRequest.ExportType.BUNDLE_METADATA_JSON,
+            DocumentExportRequest.ExportType.BUNDLE_REQUIREMENTS_CSV,
+        }:
+            raise serializers.ValidationError(
+                "Bundle exports must be requested from a bundle endpoint."
+            )
+        return value
+
+
+class BundleExportRequestSerializer(DocumentExportRequestSerializer):
+    """Bundle-scoped export serializer with bundle-specific download URLs."""
+
+    def get_download_url(self, obj):
+        if obj.status != DocumentExportRequest.Status.COMPLETED or obj.is_expired:
+            return None
+        bundle_id = obj.metadata.get("bundle_id") or self.context.get("bundle_id")
+        if not bundle_id:
+            return None
+        return reverse(
+            "document-bundle-export-download",
+            kwargs={"bundle_id": bundle_id, "export_id": obj.pk},
+            request=self.context.get("request"),
+        )
+
+    def validate_export_type(self, value):
+        if value not in {
+            DocumentExportRequest.ExportType.BUNDLE_METADATA_JSON,
+            DocumentExportRequest.ExportType.BUNDLE_REQUIREMENTS_CSV,
+        }:
+            raise serializers.ValidationError(
+                "Choose bundle_metadata_json or bundle_requirements_csv."
+            )
         return value
 
 

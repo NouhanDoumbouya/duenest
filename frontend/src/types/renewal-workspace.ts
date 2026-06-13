@@ -236,6 +236,36 @@ export interface CreateRequirementRequest {
 
 export type UpdateRequirementRequest = Partial<CreateRequirementRequest>;
 
+// ---- Bundle exports --------------------------------------------------------
+
+export type BundleExportType =
+  | "bundle_metadata_json"
+  | "bundle_requirements_csv";
+
+export type ExportStatus =
+  | "pending"
+  | "processing"
+  | "completed"
+  | "failed"
+  | "expired";
+
+export interface BundleExportRequest {
+  id: number;
+  export_type: BundleExportType;
+  status: ExportStatus;
+  download_url: string | null;
+  is_expired: boolean;
+  requested_at: string;
+  completed_at: string | null;
+  expires_at: string | null;
+  error_message: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface CreateBundleExportRequest {
+  export_type: BundleExportType;
+}
+
 // ---- Timeline --------------------------------------------------------------
 
 export type TimelineEventType =

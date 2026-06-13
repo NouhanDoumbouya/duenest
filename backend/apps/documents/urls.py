@@ -2,12 +2,15 @@ from django.urls import path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
+    BundleExportDetailView,
+    BundleExportDownloadView,
+    BundleExportListCreateView,
+    BundleProofRecordListView,
     BundleReadinessView,
     BundleRequirementLinkDocumentView,
     BundleRequirementLinkFileView,
     ChecklistTemplateDetailView,
     ChecklistTemplateListView,
-    BundleProofRecordListView,
     DocumentActivityTimelineView,
     DocumentBundleDetailView,
     DocumentBundleListCreateView,
@@ -267,6 +270,21 @@ urlpatterns = [
         "document-bundles/<int:bundle_id>/readiness/",
         BundleReadinessView.as_view(),
         name="document-bundle-readiness",
+    ),
+    path(
+        "document-bundles/<int:bundle_id>/exports/",
+        BundleExportListCreateView.as_view(),
+        name="document-bundle-exports",
+    ),
+    path(
+        "document-bundles/<int:bundle_id>/exports/<int:export_id>/",
+        BundleExportDetailView.as_view(),
+        name="document-bundle-export-detail",
+    ),
+    path(
+        "document-bundles/<int:bundle_id>/exports/<int:export_id>/download/",
+        BundleExportDownloadView.as_view(),
+        name="document-bundle-export-download",
     ),
     path(
         "document-bundles/<int:bundle_id>/requirements/",

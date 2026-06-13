@@ -1114,6 +1114,21 @@ def _document_export_row(document) -> dict:
     }
 
 
+def _document_file_export_row(file) -> dict:
+    """Safe per-file export dict — display metadata only, never storage paths."""
+    return {
+        "id": file.id,
+        "document": file.document_id,
+        "original_filename": file.original_filename,
+        "content_type": file.content_type,
+        "file_size": file.file_size,
+        "checksum": file.checksum,
+        "is_previewable": file.is_previewable,
+        "created_at": file.created_at.isoformat(),
+        "updated_at": file.updated_at.isoformat(),
+    }
+
+
 def build_export_payload(user, export_type: str) -> dict:
     """
     Assemble the full structured export for a user.
@@ -1206,6 +1221,184 @@ def build_export_payload(user, export_type: str) -> dict:
     return payload
 
 
+def _bundle_requirement_export_row(requirement) -> dict:
+    linked_document = requirement.linked_document
+    linked_file = requirement.linked_file
+    safe_document = (
+        linked_document
+        if linked_document is not None and not linked_document.is_trashed
+        else None
+    )
+    safe_file = (
+        linked_file
+        if (
+            linked_file is not None
+            and not linked_file.is_trashed
+            and not linked_file.document.is_trashed
+        )
+        else None
+    )
+
+    return {
+        "id": requirement.id,
+        "title": requirement.title,
+        "description": requirement.description,
+        "is_required": requirement.is_required,
+        "requirement_type": requirement.requirement_type,
+        "expected_document_type": requirement.expected_document_type,
+        "status": requirement.status,
+        "is_satisfied": requirement.is_satisfied,
+        "due_date": requirement.due_date.isoformat() if requirement.due_date else "",
+        "sort_order": requirement.sort_order,
+        "notes": requirement.notes,
+        "linked_document": (
+            _document_export_row(safe_document) if safe_document is not None else None
+        ),
+        "linked_file": (
+            _document_file_export_row(safe_file) if safe_file is not None else None
+        ),
+        "created_at": requirement.created_at.isoformat(),
+        "updated_at": requirement.updated_at.isoformat(),
+    }
+
+
+def build_bundle_export_payload(user, bundle, export_type: str) -> dict:
+    """
+    Assemble a single-bundle metadata export.
+
+    This deliberately excludes raw files, internal storage paths, share tokens,
+    access codes, and raw OCR text. Linked files are represented by safe display
+    metadata only.
+    """
+    from .models import DocumentChecklist, ProofRecord
+
+    readiness = bundle_readiness(bundle)
+    requirements = (
+        bundle.requirements.filter(owner=user)
+        .select_related(
+            "linked_document__category",
+            "linked_file",
+            "linked_file__document",
+        )
+        .order_by("sort_order", "created_at")
+    )
+    requirement_rows = [_bundle_requirement_export_row(r) for r in requirements]
+
+    checklists = (
+        DocumentChecklist.objects.filter(owner=user, bundle=bundle)
+        .prefetch_related("items")
+        .order_by("-created_at")
+    )
+    checklist_rows = []
+    for checklist in checklists:
+        progress = checklist_progress(checklist)
+        checklist_rows.append(
+            {
+                "id": checklist.id,
+                "title": checklist.title,
+                "description": checklist.description,
+                "checklist_type": checklist.checklist_type,
+                "status": checklist.status,
+                "progress_percent": checklist.progress_percent,
+                "progress": {
+                    "percent": progress.percent,
+                    "total_items": progress.total_items,
+                    "completed_items": progress.completed_items,
+                    "skipped_items": progress.skipped_items,
+                    "required_items": progress.required_items,
+                    "required_completed": progress.required_completed,
+                    "required_incomplete": progress.required_incomplete,
+                },
+                "due_date": checklist.due_date.isoformat() if checklist.due_date else "",
+                "items": [
+                    {
+                        "id": item.id,
+                        "title": item.title,
+                        "description": item.description,
+                        "is_required": item.is_required,
+                        "status": item.status,
+                        "due_date": item.due_date.isoformat() if item.due_date else "",
+                        "linked_document": item.linked_document_id,
+                        "linked_file": item.linked_file_id,
+                        "completed_at": (
+                            item.completed_at.isoformat()
+                            if item.completed_at
+                            else ""
+                        ),
+                        "sort_order": item.sort_order,
+                        "notes": item.notes,
+                    }
+                    for item in checklist.items.all()
+                ],
+                "created_at": checklist.created_at.isoformat(),
+                "updated_at": checklist.updated_at.isoformat(),
+            }
+        )
+
+    proof_records = (
+        ProofRecord.objects.filter(owner=user, bundle=bundle)
+        .select_related("document", "checklist", "linked_file")
+        .order_by("-created_at")
+    )
+    proof_rows = [
+        {
+            "id": proof.id,
+            "title": proof.title,
+            "proof_type": proof.proof_type,
+            "status": proof.status,
+            "document": proof.document_id,
+            "checklist": proof.checklist_id,
+            "linked_file": proof.linked_file_id,
+            "reference_number": proof.reference_number,
+            "submitted_to": proof.submitted_to,
+            "submitted_at": proof.submitted_at.isoformat() if proof.submitted_at else "",
+            "notes": proof.notes,
+            "created_at": proof.created_at.isoformat(),
+            "updated_at": proof.updated_at.isoformat(),
+        }
+        for proof in proof_records
+    ]
+
+    return {
+        "exported_at": timezone.now().isoformat(),
+        "export_type": export_type,
+        "scope": "bundle",
+        "bundle": {
+            "id": bundle.id,
+            "title": bundle.title,
+            "description": bundle.description,
+            "bundle_type": bundle.bundle_type,
+            "status": bundle.status,
+            "country": bundle.country,
+            "authority_or_provider": bundle.authority_or_provider,
+            "target_date": bundle.target_date.isoformat() if bundle.target_date else "",
+            "notes": bundle.notes,
+            "readiness_score": bundle.readiness_score,
+            "created_at": bundle.created_at.isoformat(),
+            "updated_at": bundle.updated_at.isoformat(),
+        },
+        "readiness": {
+            "score": readiness.score,
+            "is_ready": readiness.is_ready,
+            "total_requirements": readiness.total_requirements,
+            "required_total": readiness.required_total,
+            "required_satisfied": readiness.required_satisfied,
+            "required_missing": readiness.required_missing,
+            "optional_total": readiness.optional_total,
+            "optional_satisfied": readiness.optional_satisfied,
+            "missing_required_titles": readiness.missing_required_titles,
+        },
+        "counts": {
+            "requirements": len(requirement_rows),
+            "checklists": len(checklist_rows),
+            "proof_records": len(proof_rows),
+        },
+        "requirements": requirement_rows,
+        "checklists": checklist_rows,
+        "proof_records": proof_rows,
+    }
+
+
 def export_payload_to_csv(payload: dict) -> str:
     """Flatten the documents list of an export payload into CSV text."""
     import csv
@@ -1225,6 +1418,60 @@ def export_payload_to_csv(payload: dict) -> str:
     writer.writeheader()
     for row in rows:
         writer.writerow(row)
+    return output.getvalue()
+
+
+def bundle_export_payload_to_csv(payload: dict) -> str:
+    """Flatten bundle requirements into a reviewer-friendly CSV."""
+    import csv
+    import io
+
+    output = io.StringIO()
+    fieldnames = [
+        "bundle_id",
+        "bundle_title",
+        "readiness_score",
+        "requirement_id",
+        "title",
+        "is_required",
+        "requirement_type",
+        "status",
+        "is_satisfied",
+        "due_date",
+        "expected_document_type",
+        "linked_document_id",
+        "linked_document_title",
+        "linked_file_id",
+        "linked_file_name",
+        "notes",
+    ]
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer.writeheader()
+    bundle = payload.get("bundle", {})
+    readiness = payload.get("readiness", {})
+    for requirement in payload.get("requirements", []):
+        linked_document = requirement.get("linked_document") or {}
+        linked_file = requirement.get("linked_file") or {}
+        writer.writerow(
+            {
+                "bundle_id": bundle.get("id", ""),
+                "bundle_title": bundle.get("title", ""),
+                "readiness_score": readiness.get("score", ""),
+                "requirement_id": requirement.get("id", ""),
+                "title": requirement.get("title", ""),
+                "is_required": requirement.get("is_required", ""),
+                "requirement_type": requirement.get("requirement_type", ""),
+                "status": requirement.get("status", ""),
+                "is_satisfied": requirement.get("is_satisfied", ""),
+                "due_date": requirement.get("due_date", ""),
+                "expected_document_type": requirement.get("expected_document_type", ""),
+                "linked_document_id": linked_document.get("id", ""),
+                "linked_document_title": linked_document.get("title", ""),
+                "linked_file_id": linked_file.get("id", ""),
+                "linked_file_name": linked_file.get("original_filename", ""),
+                "notes": requirement.get("notes", ""),
+            }
+        )
     return output.getvalue()
 
 
@@ -1273,5 +1520,55 @@ def create_document_export(user, export_type: str) -> DocumentExportRequest:
         action=DocumentActivity.Action.EXPORT_REQUESTED,
         title="Export requested",
         description=export.get_export_type_display(),
+    )
+    return export
+
+
+def create_bundle_export(user, bundle, export_type: str) -> DocumentExportRequest:
+    """
+    Create and synchronously generate a metadata export for one user bundle.
+    """
+    export = DocumentExportRequest.objects.create(
+        owner=user,
+        export_type=export_type,
+        status=DocumentExportRequest.Status.PROCESSING,
+        metadata={"scope": "bundle", "bundle_id": bundle.id},
+    )
+    try:
+        payload = build_bundle_export_payload(user, bundle, export_type)
+        if export_type == DocumentExportRequest.ExportType.BUNDLE_REQUIREMENTS_CSV:
+            content = bundle_export_payload_to_csv(payload).encode("utf-8")
+            ext, suffix = ".csv", "bundle-requirements"
+        else:
+            content = json.dumps(payload, indent=2).encode("utf-8")
+            ext, suffix = ".json", "bundle-metadata"
+        export.file.save(
+            f"duenest-bundle-{bundle.id}-export-{export.id}-{suffix}{ext}",
+            ContentFile(content),
+            save=False,
+        )
+        export.status = DocumentExportRequest.Status.COMPLETED
+        export.completed_at = timezone.now()
+        export.expires_at = timezone.now() + timedelta(days=EXPORT_TTL_DAYS)
+        export.metadata = {
+            "scope": "bundle",
+            "bundle_id": bundle.id,
+            "bundle_title": bundle.title,
+            **payload.get("counts", {}),
+        }
+        export.save()
+    except Exception as exc:  # noqa: BLE001 — caller surfaces the failure
+        export.status = DocumentExportRequest.Status.FAILED
+        export.error_message = "Bundle export generation failed."
+        export.save(update_fields=["status", "error_message"])
+        raise ExportGenerationError("Bundle export generation failed.") from exc
+
+    log_document_activity(
+        owner=user,
+        action=DocumentActivity.Action.EXPORT_REQUESTED,
+        title="Bundle export requested",
+        description=export.get_export_type_display(),
+        related_bundle=bundle,
+        metadata={"export_type": export.export_type, "bundle_id": bundle.id},
     )
     return export

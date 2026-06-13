@@ -1,12 +1,13 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { CheckCircle2, Paperclip, UploadCloud } from "lucide-react";
+import { Camera, CheckCircle2, FileUp, Paperclip, UploadCloud } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api";
 import {
   ACCEPT_ATTR,
+  SCAN_ACCEPT_ATTR,
   uploadDocumentFile,
   validateFile,
 } from "@/lib/document-files";
@@ -20,6 +21,7 @@ export function DocumentFileUploader({
   onUploaded: (file: DocumentFile) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -56,6 +58,7 @@ export function DocumentFileUploader({
       onUploaded(uploaded);
       setFile(null);
       if (inputRef.current) inputRef.current.value = "";
+      if (cameraInputRef.current) cameraInputRef.current.value = "";
       setSuccess(`“${uploaded.original_filename}” uploaded.`);
     } catch (err) {
       setError(
@@ -70,14 +73,14 @@ export function DocumentFileUploader({
 
   return (
     <div className="rounded-xl border border-dashed border-border bg-muted/30 p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-3">
           <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
             <UploadCloud className="size-5" />
           </span>
           <div className="min-w-0">
             <p className="text-sm font-medium">
-              {file ? "Ready to upload" : "Attach a file"}
+              {file ? "Ready to upload" : "Upload or scan"}
             </p>
             <p className="truncate text-xs text-muted-foreground">
               {file ? (
@@ -89,10 +92,16 @@ export function DocumentFileUploader({
                 "PDF, JPG, PNG, DOC, DOCX · up to 10 MB"
               )}
             </p>
+            {!file && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Camera scans upload as image files. Cropping and OCR review are
+                manual in this beta.
+              </p>
+            )}
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
           <input
             ref={inputRef}
             type="file"
@@ -100,7 +109,17 @@ export function DocumentFileUploader({
             onChange={handleSelect}
             disabled={uploading}
             className="hidden"
-            id="document-file-input"
+            id={`document-file-input-${documentId}`}
+          />
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept={SCAN_ACCEPT_ATTR}
+            capture="environment"
+            onChange={handleSelect}
+            disabled={uploading}
+            className="hidden"
+            id={`document-camera-input-${documentId}`}
           />
           <Button
             type="button"
@@ -109,7 +128,18 @@ export function DocumentFileUploader({
             onClick={() => inputRef.current?.click()}
             disabled={uploading}
           >
-            Choose file
+            <FileUp className="size-4" />
+            Choose
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => cameraInputRef.current?.click()}
+            disabled={uploading}
+          >
+            <Camera className="size-4" />
+            Scan
           </Button>
           <Button
             type="button"

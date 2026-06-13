@@ -1477,13 +1477,16 @@ branch. Every user-owned model is scoped to its owner and follows the existing
 - **Constraint:** unique `(document, version_number)`.
 
 ### DocumentExportRequest — *Implemented*
-- **Purpose:** owner-requested structured metadata export.
+- **Purpose:** owner-requested structured metadata export. Supports vault-wide
+  metadata exports and bundle-scoped metadata/requirements exports.
 - **Key fields:** `owner`, `export_type`, `status`, generated `file`,
   `requested_at`, `completed_at`, `expires_at`, `error_message`, `metadata`.
 - **Relationships:** `owner → User`.
 - **Security:** owner-scoped; generated exports exclude raw uploaded files, raw
-  OCR text, share tokens, access-code hashes, and internal storage paths.
-  Export files are served only through authenticated, expiring download routes.
+  OCR text, share tokens, access codes, access-code hashes, and internal storage
+  paths. Export files are served only through authenticated, expiring download
+  routes. Bundle exports store `metadata.scope = "bundle"` and the `bundle_id`
+  used for owner-scoped filtering.
 
 ### EmergencyAccessPack — *Implemented*
 - **Purpose:** owner-selected collection of documents/files for emergency use.

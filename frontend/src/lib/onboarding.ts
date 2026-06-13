@@ -1,4 +1,5 @@
-import { apiFetch } from "./api";
+import { API_BASE_URL, ApiError, apiFetch } from "./api";
+import { getAccessToken } from "./auth";
 import type {
   AccountDataSummary,
   AccountDeletionRequest,
@@ -86,6 +87,65 @@ export function requestDataExport(): Promise<DocumentExportRequest> {
     method: "POST",
     auth: true,
   });
+}
+
+function getApiErrorMessage(data: unknown, fallback: string): string {
+  if (typeof data === "string" && data) return data;
+  if (data && typeof data === "object") {
+    const record = data as Record<string, unknown>;
+    if (typeof record.detail === "string") return record.detail;
+  }
+  return fallback;
+}
+
+async function getDocumentExportBlob(exportId: number): Promise<Blob> {
+  const headers = new Headers();
+  headers.set("Accept", "*/*");
+
+  const token = getAccessToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/document-exports/${exportId}/download/`, {
+      headers,
+    });
+  } catch {
+    throw new ApiError("Unable to reach the server. Please try again.", 0, null);
+  }
+
+  if (!response.ok) {
+    const isJson = response.headers
+      .get("content-type")
+      ?.includes("application/json");
+    const data: unknown = isJson ? await response.json() : null;
+    throw new ApiError(
+      getApiErrorMessage(data, "Could not download this export."),
+      response.status,
+      data,
+    );
+  }
+
+  return response.blob();
+}
+
+function saveBlob(blob: Blob, filename: string) {
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(objectUrl);
+}
+
+export async function downloadDocumentExport(
+  exportRequest: DocumentExportRequest,
+): Promise<void> {
+  const blob = await getDocumentExportBlob(exportRequest.id);
+  const ext = exportRequest.export_type === "documents_csv" ? "csv" : "json";
+  saveBlob(blob, `duenest-export-${exportRequest.id}.${ext}`);
 }
 
 export function requestAccountDeletion(

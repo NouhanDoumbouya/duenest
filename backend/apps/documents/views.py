@@ -38,6 +38,7 @@ from .models import (
 )
 from .serializers import (
     BundleReadinessSerializer,
+    BundleExportRequestSerializer,
     ChecklistFromTemplateSerializer,
     DocumentActivityEventSerializer,
     DocumentBundleRequirementSerializer,
@@ -71,6 +72,7 @@ from .services import (
     bundle_readiness,
     build_timeline,
     create_document_export,
+    create_bundle_export,
     extract_file_details,
     get_document_health,
     log_activity,
@@ -2066,6 +2068,130 @@ class DocumentExportDownloadView(APIView):
             "duenest-export.csv"
             if export.export_type == DocumentExportRequest.ExportType.DOCUMENTS_CSV
             else "duenest-export.json"
+        )
+        return FileResponse(opened, as_attachment=True, filename=filename)
+
+
+class BundleExportListCreateView(generics.ListCreateAPIView):
+    """GET/POST metadata exports for one owner-owned bundle."""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = BundleExportRequestSerializer
+
+    def get_bundle(self):
+        return get_object_or_404(
+            DocumentBundle, pk=self.kwargs["bundle_id"], owner=self.request.user
+        )
+
+    def get_queryset(self):
+        bundle = self.get_bundle()
+        return DocumentExportRequest.objects.filter(
+            owner=self.request.user,
+            metadata__scope="bundle",
+            metadata__bundle_id=bundle.id,
+        )
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["bundle_id"] = self.kwargs.get("bundle_id")
+        return context
+
+    def create(self, request, *args, **kwargs):
+        bundle = self.get_bundle()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        export_type = serializer.validated_data["export_type"]
+
+        try:
+            export = create_bundle_export(request.user, bundle, export_type)
+        except ExportGenerationError:
+            return Response(
+                {"detail": "Bundle export generation failed."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        _track_product_event(
+            request,
+            "export_requested",
+            object_type="document_export",
+            object_id=export.id,
+            metadata={
+                "export_type": export.export_type,
+                "scope": "bundle",
+                "bundle_id": bundle.id,
+            },
+        )
+
+        return Response(
+            BundleExportRequestSerializer(
+                export,
+                context={"request": request, "bundle_id": bundle.id},
+            ).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class BundleExportDetailView(generics.RetrieveAPIView):
+    """Retrieve metadata for one bundle-scoped export request."""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = BundleExportRequestSerializer
+    lookup_url_kwarg = "export_id"
+
+    def get_bundle(self):
+        return get_object_or_404(
+            DocumentBundle, pk=self.kwargs["bundle_id"], owner=self.request.user
+        )
+
+    def get_queryset(self):
+        bundle = self.get_bundle()
+        return DocumentExportRequest.objects.filter(
+            owner=self.request.user,
+            metadata__scope="bundle",
+            metadata__bundle_id=bundle.id,
+        )
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["bundle_id"] = self.kwargs.get("bundle_id")
+        return context
+
+
+class BundleExportDownloadView(APIView):
+    """Owner-only, expiring download of one bundle-scoped export file."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, bundle_id, export_id):
+        bundle = get_object_or_404(DocumentBundle, pk=bundle_id, owner=request.user)
+        export = get_object_or_404(
+            DocumentExportRequest,
+            pk=export_id,
+            owner=request.user,
+            metadata__scope="bundle",
+            metadata__bundle_id=bundle.id,
+        )
+        if export.status != DocumentExportRequest.Status.COMPLETED or not export.file:
+            return Response(
+                {"detail": "This export is not ready."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if export.is_expired:
+            return Response(
+                {"detail": "This export has expired. Please request a new one."},
+                status=status.HTTP_410_GONE,
+            )
+        try:
+            opened = export.file.open("rb")
+        except (FileNotFoundError, ValueError):
+            return Response(
+                {"detail": "This export is no longer available."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        filename = (
+            f"duenest-bundle-{bundle.id}-requirements.csv"
+            if export.export_type
+            == DocumentExportRequest.ExportType.BUNDLE_REQUIREMENTS_CSV
+            else f"duenest-bundle-{bundle.id}-metadata.json"
         )
         return FileResponse(opened, as_attachment=True, filename=filename)
 
