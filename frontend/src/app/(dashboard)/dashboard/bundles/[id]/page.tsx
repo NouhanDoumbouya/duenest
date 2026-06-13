@@ -20,6 +20,14 @@ import { ReadinessRing } from "@/components/bundles/readiness-ring";
 import { DocumentAppointments } from "@/components/documents/document-appointments";
 import { DocumentPayments } from "@/components/documents/document-payments";
 import { DocumentProofRecords } from "@/components/documents/document-proof-records";
+import { PageContainer } from "@/components/ui/page-container";
+import { PageHeader } from "@/components/ui/page-header";
+import {
+  InlineAlert,
+  ProductMetric,
+  SegmentedControl,
+  TrustNotice,
+} from "@/components/ui/product-ui";
 import { SectionCard } from "@/components/ui/section-card";
 import { TimelineList } from "@/components/timeline/timeline-list";
 import { Button } from "@/components/ui/button";
@@ -82,6 +90,16 @@ const BUNDLE_EXPORT_LABELS: Record<BundleExportType, string> = {
   bundle_metadata_json: "Full bundle metadata (JSON)",
   bundle_requirements_csv: "Requirements checklist (CSV)",
 };
+
+type BundleTab = "requirements" | "files" | "timeline" | "proofs" | "exports";
+
+const BUNDLE_TABS: { value: BundleTab; label: string }[] = [
+  { value: "requirements", label: "Requirements" },
+  { value: "files", label: "Files" },
+  { value: "timeline", label: "Timeline" },
+  { value: "proofs", label: "Proofs" },
+  { value: "exports", label: "Exports" },
+];
 
 const STATUS_STYLES: Record<RequirementStatus, string> = {
   missing: "bg-amber-100 text-amber-700",
@@ -264,6 +282,7 @@ export default function BundleDetailPage() {
   const [exportBusy, setExportBusy] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [activeTab, setActiveTab] = useState<BundleTab>("requirements");
 
   useEffect(() => {
     if (!validId) return;
@@ -391,7 +410,7 @@ export default function BundleDetailPage() {
 
   if (loadError) {
     return (
-      <div className="mx-auto w-full max-w-3xl space-y-4">
+      <PageContainer width="narrow" className="space-y-4">
         <Link
           href="/dashboard/bundles"
           className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
@@ -399,26 +418,26 @@ export default function BundleDetailPage() {
           <ArrowLeft className="size-4" />
           Back to bundles
         </Link>
-        <p className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {loadError}
-        </p>
-      </div>
+        <InlineAlert>{loadError}</InlineAlert>
+      </PageContainer>
     );
   }
 
   if (bundle === null) {
     return (
-      <div className="flex items-center justify-center gap-2 py-20 text-muted-foreground">
-        <Loader2 className="size-5 animate-spin" />
-        <span>Loading bundle…</span>
-      </div>
+      <PageContainer width="narrow">
+        <div className="flex items-center justify-center gap-2 rounded-xl border border-border bg-card py-20 text-muted-foreground shadow-card">
+          <Loader2 className="size-5 animate-spin" />
+          <span>Loading bundle...</span>
+        </div>
+      </PageContainer>
     );
   }
 
   const readiness = bundle.readiness;
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-6">
+    <PageContainer width="wide">
       <Link
         href="/dashboard/bundles"
         className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
@@ -427,386 +446,435 @@ export default function BundleDetailPage() {
         Back to bundles
       </Link>
 
-      {/* Overview + readiness */}
-      <Card>
-        <CardContent className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-              {BUNDLE_TYPE_LABELS[bundle.bundle_type]} bundle
-            </p>
-            <h1 className="mt-1 font-heading text-2xl font-semibold tracking-tight">
-              {bundle.title}
-            </h1>
-            {bundle.description && (
-              <p className="mt-1 text-sm text-muted-foreground">
-                {bundle.description}
-              </p>
-            )}
-            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-              {bundle.target_date && (
-                <span>Target {formatDate(bundle.target_date)}</span>
-              )}
-              {bundle.authority_or_provider && (
-                <span>{bundle.authority_or_provider}</span>
-              )}
-            </div>
-          </div>
-          <div className="flex shrink-0 flex-col items-center gap-2">
-            <ReadinessRing score={bundle.readiness_score} size={72} />
-            <span className="text-xs text-muted-foreground">
-              {readiness.required_satisfied}/{readiness.required_total} required
-            </span>
-          </div>
-        </CardContent>
-      </Card>
+      <PageHeader
+        eyebrow={`${BUNDLE_TYPE_LABELS[bundle.bundle_type]} bundle`}
+        title={bundle.title}
+        description={
+          bundle.description ||
+          "Track requirements, files, timeline, proof, and safe exports for this application pack."
+        }
+      />
 
-      {/* Status + missing summary */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2">
-          <label htmlFor="bundle-status" className="text-sm text-muted-foreground">
-            Status
-          </label>
-          <select
-            id="bundle-status"
-            value={bundle.status}
-            onChange={(e) => changeBundleStatus(e.target.value as BundleStatus)}
-            disabled={savingStatus}
-            className="h-9 rounded-lg border border-input bg-card px-3 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-          >
-            {BUNDLE_STATUSES.map((status) => (
-              <option key={status} value={status}>
-                {BUNDLE_STATUS_LABELS[status]}
-              </option>
-            ))}
-          </select>
-        </div>
-        {readiness.required_missing > 0 ? (
-          <p className="text-sm text-amber-600">
-            {readiness.required_missing} required item
-            {readiness.required_missing === 1 ? "" : "s"} still missing
-          </p>
-        ) : (
-          <p className="flex items-center gap-1.5 text-sm text-brand-success">
-            <CheckCircle2 className="size-4" />
-            All required items are ready
-          </p>
-        )}
-      </div>
-
-      {/* Requirements */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Requirements</CardTitle>
-          <CardDescription>
-            Track each document, proof, or step this bundle needs. Linking a
-            document marks the requirement as attached.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {error && (
-            <p
-              className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
-              role="alert"
-            >
-              {error}
-            </p>
-          )}
-
-          {bundle.requirements.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center">
-              <p className="text-sm font-medium">No requirements yet</p>
-              <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-                Add what this bundle needs below to start tracking readiness.
-              </p>
-            </div>
-          ) : (
-            <ul className="space-y-2">
-              {bundle.requirements.map((requirement) => (
-                <RequirementRow
-                  key={requirement.id}
-                  bundleId={bundleId}
-                  requirement={requirement}
-                  documents={documents}
-                  onChanged={(updated) => {
-                    setBundle((prev) =>
-                      prev
-                        ? {
-                            ...prev,
-                            requirements: prev.requirements.map((r) =>
-                              r.id === updated.id ? updated : r,
-                            ),
-                          }
-                        : prev,
-                    );
-                    refreshReadiness();
-                  }}
-                  onDeleted={(id) => {
-                    setBundle((prev) =>
-                      prev
-                        ? {
-                            ...prev,
-                            requirements: prev.requirements.filter(
-                              (r) => r.id !== id,
-                            ),
-                          }
-                        : prev,
-                    );
-                    refreshReadiness();
-                  }}
-                />
-              ))}
-            </ul>
-          )}
-
-          <div className="flex flex-col gap-2 rounded-xl border border-border bg-muted/25 p-3 sm:flex-row sm:items-center">
-            <Input
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  addRequirement();
-                }
-              }}
-              placeholder="Add a requirement…"
-              className="h-9"
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <main className="min-w-0 space-y-6">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <ProductMetric
+              icon={ShieldCheck}
+              label="Readiness"
+              value={`${bundle.readiness_score}%`}
+              hint={`${readiness.required_satisfied}/${readiness.required_total} required ready`}
+              tone={readiness.required_missing > 0 ? "warn" : "good"}
             />
-            <label className="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground">
-              <input
-                type="checkbox"
-                checked={newRequired}
-                onChange={(e) => setNewRequired(e.target.checked)}
-                className="size-4 rounded border-input"
-              />
-              Required
-            </label>
-            <Button
-              onClick={addRequirement}
-              disabled={adding || !newTitle.trim()}
-              className="shrink-0"
-            >
-              {adding ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Plus className="size-4" />
-              )}
-              Add
-            </Button>
+            <ProductMetric
+              icon={FileText}
+              label="Requirements"
+              value={readiness.total_requirements}
+              hint={`${readiness.optional_total} optional`}
+              tone="secure"
+            />
+            <ProductMetric
+              icon={CheckCircle2}
+              label="Missing required"
+              value={readiness.required_missing}
+              hint={
+                readiness.required_missing > 0
+                  ? "Review before submission"
+                  : "All required items ready"
+              }
+              tone={readiness.required_missing > 0 ? "warn" : "good"}
+            />
+            <ProductMetric
+              icon={Download}
+              label="Exports"
+              value={bundleExports.length}
+              hint="Owner-only handoff files"
+            />
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Files included in this bundle */}
-      <BundleFilesSection bundleId={bundle.id} />
+          <SegmentedControl
+            label="Bundle workspace"
+            value={activeTab}
+            options={BUNDLE_TABS}
+            onChange={setActiveTab}
+            className="max-w-full overflow-x-auto"
+          />
 
-      {/* Timeline for this bundle */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Bundle timeline</CardTitle>
-          <CardDescription>
-            Upcoming dates tied to this bundle and its requirements.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <TimelineList events={events} />
-        </CardContent>
-      </Card>
+          {activeTab === "requirements" && (
+            <Card className="content-fade-in">
+              <CardHeader>
+                <CardTitle className="text-lg">Requirements</CardTitle>
+                <CardDescription>
+                  Track each document, proof, or step this bundle needs. Linking
+                  a document marks the requirement as attached.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {error && <InlineAlert>{error}</InlineAlert>}
 
-      {/* Proof of submission for this bundle */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Proof of submission</CardTitle>
-          <CardDescription>
-            Record confirmations and receipts for what you’ve submitted as part
-            of this bundle.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <DocumentProofRecords bundleId={bundleId} />
-        </CardContent>
-      </Card>
+                {bundle.requirements.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center">
+                    <p className="text-sm font-medium">No requirements yet</p>
+                    <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+                      Add what this bundle needs below to start tracking
+                      readiness.
+                    </p>
+                  </div>
+                ) : (
+                  <ul className="space-y-2">
+                    {bundle.requirements.map((requirement) => (
+                      <RequirementRow
+                        key={requirement.id}
+                        bundleId={bundleId}
+                        requirement={requirement}
+                        documents={documents}
+                        onChanged={(updated) => {
+                          setBundle((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  requirements: prev.requirements.map((r) =>
+                                    r.id === updated.id ? updated : r,
+                                  ),
+                                }
+                              : prev,
+                          );
+                          refreshReadiness();
+                        }}
+                        onDeleted={(id) => {
+                          setBundle((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  requirements: prev.requirements.filter(
+                                    (r) => r.id !== id,
+                                  ),
+                                }
+                              : prev,
+                          );
+                          refreshReadiness();
+                        }}
+                      />
+                    ))}
+                  </ul>
+                )}
 
-      {/* Appointments for this bundle */}
-      <SectionCard
-        title="Appointments"
-        description="Appointments connected to this bundle."
-      >
-        <DocumentAppointments bundleId={bundleId} />
-      </SectionCard>
-
-      {/* Costs for this bundle */}
-      <SectionCard
-        title="Application costs"
-        description="Track the expected and actual costs for this application or renewal."
-      >
-        <DocumentPayments bundleId={bundleId} />
-      </SectionCard>
-
-      {/* Bundle export */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-start gap-3">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <Download className="size-4" />
-            </span>
-            <div className="min-w-0">
-              <CardTitle className="text-lg">Export bundle</CardTitle>
-              <CardDescription>
-                Download a bundle-specific metadata file for applications,
-                renewals, or handoff review.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {exportError && (
-            <p
-              className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
-              role="alert"
-            >
-              {exportError}
-            </p>
+                <div className="flex flex-col gap-2 rounded-xl border border-border bg-muted/25 p-3 sm:flex-row sm:items-center">
+                  <Input
+                    value={newTitle}
+                    onChange={(e) => setNewTitle(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addRequirement();
+                      }
+                    }}
+                    placeholder="Add a requirement..."
+                    className="h-9"
+                  />
+                  <label className="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      checked={newRequired}
+                      onChange={(e) => setNewRequired(e.target.checked)}
+                      className="size-4 rounded border-input"
+                    />
+                    Required
+                  </label>
+                  <Button
+                    onClick={addRequirement}
+                    disabled={adding || !newTitle.trim()}
+                    className="shrink-0"
+                  >
+                    {adding ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Plus className="size-4" />
+                    )}
+                    Add
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           )}
-          {exportMessage && (
-            <p className="rounded-lg bg-brand-success/10 px-3 py-2 text-sm text-brand-success">
-              {exportMessage}
-            </p>
+
+          {activeTab === "files" && (
+            <div className="content-fade-in">
+              <BundleFilesSection bundleId={bundle.id} />
+            </div>
           )}
 
-          <div className="flex flex-col gap-3 rounded-xl border border-border bg-muted/25 p-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <label
-                htmlFor="bundle-export-type"
-                className="text-sm font-medium"
-              >
-                Export format
-              </label>
-              <select
-                id="bundle-export-type"
-                value={exportType}
-                onChange={(e) =>
-                  setExportType(e.target.value as BundleExportType)
-                }
-                disabled={exportBusy !== null}
-                className="mt-1 h-9 w-full rounded-lg border border-input bg-card px-3 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:w-[260px]"
-              >
-                {Object.entries(BUNDLE_EXPORT_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-              <p className="mt-1 text-xs text-muted-foreground">
-                JSON includes readiness, requirements, linked document/file
-                summaries, checklist progress, and proof records. CSV focuses on
-                requirement rows.
-              </p>
-            </div>
-            <Button
-              type="button"
-              onClick={handleCreateExport}
-              disabled={exportBusy !== null}
-              className="w-full sm:w-auto"
-            >
-              {exportBusy === "create" ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <FileText className="size-4" />
-              )}
-              Create export
-            </Button>
-          </div>
+          {activeTab === "timeline" && (
+            <div className="space-y-6 content-fade-in">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Bundle timeline</CardTitle>
+                  <CardDescription>
+                    Upcoming dates tied to this bundle and its requirements.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <TimelineList events={events} />
+                </CardContent>
+              </Card>
 
-          <div className="rounded-xl border border-border p-3">
-            <div className="flex items-start gap-2 text-sm">
-              <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" />
-              <p className="text-muted-foreground">
-                Exports are owner-only, expire after 7 days, and exclude raw
-                files, share tokens, access codes, raw OCR text, and internal
-                storage paths.
-              </p>
-            </div>
-          </div>
+              <SectionCard
+                title="Appointments"
+                description="Appointments connected to this bundle."
+              >
+                <DocumentAppointments bundleId={bundleId} />
+              </SectionCard>
 
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Recent exports</p>
-            {bundleExports.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border px-4 py-6 text-center">
-                <p className="text-sm text-muted-foreground">
-                  No bundle exports yet.
-                </p>
-              </div>
-            ) : (
-              <ul className="space-y-2">
-                {bundleExports.slice(0, 4).map((exportRequest) => {
-                  const canDownload =
-                    exportRequest.status === "completed" &&
-                    !exportRequest.is_expired &&
-                    Boolean(exportRequest.download_url);
-                  return (
-                    <li
-                      key={exportRequest.id}
-                      className="flex flex-col gap-3 rounded-xl border border-border p-3 sm:flex-row sm:items-center sm:justify-between"
+              <SectionCard
+                title="Application costs"
+                description="Track expected and actual costs for this application or renewal."
+              >
+                <DocumentPayments bundleId={bundleId} />
+              </SectionCard>
+            </div>
+          )}
+
+          {activeTab === "proofs" && (
+            <Card className="content-fade-in">
+              <CardHeader>
+                <CardTitle className="text-lg">Proof of submission</CardTitle>
+                <CardDescription>
+                  Record confirmations and receipts for what you submitted as
+                  part of this bundle.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <DocumentProofRecords bundleId={bundleId} />
+              </CardContent>
+            </Card>
+          )}
+
+          {activeTab === "exports" && (
+            <Card className="content-fade-in">
+              <CardHeader>
+                <div className="flex items-start gap-3">
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <Download className="size-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <CardTitle className="text-lg">Export bundle</CardTitle>
+                    <CardDescription>
+                      Download a bundle-specific metadata file for applications,
+                      renewals, or handoff review.
+                    </CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {exportError && <InlineAlert>{exportError}</InlineAlert>}
+                {exportMessage && (
+                  <InlineAlert tone="good">{exportMessage}</InlineAlert>
+                )}
+
+                <div className="flex flex-col gap-3 rounded-xl border border-border bg-muted/25 p-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <label
+                      htmlFor="bundle-export-type"
+                      className="text-sm font-medium"
                     >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">
-                          {BUNDLE_EXPORT_LABELS[exportRequest.export_type]}
-                        </p>
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                          {exportRequest.status} · Requested{" "}
-                          {formatDate(exportRequest.requested_at)}
-                        </p>
-                        {exportRequest.expires_at && (
-                          <p className="mt-0.5 text-xs text-muted-foreground">
-                            Expires {formatDate(exportRequest.expires_at)}
-                          </p>
-                        )}
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDownloadExport(exportRequest)}
-                        disabled={!canDownload || exportBusy !== null}
-                        className="w-full sm:w-auto"
-                      >
-                        {exportBusy === `download-${exportRequest.id}` ? (
-                          <Loader2 className="size-4 animate-spin" />
-                        ) : (
-                          <Download className="size-4" />
-                        )}
-                        Download
-                      </Button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+                      Export format
+                    </label>
+                    <select
+                      id="bundle-export-type"
+                      value={exportType}
+                      onChange={(e) =>
+                        setExportType(e.target.value as BundleExportType)
+                      }
+                      disabled={exportBusy !== null}
+                      className="mt-1 h-9 w-full rounded-lg border border-input bg-card px-3 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:w-[260px]"
+                    >
+                      {Object.entries(BUNDLE_EXPORT_LABELS).map(
+                        ([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        ),
+                      )}
+                    </select>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      JSON includes readiness, requirements, linked
+                      document/file summaries, checklist progress, and proof
+                      records. CSV focuses on requirement rows.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={handleCreateExport}
+                    disabled={exportBusy !== null}
+                    className="w-full sm:w-auto"
+                  >
+                    {exportBusy === "create" ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <FileText className="size-4" />
+                    )}
+                    Create export
+                  </Button>
+                </div>
 
-      {/* Danger zone */}
-      <div className="flex justify-end">
-        <Button
-          variant="ghost"
-          className="text-muted-foreground hover:text-destructive"
-          onClick={() => setConfirmDelete(true)}
-        >
-          <Trash2 className="size-4" />
-          Delete bundle
-        </Button>
+                <TrustNotice icon={ShieldCheck} title="Safe export contents">
+                  Exports are owner-only, expire after 7 days, and exclude raw
+                  files, share tokens, access codes, raw OCR text, and internal
+                  storage paths.
+                </TrustNotice>
+
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Recent exports</p>
+                  {bundleExports.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-border px-4 py-6 text-center">
+                      <p className="text-sm text-muted-foreground">
+                        No bundle exports yet.
+                      </p>
+                    </div>
+                  ) : (
+                    <ul className="space-y-2">
+                      {bundleExports.slice(0, 4).map((exportRequest) => {
+                        const canDownload =
+                          exportRequest.status === "completed" &&
+                          !exportRequest.is_expired &&
+                          Boolean(exportRequest.download_url);
+                        return (
+                          <li
+                            key={exportRequest.id}
+                            className="flex flex-col gap-3 rounded-xl border border-border p-3 sm:flex-row sm:items-center sm:justify-between"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium">
+                                {BUNDLE_EXPORT_LABELS[exportRequest.export_type]}
+                              </p>
+                              <p className="mt-0.5 text-xs text-muted-foreground">
+                                {exportRequest.status} - Requested{" "}
+                                {formatDate(exportRequest.requested_at)}
+                              </p>
+                              {exportRequest.expires_at && (
+                                <p className="mt-0.5 text-xs text-muted-foreground">
+                                  Expires {formatDate(exportRequest.expires_at)}
+                                </p>
+                              )}
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDownloadExport(exportRequest)}
+                              disabled={!canDownload || exportBusy !== null}
+                              className="w-full sm:w-auto"
+                            >
+                              {exportBusy === `download-${exportRequest.id}` ? (
+                                <Loader2 className="size-4 animate-spin" />
+                              ) : (
+                                <Download className="size-4" />
+                              )}
+                              Download
+                            </Button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </main>
+
+        <aside className="space-y-4 lg:sticky lg:top-8 lg:self-start">
+          <Card>
+            <CardContent className="space-y-5">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium">Readiness</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Required item coverage
+                  </p>
+                </div>
+                <ReadinessRing score={bundle.readiness_score} size={76} />
+              </div>
+
+              <div className="space-y-2">
+                <label
+                  htmlFor="bundle-status"
+                  className="text-sm font-medium"
+                >
+                  Bundle status
+                </label>
+                <select
+                  id="bundle-status"
+                  value={bundle.status}
+                  onChange={(e) =>
+                    changeBundleStatus(e.target.value as BundleStatus)
+                  }
+                  disabled={savingStatus}
+                  className="h-10 w-full rounded-lg border border-input bg-card px-3 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                >
+                  {BUNDLE_STATUSES.map((status) => (
+                    <option key={status} value={status}>
+                      {BUNDLE_STATUS_LABELS[status]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {readiness.required_missing > 0 ? (
+                <InlineAlert tone="warn">
+                  {readiness.required_missing} required item
+                  {readiness.required_missing === 1 ? "" : "s"} still missing.
+                </InlineAlert>
+              ) : (
+                <p className="flex items-center gap-1.5 rounded-lg border border-brand-success/25 bg-brand-success/10 px-3 py-2 text-sm text-brand-success">
+                  <CheckCircle2 className="size-4" />
+                  All required items are ready.
+                </p>
+              )}
+
+              <dl className="space-y-2 text-sm">
+                {bundle.target_date && (
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-muted-foreground">Target</dt>
+                    <dd className="font-medium">{formatDate(bundle.target_date)}</dd>
+                  </div>
+                )}
+                {bundle.authority_or_provider && (
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-muted-foreground">Authority</dt>
+                    <dd className="truncate font-medium">
+                      {bundle.authority_or_provider}
+                    </dd>
+                  </div>
+                )}
+              </dl>
+            </CardContent>
+          </Card>
+
+          <TrustNotice icon={ShieldCheck} title="Owner-only workspace">
+            Bundle exports and linked files stay private to the owner. Public
+            sharing still happens through secure rooms or explicit file shares.
+          </TrustNotice>
+
+          <Button
+            variant="ghost"
+            className="w-full justify-start text-muted-foreground hover:text-destructive"
+            onClick={() => setConfirmDelete(true)}
+          >
+            <Trash2 className="size-4" />
+            Delete bundle
+          </Button>
+        </aside>
       </div>
 
       <ConfirmDialog
         open={confirmDelete}
         title="Delete bundle?"
-        description={`“${bundle.title}” and its requirements will be permanently removed. This cannot be undone.`}
+        description={`"${bundle.title}" and its requirements will be permanently removed. This cannot be undone.`}
         confirmLabel="Delete"
         loading={deleting}
         onConfirm={handleDelete}
         onCancel={() => setConfirmDelete(false)}
       />
-    </div>
+    </PageContainer>
   );
 }

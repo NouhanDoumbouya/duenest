@@ -1,14 +1,34 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { DoorClosed, Loader2, Lock, Plus, ShieldCheck } from "lucide-react";
+import {
+  DoorClosed,
+  Eye,
+  FileText,
+  Loader2,
+  Lock,
+  Plus,
+  ShieldCheck,
+} from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PageContainer } from "@/components/ui/page-container";
+import { PageHeader } from "@/components/ui/page-header";
+import {
+  DataRow,
+  InlineAlert,
+  ProductMetric,
+  SectionToolbar,
+  TrustNotice,
+} from "@/components/ui/product-ui";
+import { SectionCard } from "@/components/ui/section-card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/lib/api";
 import { formatDate } from "@/lib/documents";
 import { createShareRoom, listShareRooms } from "@/lib/share-rooms";
@@ -23,10 +43,10 @@ const statusClass: Record<RoomStatus, string> = {
 };
 
 const statusLabel: Record<RoomStatus, string> = {
-  active: "active",
-  expired: "expired",
-  revoked: "revoked",
-  limit_reached: "limit reached",
+  active: "Active",
+  expired: "Expired",
+  revoked: "Revoked",
+  limit_reached: "Limit reached",
 };
 
 export default function ShareRoomsPage() {
@@ -57,7 +77,17 @@ export default function ShareRoomsPage() {
     };
   }, []);
 
-  async function handleCreate(event: React.FormEvent<HTMLFormElement>) {
+  const metrics = useMemo(() => {
+    const list = rooms ?? [];
+    return {
+      active: list.filter((room) => room.status === "active").length,
+      protected: list.filter((room) => room.access_code_required).length,
+      viewOnly: list.filter((room) => room.permission === "view_only").length,
+      files: list.reduce((sum, room) => sum + room.file_count, 0),
+    };
+  }, [rooms]);
+
+  async function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!title.trim()) return;
     setCreating(true);
@@ -84,180 +114,233 @@ export default function ShareRoomsPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            Packs &amp; sharing
-          </p>
-          <h1 className="mt-2 font-heading text-2xl font-semibold tracking-tight sm:text-3xl">
-            Secure rooms
-          </h1>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Share only the documents and files you choose — with expiry, an
-            access code, watermarking, and view-only controls. A room never
-            exposes the rest of your vault.
-          </p>
-        </div>
-        <Button onClick={() => setShowCreate((value) => !value)}>
-          <Plus className="size-4" />
-          New room
-        </Button>
-      </div>
+    <PageContainer width="wide">
+      <PageHeader
+        eyebrow="Packs & sharing"
+        title="Secure rooms"
+        description="Create private rooms that expose only the documents and files you choose, with expiry, view-only controls, access codes, and watermarking."
+        actions={
+          <Button onClick={() => setShowCreate((value) => !value)}>
+            <Plus className="size-4" />
+            New room
+          </Button>
+        }
+      />
 
-      {showCreate && (
-        <form
-          onSubmit={handleCreate}
-          className="space-y-4 rounded-xl border border-border bg-card p-4 shadow-card"
-        >
-          <div className="space-y-2">
-            <Label htmlFor="room-title">Room title</Label>
-            <Input
-              id="room-title"
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              placeholder="Visa application pack"
-              autoFocus
+      {error && <InlineAlert>{error}</InlineAlert>}
+
+      <div className="grid gap-6 lg:grid-cols-[1.45fr_0.9fr]">
+        <div className="space-y-6">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <ProductMetric
+              icon={DoorClosed}
+              label="Active rooms"
+              value={rooms === null ? "..." : metrics.active}
+              hint="Recipient-ready spaces"
+              tone="secure"
+            />
+            <ProductMetric
+              icon={Lock}
+              label="Access-code rooms"
+              value={rooms === null ? "..." : metrics.protected}
+              hint="Extra verification enabled"
+              tone="warn"
+            />
+            <ProductMetric
+              icon={Eye}
+              label="View-only rooms"
+              value={rooms === null ? "..." : metrics.viewOnly}
+              hint="Downloads blocked"
+              tone="good"
+            />
+            <ProductMetric
+              icon={FileText}
+              label="Shared files"
+              value={rooms === null ? "..." : metrics.files}
+              hint="Explicitly included"
             />
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="room-permission">Permission</Label>
-              <select
-                id="room-permission"
-                value={permission}
-                onChange={(event) =>
-                  setPermission(event.target.value as RoomPermission)
-                }
-                className="h-10 w-full rounded-lg border border-input bg-card px-3 text-sm"
-              >
-                <option value="view_only">View only</option>
-                <option value="download_allowed">View and download</option>
-              </select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="room-expiry">Expires in</Label>
-              <select
-                id="room-expiry"
-                value={expiryDays}
-                onChange={(event) => setExpiryDays(event.target.value)}
-                className="h-10 w-full rounded-lg border border-input bg-card px-3 text-sm"
-              >
-                <option value="1">1 day</option>
-                <option value="7">7 days</option>
-                <option value="30">30 days</option>
-                <option value="never">No expiry</option>
-              </select>
-            </div>
-          </div>
-          {createError && (
-            <p className="text-sm text-destructive" role="alert">
-              {createError}
-            </p>
-          )}
-          <div className="flex justify-end gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => setShowCreate(false)}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={creating || !title.trim()}>
-              {creating ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <ShieldCheck className="size-4" />
-              )}
-              Create room
-            </Button>
-          </div>
-        </form>
-      )}
 
-      {error && (
-        <p
-          className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
-          role="alert"
-        >
-          {error}
-        </p>
-      )}
-
-      {rooms === null ? (
-        <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">
-          <Loader2 className="size-5 animate-spin" />
-          <span>Loading rooms…</span>
-        </div>
-      ) : rooms.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border px-4 py-12 text-center">
-          <DoorClosed className="mx-auto size-7 text-muted-foreground/60" />
-          <p className="mt-3 text-sm font-medium">No secure rooms yet</p>
-          <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-            Create a room to share a curated set of documents with a recipient,
-            with full control over expiry, access codes, and downloads.
-          </p>
-        </div>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {rooms.map((room) => (
-            <Link
-              key={room.id}
-              href={`/dashboard/share-rooms/${room.id}`}
-              className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/40"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <p className="truncate font-medium">{room.title}</p>
-                <Badge
-                  variant="outline"
-                  className={cn("shrink-0", statusClass[room.status])}
-                >
-                  {statusLabel[room.status]}
-                </Badge>
+          <SectionCard
+            title="Room inventory"
+            description="Review active, expired, revoked, and limited rooms without exposing private vault contents."
+            action={
+              rooms && (
+                <span className="text-sm text-muted-foreground">
+                  {rooms.length} room{rooms.length === 1 ? "" : "s"}
+                </span>
+              )
+            }
+          >
+            {rooms === null ? (
+              <div className="space-y-3">
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <Skeleton key={index} className="h-[74px] rounded-xl" />
+                ))}
               </div>
-              <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                <span>
-                  {room.file_count} file{room.file_count === 1 ? "" : "s"}
-                </span>
-                <span>·</span>
-                <span>
-                  {room.permission === "view_only"
-                    ? "View-only"
-                    : "Download allowed"}
-                </span>
-                {room.watermark_enabled && (
-                  <>
-                    <span>·</span>
-                    <span>Watermarked</span>
-                  </>
-                )}
-                {room.access_code_required && (
-                  <>
-                    <span>·</span>
-                    <span className="inline-flex items-center gap-1">
-                      <Lock className="size-3" /> Code
-                    </span>
-                  </>
-                )}
-              </p>
-              {room.expires_at && (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Expires {formatDate(room.expires_at)}
-                </p>
-              )}
-            </Link>
-          ))}
+            ) : rooms.length === 0 ? (
+              <EmptyState
+                icon={DoorClosed}
+                title="No secure rooms yet"
+                description="Create a room when you need to share a curated document set without exposing the rest of your vault."
+                action={
+                  <Button onClick={() => setShowCreate(true)}>
+                    <Plus className="size-4" />
+                    Create a room
+                  </Button>
+                }
+              />
+            ) : (
+              <div className="space-y-2">
+                {rooms.map((room) => (
+                  <DataRow
+                    key={room.id}
+                    label={
+                      <Link
+                        href={`/dashboard/share-rooms/${room.id}`}
+                        className="hover:text-primary"
+                      >
+                        {room.title}
+                      </Link>
+                    }
+                    meta={
+                      <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span>
+                          {room.file_count} file
+                          {room.file_count === 1 ? "" : "s"}
+                        </span>
+                        <span>{room.item_count} item{room.item_count === 1 ? "" : "s"}</span>
+                        <span>
+                          {room.permission === "view_only"
+                            ? "View-only"
+                            : "Download allowed"}
+                        </span>
+                        {room.access_code_required && (
+                          <span className="inline-flex items-center gap-1">
+                            <Lock className="size-3" />
+                            Access code
+                          </span>
+                        )}
+                        {room.expires_at && (
+                          <span>Expires {formatDate(room.expires_at)}</span>
+                        )}
+                      </span>
+                    }
+                    value={
+                      <Badge
+                        variant="outline"
+                        className={cn("shrink-0", statusClass[room.status])}
+                      >
+                        {statusLabel[room.status]}
+                      </Badge>
+                    }
+                    action={
+                      <Link
+                        href={`/dashboard/share-rooms/${room.id}`}
+                        className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+                      >
+                        Open
+                      </Link>
+                    }
+                  />
+                ))}
+              </div>
+            )}
+          </SectionCard>
         </div>
-      )}
 
-      <p className="text-center text-xs text-muted-foreground">
-        <Link
-          href="/dashboard/bundles"
-          className={cn(buttonVariants({ variant: "link" }), "h-auto p-0")}
-        >
-          Looking for application packs? Open bundles
-        </Link>
-      </p>
-    </div>
+        <aside className="space-y-4">
+          {showCreate ? (
+            <SectionCard
+              title="Create secure room"
+              description="Start with safe defaults, then add files and access controls on the room detail page."
+            >
+              <form onSubmit={handleCreate} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="room-title">Room title</Label>
+                  <Input
+                    id="room-title"
+                    value={title}
+                    onChange={(event) => setTitle(event.target.value)}
+                    placeholder="Visa application pack"
+                    autoFocus
+                  />
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+                  <div className="space-y-2">
+                    <Label htmlFor="room-permission">Permission</Label>
+                    <select
+                      id="room-permission"
+                      value={permission}
+                      onChange={(event) =>
+                        setPermission(event.target.value as RoomPermission)
+                      }
+                      className="h-10 w-full rounded-lg border border-input bg-card px-3 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                    >
+                      <option value="view_only">View only</option>
+                      <option value="download_allowed">View and download</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="room-expiry">Expires in</Label>
+                    <select
+                      id="room-expiry"
+                      value={expiryDays}
+                      onChange={(event) => setExpiryDays(event.target.value)}
+                      className="h-10 w-full rounded-lg border border-input bg-card px-3 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                    >
+                      <option value="1">1 day</option>
+                      <option value="7">7 days</option>
+                      <option value="30">30 days</option>
+                      <option value="never">No expiry</option>
+                    </select>
+                  </div>
+                </div>
+                {createError && <InlineAlert>{createError}</InlineAlert>}
+                <div className="flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setShowCreate(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={creating || !title.trim()}>
+                    {creating ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <ShieldCheck className="size-4" />
+                    )}
+                    Create room
+                  </Button>
+                </div>
+              </form>
+            </SectionCard>
+          ) : (
+            <TrustNotice icon={ShieldCheck} title="Recipient safety model">
+              A room is a curated share space. Public recipients can only see
+              items explicitly added to that room, and owner controls decide
+              expiry, downloads, watermarking, and access-code requirements.
+            </TrustNotice>
+          )}
+
+          <SectionToolbar>
+            <div>
+              <p className="text-sm font-medium">Application packs live in Bundles</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Use rooms for controlled sharing, and bundles for application
+                readiness and export workflows.
+              </p>
+            </div>
+            <Link
+              href="/dashboard/bundles"
+              className={cn(buttonVariants({ variant: "outline" }))}
+            >
+              Open bundles
+            </Link>
+          </SectionToolbar>
+        </aside>
+      </div>
+    </PageContainer>
   );
 }

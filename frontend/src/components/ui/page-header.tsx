@@ -32,13 +32,9 @@ export function PageHeader({
             {eyebrow}
           </p>
         )}
-        <h1 className="mt-2 font-heading text-2xl font-semibold tracking-tight sm:text-3xl">
-          {title}
-        </h1>
+        <h1 className="mt-2 text-page-title">{title}</h1>
         {description && (
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            {description}
-          </p>
+          <p className="mt-2 text-page-subtitle">{description}</p>
         )}
       </div>
       {actions && <div className="flex items-center gap-2">{actions}</div>}

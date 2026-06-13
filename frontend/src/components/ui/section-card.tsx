@@ -17,24 +17,28 @@ export function SectionCard({
   description,
   action,
   children,
+  className,
+  contentClassName,
 }: {
   title: string;
   description?: string;
   action?: ReactNode;
   children: ReactNode;
+  className?: string;
+  contentClassName?: string;
 }) {
   return (
-    <Card>
+    <Card className={className}>
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <CardTitle className="text-lg">{title}</CardTitle>
+            <CardTitle className="text-section-title">{title}</CardTitle>
             {description && <CardDescription>{description}</CardDescription>}
           </div>
           {action && <div className="shrink-0">{action}</div>}
         </div>
       </CardHeader>
-      <CardContent>{children}</CardContent>
+      <CardContent className={contentClassName}>{children}</CardContent>
     </Card>
   );
 }

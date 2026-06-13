@@ -2,12 +2,13 @@ import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
-type ContainerWidth = "narrow" | "default" | "wide";
+type ContainerWidth = "narrow" | "default" | "wide" | "full";
 
 const widthClass: Record<ContainerWidth, string> = {
   narrow: "max-w-3xl",
   default: "max-w-5xl",
   wide: "max-w-6xl",
+  full: "max-w-7xl",
 };
 
 /**
@@ -25,7 +26,13 @@ export function PageContainer({
   className?: string;
 }) {
   return (
-    <div className={cn("mx-auto w-full space-y-8", widthClass[width], className)}>
+    <div
+      className={cn(
+        "mx-auto w-full space-y-8 content-fade-in",
+        widthClass[width],
+        className,
+      )}
+    >
       {children}
     </div>
   );

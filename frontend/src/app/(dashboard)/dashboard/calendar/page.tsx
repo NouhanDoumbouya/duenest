@@ -3,18 +3,32 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
+  BellRing,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
   Download,
+  FileText,
   Loader2,
   Plus,
   ShieldAlert,
+  ShieldCheck,
   X,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { PageContainer } from "@/components/ui/page-container";
+import { PageHeader } from "@/components/ui/page-header";
+import {
+  DrawerBackdrop,
+  DrawerPanel,
+  InlineAlert,
+  ProductMetric,
+  SectionToolbar,
+  SegmentedControl,
+  TrustNotice,
+} from "@/components/ui/product-ui";
 import { ApiError } from "@/lib/api";
 import { downloadCalendarIcs, getCalendarEvents } from "@/lib/calendar";
 import { cn } from "@/lib/utils";
@@ -128,6 +142,24 @@ export default function CalendarPage() {
     return "No urgent dates this week";
   }, [events]);
 
+  const metrics = useMemo(() => {
+    if (!events) return null;
+    const today = startOfDay(new Date());
+    const weekEnd = new Date(today.getTime() + 7 * 86_400_000);
+    const overdue = events.filter((event) => new Date(event.date) < today).length;
+    const thisWeek = events.filter((event) => {
+      const d = startOfDay(new Date(event.date));
+      return d >= today && d <= weekEnd;
+    }).length;
+    const documents = events.filter(
+      (event) => event.category === "documents",
+    ).length;
+    const reminders = events.filter(
+      (event) => event.category === "reminders",
+    ).length;
+    return { overdue, thisWeek, documents, reminders, total: events.length };
+  }, [events]);
+
   async function handleExport() {
     setExporting(true);
     try {
@@ -140,21 +172,13 @@ export default function CalendarPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            Workspace
-          </p>
-          <h1 className="mt-2 font-heading text-2xl font-semibold tracking-tight sm:text-3xl">
-            Calendar
-          </h1>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            See document expiries, renewals, reminders, bundle deadlines,
-            appointments, proofs, and secure sharing expiries in one place.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
+    <PageContainer width="wide">
+      <PageHeader
+        eyebrow="Workspace"
+        title="Calendar"
+        description="See document expiries, renewals, reminders, bundle deadlines, appointments, proofs, and secure sharing expiries in one owner-scoped planning view."
+        actions={
+          <div className="flex flex-wrap gap-2">
           <Link
             href="/dashboard/documents"
             className={cn(buttonVariants({ variant: "outline" }))}
@@ -171,38 +195,60 @@ export default function CalendarPage() {
             Export .ics
           </Button>
         </div>
-      </div>
+        }
+      />
+
+      {metrics && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <ProductMetric
+            icon={ShieldAlert}
+            label="Overdue"
+            value={metrics.overdue}
+            hint={metrics.overdue > 0 ? "Needs review" : "No overdue dates"}
+            tone={metrics.overdue > 0 ? "danger" : "good"}
+          />
+          <ProductMetric
+            icon={CalendarDays}
+            label="This week"
+            value={metrics.thisWeek}
+            hint="Visible in upcoming view"
+            tone={metrics.thisWeek > 0 ? "warn" : "secure"}
+          />
+          <ProductMetric
+            icon={FileText}
+            label="Document dates"
+            value={metrics.documents}
+            hint={`${metrics.total} total calendar events`}
+            tone="secure"
+          />
+          <ProductMetric
+            icon={BellRing}
+            label="Reminders"
+            value={metrics.reminders}
+            hint="Owner-only reminders"
+          />
+        </div>
+      )}
 
       {events && (
-        <p className="flex items-center gap-2 text-sm text-muted-foreground">
-          <ShieldAlert className="size-4" />
-          {health}
-        </p>
+        <TrustNotice icon={ShieldCheck} title="Private calendar scope">
+          {health}. Calendar events use safe summaries only and never include
+          share tokens, access codes, or internal file paths.
+        </TrustNotice>
       )}
 
-      {error && (
-        <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {error}
-        </p>
-      )}
+      {error && <InlineAlert>{error}</InlineAlert>}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="inline-flex rounded-lg border border-border p-0.5">
-          {(["month", "upcoming"] as ViewMode[]).map((mode) => (
-            <button
-              key={mode}
-              onClick={() => setView(mode)}
-              className={cn(
-                "rounded-md px-3 py-1.5 text-sm font-medium capitalize transition-colors",
-                view === mode
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {mode}
-            </button>
-          ))}
-        </div>
+      <SectionToolbar className="items-start">
+        <SegmentedControl
+          label="Calendar view"
+          value={view}
+          onChange={setView}
+          options={[
+            { value: "upcoming", label: "Upcoming" },
+            { value: "month", label: "Month" },
+          ]}
+        />
         <div className="flex flex-wrap gap-1.5">
           {FILTERS.map((f) => (
             <button
@@ -219,27 +265,31 @@ export default function CalendarPage() {
             </button>
           ))}
         </div>
-      </div>
+      </SectionToolbar>
 
       {events === null ? (
         <CalendarSkeleton />
       ) : filtered.length === 0 ? (
-        <EmptyState filtered={filter !== "all"} onClear={() => setFilter("all")} />
+        <CalendarEmptyState filtered={filter !== "all"} onClear={() => setFilter("all")} />
       ) : view === "month" ? (
-        <MonthView
-          events={filtered}
-          cursor={monthCursor}
-          onCursor={setMonthCursor}
-          onSelect={setSelected}
-        />
+        <div className="content-fade-in">
+          <MonthView
+            events={filtered}
+            cursor={monthCursor}
+            onCursor={setMonthCursor}
+            onSelect={setSelected}
+          />
+        </div>
       ) : (
-        <UpcomingView events={filtered} onSelect={setSelected} />
+        <div className="content-fade-in">
+          <UpcomingView events={filtered} onSelect={setSelected} />
+        </div>
       )}
 
       {selected && (
         <EventDrawer event={selected} onClose={() => setSelected(null)} />
       )}
-    </div>
+    </PageContainer>
   );
 }
 
@@ -429,17 +479,17 @@ function EventDrawer({
   event: CalendarEvent;
   onClose: () => void;
 }) {
+  useEffect(() => {
+    function onKeyDown(keyboardEvent: KeyboardEvent) {
+      if (keyboardEvent.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
   return (
-    <div
-      className="fixed inset-0 z-50 flex justify-end bg-foreground/40 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <aside
-        className="h-full w-full max-w-md overflow-y-auto border-l border-border bg-card p-5 shadow-floating"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-label={event.title}
-      >
+    <DrawerBackdrop onClose={onClose}>
+      <DrawerPanel label={event.title} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3">
           <h2 className="font-heading text-lg font-semibold">{event.title}</h2>
           <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
@@ -475,12 +525,12 @@ function EventDrawer({
             Open {event.linked_resource_type || "resource"}
           </Link>
         )}
-      </aside>
-    </div>
+      </DrawerPanel>
+    </DrawerBackdrop>
   );
 }
 
-function EmptyState({
+function CalendarEmptyState({
   filtered,
   onClear,
 }: {
