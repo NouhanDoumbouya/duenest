@@ -1226,17 +1226,22 @@ The first goal is not to build a complex distributed system. The first goal is t
 Founder Console V1 is implemented as part of the modular monolith:
 
 - Backend app: `apps.founder`
-- Frontend routes: `/dashboard/founder/*` and `/dashboard/feedback`
+- Frontend routes: `/founder/*`, compatibility routes under
+  `/dashboard/founder/*`, and `/dashboard/feedback`
 - API prefix: `/api/v1/founder/`
 
 The module owns internal operations models (`ProductEvent`, `FeedbackItem`,
-`AppErrorLog`), the founder permission class, aggregate service functions,
-serializers, views, URLs, admin registration, and tests.
+`AppErrorLog`, `FeatureCompletionItem`, `LaunchChecklistItem`,
+`BetaUserProfile`, `FounderAuditLog`), the founder permission class, aggregate
+service functions, serializers, views, URLs, admin registration, and tests.
 
 It deliberately reuses existing document/user data instead of duplicating
 private records. Metrics are built from aggregate queries over users,
 documents, files, shares, reminders, checklists, bundles, exports, emergency
-packs, proof records, product events, feedback, and error logs.
+packs, proof records, product events, feedback, beta metadata, launch
+checklist items, feature completion rows, country-level product-event metadata,
+and error logs.
 
-No background worker, billing system, analytics vendor, or support-data access
-service is introduced in this branch.
+Charts use lightweight first-party SVG/CSS components. No background worker,
+billing system, analytics vendor, heavy map dependency, or support-data access
+service is introduced for Founder Console V1.

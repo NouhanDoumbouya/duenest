@@ -9,7 +9,8 @@ from datetime import timedelta
 from typing import Any
 
 from django.contrib.auth import get_user_model
-from django.db.models import Count, Exists, Max, OuterRef, Q
+from django.db.models import Count, Exists, Max, Min, OuterRef, Q
+from django.db.models.functions import TruncDate
 from django.utils import timezone
 
 from apps.documents.models import (
@@ -27,10 +28,23 @@ from apps.documents.models import (
     EmergencyAccessPack,
     ProofRecord,
 )
-from apps.documents.services import client_ip, get_document_health
+from apps.documents.services import (
+    LOW_CONFIDENCE_THRESHOLD,
+    client_ip,
+    compute_confidence,
+    get_document_health,
+)
 from apps.users.models import AccountDeletionRequest, UserOnboardingState
 
-from .models import AppErrorLog, FeedbackItem, ProductEvent
+from .models import (
+    AppErrorLog,
+    BetaUserProfile,
+    FeatureCompletionItem,
+    FeedbackItem,
+    FounderAuditLog,
+    LaunchChecklistItem,
+    ProductEvent,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -54,6 +68,46 @@ SENSITIVE_KEY_FRAGMENTS = {
     "private_note",
     "notes",
 }
+
+
+FEATURE_COMPLETION_DEFAULTS = [
+    ("auth", "Auth", "Core", "ready", "critical", True, True, True, True, True),
+    ("documents", "Documents", "Documents", "ready", "critical", True, True, True, True, True),
+    ("files", "Files", "Documents", "ready", "critical", True, True, True, True, True),
+    ("preview", "Preview", "Documents", "ready", "high", True, True, True, True, True),
+    ("secure-sharing", "Secure Sharing", "Sharing", "ready", "high", True, True, True, True, True),
+    ("attention-needed", "Attention Needed", "Documents", "ready", "high", True, True, True, True, True),
+    ("reminders", "Reminders", "Documents", "ready", "high", True, True, True, True, True),
+    ("bundles", "Bundles/Application Packs", "Packs", "ready", "high", True, True, True, True, True),
+    ("trash-restore", "Trash/Restore", "Documents", "ready", "medium", True, True, True, True, True),
+    ("emergency-access", "Emergency Access", "Sharing", "ready", "high", True, True, True, True, True),
+    ("proof-submission", "Proof of Submission", "Documents", "ready", "medium", True, True, True, True, True),
+    ("physical-location", "Physical Location", "Documents", "ready", "medium", True, True, True, True, True),
+    ("export-backup", "Export/Backup", "Trust", "partial", "medium", True, True, True, True, False),
+    ("trust-center", "Trust Center", "Trust", "ready", "medium", True, True, True, True, True),
+    ("plan-limits", "Plan Limits", "Account", "ready", "medium", True, True, True, True, True),
+    ("founder-console", "Founder Console", "Operations", "in_progress", "critical", True, True, False, False, False),
+    ("private-beta", "Private Beta", "Operations", "in_progress", "high", True, True, False, False, False),
+]
+
+LAUNCH_CHECKLIST_DEFAULTS = [
+    ("auth-ready", "Auth ready", "Authentication is stable and protected.", "critical"),
+    ("upload-ready", "Upload ready", "File upload, validation, and storage flows work.", "critical"),
+    ("preview-ready", "Preview ready", "Users can preview supported files safely.", "high"),
+    ("sharing-ready", "Sharing ready", "Secure links, access codes, expiry, and revoke flows work.", "high"),
+    ("trash-ready", "Trash ready", "Soft delete, restore, and permanent delete flows work.", "medium"),
+    ("bundles-ready", "Bundles ready", "Application packs are usable for core workflows.", "high"),
+    ("emergency-access-ready", "Emergency access ready", "Emergency packs expose only chosen records.", "high"),
+    ("trust-center-ready", "Trust center ready", "Trust, security, and privacy pages are current.", "medium"),
+    ("privacy-policy-ready", "Privacy policy ready", "Privacy policy is published and accurate.", "high"),
+    ("terms-ready", "Terms ready", "Terms are published and accurate.", "high"),
+    ("backup-strategy-ready", "Backup strategy ready", "Data export and operational backup story is clear.", "medium"),
+    ("error-monitoring-ready", "Error monitoring ready", "Founder can see errors and failures.", "high"),
+    ("demo-account-ready", "Demo account ready", "Demo account and sample journey are prepared.", "medium"),
+    ("support-contact-ready", "Support contact ready", "Feedback and support paths are working.", "medium"),
+    ("deployment-ready", "Deployment ready", "Production deploy settings are ready.", "critical"),
+    ("founder-console-ready", "Founder console ready", "Founder Console V1 is private, useful, and polished.", "critical"),
+]
 
 
 def _is_sensitive_key(key: str) -> bool:
@@ -131,6 +185,32 @@ def track_product_event(
         logger.warning("Failed to record product event", exc_info=True)
 
 
+def log_founder_action(
+    *,
+    request,
+    action: str,
+    object_type: str = "",
+    object_id: Any = "",
+    metadata: dict | None = None,
+) -> None:
+    """Best-effort founder/admin audit entry; never expose sensitive metadata."""
+    try:
+        actor = getattr(request, "user", None)
+        if not getattr(actor, "is_authenticated", False):
+            actor = None
+        FounderAuditLog.objects.create(
+            actor=actor,
+            action=action[:120],
+            object_type=object_type[:80],
+            object_id=str(object_id)[:80] if object_id not in {None, ""} else "",
+            path=request.path[:255],
+            method=request.method[:12],
+            metadata=sanitize_metadata(metadata or {}),
+        )
+    except Exception:  # noqa: BLE001 - audit should not break founder workflows
+        logger.warning("Failed to record founder audit log", exc_info=True)
+
+
 def _since(days: int):
     return timezone.now() - timedelta(days=days)
 
@@ -169,6 +249,145 @@ def _event_label(event_type: str) -> str:
         return event_type.replace("_", " ").title()
 
 
+def _range_config(range_key: str | None) -> tuple[str, int | None]:
+    if range_key == "7d":
+        return "7d", 7
+    if range_key == "90d":
+        return "90d", 90
+    if range_key == "all":
+        return "all", None
+    return "30d", 30
+
+
+def _range_since(days: int | None):
+    return None if days is None else _since(days)
+
+
+def _date_span(since, *, fallback_days: int = 30) -> list:
+    today = timezone.localdate()
+    if since is None:
+        first_event = ProductEvent.objects.aggregate(value=Min("created_at"))["value"]
+        first_user = User.objects.aggregate(value=Min("date_joined"))["value"]
+        candidates = [value.date() for value in [first_event, first_user] if value]
+        start = min(candidates) if candidates else today - timedelta(days=fallback_days - 1)
+        # Keep all-time charts readable for early SaaS scale.
+        if (today - start).days > 365:
+            start = today - timedelta(days=364)
+    else:
+        start = since.date()
+    days = max((today - start).days + 1, 1)
+    return [start + timedelta(days=offset) for offset in range(days)]
+
+
+def _count_by_date(queryset, date_field: str, dates: list) -> list[dict]:
+    rows = (
+        queryset.annotate(day=TruncDate(date_field))
+        .values("day")
+        .annotate(count=Count("id"))
+    )
+    counts = {row["day"]: row["count"] for row in rows}
+    return [
+        {"date": day.isoformat(), "count": counts.get(day, 0)}
+        for day in dates
+    ]
+
+
+def _distinct_user_count_by_date(queryset, date_field: str, dates: list) -> list[dict]:
+    rows = (
+        queryset.exclude(user__isnull=True)
+        .annotate(day=TruncDate(date_field))
+        .values("day")
+        .annotate(count=Count("user", distinct=True))
+    )
+    counts = {row["day"]: row["count"] for row in rows}
+    return [
+        {"date": day.isoformat(), "count": counts.get(day, 0)}
+        for day in dates
+    ]
+
+
+def _apply_since(queryset, field: str, since):
+    return queryset if since is None else queryset.filter(**{f"{field}__gte": since})
+
+
+def ensure_feature_completion_defaults() -> None:
+    existing = set(FeatureCompletionItem.objects.values_list("key", flat=True))
+    items = []
+    for index, default in enumerate(FEATURE_COMPLETION_DEFAULTS, start=1):
+        (
+            key,
+            name,
+            module,
+            status,
+            priority,
+            backend_done,
+            frontend_done,
+            tests_done,
+            docs_done,
+            polished,
+        ) = default
+        if key in existing:
+            continue
+        items.append(
+            FeatureCompletionItem(
+                key=key,
+                feature_name=name,
+                module=module,
+                status=status,
+                priority=priority,
+                backend_done=backend_done,
+                frontend_done=frontend_done,
+                tests_done=tests_done,
+                docs_done=docs_done,
+                polished=polished,
+                sort_order=index,
+            )
+        )
+    FeatureCompletionItem.objects.bulk_create(items, ignore_conflicts=True)
+
+
+def ensure_launch_checklist_defaults() -> None:
+    existing = set(LaunchChecklistItem.objects.values_list("key", flat=True))
+    items = []
+    for index, (key, label, description, priority) in enumerate(
+        LAUNCH_CHECKLIST_DEFAULTS,
+        start=1,
+    ):
+        if key in existing:
+            continue
+        items.append(
+            LaunchChecklistItem(
+                key=key,
+                label=label,
+                description=description,
+                priority=priority,
+                sort_order=index,
+            )
+        )
+    LaunchChecklistItem.objects.bulk_create(items, ignore_conflicts=True)
+
+
+def ensure_beta_profiles_for_users() -> None:
+    profiled_ids = set(BetaUserProfile.objects.values_list("user_id", flat=True))
+    profiles = [
+        BetaUserProfile(user=user)
+        for user in User.objects.exclude(id__in=profiled_ids).only("id")
+    ]
+    BetaUserProfile.objects.bulk_create(profiles, ignore_conflicts=True)
+
+
+def launch_readiness_summary() -> dict:
+    ensure_launch_checklist_defaults()
+    total = LaunchChecklistItem.objects.count()
+    complete = LaunchChecklistItem.objects.filter(is_complete=True).count()
+    percent = 0 if total == 0 else round((complete / total) * 100)
+    return {
+        "total": total,
+        "complete": complete,
+        "percent": percent,
+    }
+
+
 def _recent_activity_summary(days: int = 30, limit: int = 10) -> list[dict]:
     rows = (
         ProductEvent.objects.filter(created_at__gte=_since(days))
@@ -198,23 +417,41 @@ def _attention_needed_count() -> int:
     )
 
 
-def build_founder_dashboard() -> dict:
+def build_founder_dashboard(range_key: str | None = None) -> dict:
+    selected_range, range_days = _range_config(range_key)
     today = _today_start()
     since_7d = _since(7)
     since_30d = _since(30)
+    since_range = _range_since(range_days)
 
     open_feedback = FeedbackItem.objects.exclude(
         status__in=[FeedbackItem.Status.CLOSED, FeedbackItem.Status.REJECTED]
     )
+    beta = beta_user_summary()
+    security_events = ProductEvent.objects.filter(
+        event_type=ProductEvent.EventType.SECURITY_EVENT_RECORDED
+    )
+    launch = launch_readiness_summary()
+    completion = feature_completion_summary()
 
     return {
+        "range_key": selected_range,
+        "range_days": range_days,
         "total_users": User.objects.count(),
         "new_users_today": User.objects.filter(date_joined__gte=today).count(),
         "new_users_7d": User.objects.filter(date_joined__gte=since_7d).count(),
         "new_users_30d": User.objects.filter(date_joined__gte=since_30d).count(),
+        "new_users_in_range": _apply_since(
+            User.objects.all(), "date_joined", since_range
+        ).count(),
         "active_users_today": _active_users_since(today),
         "active_users_7d": _active_users_since(since_7d),
         "active_users_30d": _active_users_since(since_30d),
+        "active_users_in_range": (
+            User.objects.count()
+            if since_range is None
+            else _active_users_since(since_range)
+        ),
         "total_documents": Document.objects.filter(is_trashed=False).count(),
         "documents_created_7d": Document.objects.filter(
             is_trashed=False,
@@ -241,7 +478,125 @@ def build_founder_dashboard() -> dict:
         "total_feedback_items": FeedbackItem.objects.count(),
         "open_feedback_items": open_feedback.count(),
         "open_error_items": AppErrorLog.objects.filter(resolved=False).count(),
+        "security_events_count": security_events.count(),
+        "security_events_in_range": _apply_since(
+            security_events,
+            "created_at",
+            since_range,
+        ).count(),
+        "beta_users": beta["beta_users"],
+        "active_beta_users": beta["active_beta_users"],
+        "launch_readiness_percent": launch["percent"],
+        "feature_completion_percent": completion["percent"],
         "recent_activity_summary": _recent_activity_summary(),
+    }
+
+
+def _attention_breakdown() -> list[dict]:
+    counts = {
+        "expired": 0,
+        "expiring_soon": 0,
+        "missing_file": 0,
+        "missing_expiry_date": 0,
+        "renewal_due": 0,
+        "low_confidence": 0,
+    }
+    documents = (
+        Document.objects.filter(is_trashed=False)
+        .exclude(status=Document.Status.ARCHIVED)
+        .annotate(file_count=Count("files", filter=Q(files__is_trashed=False)))
+    )
+    for document in documents:
+        health = get_document_health(document)
+        if health.computed_status in counts:
+            counts[health.computed_status] += 1
+        if compute_confidence(document, health=health).score < LOW_CONFIDENCE_THRESHOLD:
+            counts["low_confidence"] += 1
+    labels = {
+        "expired": "Expired",
+        "expiring_soon": "Expiring soon",
+        "missing_file": "Missing file",
+        "missing_expiry_date": "Missing expiry date",
+        "renewal_due": "Renewal due",
+        "low_confidence": "Low confidence",
+    }
+    return [
+        {"key": key, "label": labels[key], "count": value}
+        for key, value in counts.items()
+    ]
+
+
+def build_founder_analytics(range_key: str | None = None) -> dict:
+    selected_range, range_days = _range_config(range_key)
+    since = _range_since(range_days)
+    dates = _date_span(since)
+
+    users = _apply_since(User.objects.all(), "date_joined", since)
+    documents = _apply_since(
+        Document.objects.filter(is_trashed=False),
+        "created_at",
+        since,
+    )
+    files = _apply_since(
+        DocumentFile.objects.filter(is_trashed=False),
+        "created_at",
+        since,
+    )
+    errors = _apply_since(AppErrorLog.objects.all(), "created_at", since)
+    security_events = _apply_since(
+        ProductEvent.objects.filter(
+            event_type=ProductEvent.EventType.SECURITY_EVENT_RECORDED
+        ),
+        "created_at",
+        since,
+    )
+
+    feedback_categories = (
+        _apply_since(FeedbackItem.objects.all(), "created_at", since)
+        .values("category")
+        .annotate(count=Count("id"))
+        .order_by("category")
+    )
+
+    return {
+        "range_key": selected_range,
+        "range_days": range_days,
+        "series": {
+            "user_growth": _count_by_date(users, "date_joined", dates),
+            "active_users": _distinct_user_count_by_date(
+                _apply_since(ProductEvent.objects.all(), "created_at", since),
+                "created_at",
+                dates,
+            ),
+            "documents_created": _count_by_date(documents, "created_at", dates),
+            "files_uploaded": _count_by_date(files, "created_at", dates),
+            "errors": _count_by_date(errors, "created_at", dates),
+            "security_events": _count_by_date(security_events, "created_at", dates),
+        },
+        "attention_breakdown": _attention_breakdown(),
+        "feedback_categories": [
+            {
+                "key": row["category"],
+                "label": FeedbackItem.Category(row["category"]).label,
+                "count": row["count"],
+            }
+            for row in feedback_categories
+        ],
+        "failure_breakdown": [
+            {
+                "key": row["error_type"] or "unknown",
+                "label": row["error_type"] or "Unknown",
+                "count": row["count"],
+            }
+            for row in errors.values("error_type")
+            .annotate(count=Count("id"))
+            .order_by("-count")[:12]
+        ],
+        "privacy_note": (
+            "Founder analytics use aggregate product events and metadata. They "
+            "do not include document contents, file previews, private notes, "
+            "access codes, share tokens, or raw OCR text."
+        ),
     }
 
 
@@ -607,6 +962,84 @@ def build_founder_user_summary(user) -> dict:
             "Founder support view intentionally excludes document titles, filenames, "
             "raw OCR text, private notes, physical locations, access codes, share "
             "tokens, and file paths."
+        ),
+    }
+
+
+def feature_completion_summary() -> dict:
+    ensure_feature_completion_defaults()
+    total = FeatureCompletionItem.objects.count()
+    ready = FeatureCompletionItem.objects.filter(
+        backend_done=True,
+        frontend_done=True,
+        tests_done=True,
+        docs_done=True,
+        polished=True,
+    ).count()
+    return {
+        "total": total,
+        "ready": ready,
+        "percent": 0 if total == 0 else round((ready / total) * 100),
+    }
+
+
+def beta_user_summary() -> dict:
+    ensure_beta_profiles_for_users()
+    beta_profiles = BetaUserProfile.objects.exclude(
+        invite_status=BetaUserProfile.InviteStatus.NOT_INVITED
+    )
+    active_profiles = beta_profiles.filter(
+        invite_status__in=[
+            BetaUserProfile.InviteStatus.ACCEPTED,
+            BetaUserProfile.InviteStatus.ACTIVE,
+        ]
+    )
+    return {
+        "total_profiles": BetaUserProfile.objects.count(),
+        "beta_users": beta_profiles.count(),
+        "active_beta_users": active_profiles.count(),
+    }
+
+
+def build_country_activity(range_key: str | None = None) -> dict:
+    selected_range, range_days = _range_config(range_key)
+    since = _range_since(range_days)
+    queryset = _apply_since(ProductEvent.objects.all(), "created_at", since).exclude(
+        country=""
+    )
+    rows = (
+        queryset.values("country")
+        .annotate(
+            active_users=Count("user", distinct=True),
+            new_signups=Count(
+                "id",
+                filter=Q(event_type=ProductEvent.EventType.USER_SIGNED_UP),
+            ),
+            documents_created=Count(
+                "id",
+                filter=Q(event_type=ProductEvent.EventType.DOCUMENT_CREATED),
+            ),
+            share_access=Count(
+                "id",
+                filter=Q(event_type=ProductEvent.EventType.SHARE_LINK_OPENED),
+            ),
+            security_events=Count(
+                "id",
+                filter=Q(event_type=ProductEvent.EventType.SECURITY_EVENT_RECORDED),
+            ),
+            total_events=Count("id"),
+            last_seen_at=Max("created_at"),
+        )
+        .order_by("-total_events", "country")[:100]
+    )
+    return {
+        "range_key": selected_range,
+        "range_days": range_days,
+        "countries": list(rows),
+        "privacy_note": (
+            "Country activity is aggregated from approximate product-event "
+            "metadata. DueNest does not use GPS, street-level location, or raw "
+            "IP addresses in this founder view."
         ),
     }
 

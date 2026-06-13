@@ -11,6 +11,8 @@ export interface FounderMe {
   email: string;
 }
 
+export type FounderRange = "7d" | "30d" | "90d" | "all";
+
 export interface RecentActivitySummary {
   event_type: string;
   label: string;
@@ -19,13 +21,17 @@ export interface RecentActivitySummary {
 }
 
 export interface FounderDashboard {
+  range_key: FounderRange;
+  range_days: number | null;
   total_users: number;
   new_users_today: number;
   new_users_7d: number;
   new_users_30d: number;
+  new_users_in_range: number;
   active_users_today: number;
   active_users_7d: number;
   active_users_30d: number;
+  active_users_in_range: number;
   total_documents: number;
   documents_created_7d: number;
   total_files_uploaded: number;
@@ -42,7 +48,41 @@ export interface FounderDashboard {
   total_feedback_items: number;
   open_feedback_items: number;
   open_error_items: number;
+  security_events_count: number;
+  security_events_in_range: number;
+  beta_users: number;
+  active_beta_users: number;
+  launch_readiness_percent: number;
+  feature_completion_percent: number;
   recent_activity_summary: RecentActivitySummary[];
+}
+
+export interface ChartPoint {
+  date: string;
+  count: number;
+}
+
+export interface FounderBreakdownItem {
+  key: string;
+  label: string;
+  count: number;
+}
+
+export interface FounderAnalytics {
+  range_key: FounderRange;
+  range_days: number | null;
+  series: {
+    user_growth: ChartPoint[];
+    active_users: ChartPoint[];
+    documents_created: ChartPoint[];
+    files_uploaded: ChartPoint[];
+    errors: ChartPoint[];
+    security_events: ChartPoint[];
+  };
+  attention_breakdown: FounderBreakdownItem[];
+  feedback_categories: FounderBreakdownItem[];
+  failure_breakdown: FounderBreakdownItem[];
+  privacy_note: string;
 }
 
 export interface ActivationStep {
@@ -83,6 +123,47 @@ export interface FeatureAdoption {
   proof_records_used_count: number;
   trash_restore_used_count: number;
   features: FeatureMetric[];
+}
+
+export type FeatureCompletionStatus =
+  | "not_started"
+  | "in_progress"
+  | "partial"
+  | "ready"
+  | "needs_polish"
+  | "deferred";
+
+export type FounderPriority = "low" | "medium" | "high" | "critical";
+
+export interface FounderSummary {
+  total: number;
+  ready?: number;
+  complete?: number;
+  percent: number;
+}
+
+export interface FeatureCompletionItem {
+  id: number;
+  key: string;
+  feature_name: string;
+  module: string;
+  backend_done: boolean;
+  frontend_done: boolean;
+  tests_done: boolean;
+  docs_done: boolean;
+  polished: boolean;
+  status: FeatureCompletionStatus;
+  priority: FounderPriority;
+  notes: string;
+  sort_order: number;
+  completion_percent: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FeatureCompletionResponse {
+  summary: FounderSummary;
+  items: FeatureCompletionItem[];
 }
 
 export type FeedbackCategory =
@@ -180,6 +261,19 @@ export interface AppErrorLog {
   created_at: string;
 }
 
+export interface FounderAuditLog {
+  id: number;
+  actor: number | null;
+  actor_email: string | null;
+  action: string;
+  object_type: string;
+  object_id: string;
+  path: string;
+  method: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
 export interface SecurityEvent {
   id: number;
   event_kind: string;
@@ -249,5 +343,84 @@ export interface FounderUserSummary {
   };
   plan: string;
   safe_recent_activity_summary: RecentActivitySummary[];
+  privacy_note: string;
+}
+
+export type BetaInviteStatus =
+  | "not_invited"
+  | "invited"
+  | "accepted"
+  | "active"
+  | "paused"
+  | "churned";
+
+export type BetaPersona =
+  | "international_student"
+  | "visa_holder"
+  | "scholarship_applicant"
+  | "freelancer"
+  | "family_user"
+  | "student_leader"
+  | "traveler"
+  | "other";
+
+export interface BetaUserProfile {
+  id: number;
+  user: number;
+  user_email: string;
+  username: string;
+  date_joined: string;
+  last_login: string | null;
+  invite_status: BetaInviteStatus;
+  persona: BetaPersona;
+  tags: string[];
+  notes: string;
+  invited_at: string | null;
+  activated_at: string | null;
+  last_contacted_at: string | null;
+  document_count: number;
+  file_count: number;
+  reminder_count: number;
+  bundle_count: number;
+  feedback_count: number;
+  onboarding_completed: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LaunchChecklistItem {
+  id: number;
+  key: string;
+  label: string;
+  description: string;
+  is_complete: boolean;
+  priority: FounderPriority;
+  notes: string;
+  sort_order: number;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LaunchReadinessResponse {
+  summary: FounderSummary;
+  items: LaunchChecklistItem[];
+}
+
+export interface CountryActivityItem {
+  country: string;
+  active_users: number;
+  new_signups: number;
+  documents_created: number;
+  share_access: number;
+  security_events: number;
+  total_events: number;
+  last_seen_at: string | null;
+}
+
+export interface CountryActivityResponse {
+  range_key: FounderRange;
+  range_days: number | null;
+  countries: CountryActivityItem[];
   privacy_note: string;
 }

@@ -1137,19 +1137,25 @@ Founder Console V1 is implemented as the first solo-founder operations layer.
 Delivered:
 
 - founder-only dashboard metrics
+- standalone `/founder` console shell and route group
+- date-ranged analytics charts for users, documents, files, errors, and security activity
 - activation funnel
 - feature adoption dashboard
+- editable feature completion tracker
 - feedback submission and founder feedback board
 - checklist template management foundation
+- beta user tracking
+- launch readiness checklist
+- privacy-safe country activity map/table
 - lightweight error monitoring
 - security/audit overview
 - privacy-safe user support metadata
+- founder audit logs
 - Founder Console documentation
 
 Deferred:
 
 - billing dashboard
-- global activity map
 - advanced segmentation
 - consent-based sensitive support access
 - AI analytics assistant

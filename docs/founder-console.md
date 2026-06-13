@@ -1,206 +1,163 @@
 # Founder Console V1
 
-**Status:** Implemented foundation  
-**Scope:** Solo-founder operations for private beta  
-**Primary route:** `/dashboard/founder`  
+**Status:** Implemented
+**Scope:** Solo-founder operations for private beta
+**Primary route:** `/founder`
+**Compatibility route:** `/dashboard/founder/*` still exists for older links
 **API prefix:** `/api/v1/founder/`
 
 ## Purpose
 
-Founder Console V1 gives a solo founder enough operational visibility to run
-DueNest during private beta without casually exposing private user vault data.
+Founder Console V1 is DueNest's private operating center for a solo founder. It
+shows product usage, activation, adoption, feedback, failures, security signals,
+beta users, launch readiness, templates, and country-level activity without
+turning founder access into a vault browser.
 
-It supports:
+## Access Control
 
-- aggregate product health metrics
-- activation funnel analysis
-- document feature adoption tracking
-- in-app feedback collection and triage
-- checklist template management
-- lightweight client/backend error monitoring
-- security/audit overview
-- privacy-safe user support metadata
+Founder API endpoints require:
 
-## Founder Access Control
+- authentication
+- `is_staff` or `is_superuser`
 
-Founder endpoints require authentication plus staff/superuser access. The
-backend permission class is `IsFounderUser`, which allows only users where
-`is_staff` or `is_superuser` is true.
+Normal authenticated users receive `403 Forbidden` for `/api/v1/founder/*`.
+The frontend standalone shell at `/founder` checks `/api/v1/founder/me/` before
+rendering console content. Normal user navigation only shows the founder link
+after that backend check succeeds.
 
-Normal authenticated users receive `403 Forbidden` for founder endpoints. The
-frontend hides Founder Console navigation unless `/api/v1/founder/me/`
-confirms access.
+## Privacy Rules
 
-## Privacy-Safe Support Principle
+Founder tools are designed for operations, not private-document inspection.
 
-Founder tools are designed for operations, not vault browsing.
-
-The console intentionally excludes:
+Founder views must not expose:
 
 - document contents
-- document titles in support summaries
+- file contents or previews
 - filenames in support summaries
 - raw OCR text
 - private notes
 - physical document locations
-- access codes and access-code hashes
+- access codes or access-code hashes
 - raw share tokens
 - internal file paths
-- passwords, JWTs, OAuth tokens, and secrets
+- passwords, JWTs, OAuth tokens, or secrets
+- raw IP addresses in ordinary UI
 
-Support access to sensitive user data is intentionally deferred until an
-explicit user-consent and logging model exists.
+Product-event metadata is sanitized before storage. Founder analytics use
+aggregate records and safe metadata such as event type, counts, timestamps,
+safe country labels, and product module names.
 
-## Dashboard Metrics
+## Frontend Routes
 
-`GET /api/v1/founder/dashboard/` returns aggregate metrics:
+```txt
+/founder
+/founder/analytics
+/founder/activation
+/founder/adoption
+/founder/features
+/founder/feedback
+/founder/errors
+/founder/security
+/founder/templates
+/founder/beta
+/founder/launch
+/founder/map
+```
 
-- total and new users
-- active users based on first-party events and login timestamps
-- documents, files, reminders, share links
-- attention-needed count
-- checklists, bundles, exports, emergency packs
-- feedback and open error counts
-- recent product activity summary by event type
+The `/founder` shell is visually separate from the normal dashboard. Existing
+`/dashboard/founder/*` pages are compatibility routes.
 
-The endpoint does not return individual document data.
+## Implemented Areas
 
-## Activation Funnel
+- Overview dashboard with KPI cards and date-range filter.
+- Native SVG/CSS charts for user growth, active users, documents, files,
+  failures, security events, attention breakdown, and feedback categories.
+- Activation funnel from signup to first document, file, expiry date, reminder,
+  checklist/bundle, and secure sharing.
+- Feature adoption dashboard.
+- Editable feature completion tracker.
+- Feedback submission and founder triage board.
+- Error/failure dashboard.
+- Security overview and founder audit log storage.
+- Checklist template management.
+- Beta user profiles with invite status, persona, tags, notes, and safe usage
+  summaries.
+- Launch readiness cockpit with editable checklist and readiness percentage.
+- Country activity dashboard as the privacy-safe V1 global map fallback.
 
-`GET /api/v1/founder/activation-funnel/` tracks the first-value path:
+## Backend Endpoints
 
-1. signed up
-2. created first document
-3. uploaded first file
-4. added expiry or renewal date
-5. viewed Attention Needed
-6. created reminder
-7. created checklist or bundle
-8. created secure share link
-
-Counts come from real user-owned records and product events. No fake funnel
-numbers are generated.
-
-## Feature Adoption
-
-`GET /api/v1/founder/feature-adoption/` reports per-feature usage:
-
-- file preview
-- secure sharing
-- access-code sharing
-- reminders
-- Attention Needed
-- checklists
-- bundles
-- timeline
-- extraction
-- export
-- emergency packs
-- proof records
-- trash restore
-
-Each feature includes user count, total event/record count, adoption percent,
-and last-7-day/last-30-day activity.
-
-## Feedback Board
-
-Users submit feedback through:
+Public/user-facing operational endpoints:
 
 ```txt
 POST /api/v1/feedback/
-```
-
-Founder management endpoints:
-
-```txt
-GET   /api/v1/founder/feedback/
-GET   /api/v1/founder/feedback/:feedback_id/
-PATCH /api/v1/founder/feedback/:feedback_id/
-```
-
-The frontend user form is at `/dashboard/feedback`. The founder board supports
-filtering and status/priority/founder-note updates.
-
-## Template Management
-
-Founder checklist template endpoints:
-
-```txt
-GET    /api/v1/founder/templates/checklists/
-POST   /api/v1/founder/templates/checklists/
-GET    /api/v1/founder/templates/checklists/:template_id/
-PATCH  /api/v1/founder/templates/checklists/:template_id/
-DELETE /api/v1/founder/templates/checklists/:template_id/
-```
-
-`DELETE` deactivates the template (`is_active=false`) instead of hard-deleting
-it. Editing a template affects future checklist creation only; existing
-user-owned checklists are already materialized and are not rewritten.
-
-## Error Monitoring
-
-Client errors are submitted through:
-
-```txt
 POST /api/v1/errors/client/
 ```
 
 Founder endpoints:
 
 ```txt
+GET   /api/v1/founder/me/
+GET   /api/v1/founder/dashboard/?range=7d|30d|90d|all
+GET   /api/v1/founder/analytics/?range=7d|30d|90d|all
+GET   /api/v1/founder/activation-funnel/
+GET   /api/v1/founder/feature-adoption/
+GET   /api/v1/founder/feature-completion/
+PATCH /api/v1/founder/feature-completion/:item_id/
+GET   /api/v1/founder/feedback/
+GET   /api/v1/founder/feedback/:feedback_id/
+PATCH /api/v1/founder/feedback/:feedback_id/
+GET   /api/v1/founder/templates/checklists/
+POST  /api/v1/founder/templates/checklists/
+GET   /api/v1/founder/templates/checklists/:template_id/
+PATCH /api/v1/founder/templates/checklists/:template_id/
+DELETE /api/v1/founder/templates/checklists/:template_id/
 GET   /api/v1/founder/errors/
 GET   /api/v1/founder/errors/:error_id/
 PATCH /api/v1/founder/errors/:error_id/
 POST  /api/v1/founder/errors/:error_id/resolve/
+GET   /api/v1/founder/security-overview/
+GET   /api/v1/founder/security-events/
+GET   /api/v1/founder/audit-logs/
+GET   /api/v1/founder/users/
+GET   /api/v1/founder/users/:user_id/summary/
+GET   /api/v1/founder/beta-users/
+PATCH /api/v1/founder/beta-users/:profile_id/
+GET   /api/v1/founder/launch-readiness/
+PATCH /api/v1/founder/launch-readiness/:item_id/
+GET   /api/v1/founder/country-activity/?range=7d|30d|90d|all
 ```
 
-Error metadata is sanitized before storage. Stack traces are only returned to
-founder users when Django `DEBUG` is enabled.
+## Data Model
 
-## Security Overview
+Founder Console uses:
 
-`GET /api/v1/founder/security-overview/` returns safe aggregate signals:
+- `ProductEvent` for privacy-minimized product analytics events.
+- `FeedbackItem` for user feedback and founder triage.
+- `AppErrorLog` for client/backend failure intake.
+- `FeatureCompletionItem` for editable feature maturity tracking.
+- `LaunchChecklistItem` for launch readiness tracking.
+- `BetaUserProfile` for founder-only beta metadata.
+- `FounderAuditLog` for founder/admin action audit entries.
 
-- failed login attempts in 24 hours
-- wrong share-code attempts in 24 hours
-- expired/revoked share-link access attempts in 24 hours
-- suspicious events in 7 days
-- high-download account count
-- recent safe security event summaries
+## Country Activity
 
-Raw IP addresses are not shown in ordinary founder UI.
+`/founder/map` is implemented as a country activity dashboard, not a heavy map
+dependency. It aggregates:
 
-## User Metadata Limitations
+- active users by country
+- new signups by country
+- documents created by country
+- share access by country
+- security events by country
 
-Founder user endpoints:
+It uses approximate country metadata only. No GPS, street-level location, raw
+IP addresses, or small-count city drilldowns are shown.
 
-```txt
-GET /api/v1/founder/users/
-GET /api/v1/founder/users/:user_id/summary/
-```
+## Deferred
 
-They show account metadata and counts only:
-
-- user id, email, joined date, last login
-- onboarding status
-- counts for documents, files, reminders, checklists, bundles, shares,
-  exports, feedback, emergency packs, and proof records
-- deletion request status
-- plan placeholder
-- safe recent activity summary by event type
-
-They do not show document titles, filenames, OCR text, notes, file paths,
-access codes, share tokens, or physical locations.
-
-## Intentionally Deferred
-
-The following are deliberately not implemented in Founder Console V1:
-
-- billing dashboard
-- global activity map
-- advanced user segmentation
-- support access with user consent
-- AI analytics assistant
-- cohort retention analytics
-- churn prediction
-- full incident response center
+- Billing dashboard.
+- AI analytics assistant.
+- Advanced cohort retention and churn prediction.
+- Consent-based sensitive support access.
+- Full incident response center.
