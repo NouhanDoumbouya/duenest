@@ -185,7 +185,7 @@ This is the recommended sequence. It can be adjusted, but the first paid MVP sho
 12. Document detail page upgrade *(done: checklists + extracted-details sections added)*
 13. Calendar/timeline view *(done: aggregated timeline API + premium timeline UI)*
 14. Secure share links *(done: file-level links)*
-15. OCR-assisted extraction *(done: review-gated foundation; no third-party OCR)*
+15. OCR-assisted extraction *(done: local PDF text + Tesseract OCR, review-gated; no third-party OCR)*
 16. Application/renewal bundles *(done: bundles + requirements + readiness score)*
 17. Activity timeline and audit log *(partially done: file activity)*
 18. Version history

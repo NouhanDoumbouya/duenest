@@ -1107,13 +1107,16 @@ justifies extraction.
   `services` layer — no new services or infrastructure. Checklist progress and
   bundle readiness are cached on the row and recalculated synchronously whenever
   a child item/requirement changes.
-- **OCR-assisted extraction foundation:** a synchronous, *review-gated*
-  extraction built on a pluggable provider abstraction (`services.extract_file_details`).
-  The current `local_text` provider reads a PDF text layer only if an optional
-  library is present and otherwise degrades to a graceful `needs_review` result.
-  Files are never sent to a third-party service, and document fields are only
-  written after explicit owner review/apply. This deliberately reuses the
-  existing request/response cycle so no queue or worker is introduced yet.
+- **OCR-assisted extraction:** a synchronous, *review-gated* extraction built on
+  a pluggable provider abstraction (`services.extract_file_details`). Two real
+  providers run locally: `local_text` (PDF text layer via `pypdf`) and
+  `local_ocr` (Tesseract via `pytesseract` for images and scanned PDFs, the
+  latter rasterized with `pdf2image` + poppler). OCR is gated on the `tesseract`
+  binary being installed and degrades to a graceful `needs_review` when it is
+  not. Files are never sent to a third-party service, and document fields are
+  only written after explicit owner review/apply. This deliberately reuses the
+  existing request/response cycle so no queue or worker is introduced yet — the
+  same provider seam can later be swapped for an async worker.
 
 ### Mid-term (Phase 3–4)
 
@@ -1143,7 +1146,7 @@ justifies extraction.
 | Application/renewal bundles | ✅ Implemented (readiness score) | Auto-suggested requirements later |
 | Timeline / calendar view | ✅ Implemented (aggregated list) | Full calendar component later |
 | Sharing | ✅ Implemented file-level links | Email delivery, watermarking, redaction later |
-| OCR-assisted extraction | ✅ Implemented (sync, review-gated foundation) | Async worker + real OCR provider |
+| OCR-assisted extraction | ✅ Implemented (local PDF text + Tesseract OCR, sync, review-gated) | Async worker for large volumes |
 | Audit / export | ✅ File activity log | Document-wide audit + export service |
 
 ---

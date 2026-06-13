@@ -735,6 +735,7 @@ class DocumentExtraction(models.Model):
     class Provider(models.TextChoices):
         MANUAL = "manual", "Manual"
         LOCAL_TEXT = "local_text", "Local text"
+        LOCAL_OCR = "local_ocr", "Local OCR (Tesseract)"
         FUTURE_OCR = "future_ocr", "Future OCR"
 
     owner = models.ForeignKey(

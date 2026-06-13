@@ -9,14 +9,17 @@ review-before-apply guarantee for extraction.
 
 import tempfile
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
-from django.test import override_settings
+from django.test import SimpleTestCase, override_settings
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
+
+from . import services
 
 _TEMP_MEDIA = tempfile.mkdtemp(prefix="duenest-renewal-test-")
 
@@ -441,3 +444,58 @@ class ExtractionTests(RenewalWorkspaceBaseTest):
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         self.alice_doc.refresh_from_db()
         self.assertEqual(self.alice_doc.issuer, "")
+
+    def test_pdf_text_layer_is_parsed_into_fields(self):
+        """When a real text layer is available, fields are parsed from it."""
+        sample = (
+            "REPUBLIC OF EXAMPLE\n"
+            "Passport\n"
+            "Passport No: AB1234567\n"
+            "Date of issue: 12 Jan 2021\n"
+            "Date of expiry: 11 Jan 2031\n"
+            "Issued by: HM Passport Office\n"
+            "Country of issue: United Kingdom\n"
+        )
+        self.auth(self.alice)
+        with patch.object(services, "_extract_pdf_text", return_value=sample):
+            response = self.client.post(self.extractions_url())
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        fields = response.data["extracted_fields"]
+        self.assertEqual(response.data["provider"], "local_text")
+        self.assertEqual(fields["reference_number"], "AB1234567")
+        self.assertEqual(fields["issue_date"], "2021-01-12")
+        self.assertEqual(fields["expiry_date"], "2031-01-11")
+        self.assertEqual(fields["document_type"], "passport")
+        self.assertIn("Passport Office", fields["issuer"])
+
+
+class ExtractionParsingTests(SimpleTestCase):
+    """Unit tests for the dependency-free date + field parsing helpers."""
+
+    def test_normalize_date_formats(self):
+        cases = {
+            "2026-01-09": "2026-01-09",
+            "09/01/2026": "2026-01-09",  # day-first
+            "9 Jan 2026": "2026-01-09",
+            "January 9, 2026": "2026-01-09",
+        }
+        for raw, expected in cases.items():
+            self.assertEqual(services._normalize_date(raw), expected, raw)
+
+    def test_normalize_date_rejects_garbage(self):
+        self.assertIsNone(services._normalize_date("not a date"))
+        self.assertIsNone(services._normalize_date("2026-13-40"))
+
+    def test_guess_fields_uses_labels(self):
+        text = (
+            "Driving Licence\n"
+            "Licence No: D9876543\n"
+            "Valid until: 2030-06-30\n"
+        )
+        fields = services._guess_fields_from_text(text)
+        self.assertEqual(fields["document_type"], "driving_licence")
+        self.assertEqual(fields["reference_number"], "D9876543")
+        self.assertEqual(fields["expiry_date"], "2030-06-30")
+
+    def test_guess_fields_handles_empty_text(self):
+        self.assertEqual(services._guess_fields_from_text(""), {})

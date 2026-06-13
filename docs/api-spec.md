@@ -1161,12 +1161,19 @@ Event types: `document_expiry`, `document_renewal`, `reminder`,
 | `PATCH` | `/api/v1/documents/:document_id/files/:file_id/extractions/:extraction_id/` | Stage reviewed fields |
 | `POST` | `/api/v1/documents/:document_id/files/:file_id/extractions/:extraction_id/apply/` | Apply chosen reviewed fields to the document |
 
-This is a safe foundation, not an automatic AI pipeline:
+This is a safe, **local** extraction pipeline — not an automatic AI service:
 
-- Extraction uses a pluggable provider abstraction. The current `local_text`
-  provider reads a PDF text layer **only if** an optional library is installed;
-  otherwise it returns a graceful `needs_review` result instead of failing.
-- **Files are never sent to a third-party OCR service.**
+- Extraction uses a pluggable provider abstraction with two real providers:
+  - `local_text` — reads a PDF **text layer** with `pypdf` (fast, exact).
+  - `local_ocr` — runs **Tesseract OCR** (`pytesseract`) on images, and on
+    scanned PDFs with no text layer (rasterized locally via `pdf2image` +
+    poppler). OCR only runs when the `tesseract` binary is installed; otherwise
+    the result degrades gracefully to `needs_review`.
+- **Files are never sent to a third-party OCR service** — all processing is on
+  the server, on local storage.
+- The provider parses labelled values where it can (e.g. `Date of expiry: …`,
+  `Passport No: …`), normalizes dates to ISO `YYYY-MM-DD` (day-first for
+  ambiguous numeric dates), and reports a `confidence_score`.
 - Extracted values are always *suggestions*. The owner reviews/edits them
   (`PATCH extracted_fields`), then explicitly applies a chosen subset
   (`POST .../apply/` with `{ "fields": ["issuer", ...] }`). A document field is
@@ -1175,6 +1182,12 @@ This is a safe foundation, not an automatic AI pipeline:
   `country`, `reference_number`, `issue_date`, `expiry_date`, `renewal_date`.
 - `raw_text` is owner-only and is **never** returned by the API; responses
   expose only a `has_raw_text` boolean.
+
+**Dependencies.** PDF text extraction works out of the box (`pypdf`). Image /
+scanned-PDF OCR additionally requires the system `tesseract` binary (and
+`poppler` for scanned PDFs); without it, image extraction returns
+`needs_review`. See the project `README.md` ("Optional: document OCR") for
+install notes.
 
 ```json
 {
