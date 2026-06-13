@@ -29,10 +29,14 @@ from .models import (
     EmergencyAccessPack,
     EmergencyAccessPackItem,
     ProofRecord,
+    RoomActivity,
+    ShareRoom,
+    ShareRoomItem,
 )
 from .services import (
     APPLICABLE_EXTRACTION_FIELDS,
     bundle_readiness,
+    collect_room_files,
     checklist_progress,
     compute_confidence,
     compute_last_safe_action,
@@ -1653,3 +1657,218 @@ class HealthOverviewGroupSerializer(serializers.Serializer):
     description = serializers.CharField()
     count = serializers.IntegerField()
     items = serializers.ListField(child=serializers.DictField())
+
+
+# ---- Secure rooms ----------------------------------------------------------
+
+
+class ShareRoomItemSerializer(serializers.ModelSerializer):
+    """Owner-facing representation of a room item with safe linked info."""
+
+    kind = serializers.SerializerMethodField()
+    title = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ShareRoomItem
+        fields = [
+            "id",
+            "kind",
+            "title",
+            "document",
+            "file",
+            "proof",
+            "sort_order",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+    def get_kind(self, obj):
+        if obj.file_id:
+            return "file"
+        if obj.document_id:
+            return "document"
+        if obj.proof_id:
+            return "proof"
+        return "unknown"
+
+    def get_title(self, obj):
+        if obj.file_id:
+            return obj.file.original_filename
+        if obj.document_id:
+            return obj.document.title
+        if obj.proof_id:
+            return obj.proof.title
+        return ""
+
+
+class ShareRoomItemCreateSerializer(serializers.Serializer):
+    """Validates adding one owner-owned item (document, file, or proof)."""
+
+    document = serializers.IntegerField(required=False, allow_null=True)
+    file = serializers.IntegerField(required=False, allow_null=True)
+    proof = serializers.IntegerField(required=False, allow_null=True)
+    sort_order = serializers.IntegerField(required=False, default=0)
+
+    def validate(self, attrs):
+        provided = [k for k in ("document", "file", "proof") if attrs.get(k)]
+        if len(provided) != 1:
+            raise serializers.ValidationError(
+                "Provide exactly one of document, file, or proof."
+            )
+        return attrs
+
+
+class ShareRoomSerializer(serializers.ModelSerializer):
+    """Owner-facing room representation (includes the token)."""
+
+    status = serializers.SerializerMethodField()
+    download_allowed = serializers.BooleanField(read_only=True)
+    items = ShareRoomItemSerializer(many=True, read_only=True)
+    item_count = serializers.SerializerMethodField()
+    file_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ShareRoom
+        fields = [
+            "id",
+            "title",
+            "description",
+            "token",
+            "permission",
+            "download_allowed",
+            "status",
+            "expires_at",
+            "revoked_at",
+            "access_code_required",
+            "watermark_enabled",
+            "privacy_screen_enabled",
+            "access_limit_type",
+            "max_views",
+            "view_count",
+            "max_downloads",
+            "download_count",
+            "limit_reached_at",
+            "recipient_email",
+            "label",
+            "purpose",
+            "items",
+            "item_count",
+            "file_count",
+            "created_at",
+            "updated_at",
+            "last_accessed_at",
+        ]
+        read_only_fields = fields
+
+    def get_status(self, obj):
+        if obj.is_revoked:
+            return "revoked"
+        if obj.is_expired:
+            return "expired"
+        if obj.is_limit_reached:
+            return "limit_reached"
+        return "active"
+
+    def get_item_count(self, obj):
+        return obj.items.count()
+
+    def get_file_count(self, obj):
+        return len(collect_room_files(obj).files)
+
+
+class ShareRoomCreateUpdateSerializer(serializers.ModelSerializer):
+    """Validates owner input when creating/updating a room."""
+
+    access_code = serializers.CharField(
+        required=False, allow_blank=True, write_only=True, max_length=64
+    )
+
+    class Meta:
+        model = ShareRoom
+        fields = [
+            "title",
+            "description",
+            "permission",
+            "expires_at",
+            "access_code_required",
+            "access_code",
+            "watermark_enabled",
+            "privacy_screen_enabled",
+            "access_limit_type",
+            "max_views",
+            "max_downloads",
+            "recipient_email",
+            "label",
+            "purpose",
+        ]
+
+    def validate_expires_at(self, value):
+        if value is not None and value <= timezone.now():
+            raise serializers.ValidationError("Expiry must be in the future.")
+        return value
+
+    def validate(self, attrs):
+        limit_type = attrs.get("access_limit_type")
+        if (
+            limit_type == ShareRoom.AccessLimitType.LIMITED_COUNT
+            and not attrs.get("max_views")
+            and not getattr(self.instance, "max_views", None)
+        ):
+            raise serializers.ValidationError(
+                {"max_views": "Set how many views this room allows."}
+            )
+        return attrs
+
+
+class PublicShareRoomFileSerializer(serializers.Serializer):
+    """Safe public representation of a single file inside a room."""
+
+    file_id = serializers.IntegerField(source="file.id")
+    name = serializers.CharField(source="file.original_filename")
+    content_type = serializers.CharField(source="file.content_type")
+    file_size = serializers.IntegerField(source="file.file_size")
+    is_previewable = serializers.BooleanField(source="file.is_previewable")
+    source = serializers.CharField(source="source_label")
+
+
+class PublicShareRoomSerializer(serializers.Serializer):
+    """
+    SAFE public metadata for a room. Omits owner identity, tokens, access codes,
+    internal paths, recipient email (except inside the watermark), and any vault
+    data beyond the room's explicit items.
+    """
+
+    title = serializers.CharField()
+    description = serializers.CharField()
+    permission = serializers.CharField()
+    download_allowed = serializers.BooleanField()
+    access_code_required = serializers.BooleanField()
+    watermark_enabled = serializers.BooleanField()
+    privacy_screen_enabled = serializers.BooleanField()
+    watermark_text = serializers.SerializerMethodField()
+    short_id = serializers.CharField()
+    expires_at = serializers.DateTimeField()
+    files = serializers.SerializerMethodField()
+
+    def get_watermark_text(self, obj):
+        return obj.watermark_text if obj.watermark_enabled else ""
+
+    def get_files(self, obj):
+        entries = self.context.get("room_files")
+        if entries is None:
+            entries = collect_room_files(obj).files
+        return PublicShareRoomFileSerializer(entries, many=True).data
+
+
+class RoomActivitySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RoomActivity
+        fields = [
+            "id",
+            "action",
+            "actor_type",
+            "ip_address",
+            "metadata",
+            "created_at",
+        ]
+        read_only_fields = fields

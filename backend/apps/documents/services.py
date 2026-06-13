@@ -673,6 +673,28 @@ def log_activity(
         logger.warning("Failed to record file activity", exc_info=True)
 
 
+def log_room_activity(
+    *, room, action, actor_type, request=None, metadata: dict | None = None
+) -> None:
+    """Record one secure-room activity entry. Never raises; codes are not logged."""
+    from .models import RoomActivity
+
+    try:
+        RoomActivity.objects.create(
+            owner_id=room.owner_id,
+            room=room,
+            action=action,
+            actor_type=actor_type,
+            ip_address=client_ip(request) if request is not None else None,
+            user_agent=(
+                request.META.get("HTTP_USER_AGENT", "")[:1000] if request else ""
+            ),
+            metadata=metadata or {},
+        )
+    except Exception:  # noqa: BLE001 — logging must never break the flow
+        logger.warning("Failed to record room activity", exc_info=True)
+
+
 # ---- Checklist progress ----------------------------------------------------
 
 
@@ -920,6 +942,112 @@ def collect_bundle_files(bundle) -> BundleFilesResult:
                 )
 
     return BundleFilesResult(files=files, missing=missing)
+
+
+# ---- Secure room files ------------------------------------------------------
+
+
+@dataclass
+class RoomFileEntry:
+    file: object  # DocumentFile
+    source_label: str
+    item_id: int
+
+
+@dataclass
+class RoomFilesResult:
+    files: list
+    missing: list
+
+    @property
+    def total_size(self) -> int:
+        return sum(entry.file.file_size for entry in self.files)
+
+
+def collect_room_files(room) -> RoomFilesResult:
+    """
+    Gather the live files exposed by a secure room's items (files, documents,
+    proofs), de-duplicated. Trashed files/documents are excluded and reported as
+    missing. The room never exposes anything beyond its explicit items.
+    """
+    files: list[RoomFileEntry] = []
+    missing: list = []
+    seen: set[int] = set()
+
+    items = (
+        room.items.select_related(
+            "document",
+            "file",
+            "file__document",
+            "proof",
+            "proof__linked_file",
+            "proof__linked_file__document",
+        )
+        .prefetch_related("document__files")
+        .all()
+    )
+
+    def _add(f, label, item_id):
+        if f.id in seen:
+            return
+        seen.add(f.id)
+        files.append(RoomFileEntry(file=f, source_label=label, item_id=item_id))
+
+    for item in items:
+        if item.file_id:
+            f = item.file
+            if f.is_trashed or f.document.is_trashed:
+                missing.append({"item_id": item.id, "reason": "file_trashed"})
+            else:
+                _add(f, f.document.title, item.id)
+        elif item.document_id:
+            doc = item.document
+            if doc.is_trashed:
+                missing.append({"item_id": item.id, "reason": "document_trashed"})
+                continue
+            live = [x for x in doc.files.all() if not x.is_trashed]
+            if not live:
+                missing.append({"item_id": item.id, "reason": "no_file"})
+            for f in live:
+                _add(f, doc.title, item.id)
+        elif item.proof_id:
+            proof = item.proof
+            f = proof.linked_file
+            if f and not f.is_trashed and not f.document.is_trashed:
+                _add(f, f"Proof: {proof.title}", item.id)
+            else:
+                missing.append({"item_id": item.id, "reason": "no_file"})
+
+    return RoomFilesResult(files=files, missing=missing)
+
+
+def build_room_zip(room):
+    """Build a streamable ZIP of a room's files (used when downloads allowed)."""
+    import tempfile
+    import zipfile
+
+    result = collect_room_files(room)
+    root = _safe_path_component(room.title, "room")
+    used: set = set()
+    included = 0
+
+    spooled = tempfile.SpooledTemporaryFile(max_size=8 * 1024 * 1024)
+    with zipfile.ZipFile(spooled, "w", zipfile.ZIP_DEFLATED) as zf:
+        for entry in result.files:
+            folder = _safe_path_component(entry.source_label, "files")
+            filename = _safe_path_component(
+                entry.file.original_filename, f"file-{entry.file.id}"
+            )
+            arcname = _dedupe_arcname(f"{root}/{folder}/{filename}", used)
+            if _write_file_to_zip(zf, arcname, entry.file):
+                included += 1
+
+    spooled.seek(0)
+    zip_filename = (
+        f"{_slugify_filename(room.title, 'room')}_"
+        f"{timezone.localdate().isoformat()}.zip"
+    )
+    return spooled, zip_filename, {"files_count": included}
 
 
 # ---- Timeline aggregation --------------------------------------------------

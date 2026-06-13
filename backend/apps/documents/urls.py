@@ -19,6 +19,17 @@ from .views import (
     DocumentBundleFilesView,
     DocumentBundleListCreateView,
     DocumentFilesExportSelectedView,
+    PublicShareRoomFileDownloadView,
+    PublicShareRoomFilePreviewView,
+    PublicShareRoomMetadataView,
+    PublicShareRoomVerifyCodeView,
+    PublicShareRoomZipView,
+    ShareRoomActivityView,
+    ShareRoomDetailView,
+    ShareRoomItemDeleteView,
+    ShareRoomItemsView,
+    ShareRoomListCreateView,
+    ShareRoomRevokeView,
     DocumentBundleRequirementCreateView,
     DocumentBundleRequirementDetailView,
     DocumentHealthOverviewView,
@@ -368,6 +379,63 @@ urlpatterns = [
         "document-bundles/<int:bundle_id>/requirements/<int:requirement_id>/link-file/",
         BundleRequirementLinkFileView.as_view(),
         name="document-bundle-requirement-link-file",
+    ),
+    # ---- Secure rooms (owner) ----------------------------------------------
+    path(
+        "share-rooms/",
+        ShareRoomListCreateView.as_view(),
+        name="share-rooms",
+    ),
+    path(
+        "share-rooms/<int:room_id>/",
+        ShareRoomDetailView.as_view(),
+        name="share-room-detail",
+    ),
+    path(
+        "share-rooms/<int:room_id>/items/",
+        ShareRoomItemsView.as_view(),
+        name="share-room-items",
+    ),
+    path(
+        "share-rooms/<int:room_id>/items/<int:item_id>/",
+        ShareRoomItemDeleteView.as_view(),
+        name="share-room-item-detail",
+    ),
+    path(
+        "share-rooms/<int:room_id>/revoke/",
+        ShareRoomRevokeView.as_view(),
+        name="share-room-revoke",
+    ),
+    path(
+        "share-rooms/<int:room_id>/activity/",
+        ShareRoomActivityView.as_view(),
+        name="share-room-activity",
+    ),
+    # ---- Secure rooms (public, token-gated) --------------------------------
+    path(
+        "public/rooms/<str:token>/",
+        PublicShareRoomMetadataView.as_view(),
+        name="public-room",
+    ),
+    path(
+        "public/rooms/<str:token>/verify-code/",
+        PublicShareRoomVerifyCodeView.as_view(),
+        name="public-room-verify-code",
+    ),
+    path(
+        "public/rooms/<str:token>/files/<int:file_id>/preview/",
+        PublicShareRoomFilePreviewView.as_view(),
+        name="public-room-file-preview",
+    ),
+    path(
+        "public/rooms/<str:token>/files/<int:file_id>/download/",
+        PublicShareRoomFileDownloadView.as_view(),
+        name="public-room-file-download",
+    ),
+    path(
+        "public/rooms/<str:token>/download-zip/",
+        PublicShareRoomZipView.as_view(),
+        name="public-room-download-zip",
     ),
     # Public share endpoints (token-gated, no authentication).
     path(

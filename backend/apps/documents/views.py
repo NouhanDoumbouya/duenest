@@ -40,6 +40,9 @@ from .models import (
     EmergencyAccessPack,
     EmergencyAccessPackItem,
     ProofRecord,
+    RoomActivity,
+    ShareRoom,
+    ShareRoomItem,
     generate_share_token,
 )
 from .serializers import (
@@ -70,8 +73,13 @@ from .serializers import (
     ExtractionApplySerializer,
     ProofRecordSerializer,
     PublicEmergencyPackSerializer,
+    PublicShareRoomSerializer,
     PublicSharedFileSerializer,
+    RoomActivitySerializer,
     ShareLinkCreateSerializer,
+    ShareRoomCreateUpdateSerializer,
+    ShareRoomItemCreateSerializer,
+    ShareRoomSerializer,
     TimelineEventSerializer,
 )
 from apps.users import plans as user_plans
@@ -87,6 +95,8 @@ from .services import (
     build_documents_zip,
     bundle_readiness,
     collect_bundle_files,
+    collect_room_files,
+    build_room_zip,
     build_timeline,
     scan_missing,
     create_document_export,
@@ -95,6 +105,7 @@ from .services import (
     get_document_health,
     log_activity,
     log_document_activity,
+    log_room_activity,
     record_document_version,
     reminder_date_for_rule,
     summarize_field_changes,
@@ -3136,3 +3147,473 @@ class DocumentHealthOverviewView(APIView):
 
     def get(self, request):
         return Response(build_health_overview(request.user))
+
+
+# ---- Secure rooms (owner) --------------------------------------------------
+
+
+class ShareRoomListCreateView(APIView):
+    """GET lists the user's rooms; POST creates one."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        rooms = (
+            ShareRoom.objects.filter(owner=request.user)
+            .prefetch_related("items")
+            .all()
+        )
+        return Response(ShareRoomSerializer(rooms, many=True).data)
+
+    def post(self, request):
+        enforce_plan_limit(request.user, user_plans.RESOURCE_SHARE_LINKS)
+        serializer = ShareRoomCreateUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        plain_code = None
+        access_code_hash = ""
+        if data.get("access_code_required"):
+            plain_code = (
+                (data.pop("access_code", "") or "").strip()
+                or f"{secrets.randbelow(1_000_000):06d}"
+            )
+            access_code_hash = make_password(plain_code)
+        data.pop("access_code", None)
+
+        room = ShareRoom.objects.create(
+            owner=request.user,
+            access_code_hash=access_code_hash,
+            **data,
+        )
+        log_room_activity(
+            room=room,
+            action=RoomActivity.Action.ROOM_CREATED,
+            actor_type=RoomActivity.ActorType.OWNER,
+            request=request,
+        )
+        _track_product_event(
+            request,
+            "share_room_created",
+            object_type="share_room",
+            object_id=room.id,
+            metadata={"permission": room.permission},
+        )
+        payload = ShareRoomSerializer(room).data
+        if plain_code is not None:
+            payload["access_code"] = plain_code
+        return Response(payload, status=status.HTTP_201_CREATED)
+
+
+class _OwnedRoomMixin:
+    permission_classes = [IsAuthenticated]
+
+    def get_room(self):
+        return get_object_or_404(
+            ShareRoom, pk=self.kwargs["room_id"], owner=self.request.user
+        )
+
+
+class ShareRoomDetailView(_OwnedRoomMixin, APIView):
+    """GET/PATCH/DELETE one owner-scoped room."""
+
+    def get(self, request, room_id):
+        return Response(ShareRoomSerializer(self.get_room()).data)
+
+    def patch(self, request, room_id):
+        room = self.get_room()
+        serializer = ShareRoomCreateUpdateSerializer(
+            room, data=request.data, partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        plain_code = None
+        if "access_code" in data:
+            code = (data.pop("access_code", "") or "").strip()
+            if data.get("access_code_required", room.access_code_required) and code:
+                room.access_code_hash = make_password(code)
+                plain_code = code
+        serializer.save()
+        if plain_code is not None:
+            room.save(update_fields=["access_code_hash"])
+        payload = ShareRoomSerializer(room).data
+        if plain_code is not None:
+            payload["access_code"] = plain_code
+        return Response(payload)
+
+    def delete(self, request, room_id):
+        self.get_room().delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ShareRoomItemsView(_OwnedRoomMixin, APIView):
+    """POST adds one owner-owned document/file/proof to the room."""
+
+    def post(self, request, room_id):
+        room = self.get_room()
+        serializer = ShareRoomItemCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        document = file = proof = None
+        if data.get("document"):
+            document = get_object_or_404(
+                Document, pk=data["document"], owner=request.user
+            )
+        elif data.get("file"):
+            file = get_object_or_404(
+                DocumentFile, pk=data["file"], document__owner=request.user
+            )
+        elif data.get("proof"):
+            proof = get_object_or_404(
+                ProofRecord, pk=data["proof"], owner=request.user
+            )
+
+        item = ShareRoomItem.objects.create(
+            room=room,
+            document=document,
+            file=file,
+            proof=proof,
+            sort_order=data.get("sort_order", 0),
+        )
+        room.save(update_fields=["updated_at"])
+        return Response(
+            ShareRoomSerializer(room).data, status=status.HTTP_201_CREATED
+        )
+
+
+class ShareRoomItemDeleteView(_OwnedRoomMixin, APIView):
+    """DELETE removes one item from the room."""
+
+    def delete(self, request, room_id, item_id):
+        room = self.get_room()
+        item = get_object_or_404(ShareRoomItem, pk=item_id, room=room)
+        item.delete()
+        room.save(update_fields=["updated_at"])
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ShareRoomRevokeView(_OwnedRoomMixin, APIView):
+    """POST revokes a room immediately."""
+
+    def post(self, request, room_id):
+        room = self.get_room()
+        if not room.is_revoked:
+            room.revoked_at = timezone.now()
+            room.save(update_fields=["revoked_at"])
+            log_room_activity(
+                room=room,
+                action=RoomActivity.Action.ROOM_REVOKED,
+                actor_type=RoomActivity.ActorType.OWNER,
+                request=request,
+            )
+        return Response(ShareRoomSerializer(room).data)
+
+
+class ShareRoomActivityView(_OwnedRoomMixin, APIView):
+    """GET the owner-only activity trail for a room."""
+
+    def get(self, request, room_id):
+        room = self.get_room()
+        activity = room.activities.all()[:100]
+        return Response(RoomActivitySerializer(activity, many=True).data)
+
+
+# ---- Secure rooms (public, token-gated) ------------------------------------
+
+
+def _resolve_room(token, request=None):
+    """Return (room, error_response). error_response is None when usable."""
+    try:
+        room = ShareRoom.objects.get(token=token)
+    except ShareRoom.DoesNotExist:
+        return None, Response(
+            {"detail": "This room is invalid.", "state": "invalid"},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    if room.is_revoked:
+        return None, Response(
+            {
+                "detail": "This room is no longer available. The owner revoked access.",
+                "state": "revoked",
+            },
+            status=status.HTTP_410_GONE,
+        )
+    if room.is_expired:
+        return None, Response(
+            {"detail": "This room has expired.", "state": "expired"},
+            status=status.HTTP_410_GONE,
+        )
+    return room, None
+
+
+def _check_room_code(room, request):
+    if not room.access_code_required:
+        return None
+    grant = request.query_params.get("grant") or request.headers.get(
+        "X-Share-Grant", ""
+    )
+    if share_grant_is_valid(room.token, grant):
+        return None
+    code = request.headers.get("X-Access-Code", "").strip()
+    if not code:
+        return Response(
+            {
+                "detail": "This room is protected. Enter the access code "
+                "provided by the sender.",
+                "state": "requires_code",
+                "access_code_required": True,
+            },
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    if not check_password(code, room.access_code_hash):
+        log_room_activity(
+            room=room,
+            action=RoomActivity.Action.ROOM_CODE_FAILED,
+            actor_type=RoomActivity.ActorType.SHARED_VIEWER,
+            request=request,
+        )
+        return Response(
+            {
+                "detail": "That code does not match. Check the code and try again.",
+                "state": "wrong_code",
+            },
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    return None
+
+
+def _check_room_usable(room, request):
+    if room.is_view_limit_reached:
+        log_room_activity(
+            room=room,
+            action=RoomActivity.Action.ROOM_BLOCKED_LIMIT_REACHED,
+            actor_type=RoomActivity.ActorType.SHARED_VIEWER,
+            request=request,
+        )
+        return Response(
+            {"detail": _LIMIT_REACHED_DETAIL, "state": "limit_reached"},
+            status=status.HTTP_410_GONE,
+        )
+    return None
+
+
+def _consume_room_view(room, request):
+    if room.access_limit_type == ShareRoom.AccessLimitType.UNLIMITED:
+        return
+    ShareRoom.objects.filter(pk=room.pk).update(view_count=F("view_count") + 1)
+    room.refresh_from_db(fields=["view_count"])
+    if room.is_view_limit_reached and room.limit_reached_at is None:
+        room.limit_reached_at = timezone.now()
+        room.save(update_fields=["limit_reached_at"])
+        log_room_activity(
+            room=room,
+            action=RoomActivity.Action.ROOM_LIMIT_REACHED,
+            actor_type=RoomActivity.ActorType.SHARED_VIEWER,
+            request=request,
+        )
+
+
+def _consume_room_download(room):
+    ShareRoom.objects.filter(pk=room.pk).update(
+        download_count=F("download_count") + 1
+    )
+    room.refresh_from_db(fields=["download_count"])
+    if room.is_download_limit_reached and room.limit_reached_at is None:
+        room.limit_reached_at = timezone.now()
+        room.save(update_fields=["limit_reached_at"])
+
+
+def _resolve_room_file(room, file_id):
+    """Return a DocumentFile only if it is exposed by this room, else None."""
+    entries = collect_room_files(room).files
+    for entry in entries:
+        if entry.file.id == int(file_id):
+            return entry.file
+    return None
+
+
+class PublicShareRoomMetadataView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, token):
+        room, err = _resolve_room(token, request=request)
+        if err:
+            return err
+        room.last_accessed_at = timezone.now()
+        room.save(update_fields=["last_accessed_at"])
+        log_room_activity(
+            room=room,
+            action=RoomActivity.Action.ROOM_OPENED,
+            actor_type=RoomActivity.ActorType.SHARED_VIEWER,
+            request=request,
+        )
+        code_err = _check_room_code(room, request)
+        if code_err:
+            return code_err
+        limit_err = _check_room_usable(room, request)
+        if limit_err:
+            return limit_err
+        files = collect_room_files(room).files
+        return Response(
+            PublicShareRoomSerializer(room, context={"room_files": files}).data
+        )
+
+
+class PublicShareRoomVerifyCodeView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, token):
+        room, err = _resolve_room(token, request=request)
+        if err:
+            return err
+        if not room.access_code_required:
+            return Response({"detail": "Access code verified."})
+        code = str(request.data.get("access_code", "")).strip()
+        if code and check_password(code, room.access_code_hash):
+            log_room_activity(
+                room=room,
+                action=RoomActivity.Action.ROOM_CODE_VERIFIED,
+                actor_type=RoomActivity.ActorType.SHARED_VIEWER,
+                request=request,
+            )
+            return Response(
+                {
+                    "detail": "Access code verified.",
+                    "grant": issue_share_grant(room.token),
+                    "grant_expires_in": SHARE_GRANT_MAX_AGE,
+                }
+            )
+        log_room_activity(
+            room=room,
+            action=RoomActivity.Action.ROOM_CODE_FAILED,
+            actor_type=RoomActivity.ActorType.SHARED_VIEWER,
+            request=request,
+        )
+        return Response(
+            {"detail": "Invalid access code.", "state": "wrong_code"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+
+class _PublicRoomFileMixin(APIView):
+    permission_classes = [AllowAny]
+
+    def resolve(self, request, token, file_id):
+        room, err = _resolve_room(token, request=request)
+        if err:
+            return None, None, err
+        code_err = _check_room_code(room, request)
+        if code_err:
+            return None, None, code_err
+        limit_err = _check_room_usable(room, request)
+        if limit_err:
+            return None, None, limit_err
+        file = _resolve_room_file(room, file_id)
+        if file is None:
+            return None, None, Response(
+                {"detail": "This file is not part of this room.", "state": "not_found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return room, file, None
+
+
+class PublicShareRoomFilePreviewView(_PublicRoomFileMixin):
+    def get(self, request, token, file_id):
+        room, file, err = self.resolve(request, token, file_id)
+        if err:
+            return err
+        if not file.is_previewable:
+            return Response(
+                {
+                    "detail": "Preview is not available for this file type.",
+                    "state": "unsupported_preview",
+                },
+                status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            )
+        log_room_activity(
+            room=room,
+            action=RoomActivity.Action.ROOM_PREVIEWED,
+            actor_type=RoomActivity.ActorType.SHARED_VIEWER,
+            request=request,
+            metadata={"file_id": file.id},
+        )
+        response = _inline_file_response(file)
+        _consume_room_view(room, request)
+        return response
+
+
+class PublicShareRoomFileDownloadView(_PublicRoomFileMixin):
+    def get(self, request, token, file_id):
+        room, file, err = self.resolve(request, token, file_id)
+        if err:
+            return err
+        if not room.download_allowed:
+            return Response(
+                {
+                    "detail": "This room is view-only. Downloading is disabled "
+                    "by the owner.",
+                    "state": "download_not_allowed",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if room.is_download_limit_reached:
+            return Response(
+                {"detail": _LIMIT_REACHED_DETAIL, "state": "limit_reached"},
+                status=status.HTTP_410_GONE,
+            )
+        log_room_activity(
+            room=room,
+            action=RoomActivity.Action.ROOM_DOWNLOADED,
+            actor_type=RoomActivity.ActorType.SHARED_VIEWER,
+            request=request,
+            metadata={"file_id": file.id},
+        )
+        response = _file_response(file, as_attachment=True)
+        _consume_room_download(room)
+        return response
+
+
+class PublicShareRoomZipView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, token):
+        room, err = _resolve_room(token, request=request)
+        if err:
+            return err
+        code_err = _check_room_code(room, request)
+        if code_err:
+            return code_err
+        limit_err = _check_room_usable(room, request)
+        if limit_err:
+            return limit_err
+        if not room.download_allowed:
+            return Response(
+                {
+                    "detail": "This room is view-only. Downloading is disabled "
+                    "by the owner.",
+                    "state": "download_not_allowed",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if room.is_download_limit_reached:
+            return Response(
+                {"detail": _LIMIT_REACHED_DETAIL, "state": "limit_reached"},
+                status=status.HTTP_410_GONE,
+            )
+        spooled, filename, summary = build_room_zip(room)
+        if summary["files_count"] == 0:
+            spooled.close()
+            return Response(
+                {"detail": "This room has no files to download.", "state": "no_files"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        log_room_activity(
+            room=room,
+            action=RoomActivity.Action.ROOM_DOWNLOADED,
+            actor_type=RoomActivity.ActorType.SHARED_VIEWER,
+            request=request,
+            metadata={"scope": "room_zip", "files": summary["files_count"]},
+        )
+        _consume_room_download(room)
+        return _zip_response(spooled, filename, summary)

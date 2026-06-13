@@ -1620,3 +1620,236 @@ class DocumentPayment(models.Model):
 
     def __str__(self):
         return f"{self.label} ({self.payment_status})"
+
+
+class ShareRoom(models.Model):
+    """
+    A secure room: a controlled, token-gated collection of selected documents,
+    files, and proofs shared with a recipient.
+
+    A room exposes ONLY the items the owner explicitly adds — never the whole
+    vault. Permission, expiry, revocation, an optional access code, watermarking,
+    and view/download limits are all enforced server-side on every request.
+    """
+
+    class Permission(models.TextChoices):
+        VIEW_ONLY = "view_only", "View only"
+        DOWNLOAD_ALLOWED = "download_allowed", "View and download"
+
+    class AccessLimitType(models.TextChoices):
+        UNLIMITED = "unlimited", "Unlimited access"
+        ONE_TIME = "one_time", "One-time view"
+        LIMITED_COUNT = "limited_count", "Limited number of views"
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="share_rooms",
+    )
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    token = models.CharField(
+        max_length=128, unique=True, db_index=True, default=generate_share_token
+    )
+    permission = models.CharField(
+        max_length=32,
+        choices=Permission.choices,
+        default=Permission.VIEW_ONLY,
+    )
+    expires_at = models.DateTimeField(null=True, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    access_code_required = models.BooleanField(default=False)
+    access_code_hash = models.CharField(max_length=255, blank=True)
+
+    watermark_enabled = models.BooleanField(default=False)
+    privacy_screen_enabled = models.BooleanField(default=False)
+
+    access_limit_type = models.CharField(
+        max_length=20,
+        choices=AccessLimitType.choices,
+        default=AccessLimitType.UNLIMITED,
+    )
+    max_views = models.PositiveIntegerField(null=True, blank=True)
+    view_count = models.PositiveIntegerField(default=0)
+    max_downloads = models.PositiveIntegerField(null=True, blank=True)
+    download_count = models.PositiveIntegerField(default=0)
+    limit_reached_at = models.DateTimeField(null=True, blank=True)
+
+    # Owner-facing only — never exposed through public room endpoints (except
+    # recipient_email inside the watermark when watermarking is on).
+    recipient_email = models.EmailField(blank=True)
+    label = models.CharField(max_length=120, blank=True)
+    purpose = models.CharField(max_length=255, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    last_accessed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["owner", "created_at"]),
+            models.Index(fields=["token"]),
+            models.Index(fields=["owner", "revoked_at"]),
+            models.Index(fields=["expires_at"]),
+        ]
+
+    def __str__(self):
+        return f"Room({self.token[:8]}… {self.title})"
+
+    @property
+    def is_revoked(self) -> bool:
+        return self.revoked_at is not None
+
+    @property
+    def is_expired(self) -> bool:
+        return self.expires_at is not None and timezone.now() >= self.expires_at
+
+    @property
+    def download_allowed(self) -> bool:
+        return self.permission == self.Permission.DOWNLOAD_ALLOWED
+
+    @property
+    def view_cap(self):
+        if self.access_limit_type == self.AccessLimitType.ONE_TIME:
+            return 1
+        if self.access_limit_type == self.AccessLimitType.LIMITED_COUNT:
+            return self.max_views
+        return None
+
+    @property
+    def download_cap(self):
+        caps = []
+        if self.max_downloads:
+            caps.append(self.max_downloads)
+        if self.access_limit_type == self.AccessLimitType.ONE_TIME:
+            caps.append(1)
+        return min(caps) if caps else None
+
+    @property
+    def is_view_limit_reached(self) -> bool:
+        cap = self.view_cap
+        return cap is not None and self.view_count >= cap
+
+    @property
+    def is_download_limit_reached(self) -> bool:
+        cap = self.download_cap
+        return cap is not None and self.download_count >= cap
+
+    @property
+    def is_limit_reached(self) -> bool:
+        return self.is_view_limit_reached
+
+    @property
+    def is_active(self) -> bool:
+        return (
+            not self.is_revoked
+            and not self.is_expired
+            and not self.is_limit_reached
+        )
+
+    @property
+    def watermark_text(self) -> str:
+        return self.recipient_email or self.label or self.title or ""
+
+    @property
+    def short_id(self) -> str:
+        return self.token[:8]
+
+
+class ShareRoomItem(models.Model):
+    """
+    One item exposed by a secure room: a document, a single file, or a proof.
+
+    Items are always owned by the room owner (validated on creation). Removing an
+    item revokes access to it through the room immediately.
+    """
+
+    room = models.ForeignKey(
+        ShareRoom,
+        on_delete=models.CASCADE,
+        related_name="items",
+    )
+    document = models.ForeignKey(
+        "Document",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="share_room_items",
+    )
+    file = models.ForeignKey(
+        "DocumentFile",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="share_room_items",
+    )
+    proof = models.ForeignKey(
+        "ProofRecord",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="share_room_items",
+    )
+    sort_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["sort_order", "created_at"]
+        indexes = [
+            models.Index(fields=["room", "sort_order"]),
+        ]
+
+    def __str__(self):
+        return f"RoomItem(room={self.room_id})"
+
+
+class RoomActivity(models.Model):
+    """Owner-only activity trail for a secure room. Access codes are never logged."""
+
+    class Action(models.TextChoices):
+        ROOM_CREATED = "room_created", "Room created"
+        ROOM_OPENED = "room_opened", "Room opened"
+        ROOM_PREVIEWED = "room_previewed", "Room item previewed"
+        ROOM_DOWNLOADED = "room_downloaded", "Room item downloaded"
+        ROOM_REVOKED = "room_revoked", "Room revoked"
+        ROOM_CODE_VERIFIED = "room_access_code_verified", "Access code verified"
+        ROOM_CODE_FAILED = "room_access_code_failed", "Access code failed"
+        ROOM_LIMIT_REACHED = "room_limit_reached", "Room access limit reached"
+        ROOM_BLOCKED_LIMIT_REACHED = (
+            "room_blocked_limit_reached",
+            "Room access blocked (limit reached)",
+        )
+
+    class ActorType(models.TextChoices):
+        OWNER = "owner", "Owner"
+        SHARED_VIEWER = "shared_viewer", "Shared viewer"
+        SYSTEM = "system", "System"
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="room_activities",
+    )
+    room = models.ForeignKey(
+        ShareRoom,
+        on_delete=models.CASCADE,
+        related_name="activities",
+    )
+    action = models.CharField(max_length=64, choices=Action.choices)
+    actor_type = models.CharField(max_length=32, choices=ActorType.choices)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["room", "created_at"]),
+            models.Index(fields=["owner", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.action} on room {self.room_id}"
