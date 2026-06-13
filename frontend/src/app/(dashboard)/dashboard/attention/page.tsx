@@ -7,6 +7,7 @@ import { ArrowRight, CheckCircle2, ShieldAlert } from "lucide-react";
 import { ConfidencePill } from "@/components/documents/confidence-indicator";
 import { DocumentStatusBadge } from "@/components/documents/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { PageContainer } from "@/components/ui/page-container";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -86,11 +87,11 @@ export default function AttentionPage() {
     overview?.groups.find((g) => g.key === "healthy")?.count ?? 0;
 
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-6">
+    <PageContainer>
       <PageHeader
-        eyebrow="Documents"
-        title="Attention &amp; health"
-        description="A quick scan of what needs fixing across your vault, plus how your documents group by health."
+        eyebrow="Workspace"
+        title="Attention needed"
+        description="An inbox for risks: what's expired, expiring, or missing across your vault — and how your documents group by health."
       />
 
       {error && (
@@ -180,6 +181,6 @@ export default function AttentionPage() {
           </div>
         </>
       )}
-    </div>
+    </PageContainer>
   );
 }

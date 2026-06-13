@@ -18,6 +18,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
+import { PageContainer } from "@/components/ui/page-container";
+import { PageHeader } from "@/components/ui/page-header";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/lib/api";
 import { deleteDocument, getDocuments } from "@/lib/documents";
 import { getTags } from "@/lib/tags";
@@ -245,25 +248,21 @@ export default function DocumentsPage() {
   const docs = documents ?? [];
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="font-heading text-3xl font-semibold tracking-tight">
-            Documents
-          </h1>
-          <p className="mt-1.5 max-w-2xl text-muted-foreground">
-            Find passports, visas, licenses, certificates, and important records
-            by title, country, issuer, or reference number.
-          </p>
-        </div>
-        <Link
-          href="/dashboard/documents/new"
-          className={cn(buttonVariants({ size: "lg" }))}
-        >
-          <Plus className="size-4" />
-          Add document
-        </Link>
-      </div>
+    <PageContainer>
+      <PageHeader
+        eyebrow="Workspace"
+        title="Documents"
+        description="Your secure vault. Find passports, visas, licences, and important records by title, country, issuer, or reference number."
+        actions={
+          <Link
+            href="/dashboard/documents/new"
+            className={cn(buttonVariants({ size: "lg" }))}
+          >
+            <Plus className="size-4" />
+            Add document
+          </Link>
+        }
+      />
 
       <Card>
         <CardContent className="space-y-5">
@@ -423,7 +422,7 @@ export default function DocumentsPage() {
       {initialLoading ? (
         <div className="flex flex-col gap-4">
           {Array.from({ length: 3 }).map((_, i) => (
-            <Card key={i} className="h-[140px] animate-pulse" />
+            <Skeleton key={i} className="h-[150px] w-full rounded-xl" />
           ))}
         </div>
       ) : docs.length === 0 ? (
@@ -487,17 +486,17 @@ export default function DocumentsPage() {
 
       <ConfirmDialog
         open={pendingDelete !== null}
-        title="Delete document?"
+        title="Move document to trash?"
         description={
           pendingDelete
-            ? `"${pendingDelete.title}" will be permanently removed. This cannot be undone.`
+            ? `"${pendingDelete.title}" will be moved to Trash. You can restore it later, or delete it permanently from there.`
             : ""
         }
-        confirmLabel="Delete"
+        confirmLabel="Move to trash"
         loading={deleting}
         onConfirm={handleConfirmDelete}
         onCancel={() => setPendingDelete(null)}
       />
-    </div>
+    </PageContainer>
   );
 }

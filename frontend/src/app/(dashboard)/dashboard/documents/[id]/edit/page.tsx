@@ -19,16 +19,11 @@ import { DocumentReminderRules } from "@/components/documents/document-reminder-
 import { DocumentRenewalHistory } from "@/components/documents/document-renewal-history";
 import { DocumentTrashedFiles } from "@/components/documents/document-trashed-files";
 import { ConfidenceBreakdown } from "@/components/documents/confidence-indicator";
+import { DocumentSummaryGrid } from "@/components/documents/document-summary-grid";
 import { LifecycleBadge } from "@/components/documents/lifecycle-badge";
 import { DocumentStatusBadge } from "@/components/documents/status-badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { SectionCard } from "@/components/ui/section-card";
+import { PageContainer } from "@/components/ui/page-container";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ApiError } from "@/lib/api";
 import {
@@ -156,7 +151,7 @@ export default function EditDocumentPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-6">
+    <PageContainer width="narrow">
       <div>
         <Link
           href="/dashboard/documents"
@@ -201,6 +196,9 @@ export default function EditDocumentPage() {
         )}
       </div>
 
+      {/* At-a-glance summary */}
+      {doc !== null && <DocumentSummaryGrid doc={doc} />}
+
       {/* Confidence + last safe action */}
       {doc !== null && (
         <SectionCard
@@ -224,46 +222,38 @@ export default function EditDocumentPage() {
         </SectionCard>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Details</CardTitle>
-          <CardDescription>
-            Keep the document’s information and key dates up to date.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {loadError ? (
-            <p
-              className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive"
-              role="alert"
-            >
-              {loadError}
-            </p>
-          ) : doc === null ? (
-            <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground">
-              <Loader2 className="size-5 animate-spin" />
-              <span>Loading document…</span>
-            </div>
-          ) : (
-            <DocumentForm
-              initial={doc}
-              submitLabel="Save changes"
-              onSubmit={handleUpdate}
-            />
-          )}
-        </CardContent>
-      </Card>
+      <SectionCard
+        title="Details"
+        description="Keep the document’s information and key dates up to date."
+      >
+        {loadError ? (
+          <p
+            className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive"
+            role="alert"
+          >
+            {loadError}
+          </p>
+        ) : doc === null ? (
+          <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground">
+            <Loader2 className="size-5 animate-spin" />
+            <span>Loading document…</span>
+          </div>
+        ) : (
+          <DocumentForm
+            initial={doc}
+            submitLabel="Save changes"
+            onSubmit={handleUpdate}
+          />
+        )}
+      </SectionCard>
 
       {/* Attached files — available right here, no extra navigation */}
       {doc !== null && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Attached files</CardTitle>
-            <CardDescription>
-              Upload scans and copies to keep them linked to this document.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <SectionCard
+          title="Attached files"
+          description="Upload scans and copies to keep them linked to this document."
+        >
+          <div className="space-y-4">
             <DocumentFileUploader documentId={id} onUploaded={handleUploaded} />
 
             {fileError && (
@@ -295,23 +285,17 @@ export default function EditDocumentPage() {
               documentId={id}
               onRestored={(file) => setFiles((prev) => [file, ...(prev ?? [])])}
             />
-          </CardContent>
-        </Card>
+          </div>
+        </SectionCard>
       )}
 
       {doc !== null && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Proof of submission</CardTitle>
-            <CardDescription>
-              Record confirmations, receipts, and tracking numbers tied to this
-              document.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <DocumentProofRecords documentId={id} />
-          </CardContent>
-        </Card>
+        <SectionCard
+          title="Proof of submission"
+          description="Record confirmations, receipts, and tracking numbers tied to this document."
+        >
+          <DocumentProofRecords documentId={id} />
+        </SectionCard>
       )}
 
       {doc !== null && (
@@ -342,50 +326,34 @@ export default function EditDocumentPage() {
       )}
 
       {doc !== null && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Renewal checklists</CardTitle>
-            <CardDescription>
-              Prepare everything you need before this document’s renewal or
-              application deadline.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <DocumentChecklists documentId={id} />
-          </CardContent>
-        </Card>
+        <SectionCard
+          title="Renewal checklists"
+          description="Prepare everything you need before this document’s renewal or application deadline."
+        >
+          <DocumentChecklists documentId={id} />
+        </SectionCard>
       )}
 
       {doc !== null && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Extracted details</CardTitle>
-            <CardDescription>
-              Read details from an attached file and review them before applying.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <DocumentFileExtraction
-              documentId={id}
-              files={files ?? []}
-              onApplied={(updated) => setDoc(updated)}
-            />
-          </CardContent>
-        </Card>
+        <SectionCard
+          title="Extracted details"
+          description="Read details from an attached file and review them before applying."
+        >
+          <DocumentFileExtraction
+            documentId={id}
+            files={files ?? []}
+            onApplied={(updated) => setDoc(updated)}
+          />
+        </SectionCard>
       )}
 
       {doc !== null && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Reminder rules</CardTitle>
-            <CardDescription>
-              Calculate renewal and expiry reminders for this document.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <DocumentReminderRules document={doc} />
-          </CardContent>
-        </Card>
+        <SectionCard
+          title="Reminder rules"
+          description="Calculate renewal and expiry reminders for this document."
+        >
+          <DocumentReminderRules document={doc} />
+        </SectionCard>
       )}
 
       <ConfirmDialog
@@ -421,6 +389,6 @@ export default function EditDocumentPage() {
           onClose={() => setSharingFile(null)}
         />
       )}
-    </div>
+    </PageContainer>
   );
 }

@@ -248,6 +248,7 @@ export interface DocumentReminderRule {
   id: number;
   owner: number;
   document: number;
+  document_title: string | null;
   trigger_type: ReminderTriggerType;
   days_before: number;
   is_enabled: boolean;

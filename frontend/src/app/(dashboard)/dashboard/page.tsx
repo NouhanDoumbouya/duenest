@@ -4,50 +4,75 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
+  BellRing,
   CalendarClock,
   FileText,
-  FileWarning,
+  LifeBuoy,
+  Package,
+  Paperclip,
   Plus,
-  RefreshCw,
   ShieldAlert,
-  TriangleAlert,
 } from "lucide-react";
 
 import { StatCard, type Stat } from "@/components/dashboard/stat-card";
 import { useDashboardUser } from "@/components/dashboard/user-context";
 import { DocumentStatusBadge } from "@/components/documents/status-badge";
+import { UrgencyBadge } from "@/components/documents/urgency-badge";
 import { SetupChecklistCard } from "@/components/onboarding/setup-checklist-card";
 import { buttonVariants } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { PageContainer } from "@/components/ui/page-container";
+import { SectionCard } from "@/components/ui/section-card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/lib/api";
-import { formatDate, getAttentionNeeded, getDocuments } from "@/lib/documents";
+import {
+  daysUntil,
+  formatDate,
+  getAttentionNeeded,
+  getDocuments,
+  getUpcomingDocumentReminders,
+} from "@/lib/documents";
 import { getDocumentSetupChecklist, getOnboardingState } from "@/lib/onboarding";
 import { cn } from "@/lib/utils";
-import type { DocumentRecord } from "@/types/documents";
+import type { DocumentRecord, DocumentReminderRule } from "@/types/documents";
 import type {
   DocumentSetupChecklist,
   OnboardingState,
 } from "@/types/onboarding";
 
-interface DashboardSummary {
+interface DashboardData {
   total: number;
   needsAttention: number;
   expiringSoon: number;
-  renewalDue: number;
-  expired: number;
+  missingFiles: number;
+  upcomingReminders: number;
+}
+
+const QUICK_ACTIONS = [
+  { label: "Add document", href: "/dashboard/documents/new", icon: Plus },
+  { label: "Review attention", href: "/dashboard/attention", icon: ShieldAlert },
+  { label: "Create bundle", href: "/dashboard/bundles/new", icon: Package },
+  { label: "Emergency access", href: "/dashboard/emergency", icon: LifeBuoy },
+];
+
+function reminderWhen(rule: DocumentReminderRule): string {
+  const date = rule.upcoming_reminder_date;
+  if (!date) return "—";
+  const days = daysUntil(date);
+  if (days === null) return formatDate(date);
+  if (days < 0) return "Overdue";
+  if (days === 0) return "Today";
+  if (days === 1) return "Tomorrow";
+  return `In ${days} days`;
 }
 
 export default function DashboardPage() {
   const user = useDashboardUser();
-  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [data, setData] = useState<DashboardData | null>(null);
   const [attention, setAttention] = useState<DocumentRecord[] | null>(null);
+  const [recent, setRecent] = useState<DocumentRecord[]>([]);
+  const [reminders, setReminders] = useState<DocumentReminderRule[]>([]);
   const [setupChecklist, setSetupChecklist] =
     useState<DocumentSetupChecklist | null>(null);
   const [onboardingState, setOnboardingState] =
@@ -59,51 +84,55 @@ export default function DashboardPage() {
     Promise.all([
       getDocuments(),
       getDocuments({ computed_status: "expiring_soon" }),
-      getDocuments({ computed_status: "renewal_due" }),
-      getDocuments({ computed_status: "expired" }),
+      getDocuments({ missing_file: true }),
+      getDocuments({ ordering: "-updated_at" }),
       getAttentionNeeded(),
+      getUpcomingDocumentReminders(),
       getDocumentSetupChecklist(),
       getOnboardingState(),
     ])
-      .then(([
-        allDocs,
-        expiringSoon,
-        renewalDue,
-        expired,
-        attentionResult,
-        checklistResult,
-        onboardingResult,
-      ]) => {
-        if (!active) return;
-        setSummary({
-          total: allDocs.count,
-          needsAttention: attentionResult.count,
-          expiringSoon: expiringSoon.count,
-          renewalDue: renewalDue.count,
-          expired: expired.count,
-        });
-        setAttention(attentionResult.items);
-        setSetupChecklist(checklistResult);
-        setOnboardingState(onboardingResult);
-        setError(null);
-      })
+      .then(
+        ([
+          allDocs,
+          expiringSoon,
+          missingFiles,
+          recentDocs,
+          attentionResult,
+          remindersResult,
+          checklistResult,
+          onboardingResult,
+        ]) => {
+          if (!active) return;
+          setData({
+            total: allDocs.count,
+            needsAttention: attentionResult.count,
+            expiringSoon: expiringSoon.count,
+            missingFiles: missingFiles.count,
+            upcomingReminders: remindersResult.count,
+          });
+          setAttention(attentionResult.items);
+          setRecent(recentDocs.results.slice(0, 5));
+          setReminders(remindersResult.items.slice(0, 4));
+          setSetupChecklist(checklistResult);
+          setOnboardingState(onboardingResult);
+          setError(null);
+        },
+      )
       .catch((err) => {
         if (!active) return;
         setError(
           err instanceof ApiError
             ? err.message
-            : "Unable to load your documents.",
+            : "We couldn't load your workspace. Please try again.",
         );
-        setSummary({
+        setData({
           total: 0,
           needsAttention: 0,
           expiringSoon: 0,
-          renewalDue: 0,
-          expired: 0,
+          missingFiles: 0,
+          upcomingReminders: 0,
         });
         setAttention([]);
-        setSetupChecklist(null);
-        setOnboardingState(null);
       });
     return () => {
       active = false;
@@ -117,55 +146,34 @@ export default function DashboardPage() {
     day: "numeric",
   });
 
-  const loading = summary === null || attention === null;
+  const loading = data === null || attention === null;
   const showSetupChecklist =
     setupChecklist !== null &&
     onboardingState !== null &&
     !onboardingState.has_completed_document_onboarding &&
     !onboardingState.dismissed_onboarding_at;
-  const stats: Stat[] = summary
+
+  const stats: Stat[] = data
     ? [
-        {
-          label: "Documents",
-          value: summary.total,
-          hint: "in your vault",
-          icon: FileText,
-          tone: "blue",
-        },
-        {
-          label: "Needs attention",
-          value: summary.needsAttention,
-          hint: "ranked by urgency",
-          icon: ShieldAlert,
-          tone: "amber",
-        },
-        {
-          label: "Expiring soon",
-          value: summary.expiringSoon,
-          hint: "within 90 days",
-          icon: CalendarClock,
-          tone: "amber",
-        },
-        {
-          label: "Renewal due",
-          value: summary.renewalDue,
-          hint: "ready to act on",
-          icon: RefreshCw,
-          tone: "teal",
-        },
-        {
-          label: "Expired",
-          value: summary.expired,
-          hint: "past their date",
-          icon: TriangleAlert,
-          tone: "slate",
-        },
+        { label: "Documents", value: data.total, hint: "in your vault", icon: FileText, tone: "blue" },
+        { label: "Needs attention", value: data.needsAttention, hint: "ranked by urgency", icon: ShieldAlert, tone: "amber" },
+        { label: "Expiring soon", value: data.expiringSoon, hint: "within 90 days", icon: CalendarClock, tone: "amber" },
+        { label: "Missing files", value: data.missingFiles, hint: "no file attached", icon: Paperclip, tone: "slate" },
+        { label: "Upcoming reminders", value: data.upcomingReminders, hint: "scheduled ahead", icon: BellRing, tone: "teal" },
       ]
     : [];
-  const attentionItems = (attention ?? []).slice(0, 6);
+  const statHref: Record<string, string> = {
+    "Needs attention": "/dashboard/attention",
+    "Expiring soon": "/dashboard/documents?quick=expiring_soon",
+    "Missing files": "/dashboard/documents?quick=missing_file",
+    "Upcoming reminders": "/dashboard/reminders",
+  };
+  const attentionItems = (attention ?? []).slice(0, 5);
+  const isEmptyVault = !loading && data?.total === 0;
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-8">
+    <PageContainer>
+      {/* Welcome + primary action */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
@@ -175,7 +183,8 @@ export default function DashboardPage() {
             Welcome back, {greetingName}
           </h1>
           <p className="mt-1.5 text-muted-foreground">
-            Here&apos;s what needs your attention across documents and deadlines.
+            Keep important documents, expiry dates, and renewal tasks under
+            control.
           </p>
         </div>
         <Link
@@ -196,19 +205,16 @@ export default function DashboardPage() {
         </p>
       )}
 
+      {/* Metrics */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         {loading
           ? Array.from({ length: 5 }).map((_, i) => (
-              <Card key={i} className="h-[120px] animate-pulse" />
+              <Skeleton key={i} className="h-[124px] w-full rounded-xl" />
             ))
           : stats.map((stat) => (
               <Link
                 key={stat.label}
-                href={
-                  stat.label === "Needs attention"
-                    ? "/dashboard/documents?quick=needs_attention"
-                    : "/dashboard/documents"
-                }
+                href={statHref[stat.label] ?? "/dashboard/documents"}
                 className="rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
               >
                 <StatCard stat={stat} />
@@ -218,13 +224,13 @@ export default function DashboardPage() {
 
       {showSetupChecklist && <SetupChecklistCard checklist={setupChecklist} />}
 
-      {!loading && summary?.total === 0 ? (
+      {isEmptyVault ? (
         <Card>
           <CardContent>
             <EmptyState
               icon={FileText}
               title="Your vault is ready"
-              description="Your dashboard will come alive as you add documents, renewal dates, and important files. Start with your passport, a visa, or an insurance policy."
+              description="Start with your passport, a visa, or an insurance policy. DueNest will track expiry dates, flag what needs attention, and keep your files in one calm place."
               action={
                 <Link
                   href="/dashboard/documents/new"
@@ -238,80 +244,173 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       ) : (
-        !loading && (
-          <Card>
-            <CardHeader className="flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-lg">Needs attention</CardTitle>
-                <CardDescription>
-                  Documents that are expired, due, expiring soon, or missing
-                  key tracking information.
-                </CardDescription>
-              </div>
+        <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
+          {/* Needs attention */}
+          <SectionCard
+            title="Needs attention"
+            description="Expired, due, expiring soon, or missing key tracking information."
+            action={
               <Link
-                href="/dashboard/documents?quick=needs_attention"
-                className="shrink-0 text-sm font-medium text-primary hover:underline"
+                href="/dashboard/attention"
+                className="text-sm font-medium text-primary hover:underline"
               >
                 View all
               </Link>
-            </CardHeader>
-            <CardContent>
-              {attentionItems.length === 0 ? (
-                <div className="flex flex-col items-center gap-3 py-10 text-center">
-                  <span className="flex size-11 items-center justify-center rounded-full bg-brand-success/10 text-brand-success">
-                    <FileWarning className="size-5" />
-                  </span>
-                  <div>
-                    <p className="text-sm font-medium">
-                      Nothing needs attention right now.
-                    </p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Your tracked documents look calm and up to date.
-                    </p>
-                  </div>
+            }
+          >
+            {loading ? (
+              <div className="space-y-2">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="h-14 w-full" />
+                ))}
+              </div>
+            ) : attentionItems.length === 0 ? (
+              <div className="flex flex-col items-center gap-3 py-10 text-center">
+                <span className="flex size-11 items-center justify-center rounded-full bg-brand-success/10 text-brand-success">
+                  <ShieldAlert className="size-5" />
+                </span>
+                <div>
+                  <p className="text-sm font-medium">
+                    No documents need attention right now.
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Everything you track looks calm and up to date.
+                  </p>
                 </div>
-              ) : (
-                <ul className="flex flex-col gap-2">
-                  {attentionItems.map((doc) => (
-                    <li key={doc.id}>
-                      <Link
-                        href={`/dashboard/documents/${doc.id}/edit`}
-                        className="flex items-center justify-between gap-3 rounded-xl border border-border px-4 py-3 transition-colors hover:bg-muted/40"
-                      >
-                        <div className="flex min-w-0 items-center gap-3">
-                          <CalendarClock className="size-4 shrink-0 text-muted-foreground" />
-                          <span className="min-w-0">
-                            <span className="block truncate font-medium">
-                              {doc.title}
-                            </span>
-                            <span className="block text-xs text-muted-foreground">
-                              {doc.status_reason}
-                              {doc.expiry_date
-                                ? ` Expires ${formatDate(doc.expiry_date)}.`
-                                : ""}
-                            </span>
+              </div>
+            ) : (
+              <ul className="divide-y divide-border">
+                {attentionItems.map((doc) => (
+                  <li key={doc.id}>
+                    <Link
+                      href={`/dashboard/documents/${doc.id}/edit`}
+                      className="flex items-center justify-between gap-3 py-3 transition-colors hover:text-primary"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate text-sm font-medium">
+                            {doc.title}
                           </span>
+                          <UrgencyBadge level={doc.urgency_level} />
                         </div>
-                        <DocumentStatusBadge status={doc.computed_status} />
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                          {doc.status_reason}
+                        </p>
+                      </div>
+                      <DocumentStatusBadge status={doc.computed_status} />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </SectionCard>
+
+          {/* Side rail: reminders + recent */}
+          <div className="flex flex-col gap-6">
+            <SectionCard
+              title="Upcoming reminders"
+              action={
+                <Link
+                  href="/dashboard/reminders"
+                  className="text-sm font-medium text-primary hover:underline"
+                >
+                  All
+                </Link>
+              }
+            >
+              {loading ? (
+                <div className="space-y-2">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <Skeleton key={i} className="h-10 w-full" />
+                  ))}
+                </div>
+              ) : reminders.length === 0 ? (
+                <p className="py-2 text-sm text-muted-foreground">
+                  No reminders scheduled yet. Add one from any document with an
+                  expiry or renewal date.
+                </p>
+              ) : (
+                <ul className="space-y-2.5">
+                  {reminders.map((rule) => (
+                    <li key={rule.id}>
+                      <Link
+                        href={`/dashboard/documents/${rule.document}/edit`}
+                        className="flex items-center justify-between gap-2 text-sm transition-colors hover:text-primary"
+                      >
+                        <span className="min-w-0 truncate">
+                          {rule.document_title ?? "Document"}
+                        </span>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {reminderWhen(rule)}
+                        </span>
                       </Link>
                     </li>
                   ))}
                 </ul>
               )}
-            </CardContent>
-          </Card>
-        )
+            </SectionCard>
+
+            <SectionCard title="Recently updated">
+              {loading ? (
+                <div className="space-y-2">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <Skeleton key={i} className="h-10 w-full" />
+                  ))}
+                </div>
+              ) : recent.length === 0 ? (
+                <p className="py-2 text-sm text-muted-foreground">
+                  Documents you add or edit will show up here.
+                </p>
+              ) : (
+                <ul className="space-y-2.5">
+                  {recent.map((doc) => (
+                    <li key={doc.id}>
+                      <Link
+                        href={`/dashboard/documents/${doc.id}/edit`}
+                        className="flex items-center justify-between gap-2 text-sm transition-colors hover:text-primary"
+                      >
+                        <span className="min-w-0 truncate">{doc.title}</span>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {formatDate(doc.updated_at)}
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </SectionCard>
+          </div>
+        </div>
       )}
 
-      <div className="flex items-center justify-center">
-        <Link
-          href="/dashboard/documents"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+      {/* Quick actions */}
+      {!isEmptyVault && (
+        <SectionCard
+          title="Quick actions"
+          description="Jump straight to the things you do most."
         >
-          Go to all documents
-          <ArrowRight className="size-4" />
-        </Link>
-      </div>
-    </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {QUICK_ACTIONS.map((action) => {
+              const Icon = action.icon;
+              return (
+                <Link
+                  key={action.label}
+                  href={action.href}
+                  className="group flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 transition-colors hover:border-primary/40 hover:bg-muted/40"
+                >
+                  <span className="flex size-9 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+                    <Icon className="size-4" />
+                  </span>
+                  <span className="flex-1 text-sm font-medium">
+                    {action.label}
+                  </span>
+                  <ArrowRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                </Link>
+              );
+            })}
+          </div>
+        </SectionCard>
+      )}
+    </PageContainer>
   );
 }
