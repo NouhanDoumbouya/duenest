@@ -484,6 +484,9 @@ class DocumentReminderRuleSerializer(serializers.ModelSerializer):
 
     owner = serializers.PrimaryKeyRelatedField(read_only=True)
     document = serializers.PrimaryKeyRelatedField(read_only=True)
+    document_title = serializers.CharField(
+        source="document.title", read_only=True, default=None
+    )
     upcoming_reminder_date = serializers.SerializerMethodField()
     date_source = serializers.SerializerMethodField()
 
@@ -493,6 +496,7 @@ class DocumentReminderRuleSerializer(serializers.ModelSerializer):
             "id",
             "owner",
             "document",
+            "document_title",
             "trigger_type",
             "days_before",
             "is_enabled",
@@ -505,6 +509,7 @@ class DocumentReminderRuleSerializer(serializers.ModelSerializer):
             "id",
             "owner",
             "document",
+            "document_title",
             "upcoming_reminder_date",
             "date_source",
             "created_at",
