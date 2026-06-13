@@ -79,6 +79,22 @@ class Document(models.Model):
         NO = "no", "No"
         UNKNOWN = "unknown", "Unknown"
 
+    class Lifecycle(models.TextChoices):
+        """
+        Where a document is in the user's real-world process. This is owner-set
+        and deliberately separate from the date-derived ``computed_status`` so
+        the two never fight each other.
+        """
+
+        DRAFT = "draft", "Draft"
+        COLLECTED = "collected", "Collected"
+        SUBMITTED = "submitted", "Submitted"
+        UNDER_REVIEW = "under_review", "Under review"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+        RENEWED = "renewed", "Renewed"
+        ARCHIVED = "archived", "Archived"
+
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -124,6 +140,28 @@ class Document(models.Model):
         max_length=10, choices=Availability.choices, default=Availability.UNKNOWN
     )
     notes_about_original = models.TextField(blank=True)
+
+    # Lifecycle status — owner-managed, separate from the computed expiry status.
+    lifecycle_status = models.CharField(
+        max_length=20,
+        choices=Lifecycle.choices,
+        default=Lifecycle.COLLECTED,
+    )
+
+    # Optional manual override for the "last safe action" date. When blank, the
+    # date is computed from renewal/expiry (see services.compute_last_safe_action).
+    last_safe_action_date = models.DateField(null=True, blank=True)
+
+    # Type-specific extra fields (e.g. passport number, policy number). Stored as
+    # a flat JSON object of string keys/values — kept owner-only like all metadata.
+    custom_fields = models.JSONField(default=dict, blank=True)
+
+    # User-owned tags for organisation and filtering.
+    tags = models.ManyToManyField(
+        "DocumentTag",
+        related_name="documents",
+        blank=True,
+    )
 
     # Soft delete (trash). Trashed documents are hidden from active lists,
     # intelligence, timeline, reminders, and share access until restored.
@@ -1286,3 +1324,219 @@ class DocumentActivity(models.Model):
 
     def __str__(self):
         return f"{self.action} (doc {self.document_id})"
+
+
+class DocumentTag(models.Model):
+    """
+    A user-owned label for organising documents.
+
+    Tags are private to their owner (unlike the shared ``DocumentCategory``
+    vocabulary) and are unique per owner by slug so the same name isn't created
+    twice.
+    """
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="document_tags",
+    )
+    name = models.CharField(max_length=60)
+    slug = models.SlugField(max_length=80, blank=True)
+    # Optional small palette key the UI maps to a colour; never free-form CSS.
+    color = models.CharField(max_length=20, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["owner", "slug"], name="unique_tag_slug_per_owner"
+            )
+        ]
+        indexes = [
+            models.Index(fields=["owner", "slug"]),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.owner_id})"
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.name)[:80]
+        super().save(*args, **kwargs)
+
+
+class DocumentRenewalEvent(models.Model):
+    """
+    A recorded renewal in a document's history (e.g. "passport renewed in 2026").
+
+    Owner-owned history. Captures what changed (old/new expiry) and the cost, and
+    can link to a proof record from the same owner. Never exposed publicly.
+    """
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="document_renewal_events",
+    )
+    document = models.ForeignKey(
+        Document,
+        on_delete=models.CASCADE,
+        related_name="renewal_events",
+    )
+    renewal_date = models.DateField()
+    previous_expiry_date = models.DateField(null=True, blank=True)
+    new_expiry_date = models.DateField(null=True, blank=True)
+    cost = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True
+    )
+    currency = models.CharField(max_length=3, blank=True)
+    notes = models.TextField(blank=True)
+    proof = models.ForeignKey(
+        "ProofRecord",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="renewal_events",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-renewal_date", "-created_at"]
+        indexes = [
+            models.Index(fields=["owner", "renewal_date"]),
+            models.Index(fields=["document", "renewal_date"]),
+        ]
+
+    def __str__(self):
+        return f"Renewal {self.renewal_date} for document {self.document_id}"
+
+
+class DocumentAppointment(models.Model):
+    """
+    An appointment tied to a document and/or a bundle (e.g. a biometrics
+    appointment, an interview, a notary visit).
+
+    Owner-owned. At least one of document/bundle should be set; both must belong
+    to the same owner (enforced in the serializer).
+    """
+
+    class Status(models.TextChoices):
+        SCHEDULED = "scheduled", "Scheduled"
+        COMPLETED = "completed", "Completed"
+        CANCELLED = "cancelled", "Cancelled"
+        MISSED = "missed", "Missed"
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="document_appointments",
+    )
+    document = models.ForeignKey(
+        Document,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="appointments",
+    )
+    bundle = models.ForeignKey(
+        DocumentBundle,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="appointments",
+    )
+    title = models.CharField(max_length=255)
+    appointment_at = models.DateTimeField()
+    location = models.CharField(max_length=255, blank=True)
+    reference_number = models.CharField(max_length=255, blank=True)
+    notes = models.TextField(blank=True)
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.SCHEDULED
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["appointment_at"]
+        indexes = [
+            models.Index(fields=["owner", "appointment_at"]),
+            models.Index(fields=["document", "appointment_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.title} @ {self.appointment_at:%Y-%m-%d}"
+
+
+class DocumentPayment(models.Model):
+    """
+    Expected/actual renewal or application cost tied to a document and/or bundle.
+
+    Owner-owned. Tracks budgeting (expected) vs reality (actual) and an optional
+    proof/receipt link from the same owner.
+    """
+
+    class PaymentStatus(models.TextChoices):
+        PENDING = "pending", "Pending"
+        PARTIAL = "partial", "Partially paid"
+        PAID = "paid", "Paid"
+        REFUNDED = "refunded", "Refunded"
+        WAIVED = "waived", "Waived"
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="document_payments",
+    )
+    document = models.ForeignKey(
+        Document,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="payments",
+    )
+    bundle = models.ForeignKey(
+        DocumentBundle,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="payments",
+    )
+    label = models.CharField(max_length=255)
+    expected_cost = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True
+    )
+    actual_cost = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True
+    )
+    currency = models.CharField(max_length=3, blank=True)
+    payment_status = models.CharField(
+        max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.PENDING
+    )
+    payment_date = models.DateField(null=True, blank=True)
+    proof = models.ForeignKey(
+        "ProofRecord",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="payments",
+    )
+    notes = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["owner", "created_at"]),
+            models.Index(fields=["document", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.label} ({self.payment_status})"

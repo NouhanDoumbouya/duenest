@@ -11,6 +11,8 @@ import {
   UploadCloud,
 } from "lucide-react";
 
+import { ConfidencePill } from "@/components/documents/confidence-indicator";
+import { LifecycleBadge } from "@/components/documents/lifecycle-badge";
 import { DocumentStatusBadge } from "@/components/documents/status-badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -21,6 +23,7 @@ import {
   validateFile,
 } from "@/lib/document-files";
 import { formatDate } from "@/lib/documents";
+import { tagColorClass } from "@/lib/tags";
 import { cn } from "@/lib/utils";
 import type { DocumentRecord } from "@/types/documents";
 
@@ -104,9 +107,29 @@ export function DocumentCard({
                 {doc.title}
               </Link>
               <DocumentStatusBadge status={doc.computed_status} />
+              <LifecycleBadge status={doc.lifecycle_status} />
+              <ConfidencePill
+                score={doc.confidence_score}
+                label={doc.confidence_label}
+              />
             </div>
             {meta && (
               <p className="mt-1 truncate text-sm text-muted-foreground">{meta}</p>
+            )}
+            {doc.tags.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {doc.tags.map((tag) => (
+                  <span
+                    key={tag.id}
+                    className={cn(
+                      "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+                      tagColorClass(tag.color),
+                    )}
+                  >
+                    {tag.name}
+                  </span>
+                ))}
+              </div>
             )}
             {doc.needs_attention && (
               <p

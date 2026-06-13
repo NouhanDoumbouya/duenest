@@ -8,6 +8,7 @@ from .constants import ALLOWED_CONTENT_TYPES, ALLOWED_EXTENSIONS, MAX_FILE_SIZE
 from .models import (
     Document,
     DocumentActivity,
+    DocumentAppointment,
     DocumentBundle,
     DocumentBundleRequirement,
     DocumentCategory,
@@ -20,7 +21,10 @@ from .models import (
     DocumentFile,
     DocumentFileActivity,
     DocumentFileShareLink,
+    DocumentPayment,
     DocumentReminderRule,
+    DocumentRenewalEvent,
+    DocumentTag,
     DocumentVersion,
     EmergencyAccessPack,
     EmergencyAccessPackItem,
@@ -30,9 +34,36 @@ from .services import (
     APPLICABLE_EXTRACTION_FIELDS,
     bundle_readiness,
     checklist_progress,
+    compute_confidence,
+    compute_last_safe_action,
     get_document_health,
     reminder_date_for_rule,
 )
+
+
+class DocumentTagSerializer(serializers.ModelSerializer):
+    owner = serializers.PrimaryKeyRelatedField(read_only=True)
+    document_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DocumentTag
+        fields = [
+            "id",
+            "owner",
+            "name",
+            "slug",
+            "color",
+            "document_count",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "owner", "slug", "document_count", "created_at", "updated_at"]
+
+    def get_document_count(self, obj):
+        count = getattr(obj, "document_count", None)
+        if count is not None:
+            return count
+        return obj.documents.filter(is_trashed=False).count()
 
 
 class DocumentCategorySerializer(serializers.ModelSerializer):
@@ -63,6 +94,32 @@ class DocumentSerializer(serializers.ModelSerializer):
     missing_file = serializers.SerializerMethodField()
     needs_attention = serializers.SerializerMethodField()
 
+    # Confidence / readiness.
+    confidence_score = serializers.SerializerMethodField()
+    confidence_label = serializers.SerializerMethodField()
+    confidence_reasons = serializers.SerializerMethodField()
+
+    # Last safe action — effective date is computed; the override is writable.
+    last_safe_action_date = serializers.SerializerMethodField()
+    days_until_last_safe_action = serializers.SerializerMethodField()
+    last_safe_action_status = serializers.SerializerMethodField()
+    last_safe_action_is_manual = serializers.SerializerMethodField()
+    last_safe_action_override = serializers.DateField(
+        source="last_safe_action_date", required=False, allow_null=True
+    )
+
+    is_shared_externally = serializers.SerializerMethodField()
+
+    # Tags: nested for reads, id list for writes (scoped to the owner).
+    tags = DocumentTagSerializer(many=True, read_only=True)
+    tag_ids = serializers.PrimaryKeyRelatedField(
+        many=True,
+        write_only=True,
+        required=False,
+        source="tags",
+        queryset=DocumentTag.objects.all(),
+    )
+
     class Meta:
         model = Document
         fields = [
@@ -80,12 +137,16 @@ class DocumentSerializer(serializers.ModelSerializer):
             "renewal_date",
             "notes",
             "status",
+            "lifecycle_status",
+            "custom_fields",
             "physical_location_label",
             "physical_location_details",
             "original_available",
             "certified_copy_available",
             "translation_available",
             "notes_about_original",
+            "tags",
+            "tag_ids",
             "is_trashed",
             "trashed_at",
             "computed_status",
@@ -101,6 +162,15 @@ class DocumentSerializer(serializers.ModelSerializer):
             "missing_expiry_date",
             "missing_file",
             "needs_attention",
+            "confidence_score",
+            "confidence_label",
+            "confidence_reasons",
+            "last_safe_action_date",
+            "last_safe_action_override",
+            "days_until_last_safe_action",
+            "last_safe_action_status",
+            "last_safe_action_is_manual",
+            "is_shared_externally",
             "created_at",
             "updated_at",
         ]
@@ -122,14 +192,44 @@ class DocumentSerializer(serializers.ModelSerializer):
             "missing_expiry_date",
             "missing_file",
             "needs_attention",
+            "confidence_score",
+            "confidence_label",
+            "confidence_reasons",
+            "last_safe_action_date",
+            "days_until_last_safe_action",
+            "last_safe_action_status",
+            "last_safe_action_is_manual",
+            "is_shared_externally",
             "created_at",
             "updated_at",
         ]
+
+    def get_fields(self):
+        fields = super().get_fields()
+        request = self.context.get("request")
+        # Only the owner's tags can be assigned.
+        if request is not None and "tag_ids" in fields:
+            fields["tag_ids"].child_relation.queryset = DocumentTag.objects.filter(
+                owner=request.user
+            )
+        return fields
 
     def _health(self, obj):
         if not hasattr(obj, "_document_health_cache"):
             obj._document_health_cache = get_document_health(obj)
         return obj._document_health_cache
+
+    def _confidence(self, obj):
+        if not hasattr(obj, "_document_confidence_cache"):
+            obj._document_confidence_cache = compute_confidence(
+                obj, health=self._health(obj)
+            )
+        return obj._document_confidence_cache
+
+    def _last_safe_action(self, obj):
+        if not hasattr(obj, "_document_lsa_cache"):
+            obj._document_lsa_cache = compute_last_safe_action(obj)
+        return obj._document_lsa_cache
 
     def get_computed_status(self, obj):
         return self._health(obj).computed_status
@@ -169,6 +269,55 @@ class DocumentSerializer(serializers.ModelSerializer):
 
     def get_needs_attention(self, obj):
         return self._health(obj).needs_attention
+
+    def get_confidence_score(self, obj):
+        return self._confidence(obj).score
+
+    def get_confidence_label(self, obj):
+        return self._confidence(obj).label
+
+    def get_confidence_reasons(self, obj):
+        return self._confidence(obj).reasons
+
+    def get_last_safe_action_date(self, obj):
+        value = self._last_safe_action(obj).date
+        return value.isoformat() if value else None
+
+    def get_days_until_last_safe_action(self, obj):
+        return self._last_safe_action(obj).days_until
+
+    def get_last_safe_action_status(self, obj):
+        return self._last_safe_action(obj).status
+
+    def get_last_safe_action_is_manual(self, obj):
+        return self._last_safe_action(obj).is_manual
+
+    def get_is_shared_externally(self, obj):
+        annotated = getattr(obj, "is_shared_ext", None)
+        if annotated is not None:
+            return bool(annotated)
+        return obj.file_share_links.filter(
+            revoked_at__isnull=True, expires_at__gt=timezone.now()
+        ).exists()
+
+    def validate_custom_fields(self, value):
+        """Custom fields are a flat object of string keys to scalar values."""
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Custom fields must be an object.")
+        if len(value) > 30:
+            raise serializers.ValidationError("Too many custom fields (max 30).")
+        cleaned = {}
+        for key, raw in value.items():
+            key = str(key)[:60]
+            if raw is None:
+                cleaned[key] = ""
+            elif isinstance(raw, (str, int, float, bool)):
+                cleaned[key] = str(raw)[:500]
+            else:
+                raise serializers.ValidationError(
+                    f"Custom field “{key}” must be a simple value."
+                )
+        return cleaned
 
     def validate(self, attrs):
         """
@@ -1297,3 +1446,157 @@ class DocumentActivityEventSerializer(serializers.Serializer):
     related_bundle = serializers.IntegerField(allow_null=True)
     related_proof = serializers.IntegerField(allow_null=True)
     metadata = serializers.DictField()
+
+
+class _OwnerLinkedSerializer(serializers.ModelSerializer):
+    """Shared ownership validation for serializers that link to a user's own
+    document/bundle/proof records."""
+
+    def _request_user_id(self):
+        request = self.context.get("request")
+        return getattr(getattr(request, "user", None), "id", None)
+
+    def _assert_owned(self, obj, owner_id, field):
+        if obj is not None and owner_id != self._request_user_id():
+            raise serializers.ValidationError(
+                {field: "You can only link your own records."}
+            )
+
+
+class DocumentRenewalEventSerializer(_OwnerLinkedSerializer):
+    owner = serializers.PrimaryKeyRelatedField(read_only=True)
+    document_title = serializers.CharField(
+        source="document.title", read_only=True, default=None
+    )
+
+    class Meta:
+        model = DocumentRenewalEvent
+        fields = [
+            "id",
+            "owner",
+            "document",
+            "document_title",
+            "renewal_date",
+            "previous_expiry_date",
+            "new_expiry_date",
+            "cost",
+            "currency",
+            "notes",
+            "proof",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "owner", "document", "document_title", "created_at", "updated_at"]
+
+    def validate(self, attrs):
+        proof = attrs.get("proof", getattr(self.instance, "proof", None))
+        if proof is not None:
+            self._assert_owned(proof, proof.owner_id, "proof")
+        return attrs
+
+
+class DocumentAppointmentSerializer(_OwnerLinkedSerializer):
+    owner = serializers.PrimaryKeyRelatedField(read_only=True)
+    document_title = serializers.CharField(
+        source="document.title", read_only=True, default=None
+    )
+    bundle_title = serializers.CharField(
+        source="bundle.title", read_only=True, default=None
+    )
+
+    class Meta:
+        model = DocumentAppointment
+        fields = [
+            "id",
+            "owner",
+            "document",
+            "document_title",
+            "bundle",
+            "bundle_title",
+            "title",
+            "appointment_at",
+            "location",
+            "reference_number",
+            "notes",
+            "status",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "owner", "document_title", "bundle_title", "created_at", "updated_at"]
+
+    def validate(self, attrs):
+        document = attrs.get("document", getattr(self.instance, "document", None))
+        bundle = attrs.get("bundle", getattr(self.instance, "bundle", None))
+        if document is None and bundle is None:
+            raise serializers.ValidationError(
+                "Link the appointment to a document or a bundle."
+            )
+        if document is not None:
+            self._assert_owned(document, document.owner_id, "document")
+        if bundle is not None:
+            self._assert_owned(bundle, bundle.owner_id, "bundle")
+        return attrs
+
+
+class DocumentPaymentSerializer(_OwnerLinkedSerializer):
+    owner = serializers.PrimaryKeyRelatedField(read_only=True)
+    document_title = serializers.CharField(
+        source="document.title", read_only=True, default=None
+    )
+    bundle_title = serializers.CharField(
+        source="bundle.title", read_only=True, default=None
+    )
+
+    class Meta:
+        model = DocumentPayment
+        fields = [
+            "id",
+            "owner",
+            "document",
+            "document_title",
+            "bundle",
+            "bundle_title",
+            "label",
+            "expected_cost",
+            "actual_cost",
+            "currency",
+            "payment_status",
+            "payment_date",
+            "proof",
+            "notes",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "owner", "document_title", "bundle_title", "created_at", "updated_at"]
+
+    def validate(self, attrs):
+        document = attrs.get("document", getattr(self.instance, "document", None))
+        bundle = attrs.get("bundle", getattr(self.instance, "bundle", None))
+        proof = attrs.get("proof", getattr(self.instance, "proof", None))
+        if document is None and bundle is None:
+            raise serializers.ValidationError(
+                "Link the payment to a document or a bundle."
+            )
+        if document is not None:
+            self._assert_owned(document, document.owner_id, "document")
+        if bundle is not None:
+            self._assert_owned(bundle, bundle.owner_id, "bundle")
+        if proof is not None:
+            self._assert_owned(proof, proof.owner_id, "proof")
+        return attrs
+
+
+class MissingScanGroupSerializer(serializers.Serializer):
+    key = serializers.CharField()
+    label = serializers.CharField()
+    hint = serializers.CharField()
+    fix_target = serializers.CharField()
+    items = serializers.ListField(child=serializers.DictField())
+
+
+class HealthOverviewGroupSerializer(serializers.Serializer):
+    key = serializers.CharField()
+    label = serializers.CharField()
+    description = serializers.CharField()
+    count = serializers.IntegerField()
+    items = serializers.ListField(child=serializers.DictField())

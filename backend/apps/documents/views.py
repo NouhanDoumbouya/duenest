@@ -3,7 +3,8 @@ import secrets
 
 from django.contrib.auth.hashers import check_password, make_password
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db.models import Count, Q
+from django.db import IntegrityError
+from django.db.models import Count, Exists, OuterRef, Q
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -19,6 +20,7 @@ from rest_framework.views import APIView
 from .models import (
     Document,
     DocumentActivity,
+    DocumentAppointment,
     DocumentBundle,
     DocumentBundleRequirement,
     DocumentChecklist,
@@ -29,7 +31,10 @@ from .models import (
     DocumentFile,
     DocumentFileActivity,
     DocumentFileShareLink,
+    DocumentPayment,
     DocumentReminderRule,
+    DocumentRenewalEvent,
+    DocumentTag,
     DocumentVersion,
     EmergencyAccessPack,
     EmergencyAccessPackItem,
@@ -41,8 +46,12 @@ from .serializers import (
     BundleExportRequestSerializer,
     ChecklistFromTemplateSerializer,
     DocumentActivityEventSerializer,
+    DocumentAppointmentSerializer,
     DocumentBundleRequirementSerializer,
     DocumentBundleSerializer,
+    DocumentPaymentSerializer,
+    DocumentRenewalEventSerializer,
+    DocumentTagSerializer,
     DocumentChecklistItemSerializer,
     DocumentChecklistSerializer,
     DocumentChecklistTemplateSerializer,
@@ -72,8 +81,10 @@ from .services import (
     VERSIONED_FIELDS,
     ExportGenerationError,
     attention_sort_key,
+    build_health_overview,
     bundle_readiness,
     build_timeline,
+    scan_missing,
     create_document_export,
     create_bundle_export,
     extract_file_details,
@@ -176,15 +187,25 @@ class DocumentViewSet(viewsets.ModelViewSet):
         # Owner-scoped queryset — never expose other users' documents.
         # select_related avoids an extra query for each document's category.
         # file_count counts only NON-trashed files so health stays accurate.
+        # is_shared_ext uses Exists (not a second Count) to avoid join-multiplied
+        # counts; prefetch reminder rules + proof records so confidence scoring
+        # doesn't trigger per-row queries. tags are prefetched for cards/detail.
+        active_share = DocumentFileShareLink.objects.filter(
+            document=OuterRef("pk"),
+            revoked_at__isnull=True,
+            expires_at__gt=timezone.now(),
+        )
         queryset = (
             Document.objects.filter(owner=self.request.user)
             .select_related("category")
+            .prefetch_related("tags", "reminder_rules", "proof_records")
             .annotate(
                 file_count=Count(
                     "files",
                     filter=Q(files__is_trashed=False),
                     distinct=True,
-                )
+                ),
+                is_shared_ext=Exists(active_share),
             )
         )
         # Non-list actions (retrieve/update/destroy/restore/permanent-delete)
@@ -220,6 +241,15 @@ class DocumentViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(country__icontains=params["country"])
         if params.get("issuer"):
             queryset = queryset.filter(issuer__icontains=params["issuer"])
+        if params.get("lifecycle_status"):
+            queryset = queryset.filter(lifecycle_status=params["lifecycle_status"])
+        # Filter by tag id or slug (owner-scoped tags only).
+        tag = params.get("tag", "").strip()
+        if tag:
+            if tag.isdigit():
+                queryset = queryset.filter(tags__id=int(tag))
+            else:
+                queryset = queryset.filter(tags__slug=tag)
 
         expiry_from = parse_date(params.get("expiry_from", ""))
         if expiry_from:
@@ -2625,3 +2655,161 @@ class PlanUsageView(APIView):
 
     def get(self, request):
         return Response(compute_plan_usage(request.user))
+
+
+# ---- Intelligence polish: tags, history, appointments, payments, scanners --
+
+
+class DocumentTagViewSet(viewsets.ModelViewSet):
+    """CRUD for the authenticated user's private tags."""
+
+    serializer_class = DocumentTagSerializer
+    permission_classes = [IsAuthenticated]
+    lookup_url_kwarg = "tag_id"
+
+    def get_queryset(self):
+        return (
+            DocumentTag.objects.filter(owner=self.request.user)
+            .annotate(
+                document_count=Count(
+                    "documents",
+                    filter=Q(documents__is_trashed=False),
+                    distinct=True,
+                )
+            )
+            .order_by("name")
+        )
+
+    def perform_create(self, serializer):
+        tag = serializer.save(owner=self.request.user)
+        return tag
+
+    def create(self, request, *args, **kwargs):
+        # Friendly handling of the per-owner unique slug constraint.
+        try:
+            return super().create(request, *args, **kwargs)
+        except IntegrityError:
+            return Response(
+                {"detail": "You already have a tag with that name."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+
+class _DocumentOwnedMixin:
+    """Resolve a document the caller owns (404 otherwise)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get_document(self):
+        return get_object_or_404(
+            Document, pk=self.kwargs["document_id"], owner=self.request.user
+        )
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["request"] = self.request
+        return context
+
+
+class DocumentRenewalEventListCreateView(
+    _DocumentOwnedMixin, generics.ListCreateAPIView
+):
+    """List/create renewal-history events for one owner-owned document."""
+
+    serializer_class = DocumentRenewalEventSerializer
+
+    def get_queryset(self):
+        self.get_document()
+        return DocumentRenewalEvent.objects.filter(
+            owner=self.request.user, document_id=self.kwargs["document_id"]
+        )
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user, document=self.get_document())
+
+
+class DocumentRenewalEventDetailView(
+    _DocumentOwnedMixin, generics.RetrieveUpdateDestroyAPIView
+):
+    """Retrieve/update/delete one renewal event."""
+
+    serializer_class = DocumentRenewalEventSerializer
+    lookup_url_kwarg = "event_id"
+
+    def get_queryset(self):
+        self.get_document()
+        return DocumentRenewalEvent.objects.filter(
+            owner=self.request.user, document_id=self.kwargs["document_id"]
+        )
+
+
+class DocumentAppointmentViewSet(viewsets.ModelViewSet):
+    """CRUD for appointments, optionally filtered by document or bundle."""
+
+    serializer_class = DocumentAppointmentSerializer
+    permission_classes = [IsAuthenticated]
+    lookup_url_kwarg = "appointment_id"
+
+    def get_queryset(self):
+        queryset = DocumentAppointment.objects.filter(owner=self.request.user)
+        params = self.request.query_params
+        if params.get("document"):
+            queryset = queryset.filter(document_id=params["document"])
+        if params.get("bundle"):
+            queryset = queryset.filter(bundle_id=params["bundle"])
+        if params.get("status"):
+            queryset = queryset.filter(status=params["status"])
+        return queryset
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["request"] = self.request
+        return context
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
+
+
+class DocumentPaymentViewSet(viewsets.ModelViewSet):
+    """CRUD for renewal/application costs, filterable by document or bundle."""
+
+    serializer_class = DocumentPaymentSerializer
+    permission_classes = [IsAuthenticated]
+    lookup_url_kwarg = "payment_id"
+
+    def get_queryset(self):
+        queryset = DocumentPayment.objects.filter(owner=self.request.user)
+        params = self.request.query_params
+        if params.get("document"):
+            queryset = queryset.filter(document_id=params["document"])
+        if params.get("bundle"):
+            queryset = queryset.filter(bundle_id=params["bundle"])
+        if params.get("payment_status"):
+            queryset = queryset.filter(payment_status=params["payment_status"])
+        return queryset
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["request"] = self.request
+        return context
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
+
+
+class DocumentMissingScanView(APIView):
+    """Owner-scoped summary of missing/risky items across the vault."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response(scan_missing(request.user))
+
+
+class DocumentHealthOverviewView(APIView):
+    """Owner-scoped grouped health sections for the documents dashboard."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response(build_health_overview(request.user))

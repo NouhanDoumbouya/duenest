@@ -12,10 +12,17 @@ from .views import (
     ChecklistTemplateDetailView,
     ChecklistTemplateListView,
     DocumentActivityTimelineView,
+    DocumentAppointmentViewSet,
     DocumentBundleDetailView,
     DocumentBundleListCreateView,
     DocumentBundleRequirementCreateView,
     DocumentBundleRequirementDetailView,
+    DocumentHealthOverviewView,
+    DocumentMissingScanView,
+    DocumentPaymentViewSet,
+    DocumentRenewalEventDetailView,
+    DocumentRenewalEventListCreateView,
+    DocumentTagViewSet,
     DocumentChecklistDetailView,
     DocumentChecklistFromTemplateView,
     DocumentChecklistItemCreateView,
@@ -66,6 +73,9 @@ router = DefaultRouter()
 router.register("documents", DocumentViewSet, basename="document")
 router.register("emergency-packs", EmergencyPackViewSet, basename="emergency-pack")
 router.register("proof-records", ProofRecordViewSet, basename="proof-record")
+router.register("document-tags", DocumentTagViewSet, basename="document-tag")
+router.register("appointments", DocumentAppointmentViewSet, basename="appointment")
+router.register("payments", DocumentPaymentViewSet, basename="payment")
 
 # Owner endpoints for files, previews, share links, and activity. Listed before
 # the router so the more specific paths are matched first.
@@ -192,6 +202,28 @@ urlpatterns = [
         "plan/usage/",
         PlanUsageView.as_view(),
         name="plan-usage",
+    ),
+    # ---- Intelligence polish: scanners over the whole vault ----------------
+    path(
+        "documents/missing-summary/",
+        DocumentMissingScanView.as_view(),
+        name="document-missing-summary",
+    ),
+    path(
+        "documents/health-overview/",
+        DocumentHealthOverviewView.as_view(),
+        name="document-health-overview",
+    ),
+    # ---- Intelligence polish: renewal history (nested under a document) ----
+    path(
+        "documents/<int:document_id>/renewal-events/",
+        DocumentRenewalEventListCreateView.as_view(),
+        name="document-renewal-events",
+    ),
+    path(
+        "documents/<int:document_id>/renewal-events/<int:event_id>/",
+        DocumentRenewalEventDetailView.as_view(),
+        name="document-renewal-event-detail",
     ),
     path(
         "documents/<int:document_id>/reminder-rules/",

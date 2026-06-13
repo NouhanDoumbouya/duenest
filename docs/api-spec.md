@@ -1559,6 +1559,66 @@ strictly owner-scoped; one user's usage never affects another's limits.
 
 ---
 
+## 13C.7 Document intelligence polish
+
+Intelligence fields are computed read-only on every document (`GET/LIST
+/api/v1/documents/`):
+
+| Field | Notes |
+| --- | --- |
+| `confidence_score` / `confidence_label` / `confidence_reasons` | 0–100 readiness derived from file, expiry, reminder, location, status, and (when relevant) proof. Reasons list each factor with `met`/`weight`/`hint`. |
+| `last_safe_action_date` | Effective last date to act. Uses `last_safe_action_override` if set, else renewal date, else expiry minus a 30-day buffer. |
+| `days_until_last_safe_action` / `last_safe_action_status` | `unknown` / `ok` / `approaching` / `passed`. |
+| `is_shared_externally` | Whether the document has an active file share link. |
+
+Writable additions on create/update: `lifecycle_status` (owner-managed, separate
+from `computed_status`), `custom_fields` (flat object of string values),
+`tag_ids` (owner's tag ids), and `last_safe_action_override`.
+
+New list filters: `?tag=<id|slug>` and `?lifecycle_status=<value>`.
+
+### Scanners
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/v1/documents/missing-summary/` | Grouped missing/risky items: missing files, missing expiry, no reminders, low confidence, bundles missing required items |
+| `GET` | `/api/v1/documents/health-overview/` | Documents grouped into health sections (expired, expiring soon, missing info, needs review, healthy, shared externally, low confidence) |
+
+### Tags
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` / `POST` | `/api/v1/document-tags/` | List / create owner tags |
+| `GET` / `PATCH` / `DELETE` | `/api/v1/document-tags/:tag_id/` | Retrieve / update / delete a tag |
+
+### Renewal history (nested under a document)
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` / `POST` | `/api/v1/documents/:document_id/renewal-events/` | List / add renewal events |
+| `GET` / `PATCH` / `DELETE` | `/api/v1/documents/:document_id/renewal-events/:event_id/` | Retrieve / update / delete one |
+
+### Appointments
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` / `POST` | `/api/v1/appointments/` | List (filter `?document=` / `?bundle=` / `?status=`) / create |
+| `GET` / `PATCH` / `DELETE` | `/api/v1/appointments/:appointment_id/` | Retrieve / update / delete |
+
+An appointment must link to a document and/or bundle the caller owns.
+
+### Renewal / application costs
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` / `POST` | `/api/v1/payments/` | List (filter `?document=` / `?bundle=` / `?payment_status=`) / create |
+| `GET` / `PATCH` / `DELETE` | `/api/v1/payments/:payment_id/` | Retrieve / update / delete |
+
+All intelligence resources are strictly owner-scoped: linked documents, bundles,
+and proof records must belong to the requesting user.
+
+---
+
 # 14. Dashboard API
 
 ## 14.1 Get Dashboard Summary

@@ -6,11 +6,14 @@ import type {
   AttentionNeededResponse,
   CreateReminderRuleRequest,
   DocumentComputedStatus,
+  DocumentLifecycleStatus,
   DocumentListParams,
   DocumentReminderRule,
   CreateDocumentRequest,
   DocumentRecord,
   DocumentStatus,
+  HealthOverviewResponse,
+  MissingScanResponse,
   Paginated,
   ReminderTriggerType,
   UpdateDocumentRequest,
@@ -157,7 +160,32 @@ export function getUpcomingDocumentReminders(): Promise<UpcomingRemindersRespons
   });
 }
 
+/** What-is-missing scanner summary across the vault. */
+export function getMissingSummary(): Promise<MissingScanResponse> {
+  return apiFetch<MissingScanResponse>("/documents/missing-summary/", {
+    auth: true,
+  });
+}
+
+/** Grouped health sections for the documents dashboard. */
+export function getHealthOverview(): Promise<HealthOverviewResponse> {
+  return apiFetch<HealthOverviewResponse>("/documents/health-overview/", {
+    auth: true,
+  });
+}
+
 // ---- Display helpers -------------------------------------------------------
+
+export const LIFECYCLE_STATUS_LABELS: Record<DocumentLifecycleStatus, string> = {
+  draft: "Draft",
+  collected: "Collected",
+  submitted: "Submitted",
+  under_review: "Under review",
+  approved: "Approved",
+  rejected: "Rejected",
+  renewed: "Renewed",
+  archived: "Archived",
+};
 
 export const STATUS_LABELS: Record<DocumentStatus, string> = {
   active: "Active",

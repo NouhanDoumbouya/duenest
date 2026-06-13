@@ -23,6 +23,40 @@ export type DocumentUrgencyLevel =
 /** Availability of an original / certified copy / translation. */
 export type DocumentAvailability = "yes" | "no" | "unknown";
 
+/** Owner-managed lifecycle status, separate from computed expiry status. */
+export type DocumentLifecycleStatus =
+  | "draft"
+  | "collected"
+  | "submitted"
+  | "under_review"
+  | "approved"
+  | "rejected"
+  | "renewed"
+  | "archived";
+
+export type LastSafeActionStatus = "unknown" | "ok" | "approaching" | "passed";
+
+/** A single factor in the confidence breakdown. */
+export interface ConfidenceReason {
+  key: string;
+  label: string;
+  met: boolean;
+  weight: number;
+  hint: string;
+}
+
+/** A user-owned tag (GET/POST /api/v1/document-tags/). */
+export interface DocumentTag {
+  id: number;
+  owner: number;
+  name: string;
+  slug: string;
+  color: string;
+  document_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface DocumentRecord {
   id: number;
   owner: number;
@@ -38,6 +72,20 @@ export interface DocumentRecord {
   renewal_date: string | null;
   notes: string;
   status: DocumentStatus;
+  lifecycle_status: DocumentLifecycleStatus;
+  custom_fields: Record<string, string>;
+  tags: DocumentTag[];
+  // Confidence / readiness.
+  confidence_score: number;
+  confidence_label: string;
+  confidence_reasons: ConfidenceReason[];
+  // Last safe action.
+  last_safe_action_date: string | null;
+  last_safe_action_override: string | null;
+  days_until_last_safe_action: number | null;
+  last_safe_action_status: LastSafeActionStatus;
+  last_safe_action_is_manual: boolean;
+  is_shared_externally: boolean;
   // Physical document location — "where is the original?" details.
   physical_location_label: string;
   physical_location_details: string;
@@ -81,6 +129,10 @@ export interface CreateDocumentRequest {
   notes?: string;
   status?: DocumentStatus;
   category?: number | null;
+  lifecycle_status?: DocumentLifecycleStatus;
+  custom_fields?: Record<string, string>;
+  tag_ids?: number[];
+  last_safe_action_override?: string | null;
   physical_location_label?: string;
   physical_location_details?: string;
   original_available?: DocumentAvailability;
@@ -126,12 +178,65 @@ export interface DocumentListParams {
   expiry_from?: string;
   expiry_to?: string;
   expiring_within_days?: number;
+  tag?: number | string;
+  lifecycle_status?: DocumentLifecycleStatus;
   ordering?: DocumentOrdering;
 }
 
 export interface AttentionNeededResponse {
   count: number;
   items: DocumentRecord[];
+}
+
+/** GET /api/v1/documents/missing-summary/ */
+export interface MissingScanItem {
+  id: number;
+  title: string;
+  document_type?: string;
+  computed_status?: DocumentComputedStatus;
+  status_label?: string;
+  confidence_score?: number;
+  missing_required_count?: number;
+  readiness_score?: number;
+}
+
+export interface MissingScanGroup {
+  key: string;
+  label: string;
+  hint: string;
+  fix_target: "document" | "bundle";
+  items: MissingScanItem[];
+}
+
+export interface MissingScanResponse {
+  total: number;
+  groups: MissingScanGroup[];
+}
+
+/** GET /api/v1/documents/health-overview/ */
+export interface HealthOverviewItem {
+  id: number;
+  title: string;
+  document_type: string;
+  computed_status: DocumentComputedStatus;
+  status_label: string;
+  urgency_level: DocumentUrgencyLevel;
+  lifecycle_status: DocumentLifecycleStatus;
+  confidence_score: number;
+  confidence_label: string;
+}
+
+export interface HealthOverviewGroup {
+  key: string;
+  label: string;
+  description: string;
+  count: number;
+  items: HealthOverviewItem[];
+}
+
+export interface HealthOverviewResponse {
+  total: number;
+  groups: HealthOverviewGroup[];
 }
 
 export type ReminderTriggerType =

@@ -20,11 +20,13 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { ApiError } from "@/lib/api";
 import { deleteDocument, getDocuments } from "@/lib/documents";
+import { getTags } from "@/lib/tags";
 import { cn } from "@/lib/utils";
 import type {
   DocumentListParams,
   DocumentOrdering,
   DocumentRecord,
+  DocumentTag,
 } from "@/types/documents";
 
 type QuickFilter =
@@ -76,6 +78,7 @@ function buildListParams({
   issuer,
   expiryFrom,
   expiryTo,
+  tag,
   ordering,
 }: {
   search: string;
@@ -85,6 +88,7 @@ function buildListParams({
   issuer: string;
   expiryFrom: string;
   expiryTo: string;
+  tag: number | "";
   ordering: DocumentOrdering;
 }): DocumentListParams {
   const params: DocumentListParams = { ordering };
@@ -95,6 +99,7 @@ function buildListParams({
   if (issuer.trim()) params.issuer = issuer.trim();
   if (expiryFrom) params.expiry_from = expiryFrom;
   if (expiryTo) params.expiry_to = expiryTo;
+  if (tag !== "") params.tag = tag;
 
   if (quickFilter === "needs_attention") params.needs_attention = true;
   if (quickFilter === "expiring_soon") params.computed_status = "expiring_soon";
@@ -115,6 +120,8 @@ export default function DocumentsPage() {
   const [issuer, setIssuer] = useState("");
   const [expiryFrom, setExpiryFrom] = useState("");
   const [expiryTo, setExpiryTo] = useState("");
+  const [tag, setTag] = useState<number | "">("");
+  const [tags, setTags] = useState<DocumentTag[]>([]);
   const [ordering, setOrdering] = useState<DocumentOrdering>("-created_at");
 
   const [documents, setDocuments] = useState<DocumentRecord[] | null>(null);
@@ -135,6 +142,7 @@ export default function DocumentsPage() {
         issuer,
         expiryFrom,
         expiryTo,
+        tag,
         ordering,
       }),
     [
@@ -145,6 +153,7 @@ export default function DocumentsPage() {
       issuer,
       expiryFrom,
       expiryTo,
+      tag,
       ordering,
     ],
   );
@@ -172,6 +181,16 @@ export default function DocumentsPage() {
       active = false;
     };
   }, [listParams, queryKey]);
+
+  useEffect(() => {
+    let active = true;
+    getTags()
+      .then((page) => active && setTags(page.results))
+      .catch(() => active && setTags([]));
+    return () => {
+      active = false;
+    };
+  }, []);
 
   async function handleConfirmDelete() {
     if (!pendingDelete) return;
@@ -204,6 +223,7 @@ export default function DocumentsPage() {
     setIssuer("");
     setExpiryFrom("");
     setExpiryTo("");
+    setTag("");
     setOrdering("-created_at");
     if (typeof window !== "undefined" && window.location.search) {
       window.history.replaceState(null, "", "/dashboard/documents");
@@ -218,6 +238,7 @@ export default function DocumentsPage() {
     issuer.trim() !== "" ||
     expiryFrom !== "" ||
     expiryTo !== "" ||
+    tag !== "" ||
     ordering !== "-created_at";
   const initialLoading = documents === null;
   const refreshing = documents !== null && loadedQueryKey !== queryKey;
@@ -314,7 +335,7 @@ export default function DocumentsPage() {
             </label>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_1.1fr_auto]">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_1fr_1.1fr_auto]">
             <label className="block">
               <span className="sr-only">Country</span>
               <Input
@@ -323,6 +344,24 @@ export default function DocumentsPage() {
                 onChange={(event) => setCountry(event.target.value)}
                 placeholder="Country"
               />
+            </label>
+            <label className="block">
+              <span className="sr-only">Filter by tag</span>
+              <select
+                className="h-10 w-full rounded-lg border border-input bg-card px-3 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                value={tag}
+                onChange={(event) =>
+                  setTag(event.target.value === "" ? "" : Number(event.target.value))
+                }
+                disabled={tags.length === 0}
+              >
+                <option value="">All tags</option>
+                {tags.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="block">
               <span className="sr-only">Expiry from</span>

@@ -8,18 +8,24 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { CustomFieldsEditor } from "@/components/documents/custom-fields-editor";
+import { TagSelector } from "@/components/documents/tag-selector";
 import { ApiError } from "@/lib/api";
 import { ACCEPT_ATTR, validateFile } from "@/lib/document-files";
-import { STATUS_LABELS } from "@/lib/documents";
+import { LIFECYCLE_STATUS_LABELS, STATUS_LABELS } from "@/lib/documents";
 import { cn } from "@/lib/utils";
 import type {
   CreateDocumentRequest,
   DocumentAvailability,
+  DocumentLifecycleStatus,
   DocumentRecord,
   DocumentStatus,
 } from "@/types/documents";
 
 const STATUS_OPTIONS = Object.keys(STATUS_LABELS) as DocumentStatus[];
+const LIFECYCLE_OPTIONS = Object.keys(
+  LIFECYCLE_STATUS_LABELS,
+) as DocumentLifecycleStatus[];
 
 const AVAILABILITY_OPTIONS: { value: DocumentAvailability; label: string }[] = [
   { value: "unknown", label: "Not sure" },
@@ -40,6 +46,10 @@ interface FormState {
   expiry_date: string;
   renewal_date: string;
   notes: string;
+  lifecycle_status: DocumentLifecycleStatus;
+  last_safe_action_override: string;
+  tag_ids: number[];
+  custom_fields: Record<string, string>;
   physical_location_label: string;
   physical_location_details: string;
   original_available: DocumentAvailability;
@@ -60,6 +70,10 @@ function toFormState(doc?: Partial<DocumentRecord>): FormState {
     expiry_date: doc?.expiry_date ?? "",
     renewal_date: doc?.renewal_date ?? "",
     notes: doc?.notes ?? "",
+    lifecycle_status: doc?.lifecycle_status ?? "collected",
+    last_safe_action_override: doc?.last_safe_action_override ?? "",
+    tag_ids: doc?.tags?.map((tag) => tag.id) ?? [],
+    custom_fields: doc?.custom_fields ?? {},
     physical_location_label: doc?.physical_location_label ?? "",
     physical_location_details: doc?.physical_location_details ?? "",
     original_available: doc?.original_available ?? "unknown",
@@ -168,6 +182,10 @@ export function DocumentForm({
       expiry_date: nullable(form.expiry_date),
       renewal_date: nullable(form.renewal_date),
       notes: form.notes.trim(),
+      lifecycle_status: form.lifecycle_status,
+      last_safe_action_override: nullable(form.last_safe_action_override),
+      tag_ids: form.tag_ids,
+      custom_fields: form.custom_fields,
       physical_location_label: form.physical_location_label.trim(),
       physical_location_details: form.physical_location_details.trim(),
       original_available: form.original_available,
@@ -260,6 +278,41 @@ export function DocumentForm({
             </select>
           </Field>
         </div>
+
+        <Field
+          id="lifecycle_status"
+          label="Stage"
+          error={fieldErrors.lifecycle_status}
+        >
+          <select
+            id="lifecycle_status"
+            className="h-11 w-full rounded-lg border border-input bg-card px-3 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            value={form.lifecycle_status}
+            onChange={(e) =>
+              update("lifecycle_status", e.target.value as DocumentLifecycleStatus)
+            }
+          >
+            {LIFECYCLE_OPTIONS.map((value) => (
+              <option key={value} value={value}>
+                {LIFECYCLE_STATUS_LABELS[value]}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-muted-foreground">
+            Where this is in your process — separate from the expiry status
+            DueNest calculates.
+          </p>
+        </Field>
+      </FormSection>
+
+      <FormSection
+        title="Tags"
+        description="Organise documents with your own tags."
+      >
+        <TagSelector
+          selectedIds={form.tag_ids}
+          onChange={(ids) => update("tag_ids", ids)}
+        />
       </FormSection>
 
       <FormSection
@@ -344,6 +397,34 @@ export function DocumentForm({
             />
           </Field>
         </div>
+        <Field
+          id="last_safe_action_override"
+          label="Last safe action date (optional)"
+          error={fieldErrors.last_safe_action_override}
+        >
+          <Input
+            id="last_safe_action_override"
+            type="date"
+            className="h-11"
+            value={form.last_safe_action_override}
+            onChange={(e) => update("last_safe_action_override", e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">
+            The last date you can still act safely. Leave blank to let DueNest
+            estimate it from your renewal or expiry date.
+          </p>
+        </Field>
+      </FormSection>
+
+      <FormSection
+        title="Custom details"
+        description="Extra fields for this document type — passport number, policy number, and so on."
+      >
+        <CustomFieldsEditor
+          documentType={form.document_type}
+          value={form.custom_fields}
+          onChange={(next) => update("custom_fields", next)}
+        />
       </FormSection>
 
       <FormSection

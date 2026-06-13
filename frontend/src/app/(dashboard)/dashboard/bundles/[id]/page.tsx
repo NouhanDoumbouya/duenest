@@ -16,7 +16,10 @@ import {
 } from "lucide-react";
 
 import { ReadinessRing } from "@/components/bundles/readiness-ring";
+import { DocumentAppointments } from "@/components/documents/document-appointments";
+import { DocumentPayments } from "@/components/documents/document-payments";
 import { DocumentProofRecords } from "@/components/documents/document-proof-records";
+import { SectionCard } from "@/components/ui/section-card";
 import { TimelineList } from "@/components/timeline/timeline-list";
 import { Button } from "@/components/ui/button";
 import {
@@ -618,6 +621,22 @@ export default function BundleDetailPage() {
           <DocumentProofRecords bundleId={bundleId} />
         </CardContent>
       </Card>
+
+      {/* Appointments for this bundle */}
+      <SectionCard
+        title="Appointments"
+        description="Appointments connected to this bundle."
+      >
+        <DocumentAppointments bundleId={bundleId} />
+      </SectionCard>
+
+      {/* Costs for this bundle */}
+      <SectionCard
+        title="Application costs"
+        description="Track the expected and actual costs for this application or renewal."
+      >
+        <DocumentPayments bundleId={bundleId} />
+      </SectionCard>
 
       {/* Bundle export */}
       <Card>
