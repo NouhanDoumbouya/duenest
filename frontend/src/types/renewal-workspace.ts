@@ -266,6 +266,46 @@ export interface CreateBundleExportRequest {
   export_type: BundleExportType;
 }
 
+// ---- Bundle files ----------------------------------------------------------
+
+export interface BundleFile {
+  id: number;
+  document: number;
+  document_title: string;
+  requirement_id: number;
+  requirement_title: string;
+  original_filename: string;
+  content_type: string;
+  file_size: number;
+  is_previewable: boolean;
+  available: boolean;
+  created_at: string;
+}
+
+export type BundleMissingFileReason =
+  | "no_file"
+  | "file_trashed"
+  | "document_trashed";
+
+export interface BundleMissingFile {
+  requirement_id: number;
+  requirement_title: string;
+  document_id: number | null;
+  document_title: string | null;
+  reason: BundleMissingFileReason;
+}
+
+export interface BundleFilesResponse {
+  files: BundleFile[];
+  missing_files: BundleMissingFile[];
+  summary: {
+    total_files: number;
+    total_size: number;
+    documents_count: number;
+    missing_count: number;
+  };
+}
+
 // ---- Timeline --------------------------------------------------------------
 
 export type TimelineEventType =

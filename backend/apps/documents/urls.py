@@ -14,6 +14,7 @@ from .views import (
     DocumentActivityTimelineView,
     DocumentAppointmentViewSet,
     DocumentBundleDetailView,
+    DocumentBundleFilesView,
     DocumentBundleListCreateView,
     DocumentBundleRequirementCreateView,
     DocumentBundleRequirementDetailView,
@@ -309,6 +310,11 @@ urlpatterns = [
         "document-bundles/<int:bundle_id>/readiness/",
         BundleReadinessView.as_view(),
         name="document-bundle-readiness",
+    ),
+    path(
+        "document-bundles/<int:bundle_id>/files/",
+        DocumentBundleFilesView.as_view(),
+        name="document-bundle-files",
     ),
     path(
         "document-bundles/<int:bundle_id>/exports/",

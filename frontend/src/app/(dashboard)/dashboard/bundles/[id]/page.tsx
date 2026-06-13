@@ -15,6 +15,7 @@ import {
   Trash2,
 } from "lucide-react";
 
+import { BundleFilesSection } from "@/components/bundles/bundle-files-section";
 import { ReadinessRing } from "@/components/bundles/readiness-ring";
 import { DocumentAppointments } from "@/components/documents/document-appointments";
 import { DocumentPayments } from "@/components/documents/document-payments";
@@ -594,6 +595,9 @@ export default function BundleDetailPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Files included in this bundle */}
+      <BundleFilesSection bundleId={bundle.id} />
 
       {/* Timeline for this bundle */}
       <Card>

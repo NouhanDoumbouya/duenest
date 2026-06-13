@@ -447,6 +447,102 @@ class BundleTests(RenewalWorkspaceBaseTest):
 # ---- Timeline --------------------------------------------------------------
 
 
+@override_settings(MEDIA_ROOT=_TEMP_MEDIA)
+class BundleFilesTests(RenewalWorkspaceBaseTest):
+    """GET /document-bundles/<id>/files/ — owner-scoped bundle file listing."""
+
+    def _bundle(self):
+        return DocumentBundle.objects.create(
+            owner=self.alice, title="Visa pack", bundle_type="application"
+        )
+
+    def _file(self, document, owner, name="passport.pdf", trashed=False):
+        return DocumentFile.objects.create(
+            document=document,
+            uploaded_by=owner,
+            file=make_pdf(name=name),
+            original_filename=name,
+            content_type="application/pdf",
+            file_size=21,
+            is_trashed=trashed,
+            trashed_at=timezone.now() if trashed else None,
+        )
+
+    def url(self, bundle_id):
+        return f"/api/v1/document-bundles/{bundle_id}/files/"
+
+    def test_lists_linked_file_and_linked_document_files(self):
+        bundle = self._bundle()
+        explicit = self._file(self.alice_doc, self.alice, name="receipt.pdf")
+        doc_file = self._file(self.alice_doc, self.alice, name="passport.pdf")
+        DocumentBundleRequirement.objects.create(
+            owner=self.alice, bundle=bundle, title="Receipt", linked_file=explicit
+        )
+        DocumentBundleRequirement.objects.create(
+            owner=self.alice,
+            bundle=bundle,
+            title="Passport",
+            linked_document=self.alice_doc,
+        )
+        self.auth(self.alice)
+        resp = self.client.get(self.url(bundle.id))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        names = {f["original_filename"] for f in resp.data["files"]}
+        self.assertEqual(names, {"receipt.pdf", "passport.pdf"})
+        self.assertEqual(resp.data["summary"]["total_files"], 2)
+        # No internal storage path is exposed.
+        self.assertNotIn("file", resp.data["files"][0])
+
+    def test_trashed_file_excluded_and_reported_missing(self):
+        bundle = self._bundle()
+        trashed = self._file(self.alice_doc, self.alice, name="old.pdf", trashed=True)
+        DocumentBundleRequirement.objects.create(
+            owner=self.alice, bundle=bundle, title="Old scan", linked_file=trashed
+        )
+        self.auth(self.alice)
+        resp = self.client.get(self.url(bundle.id))
+        self.assertEqual(resp.data["summary"]["total_files"], 0)
+        self.assertEqual(resp.data["summary"]["missing_count"], 1)
+        self.assertEqual(resp.data["missing_files"][0]["reason"], "file_trashed")
+
+    def test_requirement_without_file_reported_missing(self):
+        bundle = self._bundle()
+        DocumentBundleRequirement.objects.create(
+            owner=self.alice,
+            bundle=bundle,
+            title="Needs passport",
+            linked_document=self.alice_doc,  # document has no files yet
+        )
+        self.auth(self.alice)
+        resp = self.client.get(self.url(bundle.id))
+        self.assertEqual(resp.data["summary"]["missing_count"], 1)
+        self.assertEqual(resp.data["missing_files"][0]["reason"], "no_file")
+
+    def test_non_owner_cannot_list_bundle_files(self):
+        bundle = self._bundle()
+        self.auth(self.bob)
+        self.assertEqual(
+            self.client.get(self.url(bundle.id)).status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+
+    def test_files_deduplicated_across_requirements(self):
+        bundle = self._bundle()
+        f = self._file(self.alice_doc, self.alice, name="passport.pdf")
+        DocumentBundleRequirement.objects.create(
+            owner=self.alice, bundle=bundle, title="A", linked_file=f
+        )
+        DocumentBundleRequirement.objects.create(
+            owner=self.alice,
+            bundle=bundle,
+            title="B",
+            linked_document=self.alice_doc,
+        )
+        self.auth(self.alice)
+        resp = self.client.get(self.url(bundle.id))
+        self.assertEqual(resp.data["summary"]["total_files"], 1)
+
+
 class TimelineTests(RenewalWorkspaceBaseTest):
     def test_timeline_only_returns_own_events(self):
         # Bob has an expiring document too.

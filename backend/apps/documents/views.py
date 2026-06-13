@@ -84,6 +84,7 @@ from .services import (
     attention_sort_key,
     build_health_overview,
     bundle_readiness,
+    collect_bundle_files,
     build_timeline,
     scan_missing,
     create_document_export,
@@ -1502,6 +1503,63 @@ class DocumentBundleDetailView(
     """GET/PATCH/DELETE one owner-scoped bundle."""
 
     lookup_url_kwarg = "bundle_id"
+
+
+class DocumentBundleFilesView(APIView):
+    """
+    List every available file reachable from a bundle's requirements, plus the
+    requirements still missing a usable file. Owner-scoped; exposes only safe
+    file metadata (never internal storage paths). Feeds the bundle Files tab and
+    the ZIP export summary.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, bundle_id):
+        bundle = get_object_or_404(
+            DocumentBundle, pk=bundle_id, owner=request.user
+        )
+        result = collect_bundle_files(bundle)
+
+        files = []
+        for entry in result.files:
+            data = DocumentFileSerializer(
+                entry.file, context={"request": request}
+            ).data
+            data.update(
+                {
+                    "requirement_id": entry.requirement_id,
+                    "requirement_title": entry.requirement_title,
+                    "document_title": entry.document_title,
+                    "available": True,
+                }
+            )
+            files.append(data)
+
+        missing = [
+            {
+                "requirement_id": m.requirement_id,
+                "requirement_title": m.requirement_title,
+                "document_id": m.document_id,
+                "document_title": m.document_title,
+                "reason": m.reason,
+            }
+            for m in result.missing
+        ]
+
+        document_ids = {entry.document_id for entry in result.files}
+        return Response(
+            {
+                "files": files,
+                "missing_files": missing,
+                "summary": {
+                    "total_files": len(files),
+                    "total_size": result.total_size,
+                    "documents_count": len(document_ids),
+                    "missing_count": len(missing),
+                },
+            }
+        )
 
 
 class _BundleRequirementScopedMixin:

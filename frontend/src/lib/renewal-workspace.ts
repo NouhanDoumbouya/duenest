@@ -11,6 +11,7 @@ import type {
   Bundle,
   BundleExportRequest,
   BundleExportType,
+  BundleFilesResponse,
   BundleReadiness,
   BundleRequirement,
   Checklist,
@@ -141,6 +142,13 @@ export function getBundles(params?: {
 
 export function getBundle(bundleId: number): Promise<Bundle> {
   return apiFetch<Bundle>(`/document-bundles/${bundleId}/`, { auth: true });
+}
+
+export function getBundleFiles(bundleId: number): Promise<BundleFilesResponse> {
+  return apiFetch<BundleFilesResponse>(
+    `/document-bundles/${bundleId}/files/`,
+    { auth: true },
+  );
 }
 
 export function createBundle(payload: CreateBundleRequest): Promise<Bundle> {

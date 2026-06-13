@@ -795,6 +795,133 @@ def bundle_readiness(bundle) -> BundleReadiness:
     )
 
 
+# ---- Bundle files -----------------------------------------------------------
+
+
+@dataclass
+class BundleFileEntry:
+    """An available file reachable from a bundle, with its requirement context."""
+
+    file: object  # DocumentFile
+    requirement_id: int
+    requirement_title: str
+    document_id: int
+    document_title: str
+
+
+@dataclass
+class BundleMissingItem:
+    """A bundle requirement that points at a document/file but has nothing usable."""
+
+    requirement_id: int
+    requirement_title: str
+    document_id: int | None
+    document_title: str | None
+    reason: str  # "no_file" | "file_trashed" | "document_trashed"
+
+
+@dataclass
+class BundleFilesResult:
+    files: list
+    missing: list
+
+    @property
+    def total_size(self) -> int:
+        return sum(entry.file.file_size for entry in self.files)
+
+
+def collect_bundle_files(bundle) -> BundleFilesResult:
+    """
+    Gather the available files reachable from a bundle's requirements, plus the
+    requirements that are still missing a usable file.
+
+    Sources, per requirement:
+      * an explicitly linked file → that single file
+      * a linked document (no explicit file) → all of the document's live files
+
+    Trashed/deleted files and trashed documents are excluded from ``files`` and
+    surfaced in ``missing`` instead. Files are de-duplicated across requirements.
+    Owner isolation is the caller's responsibility (resolve the bundle by owner).
+    """
+    files: list[BundleFileEntry] = []
+    missing: list[BundleMissingItem] = []
+    seen_file_ids: set[int] = set()
+
+    requirements = (
+        bundle.requirements.select_related(
+            "linked_document", "linked_file", "linked_file__document"
+        )
+        .prefetch_related("linked_document__files")
+        .all()
+    )
+
+    for req in requirements:
+        if req.linked_file_id:
+            f = req.linked_file
+            doc = f.document
+            if f.is_trashed or doc.is_trashed:
+                missing.append(
+                    BundleMissingItem(
+                        requirement_id=req.id,
+                        requirement_title=req.title,
+                        document_id=doc.id,
+                        document_title=doc.title,
+                        reason="document_trashed" if doc.is_trashed else "file_trashed",
+                    )
+                )
+            elif f.id not in seen_file_ids:
+                seen_file_ids.add(f.id)
+                files.append(
+                    BundleFileEntry(
+                        file=f,
+                        requirement_id=req.id,
+                        requirement_title=req.title,
+                        document_id=doc.id,
+                        document_title=doc.title,
+                    )
+                )
+        elif req.linked_document_id:
+            doc = req.linked_document
+            if doc.is_trashed:
+                missing.append(
+                    BundleMissingItem(
+                        requirement_id=req.id,
+                        requirement_title=req.title,
+                        document_id=doc.id,
+                        document_title=doc.title,
+                        reason="document_trashed",
+                    )
+                )
+                continue
+            live_files = [x for x in doc.files.all() if not x.is_trashed]
+            if not live_files:
+                missing.append(
+                    BundleMissingItem(
+                        requirement_id=req.id,
+                        requirement_title=req.title,
+                        document_id=doc.id,
+                        document_title=doc.title,
+                        reason="no_file",
+                    )
+                )
+                continue
+            for f in live_files:
+                if f.id in seen_file_ids:
+                    continue
+                seen_file_ids.add(f.id)
+                files.append(
+                    BundleFileEntry(
+                        file=f,
+                        requirement_id=req.id,
+                        requirement_title=req.title,
+                        document_id=doc.id,
+                        document_title=doc.title,
+                    )
+                )
+
+    return BundleFilesResult(files=files, missing=missing)
+
+
 # ---- Timeline aggregation --------------------------------------------------
 
 
