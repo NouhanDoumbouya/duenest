@@ -545,7 +545,7 @@ Required.
 
 Manages user-owned document metadata and returns computed document intelligence
 fields. File upload/preview/sharing is handled by nested file endpoints below.
-OCR and notification sending are not implemented. Every endpoint requires
+Notification sending is not implemented. Every endpoint requires
 authentication, and all access is scoped to the authenticated user: a document
 that belongs to another user returns `404 Not Found`.
 
@@ -561,8 +561,12 @@ Base path:
 | `POST`   | `/api/v1/documents/`      | Create a document for the current user |
 | `GET`    | `/api/v1/documents/:id/`  | Retrieve one of the user's documents |
 | `PATCH`  | `/api/v1/documents/:id/`  | Update one of the user's documents   |
-| `DELETE` | `/api/v1/documents/:id/`  | Delete one of the user's documents   |
+| `DELETE` | `/api/v1/documents/:id/`  | Move one of the user's documents to trash |
 | `GET`    | `/api/v1/documents/attention-needed/` | Documents requiring action |
+| `GET`    | `/api/v1/documents/trash/` | List trashed documents |
+| `POST`   | `/api/v1/documents/:id/trash/` | Move a document to trash with optional reason |
+| `POST`   | `/api/v1/documents/:id/restore/` | Restore a trashed document |
+| `DELETE` | `/api/v1/documents/:id/permanent-delete/` | Permanently delete a trashed document |
 
 ### Authentication
 
@@ -582,6 +586,12 @@ Required (`Authorization: Bearer <access_token>`).
   "expiry_date": "2030-01-01",
   "renewal_date": "2029-10-01",
   "notes": "Renew before travel.",
+  "physical_location_label": "Home safe",
+  "physical_location_details": "Folder A, top shelf",
+  "original_available": "yes",
+  "certified_copy_available": "unknown",
+  "translation_available": "no",
+  "notes_about_original": "Original should not leave the house.",
   "status": "active"
 }
 ```
@@ -607,7 +617,15 @@ set from the authenticated user. `category` is optional and references a
   "expiry_date": "2030-01-01",
   "renewal_date": "2029-10-01",
   "notes": "Renew before travel.",
+  "physical_location_label": "Home safe",
+  "physical_location_details": "Folder A, top shelf",
+  "original_available": "yes",
+  "certified_copy_available": "unknown",
+  "translation_available": "no",
+  "notes_about_original": "Original should not leave the house.",
   "status": "active",
+  "is_trashed": false,
+  "trashed_at": null,
   "computed_status": "active",
   "status_label": "Active",
   "status_reason": "This document looks up to date.",
@@ -666,6 +684,10 @@ specific `computed_status` while still supporting a focused attention inbox.
 
 Archived documents keep `computed_status = "archived"` and do not appear in
 Attention Needed results.
+
+Active document list responses exclude trashed documents. Trashed documents
+remain owner-owned and recoverable through `/api/v1/documents/trash/` until the
+owner calls `permanent-delete`.
 
 ### List search, filters, and ordering
 
@@ -729,7 +751,8 @@ public/shared-link documents.
 - `title` is required.
 - `expiry_date` cannot be earlier than `issue_date` (when both are set).
 - `renewal_date` cannot be later than `expiry_date` (when both are set).
-- `owner`, `id`, computed health fields, `created_at`, and `updated_at` are read-only.
+- `owner`, `id`, `is_trashed`, `trashed_at`, computed health fields,
+  `created_at`, and `updated_at` are read-only.
 
 List responses are paginated using the standard pagination envelope
 (`count`, `next`, `previous`, `results`).
@@ -747,9 +770,14 @@ require authentication.
 | `GET`    | `/api/v1/documents/:id/files/`                      | List files for the document       |
 | `POST`   | `/api/v1/documents/:id/files/`                      | Upload a file (multipart)         |
 | `GET`    | `/api/v1/documents/:id/files/:file_id/`             | Retrieve file metadata            |
-| `DELETE` | `/api/v1/documents/:id/files/:file_id/`             | Delete the file (record + blob)   |
+| `DELETE` | `/api/v1/documents/:id/files/:file_id/`             | Move the file to trash            |
 | `GET`    | `/api/v1/documents/:id/files/:file_id/download/`    | Controlled download (owner only)  |
 | `GET`    | `/api/v1/documents/:id/files/:file_id/preview/`     | Inline preview for PDF/JPEG/PNG   |
+| `GET`    | `/api/v1/documents/:id/files/trash/`                | List trashed files for a document |
+| `POST`   | `/api/v1/documents/:id/files/:file_id/trash/`       | Move a file to trash              |
+| `POST`   | `/api/v1/documents/:id/files/:file_id/restore/`     | Restore a trashed file            |
+| `DELETE` | `/api/v1/documents/:id/files/:file_id/permanent-delete/` | Permanently delete a trashed file |
+| `POST`   | `/api/v1/documents/:id/files/:file_id/versions/`    | Upload a replacement file and record a version |
 
 ### Upload Request
 
@@ -776,6 +804,8 @@ file: <binary>
   "download_url": "http://localhost:8000/api/v1/documents/12/files/1/download/",
   "preview_url": "http://localhost:8000/api/v1/documents/12/files/1/preview/",
   "is_previewable": true,
+  "is_trashed": false,
+  "trashed_at": null,
   "created_at": "2026-06-12T10:30:00Z",
   "updated_at": "2026-06-12T10:30:00Z"
 }
@@ -797,6 +827,10 @@ file: <binary>
 - `preview_url` is authenticated and ownership-checked exactly like download.
 - Accessing another user's file (list, retrieve, download, delete) returns
   `404 Not Found`.
+- Active file lists, preview, download, share-link creation, and bundle-linking
+  exclude trashed files. Existing public share links to a trashed file or
+  trashed parent document return `410 Gone`.
+- Permanent file deletion is guarded: the file must already be in trash.
 
 ---
 
@@ -890,9 +924,10 @@ Public metadata returns only safe fields:
 }
 ```
 
-Invalid links return `404`. Expired and revoked links return `410`. View-only
-links can preview supported files but cannot download. Correct access codes do
-not bypass expiry, revocation, or permission checks.
+Invalid links return `404`. Expired, revoked, trashed-file, and trashed-document
+links return `410`. View-only links can preview supported files but cannot
+download. Correct access codes do not bypass expiry, revocation, trash state, or
+permission checks.
 
 ## Activity log
 
@@ -1204,6 +1239,119 @@ install notes.
   "applied_at": null
 }
 ```
+
+---
+
+# 13C. Document Vault Maturity API (implemented)
+
+These endpoints add recoverable deletion, version history, structured exports,
+emergency access packs, proof records, and a document-wide activity timeline.
+All owner endpoints require authentication and follow the same owner-scoped
+`404` behavior as the rest of the document vault.
+
+## 13C.1 Version history
+
+Versions are metadata snapshots for a document. They do **not** duplicate file
+blobs or expose internal file paths.
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/v1/documents/:document_id/versions/` | List version snapshots |
+| `GET` | `/api/v1/documents/:document_id/versions/:version_id/` | Retrieve one version |
+| `POST` | `/api/v1/documents/:document_id/versions/:version_id/restore-metadata/` | Restore metadata from a version |
+
+Versions are recorded when a document is created, important metadata changes,
+a file is uploaded/replaced, extraction suggestions are applied, or metadata is
+restored from a version. Restoring metadata creates a new version so the action
+is itself reversible.
+
+## 13C.2 Exports
+
+Exports are generated synchronously for structured metadata only. They never
+include raw uploaded files, raw OCR text, share tokens, access-code hashes, or
+internal storage paths.
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/v1/document-exports/` | List the user's export requests |
+| `POST` | `/api/v1/document-exports/` | Generate a metadata export |
+| `GET` | `/api/v1/document-exports/:export_id/` | Retrieve export metadata |
+| `GET` | `/api/v1/document-exports/:export_id/download/` | Download a completed, unexpired export |
+
+Supported `export_type` values:
+
+```txt
+documents_json | documents_csv | full_vault_metadata
+```
+
+`future_full_archive` is intentionally rejected until full file archives are
+implemented safely. Generated files expire after 7 days.
+
+## 13C.3 Emergency access packs
+
+Emergency packs are owner-selected document/file collections. A pack never
+grants access to the whole vault, and public responses expose only safe item
+metadata plus preview/download routes for selected files.
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/v1/emergency-packs/` | List the user's packs |
+| `POST` | `/api/v1/emergency-packs/` | Create a pack |
+| `GET` | `/api/v1/emergency-packs/:pack_id/` | Retrieve a pack |
+| `PATCH` | `/api/v1/emergency-packs/:pack_id/` | Update a pack |
+| `DELETE` | `/api/v1/emergency-packs/:pack_id/` | Delete a pack |
+| `POST` | `/api/v1/emergency-packs/:pack_id/items/` | Add an owner-owned document/file |
+| `DELETE` | `/api/v1/emergency-packs/:pack_id/items/:item_id/` | Remove an item |
+| `POST` | `/api/v1/emergency-packs/:pack_id/enable/` | Activate the pack |
+| `POST` | `/api/v1/emergency-packs/:pack_id/disable/` | Disable public access |
+| `POST` | `/api/v1/emergency-packs/:pack_id/regenerate-link/` | Rotate the public token |
+
+If `access_code_required` is true, `access_code` must be supplied. The code is
+write-only and stored hashed; it is never returned by the API.
+
+Public emergency-pack endpoints:
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/v1/share/emergency-packs/:token/` | Public pack metadata after code check |
+| `POST` | `/api/v1/share/emergency-packs/:token/verify-code/` | Verify a pack access code |
+| `GET` | `/api/v1/share/emergency-packs/:token/items/:item_id/preview/` | Preview a selected file |
+| `GET` | `/api/v1/share/emergency-packs/:token/items/:item_id/download/` | Download a selected file |
+
+Access-code protected public requests use the same header as file share links:
+
+```http
+X-Access-Code: 246810
+```
+
+Expired, disabled, non-share-link, or trashed-item packs return unavailable
+responses and do not expose file contents.
+
+## 13C.4 Proof records
+
+Proof records capture submission confirmations, payment receipts, tracking
+numbers, approval/rejection notices, or related evidence. They are owner-only
+and may link to a document, bundle, checklist, or file owned by the same user.
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/v1/proof-records/` | List the user's proof records |
+| `POST` | `/api/v1/proof-records/` | Create a proof record |
+| `GET` | `/api/v1/proof-records/:proof_id/` | Retrieve one proof record |
+| `PATCH` | `/api/v1/proof-records/:proof_id/` | Update one proof record |
+| `DELETE` | `/api/v1/proof-records/:proof_id/` | Delete one proof record |
+| `GET` | `/api/v1/documents/:document_id/proof-records/` | List proof records for a document |
+| `GET` | `/api/v1/document-bundles/:bundle_id/proof-records/` | List proof records for a bundle |
+
+## 13C.5 Document activity
+
+```http
+GET /api/v1/documents/:document_id/activity/
+```
+
+Returns a merged owner-only activity timeline for document-level events and
+file/share events. Raw IP addresses, user agents, internal file paths, tokens,
+and access-code data are not exposed.
 
 ---
 

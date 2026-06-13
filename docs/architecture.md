@@ -1091,6 +1091,11 @@ justifies extraction.
   hashed access codes, and owner-only share notes.
 - **Owner-only activity log:** records upload, preview, download, share access,
   revocation, and access-code events without exposing logs to public viewers.
+- **Vault lifecycle layer:** soft trash/restore for documents and files,
+  metadata version snapshots, metadata restore, owner-only proof records,
+  structured metadata exports, emergency access packs, and a document-wide
+  activity timeline. These are implemented inside the existing documents app
+  and storage layer; no separate service or worker is introduced.
 
 ### Implemented intelligence layers
 
@@ -1127,8 +1132,8 @@ justifies extraction.
 ### Later (Phase 5–6)
 
 - **Notification service:** in-app → email → optional push.
-- **Audit/activity tracking:** append-only event log per document.
-- **Export service:** on-demand PDF/CSV/ZIP generation.
+- **Full archive export service:** file ZIP/full-archive generation, likely
+  async when file volume grows.
 - **Production storage:** S3-compatible private object storage with signed URLs.
 
 ### Current vs future at a glance
@@ -1147,7 +1152,9 @@ justifies extraction.
 | Timeline / calendar view | ✅ Implemented (aggregated list) | Full calendar component later |
 | Sharing | ✅ Implemented file-level links | Email delivery, watermarking, redaction later |
 | OCR-assisted extraction | ✅ Implemented (local PDF text + Tesseract OCR, sync, review-gated) | Async worker for large volumes |
-| Audit / export | ✅ File activity log | Document-wide audit + export service |
+| Audit / export | ✅ Document activity + metadata exports | Full archive/ZIP export later |
+| Trash / restore | ✅ Implemented for documents/files | Retention windows and purge jobs later |
+| Emergency packs / proof records | ✅ Implemented backend foundation | Trusted contacts and richer audit later |
 
 ---
 

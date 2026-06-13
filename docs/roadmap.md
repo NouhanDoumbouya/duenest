@@ -808,21 +808,23 @@ stress**.
 8. Missing-information detection                   (done)
 9. Attention Needed inbox                          (done)
 10. Renewal reminder rules                         (done: no sending yet)
-11. Renewal preparation checklists
-12. Document detail page upgrade
-13. Calendar/timeline view
+11. Renewal preparation checklists                  (done)
+12. Document detail page upgrade                    (done)
+13. Calendar/timeline view                          (done)
 14. Secure share links                             (done)
-15. OCR-assisted extraction
-16. Application/renewal bundles
-17. File activity timeline and audit log           (partially done)
-18. Version history
-19. Emergency access pack
-20. Export and backup features
+15. OCR-assisted extraction                         (done)
+16. Application/renewal bundles                     (done)
+17. File/document activity timeline and audit log   (backend foundation done)
+18. Version history                                (backend foundation done)
+19. Emergency access pack                           (backend foundation done)
+20. Export and backup features                      (backend metadata export done)
 ```
 
 Sharing (14) was implemented early as file-level sharing for the document vault.
-OCR (15) still deliberately comes **after** upload, preview, and status
-intelligence are solid.
+OCR, bundles, checklists, and the timeline now have working foundations. The
+newer vault-maturity items (17–20) have backend foundations and still need
+frontend product polish before they should be considered complete user-facing
+features.
 
 ### Upcoming branches
 
@@ -831,12 +833,14 @@ backend/document-status-intelligence   frontend/document-status-polish        (d
 backend/document-search-filter         frontend/document-search-filter        (done)
 backend/document-attention-inbox       frontend/document-attention-inbox      (done)
 backend/document-reminder-rules        frontend/document-reminder-experience  (done)
-backend/document-checklists            frontend/document-checklists
-backend/document-ocr-foundation        frontend/document-ocr-review-ui
+backend/document-checklists            frontend/document-checklists            (done)
+backend/document-ocr-foundation        frontend/document-ocr-review-ui         (done)
+backend/document-vault-maturity        frontend/document-vault-maturity        (backend in progress)
 ```
 
-The **next implementation branch** should move to renewal preparation checklists
-or calendar/timeline work, while keeping OCR, bundles, and exports deferred.
+The **next implementation branch** should polish the frontend for vault maturity
+features: trash/restore, versions, exports, emergency packs, proof records, and
+document-wide activity.
 
 ---
 

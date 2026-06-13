@@ -1,8 +1,11 @@
 import hashlib
+import json
 import secrets
+from datetime import timedelta
 
 from django.contrib.auth.hashers import check_password, make_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.files.base import ContentFile
 from django.db.models import Count, Q
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
@@ -18,25 +21,34 @@ from rest_framework.views import APIView
 
 from .models import (
     Document,
+    DocumentActivity,
     DocumentBundle,
     DocumentBundleRequirement,
     DocumentChecklist,
     DocumentChecklistItem,
     DocumentChecklistTemplate,
+    DocumentExportRequest,
     DocumentExtraction,
     DocumentFile,
     DocumentFileActivity,
     DocumentFileShareLink,
     DocumentReminderRule,
+    DocumentVersion,
+    EmergencyAccessPack,
+    EmergencyAccessPackItem,
+    ProofRecord,
+    generate_share_token,
 )
 from .serializers import (
     BundleReadinessSerializer,
     ChecklistFromTemplateSerializer,
+    DocumentActivityEventSerializer,
     DocumentBundleRequirementSerializer,
     DocumentBundleSerializer,
     DocumentChecklistItemSerializer,
     DocumentChecklistSerializer,
     DocumentChecklistTemplateSerializer,
+    DocumentExportRequestSerializer,
     DocumentExtractionSerializer,
     DocumentFileActivitySerializer,
     DocumentFileSerializer,
@@ -44,20 +56,31 @@ from .serializers import (
     DocumentFileUploadSerializer,
     DocumentReminderRuleSerializer,
     DocumentSerializer,
+    DocumentVersionSerializer,
+    EmergencyAccessPackItemSerializer,
+    EmergencyAccessPackSerializer,
     ExtractionApplySerializer,
+    ProofRecordSerializer,
+    PublicEmergencyPackSerializer,
     PublicSharedFileSerializer,
     ShareLinkCreateSerializer,
     TimelineEventSerializer,
 )
 from .services import (
     APPLICABLE_EXTRACTION_FIELDS,
+    VERSIONED_FIELDS,
     attention_sort_key,
     bundle_readiness,
+    build_export_payload,
     build_timeline,
+    export_payload_to_csv,
     extract_file_details,
     get_document_health,
     log_activity,
+    log_document_activity,
+    record_document_version,
     reminder_date_for_rule,
+    summarize_field_changes,
 )
 
 
@@ -115,13 +138,24 @@ class DocumentViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         # Owner-scoped queryset — never expose other users' documents.
         # select_related avoids an extra query for each document's category.
+        # file_count counts only NON-trashed files so health stays accurate.
         queryset = (
             Document.objects.filter(owner=self.request.user)
             .select_related("category")
-            .annotate(file_count=Count("files", distinct=True))
+            .annotate(
+                file_count=Count(
+                    "files",
+                    filter=Q(files__is_trashed=False),
+                    distinct=True,
+                )
+            )
         )
+        # Non-list actions (retrieve/update/destroy/restore/permanent-delete)
+        # operate on a single document and must be able to reach trashed ones.
         if self.action != "list":
             return queryset
+        # Active list never includes trashed documents (see the trash actions).
+        queryset = queryset.filter(is_trashed=False)
 
         params = self.request.query_params
         search = params.get("search", "").strip()
@@ -233,11 +267,76 @@ class DocumentViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         # Owner comes from the authenticated request, not the request body.
-        serializer.save(owner=self.request.user)
+        document = serializer.save(owner=self.request.user)
+        record_document_version(
+            document,
+            version_type=DocumentVersion.VersionType.METADATA_SNAPSHOT,
+            created_by=self.request.user,
+            change_summary="Document created",
+        )
+        log_document_activity(
+            owner=self.request.user,
+            document=document,
+            action=DocumentActivity.Action.DOCUMENT_CREATED,
+            title="Document created",
+            description=document.title,
+        )
+
+    def update(self, request, *args, **kwargs):
+        # Snapshot important fields before the change so we can record a version
+        # and a human-readable summary of exactly what changed.
+        instance = self.get_object()
+        before = {f: getattr(instance, f) for f in VERSIONED_FIELDS}
+        response = super().update(request, *args, **kwargs)
+        instance.refresh_from_db()
+        after = {f: getattr(instance, f) for f in VERSIONED_FIELDS}
+        summary = summarize_field_changes(before, after)
+        if summary:
+            record_document_version(
+                instance,
+                version_type=DocumentVersion.VersionType.METADATA_SNAPSHOT,
+                created_by=request.user,
+                change_summary=summary,
+            )
+            log_document_activity(
+                owner=request.user,
+                document=instance,
+                action=DocumentActivity.Action.DOCUMENT_UPDATED,
+                title="Document updated",
+                description=summary,
+            )
+        return response
+
+    def destroy(self, request, *args, **kwargs):
+        # Standard DELETE soft-trashes the document (recoverable). Permanent
+        # removal is a separate, explicit action.
+        document = self.get_object()
+        self._trash_document(document, request)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    def _trash_document(self, document, request, reason=""):
+        if document.is_trashed:
+            return
+        document.is_trashed = True
+        document.trashed_at = timezone.now()
+        if reason:
+            document.deletion_reason = reason[:255]
+        document.save(update_fields=["is_trashed", "trashed_at", "deletion_reason"])
+        log_document_activity(
+            owner=request.user,
+            document=document,
+            action=DocumentActivity.Action.DOCUMENT_TRASHED,
+            title="Moved to trash",
+            description=document.title,
+        )
 
     @action(detail=False, methods=["get"], url_path="attention-needed")
     def attention_needed(self, request):
-        documents = list(self.get_queryset().exclude(status=Document.Status.ARCHIVED))
+        documents = list(
+            self.get_queryset()
+            .filter(is_trashed=False)
+            .exclude(status=Document.Status.ARCHIVED)
+        )
         items = [
             document
             for document in documents
@@ -246,6 +345,77 @@ class DocumentViewSet(viewsets.ModelViewSet):
         items.sort(key=attention_sort_key)
         serializer = self.get_serializer(items, many=True)
         return Response({"count": len(items), "items": serializer.data})
+
+    @action(detail=False, methods=["get"], url_path="trash")
+    def trash_list(self, request):
+        """List the user's trashed documents."""
+        queryset = (
+            Document.objects.filter(owner=request.user, is_trashed=True)
+            .select_related("category")
+            .annotate(
+                file_count=Count(
+                    "files", filter=Q(files__is_trashed=False), distinct=True
+                )
+            )
+            .order_by("-trashed_at")
+        )
+        page = self.paginate_queryset(list(queryset))
+        if page is not None:
+            return self.get_paginated_response(
+                self.get_serializer(page, many=True).data
+            )
+        return Response(self.get_serializer(queryset, many=True).data)
+
+    @action(detail=True, methods=["post"], url_path="trash")
+    def trash(self, request, pk=None):
+        """Explicitly move a document to trash."""
+        document = self.get_object()
+        self._trash_document(
+            document, request, reason=request.data.get("reason", "")
+        )
+        return Response(self.get_serializer(document).data)
+
+    @action(detail=True, methods=["post"], url_path="restore")
+    def restore(self, request, pk=None):
+        """Restore a trashed document back to active."""
+        document = self.get_object()
+        if document.is_trashed:
+            document.is_trashed = False
+            document.trashed_at = None
+            document.deletion_reason = ""
+            document.save(
+                update_fields=["is_trashed", "trashed_at", "deletion_reason"]
+            )
+            log_document_activity(
+                owner=request.user,
+                document=document,
+                action=DocumentActivity.Action.DOCUMENT_RESTORED,
+                title="Restored from trash",
+                description=document.title,
+            )
+        return Response(self.get_serializer(document).data)
+
+    @action(detail=True, methods=["delete"], url_path="permanent-delete")
+    def permanent_delete(self, request, pk=None):
+        """
+        Permanently delete a document and its files/share links.
+
+        Guarded: the document must already be in trash. Stored file blobs are
+        removed best-effort before the rows are deleted.
+        """
+        document = self.get_object()
+        if not document.is_trashed:
+            return Response(
+                {"detail": "Move the document to trash before deleting it permanently."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        for file in document.files.all():
+            try:
+                file.file.delete(save=False)
+            except Exception:  # noqa: BLE001 — best-effort blob cleanup
+                pass
+        document.delete()  # cascades to files, share links, versions, activity
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class _DocumentScopedMixin:
@@ -263,9 +433,12 @@ class _DocumentScopedMixin:
         )
 
     def get_queryset(self):
+        # Active file lists exclude trashed files (see the file trash endpoints).
+        self.get_document()
         return DocumentFile.objects.filter(
             document_id=self.kwargs["document_id"],
             document__owner=self.request.user,
+            is_trashed=False,
         )
 
 
@@ -306,26 +479,49 @@ class DocumentFileListCreateView(_DocumentScopedMixin, generics.ListCreateAPIVie
             actor_type=DocumentFileActivity.ActorType.OWNER,
             request=request,
         )
+        # Record a file-upload version so history shows when files arrived.
+        record_document_version(
+            document,
+            version_type=DocumentVersion.VersionType.FILE_UPLOAD,
+            created_by=request.user,
+            file=instance,
+            change_summary=f"Uploaded file “{instance.original_filename}”",
+        )
         return Response(output.data, status=status.HTTP_201_CREATED)
 
 
 class DocumentFileDetailView(_DocumentScopedMixin, generics.RetrieveDestroyAPIView):
-    """GET file metadata; DELETE removes the record and the stored file."""
+    """GET file metadata; DELETE soft-trashes the file (recoverable)."""
 
     serializer_class = DocumentFileSerializer
 
-    def perform_destroy(self, instance):
-        # Log before deletion (cascade also removes share links + activity rows,
-        # so this entry mainly serves an at-the-moment audit need).
-        log_activity(
-            file=instance,
-            action=DocumentFileActivity.Action.FILE_DELETED,
-            actor_type=DocumentFileActivity.ActorType.OWNER,
-            request=self.request,
-        )
-        # Best-effort removal of the stored blob, then the DB row.
-        instance.file.delete(save=False)
-        instance.delete()
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        _trash_file(instance, request)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+def _trash_file(instance, request):
+    """Soft-trash a file: hide it and cut off existing share-link access."""
+    if instance.is_trashed:
+        return
+    instance.is_trashed = True
+    instance.trashed_at = timezone.now()
+    instance.save(update_fields=["is_trashed", "trashed_at"])
+    log_activity(
+        file=instance,
+        action=DocumentFileActivity.Action.FILE_DELETED,
+        actor_type=DocumentFileActivity.ActorType.OWNER,
+        request=request,
+    )
+    log_document_activity(
+        owner=request.user,
+        document=instance.document,
+        action=DocumentActivity.Action.FILE_TRASHED,
+        title="File moved to trash",
+        description=instance.original_filename,
+        related_file=instance,
+    )
 
 
 class DocumentFileDownloadView(_DocumentScopedMixin, APIView):
@@ -337,6 +533,7 @@ class DocumentFileDownloadView(_DocumentScopedMixin, APIView):
             pk=pk,
             document_id=document_id,
             document__owner=request.user,
+            is_trashed=False,
         )
         log_activity(
             file=instance,
@@ -356,6 +553,7 @@ class DocumentFilePreviewView(_DocumentScopedMixin, APIView):
             pk=pk,
             document_id=document_id,
             document__owner=request.user,
+            is_trashed=False,
         )
         if not instance.is_previewable:
             return Response(
@@ -385,6 +583,8 @@ class _FileScopedMixin:
             pk=self.kwargs["file_id"],
             document_id=self.kwargs["document_id"],
             document__owner=self.request.user,
+            document__is_trashed=False,
+            is_trashed=False,
         )
 
 
@@ -544,6 +744,7 @@ class UpcomingDocumentRemindersView(APIView):
                 owner=request.user,
                 is_enabled=True,
             )
+            .exclude(document__is_trashed=True)
             .select_related("document")
             .annotate(file_count=Count("document__files", distinct=True))
         )
@@ -592,6 +793,16 @@ def _resolve_share_link(token):
             {
                 "detail": "This shared link has expired.",
                 "state": "expired",
+            },
+            status=status.HTTP_410_GONE,
+        )
+    # A trashed file (or trashed parent document) is no longer shareable, even
+    # through a previously-issued link.
+    if link.file.is_trashed or link.document.is_trashed:
+        return None, Response(
+            {
+                "detail": "This shared file is no longer available.",
+                "state": "unavailable",
             },
             status=status.HTTP_410_GONE,
         )
@@ -800,6 +1011,7 @@ class _ChecklistScopedMixin:
         )
 
     def get_queryset(self):
+        self.get_document()
         return (
             DocumentChecklist.objects.filter(
                 document_id=self.kwargs["document_id"],
@@ -1009,6 +1221,7 @@ class _BundleRequirementScopedMixin:
         )
 
     def get_queryset(self):
+        self.get_bundle()
         return DocumentBundleRequirement.objects.filter(
             bundle_id=self.kwargs["bundle_id"],
             owner=self.request.user,
@@ -1072,7 +1285,10 @@ class BundleRequirementLinkDocumentView(_RequirementActionMixin, APIView):
     def post(self, request, bundle_id, requirement_id):
         requirement = self.get_requirement()
         document = get_object_or_404(
-            Document, pk=request.data.get("document"), owner=request.user
+            Document,
+            pk=request.data.get("document"),
+            owner=request.user,
+            is_trashed=False,
         )
         requirement.linked_document = document
         if requirement.status == DocumentBundleRequirement.Status.MISSING:
@@ -1097,6 +1313,8 @@ class BundleRequirementLinkFileView(_RequirementActionMixin, APIView):
             DocumentFile,
             pk=request.data.get("file"),
             document__owner=request.user,
+            document__is_trashed=False,
+            is_trashed=False,
         )
         requirement.linked_file = file
         if requirement.linked_document_id is None:
@@ -1285,6 +1503,20 @@ class DocumentExtractionApplyView(_ExtractionScopedMixin, APIView):
                     exc.message_dict, status=status.HTTP_400_BAD_REQUEST
                 )
             document.save(update_fields=[*updated, "updated_at"])
+            # Record a version so applied extraction changes are recoverable.
+            record_document_version(
+                document,
+                version_type=DocumentVersion.VersionType.EXTRACTION_APPLIED,
+                created_by=request.user,
+                change_summary="Applied extracted details: " + ", ".join(updated),
+            )
+            log_document_activity(
+                owner=request.user,
+                document=document,
+                action=DocumentActivity.Action.EXTRACTION_APPLIED,
+                title="Extracted details applied",
+                description=", ".join(updated),
+            )
 
         extraction.applied_at = timezone.now()
         extraction.extraction_status = DocumentExtraction.Status.COMPLETED
@@ -1301,3 +1533,726 @@ class DocumentExtractionApplyView(_ExtractionScopedMixin, APIView):
                 ).data,
             }
         )
+
+
+# ===========================================================================
+# Document Vault Maturity views
+# ===========================================================================
+
+
+# ---- File trash / restore (nested under a document) ------------------------
+
+
+class _OwnedFileMixin:
+    """Resolve a file owned by request.user, including trashed ones."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get_owned_file(self, *, include_trashed=True):
+        qs = DocumentFile.objects.filter(
+            pk=self.kwargs["file_id"],
+            document_id=self.kwargs["document_id"],
+            document__owner=self.request.user,
+        )
+        if not include_trashed:
+            qs = qs.filter(is_trashed=False)
+        return get_object_or_404(qs)
+
+
+class DocumentFileTrashListView(_DocumentScopedMixin, generics.ListAPIView):
+    """List a document's trashed files."""
+
+    serializer_class = DocumentFileSerializer
+
+    def get_queryset(self):
+        self.get_document()
+        return DocumentFile.objects.filter(
+            document_id=self.kwargs["document_id"],
+            document__owner=self.request.user,
+            is_trashed=True,
+        )
+
+
+class DocumentFileTrashView(_OwnedFileMixin, APIView):
+    """POST soft-trashes a file."""
+
+    def post(self, request, document_id, file_id):
+        file = self.get_owned_file()
+        _trash_file(file, request)
+        return Response(
+            DocumentFileSerializer(file, context={"request": request}).data
+        )
+
+
+class DocumentFileRestoreView(_OwnedFileMixin, APIView):
+    """POST restores a trashed file back to active."""
+
+    def post(self, request, document_id, file_id):
+        file = self.get_owned_file()
+        if file.is_trashed:
+            file.is_trashed = False
+            file.trashed_at = None
+            file.save(update_fields=["is_trashed", "trashed_at"])
+            log_document_activity(
+                owner=request.user,
+                document=file.document,
+                action=DocumentActivity.Action.FILE_RESTORED,
+                title="File restored",
+                description=file.original_filename,
+                related_file=file,
+            )
+        return Response(
+            DocumentFileSerializer(file, context={"request": request}).data
+        )
+
+
+class DocumentFilePermanentDeleteView(_OwnedFileMixin, APIView):
+    """DELETE permanently removes a trashed file and its share links."""
+
+    def delete(self, request, document_id, file_id):
+        file = self.get_owned_file()
+        if not file.is_trashed:
+            return Response(
+                {"detail": "Move the file to trash before deleting it permanently."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            file.file.delete(save=False)
+        except Exception:  # noqa: BLE001 — best-effort blob cleanup
+            pass
+        file.delete()  # cascades to share links + file activity
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# ---- File versioning -------------------------------------------------------
+
+
+class DocumentFileCreateVersionView(_DocumentScopedMixin, APIView):
+    """
+    POST uploads a replacement file and records a file-replacement version.
+
+    Limitation: this stores the new file as a fresh ``DocumentFile`` and records
+    a version pointing at it. Old file blobs are retained (not a destructive
+    rollback chain) — see the file-versioning note in the docs.
+    """
+
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request, document_id, file_id):
+        document = self.get_document()
+        previous = get_object_or_404(
+            DocumentFile, pk=file_id, document=document, is_trashed=False
+        )
+        serializer = DocumentFileUploadSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        uploaded = serializer.validated_data["file"]
+
+        checksum = _compute_checksum(uploaded)
+        instance = DocumentFile.objects.create(
+            document=document,
+            uploaded_by=request.user,
+            file=uploaded,
+            original_filename=uploaded.name[:255],
+            content_type=uploaded.content_type or "",
+            file_size=uploaded.size,
+            checksum=checksum,
+        )
+        record_document_version(
+            document,
+            version_type=DocumentVersion.VersionType.FILE_REPLACEMENT,
+            created_by=request.user,
+            file=instance,
+            change_summary=(
+                f"Replaced “{previous.original_filename}” with "
+                f"“{instance.original_filename}”"
+            ),
+            metadata={"previous_file_id": previous.id},
+        )
+        log_activity(
+            file=instance,
+            action=DocumentFileActivity.Action.FILE_UPLOADED,
+            actor_type=DocumentFileActivity.ActorType.OWNER,
+            request=request,
+        )
+        return Response(
+            DocumentFileSerializer(instance, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+# ---- Document version history ----------------------------------------------
+
+
+class _DocumentVersionScopedMixin:
+    permission_classes = [IsAuthenticated]
+    serializer_class = DocumentVersionSerializer
+
+    def get_document(self):
+        return get_object_or_404(
+            Document, pk=self.kwargs["document_id"], owner=self.request.user
+        )
+
+    def get_queryset(self):
+        self.get_document()
+        return DocumentVersion.objects.filter(
+            document_id=self.kwargs["document_id"],
+            owner=self.request.user,
+        ).select_related("created_by")
+
+
+class DocumentVersionListView(_DocumentVersionScopedMixin, generics.ListAPIView):
+    """List a document's version history (newest first)."""
+
+
+class DocumentVersionDetailView(
+    _DocumentVersionScopedMixin, generics.RetrieveAPIView
+):
+    lookup_url_kwarg = "version_id"
+
+
+class DocumentVersionRestoreMetadataView(_DocumentVersionScopedMixin, APIView):
+    """
+    POST restores a previous version's METADATA onto the document.
+
+    Only metadata is restored (title, type, issuer, dates, notes, etc.). Files
+    are never rolled back here. A new version is recorded so the restore itself
+    is part of the history and is reversible.
+    """
+
+    def post(self, request, document_id, version_id):
+        document = self.get_document()
+        version = get_object_or_404(
+            DocumentVersion, pk=version_id, document=document, owner=request.user
+        )
+        document.title = version.title_snapshot
+        document.document_type = version.document_type_snapshot
+        document.issuer = version.issuer_snapshot
+        document.country = version.country_snapshot
+        document.reference_number = version.reference_number_snapshot or None
+        document.issue_date = version.issue_date_snapshot
+        document.expiry_date = version.expiry_date_snapshot
+        document.renewal_date = version.renewal_date_snapshot
+        document.notes = version.notes_snapshot
+        try:
+            document.full_clean(validate_unique=False)
+        except DjangoValidationError as exc:
+            return Response(exc.message_dict, status=status.HTTP_400_BAD_REQUEST)
+        document.save()
+        record_document_version(
+            document,
+            version_type=DocumentVersion.VersionType.MANUAL_UPDATE,
+            created_by=request.user,
+            change_summary=f"Restored metadata from version {version.version_number}",
+        )
+        log_document_activity(
+            owner=request.user,
+            document=document,
+            action=DocumentActivity.Action.DOCUMENT_VERSION_RESTORED,
+            title="Version restored",
+            description=f"Restored metadata from version {version.version_number}",
+        )
+        return Response(
+            DocumentSerializer(document, context={"request": request}).data
+        )
+
+
+# ---- Export & backup -------------------------------------------------------
+
+EXPORT_TTL_DAYS = 7
+
+
+class DocumentExportListCreateView(generics.ListCreateAPIView):
+    """GET lists the user's exports; POST requests (and generates) a new one."""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = DocumentExportRequestSerializer
+
+    def get_queryset(self):
+        return DocumentExportRequest.objects.filter(owner=self.request.user)
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        export_type = serializer.validated_data["export_type"]
+
+        export = DocumentExportRequest.objects.create(
+            owner=request.user,
+            export_type=export_type,
+            status=DocumentExportRequest.Status.PROCESSING,
+        )
+        # Generated synchronously (metadata only; small payloads). A future
+        # branch can move heavy/full-archive exports to a background worker.
+        try:
+            payload = build_export_payload(request.user, export_type)
+            if export_type == DocumentExportRequest.ExportType.DOCUMENTS_CSV:
+                content = export_payload_to_csv(payload).encode("utf-8")
+                ext, suffix = ".csv", "csv"
+            else:
+                content = json.dumps(payload, indent=2).encode("utf-8")
+                ext, suffix = ".json", "json"
+            export.file.save(
+                f"duenest-export-{export.id}-{suffix}{ext}",
+                ContentFile(content),
+                save=False,
+            )
+            export.status = DocumentExportRequest.Status.COMPLETED
+            export.completed_at = timezone.now()
+            export.expires_at = timezone.now() + timedelta(days=EXPORT_TTL_DAYS)
+            export.metadata = {"document_count": payload.get("document_count", 0)}
+            export.save()
+        except Exception as exc:  # noqa: BLE001 — surface failure, don't crash
+            export.status = DocumentExportRequest.Status.FAILED
+            export.error_message = "Export generation failed."
+            export.save(update_fields=["status", "error_message"])
+            return Response(
+                {"detail": "Export generation failed.", "error": str(exc)[:200]},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        log_document_activity(
+            owner=request.user,
+            action=DocumentActivity.Action.EXPORT_REQUESTED,
+            title="Export requested",
+            description=export.get_export_type_display(),
+        )
+        return Response(
+            DocumentExportRequestSerializer(
+                export, context={"request": request}
+            ).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class DocumentExportDetailView(generics.RetrieveAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = DocumentExportRequestSerializer
+    lookup_url_kwarg = "export_id"
+
+    def get_queryset(self):
+        return DocumentExportRequest.objects.filter(owner=self.request.user)
+
+
+class DocumentExportDownloadView(APIView):
+    """Owner-only, expiring download of a generated export file."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, export_id):
+        export = get_object_or_404(
+            DocumentExportRequest, pk=export_id, owner=request.user
+        )
+        if export.status != DocumentExportRequest.Status.COMPLETED or not export.file:
+            return Response(
+                {"detail": "This export is not ready."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if export.is_expired:
+            return Response(
+                {"detail": "This export has expired. Please request a new one."},
+                status=status.HTTP_410_GONE,
+            )
+        try:
+            opened = export.file.open("rb")
+        except (FileNotFoundError, ValueError):
+            return Response(
+                {"detail": "This export is no longer available."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        filename = (
+            "duenest-export.csv"
+            if export.export_type == DocumentExportRequest.ExportType.DOCUMENTS_CSV
+            else "duenest-export.json"
+        )
+        return FileResponse(opened, as_attachment=True, filename=filename)
+
+
+# ---- Emergency access packs (owner) ----------------------------------------
+
+
+def _emergency_pack_code(plain: str) -> str:
+    return make_password(plain)
+
+
+class EmergencyPackViewSet(viewsets.ModelViewSet):
+    """Owner CRUD + lifecycle actions for emergency access packs."""
+
+    serializer_class = EmergencyAccessPackSerializer
+    permission_classes = [IsAuthenticated]
+    lookup_url_kwarg = "pack_id"
+
+    def get_queryset(self):
+        return EmergencyAccessPack.objects.filter(
+            owner=self.request.user
+        ).prefetch_related("items__document", "items__file")
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["request"] = self.request
+        return context
+
+    def perform_create(self, serializer):
+        # An optional access code may be supplied at creation.
+        plain_code = (serializer.validated_data.pop("access_code", "") or "").strip()
+        access_required = bool(
+            serializer.validated_data.get("access_code_required")
+        )
+        pack = serializer.save(
+            owner=self.request.user,
+            access_code_hash=_emergency_pack_code(plain_code)
+            if (access_required and plain_code)
+            else "",
+        )
+        log_document_activity(
+            owner=self.request.user,
+            action=DocumentActivity.Action.EMERGENCY_PACK_CREATED,
+            title="Emergency pack created",
+            description=pack.title,
+        )
+
+    def perform_update(self, serializer):
+        plain_code = (serializer.validated_data.pop("access_code", "") or "").strip()
+        access_required = serializer.validated_data.get(
+            "access_code_required",
+            getattr(serializer.instance, "access_code_required", False),
+        )
+        extra = {}
+        if access_required and plain_code:
+            extra["access_code_hash"] = _emergency_pack_code(plain_code)
+        elif not access_required:
+            extra["access_code_hash"] = ""
+        serializer.save(**extra)
+
+    @action(detail=True, methods=["post"], url_path="items")
+    def add_item(self, request, pack_id=None):
+        pack = self.get_object()
+        serializer = EmergencyAccessPackItemSerializer(
+            data=request.data, context={"request": request}
+        )
+        serializer.is_valid(raise_exception=True)
+        item = serializer.save(owner=request.user, pack=pack)
+        return Response(
+            EmergencyAccessPackItemSerializer(item, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(
+        detail=True,
+        methods=["delete"],
+        url_path=r"items/(?P<item_id>[^/.]+)",
+    )
+    def remove_item(self, request, pack_id=None, item_id=None):
+        pack = self.get_object()
+        item = get_object_or_404(
+            EmergencyAccessPackItem, pk=item_id, pack=pack, owner=request.user
+        )
+        item.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=["post"], url_path="enable")
+    def enable(self, request, pack_id=None):
+        """Activate a pack. Shareable packs get a token if they lack one."""
+        pack = self.get_object()
+        pack.status = EmergencyAccessPack.Status.ACTIVE
+        pack.disabled_at = None
+        if (
+            pack.access_mode == EmergencyAccessPack.AccessMode.SHARE_LINK
+            and not pack.token
+        ):
+            pack.token = generate_share_token()
+        pack.save(update_fields=["status", "disabled_at", "token", "updated_at"])
+        return Response(self.get_serializer(pack).data)
+
+    @action(detail=True, methods=["post"], url_path="disable")
+    def disable(self, request, pack_id=None):
+        """Disable a pack — any public link stops working immediately."""
+        pack = self.get_object()
+        pack.status = EmergencyAccessPack.Status.DISABLED
+        pack.disabled_at = timezone.now()
+        pack.save(update_fields=["status", "disabled_at", "updated_at"])
+        return Response(self.get_serializer(pack).data)
+
+    @action(detail=True, methods=["post"], url_path="regenerate-link")
+    def regenerate_link(self, request, pack_id=None):
+        """Rotate the public token, invalidating the previous link."""
+        pack = self.get_object()
+        pack.token = generate_share_token()
+        pack.save(update_fields=["token", "updated_at"])
+        return Response(self.get_serializer(pack).data)
+
+
+# ---- Emergency access packs (public, token-gated) --------------------------
+
+
+def _resolve_emergency_pack(token):
+    """Return (pack, error_response). Only active, unexpired packs are usable."""
+    try:
+        pack = EmergencyAccessPack.objects.get(token=token)
+    except EmergencyAccessPack.DoesNotExist:
+        return None, Response(
+            {"detail": "This emergency link is invalid.", "state": "invalid"},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    if not pack.is_shareable_now:
+        return None, Response(
+            {
+                "detail": "This emergency link is no longer available.",
+                "state": "unavailable",
+            },
+            status=status.HTTP_410_GONE,
+        )
+    return pack, None
+
+
+def _check_pack_access_code(pack, request):
+    if not pack.access_code_required:
+        return None
+    code = request.headers.get("X-Access-Code", "").strip()
+    if not code:
+        return Response(
+            {
+                "detail": "This emergency pack is protected. Enter the access code.",
+                "state": "requires_code",
+                "access_code_required": True,
+            },
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    if not check_password(code, pack.access_code_hash):
+        return Response(
+            {"detail": "That code does not match.", "state": "wrong_code"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    return None
+
+
+class PublicEmergencyPackMetadataView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, token):
+        pack, err = _resolve_emergency_pack(token)
+        if err:
+            return err
+        pack.last_accessed_at = timezone.now()
+        pack.save(update_fields=["last_accessed_at"])
+        log_document_activity(
+            owner=pack.owner,
+            action=DocumentActivity.Action.EMERGENCY_PACK_OPENED,
+            actor_type="shared_viewer",
+            title="Emergency pack opened",
+            description=pack.title,
+        )
+        code_err = _check_pack_access_code(pack, request)
+        if code_err:
+            return code_err
+        return Response(PublicEmergencyPackSerializer(pack).data)
+
+
+class PublicEmergencyPackVerifyCodeView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, token):
+        pack, err = _resolve_emergency_pack(token)
+        if err:
+            return err
+        if not pack.access_code_required:
+            return Response({"detail": "Access code verified."})
+        code = str(request.data.get("access_code", "")).strip()
+        if code and check_password(code, pack.access_code_hash):
+            return Response({"detail": "Access code verified."})
+        return Response(
+            {"detail": "Invalid access code.", "state": "wrong_code"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+
+class _PublicEmergencyItemMixin(APIView):
+    permission_classes = [AllowAny]
+
+    def resolve(self, request, token, item_id):
+        pack, err = _resolve_emergency_pack(token)
+        if err:
+            return None, err
+        code_err = _check_pack_access_code(pack, request)
+        if code_err:
+            return None, code_err
+        item = get_object_or_404(
+            EmergencyAccessPackItem.objects.select_related("document", "file"),
+            pk=item_id,
+            pack=pack,
+        )
+        # Never serve a trashed document/file, even via a valid pack.
+        if item.document.is_trashed or (item.file and item.file.is_trashed):
+            return None, Response(
+                {"detail": "This item is no longer available.", "state": "unavailable"},
+                status=status.HTTP_410_GONE,
+            )
+        if item.file is None:
+            return None, Response(
+                {"detail": "This item has no file attached."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return item, None
+
+
+class PublicEmergencyPackItemPreviewView(_PublicEmergencyItemMixin):
+    def get(self, request, token, item_id):
+        item, err = self.resolve(request, token, item_id)
+        if err:
+            return err
+        if not item.file.is_previewable:
+            return Response(
+                {"detail": "Preview is not available for this file type."},
+                status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            )
+        return _inline_file_response(item.file)
+
+
+class PublicEmergencyPackItemDownloadView(_PublicEmergencyItemMixin):
+    def get(self, request, token, item_id):
+        item, err = self.resolve(request, token, item_id)
+        if err:
+            return err
+        return _file_response(item.file, as_attachment=True)
+
+
+# ---- Proof-of-submission records -------------------------------------------
+
+
+class ProofRecordViewSet(viewsets.ModelViewSet):
+    """Owner CRUD for proof records."""
+
+    serializer_class = ProofRecordSerializer
+    permission_classes = [IsAuthenticated]
+    lookup_url_kwarg = "proof_id"
+
+    def get_queryset(self):
+        queryset = ProofRecord.objects.filter(owner=self.request.user)
+        params = self.request.query_params
+        if params.get("document"):
+            queryset = queryset.filter(document_id=params["document"])
+        if params.get("bundle"):
+            queryset = queryset.filter(bundle_id=params["bundle"])
+        if params.get("status"):
+            queryset = queryset.filter(status=params["status"])
+        return queryset
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["request"] = self.request
+        return context
+
+    def perform_create(self, serializer):
+        proof = serializer.save(owner=self.request.user)
+        log_document_activity(
+            owner=self.request.user,
+            document=proof.document,
+            action=DocumentActivity.Action.PROOF_SAVED,
+            title="Proof saved",
+            description=proof.title,
+            related_proof=proof,
+            related_bundle=proof.bundle,
+        )
+
+
+class DocumentProofRecordListView(generics.ListAPIView):
+    """Proof records for one owner-owned document."""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = ProofRecordSerializer
+
+    def get_queryset(self):
+        get_object_or_404(
+            Document, pk=self.kwargs["document_id"], owner=self.request.user
+        )
+        return ProofRecord.objects.filter(
+            owner=self.request.user, document_id=self.kwargs["document_id"]
+        )
+
+
+class BundleProofRecordListView(generics.ListAPIView):
+    """Proof records for one owner-owned bundle."""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = ProofRecordSerializer
+
+    def get_queryset(self):
+        get_object_or_404(
+            DocumentBundle, pk=self.kwargs["bundle_id"], owner=self.request.user
+        )
+        return ProofRecord.objects.filter(
+            owner=self.request.user, bundle_id=self.kwargs["bundle_id"]
+        )
+
+
+# ---- Unified document activity timeline ------------------------------------
+
+# File/share actions worth surfacing in the user-facing timeline, mapped to a
+# friendly title. Noisy/duplicate technical events are intentionally excluded.
+_FILE_ACTIVITY_TITLES = {
+    "file_uploaded": "File uploaded",
+    "file_previewed": "File previewed",
+    "file_downloaded": "File downloaded",
+    "share_created": "Share link created",
+    "share_opened": "Share link opened",
+    "share_previewed": "Shared file previewed",
+    "share_downloaded": "Shared file downloaded",
+    "share_revoked": "Share link revoked",
+}
+
+
+class DocumentActivityTimelineView(APIView):
+    """
+    Owner-only, human-readable activity timeline for one document.
+
+    Merges document-level activity (created/updated/trashed/checklist/proof/…)
+    with the lower-level file/share activity log. Raw IP addresses are never
+    exposed here.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, document_id):
+        document = get_object_or_404(
+            Document, pk=document_id, owner=request.user
+        )
+
+        events = []
+        for activity in document.activities.all():
+            events.append(
+                {
+                    "id": f"doc:{activity.id}",
+                    "action": activity.action,
+                    "title": activity.title or activity.get_action_display(),
+                    "description": activity.description,
+                    "actor_type": activity.actor_type,
+                    "timestamp": activity.created_at,
+                    "related_file": activity.related_file_id,
+                    "related_share": None,
+                    "related_checklist": activity.related_checklist_id,
+                    "related_bundle": activity.related_bundle_id,
+                    "related_proof": activity.related_proof_id,
+                    "metadata": activity.metadata or {},
+                }
+            )
+        for fa in document.file_activities.all():
+            if fa.action not in _FILE_ACTIVITY_TITLES:
+                continue
+            events.append(
+                {
+                    "id": f"file:{fa.id}",
+                    "action": fa.action,
+                    "title": _FILE_ACTIVITY_TITLES[fa.action],
+                    "description": "",
+                    "actor_type": fa.actor_type,
+                    "timestamp": fa.created_at,
+                    "related_file": fa.file_id,
+                    "related_share": fa.share_link_id,
+                    "related_checklist": None,
+                    "related_bundle": None,
+                    "related_proof": None,
+                    "metadata": {},
+                }
+            )
+
+        events.sort(key=lambda e: e["timestamp"], reverse=True)
+        serializer = DocumentActivityEventSerializer(events, many=True)
+        return Response({"count": len(events), "items": serializer.data})

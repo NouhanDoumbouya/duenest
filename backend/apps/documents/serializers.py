@@ -7,6 +7,7 @@ from rest_framework.reverse import reverse
 from .constants import ALLOWED_CONTENT_TYPES, ALLOWED_EXTENSIONS, MAX_FILE_SIZE
 from .models import (
     Document,
+    DocumentActivity,
     DocumentBundle,
     DocumentBundleRequirement,
     DocumentCategory,
@@ -14,11 +15,16 @@ from .models import (
     DocumentChecklistItem,
     DocumentChecklistItemTemplate,
     DocumentChecklistTemplate,
+    DocumentExportRequest,
     DocumentExtraction,
     DocumentFile,
     DocumentFileActivity,
     DocumentFileShareLink,
     DocumentReminderRule,
+    DocumentVersion,
+    EmergencyAccessPack,
+    EmergencyAccessPackItem,
+    ProofRecord,
 )
 from .services import (
     APPLICABLE_EXTRACTION_FIELDS,
@@ -74,6 +80,14 @@ class DocumentSerializer(serializers.ModelSerializer):
             "renewal_date",
             "notes",
             "status",
+            "physical_location_label",
+            "physical_location_details",
+            "original_available",
+            "certified_copy_available",
+            "translation_available",
+            "notes_about_original",
+            "is_trashed",
+            "trashed_at",
             "computed_status",
             "status_label",
             "status_reason",
@@ -93,6 +107,8 @@ class DocumentSerializer(serializers.ModelSerializer):
         read_only_fields = [
             "id",
             "owner",
+            "is_trashed",
+            "trashed_at",
             "computed_status",
             "status_label",
             "status_reason",
@@ -199,6 +215,8 @@ class DocumentFileSerializer(serializers.ModelSerializer):
             "download_url",
             "preview_url",
             "is_previewable",
+            "is_trashed",
+            "trashed_at",
             "created_at",
             "updated_at",
         ]
@@ -481,12 +499,22 @@ class _OwnerScopedRelatedMixin:
             raise serializers.ValidationError(
                 {"linked_document": "You can only link your own documents."}
             )
+        if linked_document is not None and linked_document.is_trashed:
+            raise serializers.ValidationError(
+                {"linked_document": "You cannot link a trashed document."}
+            )
         linked_file = attrs.get("linked_file")
         if linked_file is not None and linked_file.document.owner_id != getattr(
             user, "id", None
         ):
             raise serializers.ValidationError(
                 {"linked_file": "You can only link your own files."}
+            )
+        if linked_file is not None and (
+            linked_file.is_trashed or linked_file.document.is_trashed
+        ):
+            raise serializers.ValidationError(
+                {"linked_file": "You cannot link a trashed file."}
             )
         return attrs
 
@@ -878,3 +906,361 @@ class DocumentFileUploadSerializer(serializers.Serializer):
             )
 
         return uploaded
+
+
+# ===========================================================================
+# Document Vault Maturity serializers
+# ===========================================================================
+
+
+class DocumentVersionSerializer(serializers.ModelSerializer):
+    """Owner-facing version snapshot. Never exposes internal file paths."""
+
+    created_by_username = serializers.CharField(
+        source="created_by.username", read_only=True, default=None
+    )
+
+    class Meta:
+        model = DocumentVersion
+        fields = [
+            "id",
+            "document",
+            "file",
+            "version_number",
+            "version_type",
+            "title_snapshot",
+            "document_type_snapshot",
+            "issuer_snapshot",
+            "country_snapshot",
+            "reference_number_snapshot",
+            "issue_date_snapshot",
+            "expiry_date_snapshot",
+            "renewal_date_snapshot",
+            "notes_snapshot",
+            "file_name_snapshot",
+            "file_size_snapshot",
+            "file_content_type_snapshot",
+            "change_summary",
+            "created_by_username",
+            "metadata",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+
+class DocumentExportRequestSerializer(serializers.ModelSerializer):
+    download_url = serializers.SerializerMethodField()
+    is_expired = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = DocumentExportRequest
+        fields = [
+            "id",
+            "export_type",
+            "status",
+            "download_url",
+            "is_expired",
+            "requested_at",
+            "completed_at",
+            "expires_at",
+            "error_message",
+            "metadata",
+        ]
+        read_only_fields = [
+            "id",
+            "status",
+            "download_url",
+            "is_expired",
+            "requested_at",
+            "completed_at",
+            "expires_at",
+            "error_message",
+            "metadata",
+        ]
+
+    def get_download_url(self, obj):
+        # Only completed, unexpired exports expose a download URL — and never
+        # the raw storage path.
+        if obj.status != DocumentExportRequest.Status.COMPLETED or obj.is_expired:
+            return None
+        return reverse(
+            "document-export-download",
+            kwargs={"export_id": obj.pk},
+            request=self.context.get("request"),
+        )
+
+    def validate_export_type(self, value):
+        if value == DocumentExportRequest.ExportType.FUTURE_FULL_ARCHIVE:
+            raise serializers.ValidationError(
+                "Full file archive export is not available yet."
+            )
+        return value
+
+
+class EmergencyAccessPackItemSerializer(serializers.ModelSerializer):
+    owner = serializers.PrimaryKeyRelatedField(read_only=True)
+    pack = serializers.PrimaryKeyRelatedField(read_only=True)
+    document_title = serializers.CharField(
+        source="document.title", read_only=True, default=None
+    )
+    file_name = serializers.CharField(
+        source="file.original_filename", read_only=True, default=None
+    )
+    linked_document = serializers.PrimaryKeyRelatedField(
+        source="document",
+        queryset=Document.objects.all(),
+    )
+    linked_file = serializers.PrimaryKeyRelatedField(
+        source="file",
+        queryset=DocumentFile.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+
+    class Meta:
+        model = EmergencyAccessPackItem
+        fields = [
+            "id",
+            "owner",
+            "pack",
+            "linked_document",
+            "linked_file",
+            "document_title",
+            "file_name",
+            "notes",
+            "sort_order",
+            "created_at",
+        ]
+        read_only_fields = [
+            "id",
+            "owner",
+            "pack",
+            "document_title",
+            "file_name",
+            "created_at",
+        ]
+
+    def validate(self, attrs):
+        user = getattr(self.context.get("request"), "user", None)
+        document = attrs.get("document")
+        if document is not None and document.owner_id != getattr(user, "id", None):
+            raise serializers.ValidationError(
+                {"linked_document": "You can only add your own documents."}
+            )
+        if document is not None and document.is_trashed:
+            raise serializers.ValidationError(
+                {"linked_document": "You cannot add a trashed document."}
+            )
+        file = attrs.get("file")
+        if file is not None and file.document.owner_id != getattr(user, "id", None):
+            raise serializers.ValidationError(
+                {"linked_file": "You can only add your own files."}
+            )
+        if file is not None and (file.is_trashed or file.document.is_trashed):
+            raise serializers.ValidationError(
+                {"linked_file": "You cannot add a trashed file."}
+            )
+        if file is not None and document is not None and file.document_id != document.id:
+            raise serializers.ValidationError(
+                {"linked_file": "The file must belong to the selected document."}
+            )
+        return attrs
+
+
+class EmergencyAccessPackSerializer(serializers.ModelSerializer):
+    owner = serializers.PrimaryKeyRelatedField(read_only=True)
+    items = EmergencyAccessPackItemSerializer(many=True, read_only=True)
+    item_count = serializers.SerializerMethodField()
+    share_url_path = serializers.SerializerMethodField()
+    is_expired = serializers.BooleanField(read_only=True)
+    access_code = serializers.CharField(
+        write_only=True,
+        required=False,
+        allow_blank=True,
+        max_length=64,
+    )
+
+    class Meta:
+        model = EmergencyAccessPack
+        fields = [
+            "id",
+            "owner",
+            "title",
+            "description",
+            "status",
+            "access_mode",
+            "expires_at",
+            "access_code_required",
+            "access_code",
+            "share_url_path",
+            "last_accessed_at",
+            "disabled_at",
+            "is_expired",
+            "item_count",
+            "items",
+            "metadata",
+            "created_at",
+            "updated_at",
+        ]
+        # token + access_code_hash are never serialized. status/token are managed
+        # through dedicated enable/disable/regenerate actions.
+        read_only_fields = [
+            "id",
+            "owner",
+            "status",
+            "share_url_path",
+            "last_accessed_at",
+            "disabled_at",
+            "is_expired",
+            "item_count",
+            "items",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_item_count(self, obj):
+        return obj.items.count()
+
+    def get_share_url_path(self, obj):
+        # Relative public path; only present while the pack is shareable now.
+        if not obj.is_shareable_now:
+            return None
+        return f"/api/v1/share/emergency-packs/{obj.token}/"
+
+    def validate(self, attrs):
+        access_required = attrs.get(
+            "access_code_required",
+            getattr(self.instance, "access_code_required", False),
+        )
+        access_code = (attrs.get("access_code") or "").strip()
+        has_existing_hash = bool(getattr(self.instance, "access_code_hash", ""))
+        if access_required and not access_code and not has_existing_hash:
+            raise serializers.ValidationError(
+                {
+                    "access_code": (
+                        "Provide an access code when access_code_required is true."
+                    )
+                }
+            )
+        return attrs
+
+
+class PublicEmergencyPackSerializer(serializers.Serializer):
+    """SAFE public view of a shared pack. No owner identity, no internal ids."""
+
+    title = serializers.CharField()
+    description = serializers.CharField()
+    access_code_required = serializers.BooleanField()
+    expires_at = serializers.DateTimeField()
+    items = serializers.SerializerMethodField()
+
+    def get_items(self, obj):
+        rows = []
+        for item in obj.items.select_related("document", "file"):
+            document = item.document
+            file = item.file
+            # Skip trashed documents/files entirely.
+            if document.is_trashed or (file and file.is_trashed):
+                continue
+            rows.append(
+                {
+                    "id": item.id,
+                    "title": document.title,
+                    "document_type": document.document_type,
+                    "file_name": file.original_filename if file else None,
+                    "is_previewable": file.is_previewable if file else False,
+                    "has_file": file is not None,
+                    "notes": item.notes,
+                }
+            )
+        return rows
+
+
+class ProofRecordSerializer(serializers.ModelSerializer):
+    owner = serializers.PrimaryKeyRelatedField(read_only=True)
+    document_title = serializers.CharField(
+        source="document.title", read_only=True, default=None
+    )
+
+    class Meta:
+        model = ProofRecord
+        fields = [
+            "id",
+            "owner",
+            "title",
+            "proof_type",
+            "document",
+            "document_title",
+            "bundle",
+            "checklist",
+            "linked_file",
+            "reference_number",
+            "submitted_to",
+            "submitted_at",
+            "status",
+            "notes",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "owner",
+            "document_title",
+            "created_at",
+            "updated_at",
+        ]
+
+    def validate(self, attrs):
+        """Every linked object must belong to the requesting owner."""
+        user = getattr(self.context.get("request"), "user", None)
+        uid = getattr(user, "id", None)
+
+        def owned(obj, owner_id, label):
+            if obj is not None and owner_id != uid:
+                raise serializers.ValidationError(
+                    {label: "You can only link your own records."}
+                )
+
+        document = attrs.get("document", getattr(self.instance, "document", None))
+        bundle = attrs.get("bundle", getattr(self.instance, "bundle", None))
+        checklist = attrs.get("checklist", getattr(self.instance, "checklist", None))
+        linked_file = attrs.get(
+            "linked_file", getattr(self.instance, "linked_file", None)
+        )
+        if document is not None:
+            owned(document, document.owner_id, "document")
+            if document.is_trashed:
+                raise serializers.ValidationError(
+                    {"document": "You cannot link a trashed document."}
+                )
+        if bundle is not None:
+            owned(bundle, bundle.owner_id, "bundle")
+        if checklist is not None:
+            owned(checklist, checklist.owner_id, "checklist")
+        if linked_file is not None:
+            owned(linked_file, linked_file.document.owner_id, "linked_file")
+            if linked_file.is_trashed or linked_file.document.is_trashed:
+                raise serializers.ValidationError(
+                    {"linked_file": "You cannot link a trashed file."}
+                )
+        return attrs
+
+
+class DocumentActivityEventSerializer(serializers.Serializer):
+    """
+    Unified, user-facing activity event (merges document-level + file-level
+    activity). Deliberately omits raw IP addresses and internal paths.
+    """
+
+    id = serializers.CharField()
+    action = serializers.CharField()
+    title = serializers.CharField()
+    description = serializers.CharField(allow_blank=True)
+    actor_type = serializers.CharField()
+    timestamp = serializers.DateTimeField()
+    related_file = serializers.IntegerField(allow_null=True)
+    related_share = serializers.IntegerField(allow_null=True)
+    related_checklist = serializers.IntegerField(allow_null=True)
+    related_bundle = serializers.IntegerField(allow_null=True)
+    related_proof = serializers.IntegerField(allow_null=True)
+    metadata = serializers.DictField()

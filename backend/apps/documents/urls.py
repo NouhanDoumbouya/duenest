@@ -7,6 +7,8 @@ from .views import (
     BundleRequirementLinkFileView,
     ChecklistTemplateDetailView,
     ChecklistTemplateListView,
+    BundleProofRecordListView,
+    DocumentActivityTimelineView,
     DocumentBundleDetailView,
     DocumentBundleListCreateView,
     DocumentBundleRequirementCreateView,
@@ -19,18 +21,36 @@ from .views import (
     DocumentExtractionApplyView,
     DocumentExtractionDetailView,
     DocumentExtractionListCreateView,
+    DocumentExportDetailView,
+    DocumentExportDownloadView,
+    DocumentExportListCreateView,
+    DocumentFileCreateVersionView,
     DocumentFileActivityView,
     DocumentFileDetailView,
     DocumentFileDownloadView,
     DocumentFileListCreateView,
+    DocumentFilePermanentDeleteView,
     DocumentFilePreviewView,
+    DocumentFileRestoreView,
     DocumentFileShareLinkDetailView,
     DocumentFileShareLinkListCreateView,
     DocumentFileShareLinkRevokeView,
+    DocumentFileTrashListView,
+    DocumentFileTrashView,
+    DocumentProofRecordListView,
     DocumentReminderRuleDetailView,
     DocumentReminderRuleListCreateView,
     DocumentTimelineView,
+    DocumentVersionDetailView,
+    DocumentVersionListView,
+    DocumentVersionRestoreMetadataView,
     DocumentViewSet,
+    EmergencyPackViewSet,
+    ProofRecordViewSet,
+    PublicEmergencyPackItemDownloadView,
+    PublicEmergencyPackItemPreviewView,
+    PublicEmergencyPackMetadataView,
+    PublicEmergencyPackVerifyCodeView,
     PublicSharedFileDownloadView,
     PublicSharedFileMetadataView,
     PublicSharedFilePreviewView,
@@ -40,6 +60,8 @@ from .views import (
 
 router = DefaultRouter()
 router.register("documents", DocumentViewSet, basename="document")
+router.register("emergency-packs", EmergencyPackViewSet, basename="emergency-pack")
+router.register("proof-records", ProofRecordViewSet, basename="proof-record")
 
 # Owner endpoints for files, previews, share links, and activity. Listed before
 # the router so the more specific paths are matched first.
@@ -50,6 +72,11 @@ urlpatterns = [
         f"{file_base}/",
         DocumentFileListCreateView.as_view(),
         name="document-files",
+    ),
+    path(
+        f"{file_base}/trash/",
+        DocumentFileTrashListView.as_view(),
+        name="document-file-trash-list",
     ),
     path(
         f"{file_base}/<int:pk>/",
@@ -65,6 +92,26 @@ urlpatterns = [
         f"{file_base}/<int:pk>/preview/",
         DocumentFilePreviewView.as_view(),
         name="document-file-preview",
+    ),
+    path(
+        f"{file_base}/<int:file_id>/trash/",
+        DocumentFileTrashView.as_view(),
+        name="document-file-trash",
+    ),
+    path(
+        f"{file_base}/<int:file_id>/restore/",
+        DocumentFileRestoreView.as_view(),
+        name="document-file-restore",
+    ),
+    path(
+        f"{file_base}/<int:file_id>/permanent-delete/",
+        DocumentFilePermanentDeleteView.as_view(),
+        name="document-file-permanent-delete",
+    ),
+    path(
+        f"{file_base}/<int:file_id>/versions/",
+        DocumentFileCreateVersionView.as_view(),
+        name="document-file-create-version",
     ),
     path(
         f"{file_base}/<int:file_id>/share-links/",
@@ -85,6 +132,51 @@ urlpatterns = [
         f"{file_base}/<int:file_id>/activity/",
         DocumentFileActivityView.as_view(),
         name="document-file-activity",
+    ),
+    path(
+        "documents/<int:document_id>/versions/",
+        DocumentVersionListView.as_view(),
+        name="document-versions",
+    ),
+    path(
+        "documents/<int:document_id>/versions/<int:version_id>/",
+        DocumentVersionDetailView.as_view(),
+        name="document-version-detail",
+    ),
+    path(
+        "documents/<int:document_id>/versions/<int:version_id>/restore-metadata/",
+        DocumentVersionRestoreMetadataView.as_view(),
+        name="document-version-restore-metadata",
+    ),
+    path(
+        "documents/<int:document_id>/activity/",
+        DocumentActivityTimelineView.as_view(),
+        name="document-activity",
+    ),
+    path(
+        "documents/<int:document_id>/proof-records/",
+        DocumentProofRecordListView.as_view(),
+        name="document-proof-records",
+    ),
+    path(
+        "document-bundles/<int:bundle_id>/proof-records/",
+        BundleProofRecordListView.as_view(),
+        name="bundle-proof-records",
+    ),
+    path(
+        "document-exports/",
+        DocumentExportListCreateView.as_view(),
+        name="document-exports",
+    ),
+    path(
+        "document-exports/<int:export_id>/",
+        DocumentExportDetailView.as_view(),
+        name="document-export-detail",
+    ),
+    path(
+        "document-exports/<int:export_id>/download/",
+        DocumentExportDownloadView.as_view(),
+        name="document-export-download",
     ),
     path(
         "documents/reminders/upcoming/",
@@ -216,5 +308,25 @@ urlpatterns = [
         "share/files/<str:token>/download/",
         PublicSharedFileDownloadView.as_view(),
         name="public-shared-file-download",
+    ),
+    path(
+        "share/emergency-packs/<str:token>/",
+        PublicEmergencyPackMetadataView.as_view(),
+        name="public-emergency-pack",
+    ),
+    path(
+        "share/emergency-packs/<str:token>/verify-code/",
+        PublicEmergencyPackVerifyCodeView.as_view(),
+        name="public-emergency-pack-verify-code",
+    ),
+    path(
+        "share/emergency-packs/<str:token>/items/<int:item_id>/preview/",
+        PublicEmergencyPackItemPreviewView.as_view(),
+        name="public-emergency-pack-item-preview",
+    ),
+    path(
+        "share/emergency-packs/<str:token>/items/<int:item_id>/download/",
+        PublicEmergencyPackItemDownloadView.as_view(),
+        name="public-emergency-pack-item-download",
     ),
 ] + router.urls

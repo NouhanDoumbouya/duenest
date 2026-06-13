@@ -11,7 +11,13 @@ from datetime import date, timedelta
 
 from django.utils import timezone
 
-from .models import Document, DocumentFile, DocumentFileActivity
+from .models import (
+    Document,
+    DocumentActivity,
+    DocumentFile,
+    DocumentFileActivity,
+    DocumentVersion,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -88,8 +94,8 @@ def _document_has_file(document: Document) -> bool:
         return file_count > 0
     prefetched = getattr(document, "_prefetched_objects_cache", {}).get("files")
     if prefetched is not None:
-        return len(prefetched) > 0
-    return document.files.exists()
+        return any(not f.is_trashed for f in prefetched)
+    return document.files.filter(is_trashed=False).exists()
 
 
 def get_document_health(
@@ -455,8 +461,8 @@ def build_timeline(
     def wants(kind: str) -> bool:
         return event_type is None or event_type == kind
 
-    # Document expiry + renewal dates.
-    documents = Document.objects.filter(owner=user).exclude(
+    # Document expiry + renewal dates. Trashed documents are never surfaced.
+    documents = Document.objects.filter(owner=user, is_trashed=False).exclude(
         status=Document.Status.ARCHIVED
     )
     if document_id is not None:
@@ -492,9 +498,11 @@ def build_timeline(
 
     # Reminder rule dates.
     if wants("reminder") and bundle_id is None:
-        rules = DocumentReminderRule.objects.filter(
-            owner=user, is_enabled=True
-        ).select_related("document")
+        rules = (
+            DocumentReminderRule.objects.filter(owner=user, is_enabled=True)
+            .exclude(document__is_trashed=True)
+            .select_related("document")
+        )
         if document_id is not None:
             rules = rules.filter(document_id=document_id)
         for rule in rules:
@@ -520,6 +528,7 @@ def build_timeline(
             DocumentChecklistItem.objects.filter(owner=user)
             .exclude(status=DocumentChecklistItem.Status.COMPLETED)
             .exclude(status=DocumentChecklistItem.Status.SKIPPED)
+            .exclude(checklist__document__is_trashed=True)
             .select_related("checklist")
         )
         if document_id is not None:
@@ -945,3 +954,278 @@ def _guess_fields_from_text(text: str) -> dict:
         fields["country"] = country.group(1).strip()[:80]
 
     return fields
+
+
+# ---- Version history -------------------------------------------------------
+
+# Document metadata fields that are snapshotted into a version and compared to
+# decide whether an update is "important" enough to record.
+VERSIONED_FIELDS = (
+    "title",
+    "document_type",
+    "issuer",
+    "country",
+    "reference_number",
+    "issue_date",
+    "expiry_date",
+    "renewal_date",
+    "notes",
+)
+
+
+def next_version_number(document) -> int:
+    """The next sequential version number for a document (1-based)."""
+    from django.db.models import Max
+
+    current = document.versions.aggregate(n=Max("version_number"))["n"] or 0
+    return current + 1
+
+
+def record_document_version(
+    document,
+    *,
+    version_type: str,
+    created_by=None,
+    file=None,
+    change_summary: str = "",
+    metadata: dict | None = None,
+) -> DocumentVersion:
+    """
+    Snapshot a document's current metadata (and optional file display info) as a
+    new version. Snapshots never include internal storage paths.
+    """
+    return DocumentVersion.objects.create(
+        owner=document.owner,
+        document=document,
+        file=file,
+        version_number=next_version_number(document),
+        version_type=version_type,
+        title_snapshot=document.title or "",
+        document_type_snapshot=document.document_type or "",
+        issuer_snapshot=document.issuer or "",
+        country_snapshot=document.country or "",
+        reference_number_snapshot=document.reference_number or "",
+        issue_date_snapshot=document.issue_date,
+        expiry_date_snapshot=document.expiry_date,
+        renewal_date_snapshot=document.renewal_date,
+        notes_snapshot=document.notes or "",
+        file_name_snapshot=(file.original_filename if file else ""),
+        file_size_snapshot=(file.file_size if file else None),
+        file_content_type_snapshot=(file.content_type if file else ""),
+        change_summary=change_summary[:255],
+        created_by=created_by,
+        metadata=metadata or {},
+    )
+
+
+def summarize_field_changes(before: dict, after: dict) -> str:
+    """Build a short human-readable summary of which versioned fields changed."""
+    labels = {
+        "title": "title",
+        "document_type": "type",
+        "issuer": "issuer",
+        "country": "country",
+        "reference_number": "reference",
+        "issue_date": "issue date",
+        "expiry_date": "expiry date",
+        "renewal_date": "renewal date",
+        "notes": "notes",
+    }
+    changed = [
+        labels[f]
+        for f in VERSIONED_FIELDS
+        if before.get(f) != after.get(f)
+    ]
+    if not changed:
+        return ""
+    return "Updated " + ", ".join(changed)
+
+
+# ---- Document-level activity log -------------------------------------------
+
+
+def log_document_activity(
+    *,
+    owner,
+    action: str,
+    document=None,
+    actor_type: str = "owner",
+    title: str = "",
+    description: str = "",
+    related_file=None,
+    related_checklist=None,
+    related_bundle=None,
+    related_proof=None,
+    metadata: dict | None = None,
+) -> None:
+    """
+    Record one document-level activity event. Never raises: a logging failure
+    must not break the user-facing action.
+    """
+    try:
+        DocumentActivity.objects.create(
+            owner=owner,
+            document=document,
+            action=action,
+            actor_type=actor_type,
+            title=title[:255],
+            description=description[:500],
+            related_file=related_file,
+            related_checklist=related_checklist,
+            related_bundle=related_bundle,
+            related_proof=related_proof,
+            metadata=metadata or {},
+        )
+    except Exception:  # noqa: BLE001 — logging must never break the flow
+        logger.warning("Failed to record document activity", exc_info=True)
+
+
+# ---- Structured export builder ---------------------------------------------
+
+
+def _document_export_row(document) -> dict:
+    """Safe per-document export dict — no file paths, tokens, or access codes."""
+    health = get_document_health(document)
+    return {
+        "id": document.id,
+        "title": document.title,
+        "document_type": document.document_type,
+        "issuer": document.issuer,
+        "country": document.country,
+        "reference_number": document.reference_number or "",
+        "category": document.category.name if document.category_id else "",
+        "status": document.status,
+        "computed_status": health.computed_status,
+        "issue_date": document.issue_date.isoformat() if document.issue_date else "",
+        "expiry_date": (
+            document.expiry_date.isoformat() if document.expiry_date else ""
+        ),
+        "renewal_date": (
+            document.renewal_date.isoformat() if document.renewal_date else ""
+        ),
+        "notes": document.notes,
+        "file_count": document.files.filter(is_trashed=False).count(),
+        "created_at": document.created_at.isoformat(),
+        "updated_at": document.updated_at.isoformat(),
+    }
+
+
+def build_export_payload(user, export_type: str) -> dict:
+    """
+    Assemble the full structured export for a user.
+
+    Deliberately excludes raw files, internal storage paths, share tokens, and
+    access codes. Raw OCR text is never included.
+    """
+    from .models import (
+        DocumentBundle,
+        DocumentChecklist,
+        DocumentFileShareLink,
+        DocumentReminderRule,
+    )
+
+    documents = (
+        Document.objects.filter(owner=user, is_trashed=False)
+        .select_related("category")
+        .prefetch_related("files")
+    )
+    payload: dict = {
+        "exported_at": timezone.now().isoformat(),
+        "export_type": export_type,
+        "document_count": documents.count(),
+        "documents": [_document_export_row(d) for d in documents],
+    }
+
+    if export_type == DocumentExportRequestType.DOCUMENTS_JSON:
+        return payload
+
+    # full_vault_metadata adds related summaries (still secret-free).
+    checklists = (
+        DocumentChecklist.objects.filter(owner=user)
+        .exclude(document__is_trashed=True)
+        .prefetch_related("items")
+    )
+    payload["checklists"] = [
+        {
+            "id": c.id,
+            "title": c.title,
+            "document": c.document_id,
+            "bundle": c.bundle_id,
+            "status": c.status,
+            "progress_percent": c.progress_percent,
+            "due_date": c.due_date.isoformat() if c.due_date else "",
+        }
+        for c in checklists
+    ]
+    bundles = DocumentBundle.objects.filter(owner=user)
+    payload["bundles"] = [
+        {
+            "id": b.id,
+            "title": b.title,
+            "bundle_type": b.bundle_type,
+            "status": b.status,
+            "readiness_score": b.readiness_score,
+            "target_date": b.target_date.isoformat() if b.target_date else "",
+        }
+        for b in bundles
+    ]
+    reminders = (
+        DocumentReminderRule.objects.filter(owner=user)
+        .exclude(document__is_trashed=True)
+        .select_related("document")
+    )
+    payload["reminders"] = [
+        {
+            "id": r.id,
+            "document": r.document_id,
+            "trigger_type": r.trigger_type,
+            "days_before": r.days_before,
+            "is_enabled": r.is_enabled,
+        }
+        for r in reminders
+    ]
+    # Share-link SUMMARY only — never tokens or access codes.
+    share_links = DocumentFileShareLink.objects.filter(owner=user).exclude(
+        document__is_trashed=True
+    )
+    payload["share_links"] = [
+        {
+            "id": s.id,
+            "document": s.document_id,
+            "permission": s.permission,
+            "access_code_required": s.access_code_required,
+            "expires_at": s.expires_at.isoformat() if s.expires_at else "",
+            "revoked": s.is_revoked,
+        }
+        for s in share_links
+    ]
+    return payload
+
+
+def export_payload_to_csv(payload: dict) -> str:
+    """Flatten the documents list of an export payload into CSV text."""
+    import csv
+    import io
+
+    rows = payload.get("documents", [])
+    output = io.StringIO()
+    fieldnames = [
+        "id", "title", "document_type", "issuer", "country",
+        "reference_number", "category", "status", "computed_status",
+        "issue_date", "expiry_date", "renewal_date", "file_count",
+        "created_at", "updated_at",
+    ]
+    writer = csv.DictWriter(
+        output, fieldnames=fieldnames, extrasaction="ignore"
+    )
+    writer.writeheader()
+    for row in rows:
+        writer.writerow(row)
+    return output.getvalue()
+
+
+# Local alias to avoid importing the model's TextChoices at module top.
+class DocumentExportRequestType:
+    DOCUMENTS_JSON = "documents_json"
+    DOCUMENTS_CSV = "documents_csv"
+    FULL_VAULT_METADATA = "full_vault_metadata"

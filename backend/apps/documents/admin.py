@@ -2,6 +2,7 @@ from django.contrib import admin
 
 from .models import (
     Document,
+    DocumentActivity,
     DocumentBundle,
     DocumentBundleRequirement,
     DocumentCategory,
@@ -9,11 +10,16 @@ from .models import (
     DocumentChecklistItem,
     DocumentChecklistItemTemplate,
     DocumentChecklistTemplate,
+    DocumentExportRequest,
     DocumentExtraction,
     DocumentFile,
     DocumentFileActivity,
     DocumentFileShareLink,
     DocumentReminderRule,
+    DocumentVersion,
+    EmergencyAccessPack,
+    EmergencyAccessPackItem,
+    ProofRecord,
 )
 
 
@@ -32,9 +38,10 @@ class DocumentAdmin(admin.ModelAdmin):
         "category",
         "expiry_date",
         "status",
+        "is_trashed",
         "created_at",
     ]
-    list_filter = ["status", "category"]
+    list_filter = ["status", "category", "is_trashed"]
     search_fields = ["title", "issuer", "reference_number", "owner__username"]
     # owner uses raw_id (the custom User model isn't registered for autocomplete);
     # category supports autocomplete via DocumentCategoryAdmin.search_fields.
@@ -51,9 +58,10 @@ class DocumentFileAdmin(admin.ModelAdmin):
         "uploaded_by",
         "content_type",
         "file_size",
+        "is_trashed",
         "created_at",
     ]
-    list_filter = ["content_type"]
+    list_filter = ["content_type", "is_trashed"]
     search_fields = ["original_filename", "uploaded_by__username"]
     raw_id_fields = ["document", "uploaded_by"]
     readonly_fields = ["file_size", "checksum", "created_at", "updated_at"]
@@ -220,5 +228,148 @@ class DocumentExtractionAdmin(admin.ModelAdmin):
         "applied_at",
         "created_at",
         "updated_at",
+    ]
+    date_hierarchy = "created_at"
+
+
+# ---- Document vault maturity -----------------------------------------------
+
+
+@admin.register(DocumentVersion)
+class DocumentVersionAdmin(admin.ModelAdmin):
+    list_display = [
+        "document",
+        "version_number",
+        "version_type",
+        "created_by",
+        "created_at",
+    ]
+    list_filter = ["version_type"]
+    search_fields = ["document__title", "change_summary", "created_by__username"]
+    raw_id_fields = ["owner", "document", "file", "created_by"]
+    readonly_fields = [
+        "version_number",
+        "title_snapshot",
+        "document_type_snapshot",
+        "issuer_snapshot",
+        "country_snapshot",
+        "reference_number_snapshot",
+        "issue_date_snapshot",
+        "expiry_date_snapshot",
+        "renewal_date_snapshot",
+        "notes_snapshot",
+        "file_name_snapshot",
+        "file_size_snapshot",
+        "file_content_type_snapshot",
+        "metadata",
+        "created_at",
+    ]
+    date_hierarchy = "created_at"
+
+
+@admin.register(DocumentExportRequest)
+class DocumentExportRequestAdmin(admin.ModelAdmin):
+    list_display = [
+        "id",
+        "owner",
+        "export_type",
+        "status",
+        "requested_at",
+        "expires_at",
+    ]
+    list_filter = ["export_type", "status"]
+    search_fields = ["owner__username", "owner__email"]
+    raw_id_fields = ["owner"]
+    readonly_fields = [
+        "file",
+        "requested_at",
+        "completed_at",
+        "expires_at",
+        "error_message",
+        "metadata",
+    ]
+    date_hierarchy = "requested_at"
+
+
+class EmergencyAccessPackItemInline(admin.TabularInline):
+    model = EmergencyAccessPackItem
+    extra = 0
+    raw_id_fields = ["owner", "document", "file"]
+
+
+@admin.register(EmergencyAccessPack)
+class EmergencyAccessPackAdmin(admin.ModelAdmin):
+    list_display = [
+        "title",
+        "owner",
+        "status",
+        "access_mode",
+        "access_code_required",
+        "expires_at",
+        "created_at",
+    ]
+    list_filter = ["status", "access_mode", "access_code_required"]
+    search_fields = ["title", "owner__username", "owner__email"]
+    raw_id_fields = ["owner"]
+    readonly_fields = [
+        "token",
+        "access_code_hash",
+        "last_accessed_at",
+        "disabled_at",
+        "created_at",
+        "updated_at",
+    ]
+    inlines = [EmergencyAccessPackItemInline]
+    date_hierarchy = "created_at"
+
+
+@admin.register(ProofRecord)
+class ProofRecordAdmin(admin.ModelAdmin):
+    list_display = [
+        "title",
+        "owner",
+        "proof_type",
+        "status",
+        "submitted_at",
+        "created_at",
+    ]
+    list_filter = ["proof_type", "status"]
+    search_fields = [
+        "title",
+        "reference_number",
+        "submitted_to",
+        "owner__username",
+    ]
+    raw_id_fields = ["owner", "document", "bundle", "checklist", "linked_file"]
+    readonly_fields = ["created_at", "updated_at"]
+    date_hierarchy = "created_at"
+
+
+@admin.register(DocumentActivity)
+class DocumentActivityAdmin(admin.ModelAdmin):
+    list_display = ["id", "owner", "document", "action", "actor_type", "created_at"]
+    list_filter = ["action", "actor_type"]
+    search_fields = ["owner__username", "document__title", "title", "description"]
+    raw_id_fields = [
+        "owner",
+        "document",
+        "related_file",
+        "related_checklist",
+        "related_bundle",
+        "related_proof",
+    ]
+    readonly_fields = [
+        "owner",
+        "document",
+        "action",
+        "actor_type",
+        "title",
+        "description",
+        "related_file",
+        "related_checklist",
+        "related_bundle",
+        "related_proof",
+        "metadata",
+        "created_at",
     ]
     date_hierarchy = "created_at"

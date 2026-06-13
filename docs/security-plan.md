@@ -299,7 +299,12 @@ The shipped `Document` API (`apps.documents`) follows these rules concretely:
   `request.user`; users cannot create, list, update, or delete rules for
   another user's document.
 - Upcoming reminder calculations only include enabled rules owned by the
-  authenticated user.
+  authenticated user and exclude trashed documents.
+- Version history, proof records, emergency packs, export requests, and
+  document activity endpoints are owner-scoped. Cross-user access returns
+  `404`, not `403`.
+- Trashed documents are hidden from active lists, attention-needed results,
+  timeline events, reminder calculations, and public share/emergency access.
 - Intelligence responses expose document metadata and computed fields only; they
   do not expose internal file paths, storage keys, access-code hashes, or
   share-link internals.
@@ -390,6 +395,18 @@ The shipped file upload foundation enforces:
   owner-facing and are not exposed by public share endpoints.
 - **Owner-only activity:** file activity logs are visible only to the owning
   user. Public share viewers never see the owner's internal activity log.
+- **Trash-aware access:** deleting a document or file moves it to trash first.
+  Trashed files/documents are unavailable through public share links and
+  emergency packs. Permanent deletion is a separate explicit action.
+- **Version history:** document versions store metadata and file display
+  snapshots only; they do not duplicate blobs or expose internal paths.
+- **Structured exports:** metadata exports are owner-only, expire, and exclude
+  raw files, raw OCR text, share tokens, access-code hashes, and internal
+  storage paths.
+- **Emergency packs:** packs expose only explicitly selected documents/files,
+  never the whole vault. Shareable packs use unguessable tokens, optional
+  expiry, optional hashed access codes, disable/regenerate controls, and skip
+  trashed items.
 
 TODO (hardening): sniff real content type from magic bytes (the client MIME is
 spoofable) and add antivirus scanning before files are trusted. Production
@@ -930,20 +947,24 @@ not a later add-on.
   sensitive records.
 - **Private notes** are owner-only and excluded from shares/exports by default.
 
-### Audit, trash, and exports (Phase 5)
+### Audit, trash, and exports (implemented document-vault foundation)
 
-- **Activity/audit logs** are append-only and owner-readable.
+- **Activity/audit logs** are owner-readable. The document activity endpoint
+  merges document-level events with file/share events and does not expose raw
+  IP addresses, user agents, tokens, access codes, or file paths.
 - **Trash/restore:** deleting moves to trash; restore is possible within a
-  window. **Deleted files must not remain accessible** once purged, and any
-  share links to them stop working immediately.
-- **Exports** (PDF/CSV/ZIP) are generated on demand, owner-scoped, and should
-  not include masked/sensitive fields unless explicitly chosen.
+  recoverable flow. **Trashed or purged files must not remain accessible**
+  through public file shares or emergency packs.
+- **Exports** are generated on demand, owner-scoped, expiring, and currently
+  metadata-only. They exclude raw files, raw OCR text, share tokens,
+  access-code hashes, and internal storage paths.
 
-### Emergency access (Phase 6)
+### Emergency access (implemented foundation, high risk)
 
-- Emergency packs and trusted-contact access are **very high risk**; build them
-  only after sharing + audit are mature. Require explicit setup, expiry, and a
-  full access log.
+- Emergency packs are **very high risk** and must remain explicit, limited, and
+  revocable. A pack grants access only to selected documents/files, never the
+  whole vault. Require explicit setup, optional expiry, optional hashed access
+  codes, token rotation, and immediate disable controls.
 
 ### Production storage
 
