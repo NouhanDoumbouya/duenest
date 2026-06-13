@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -21,6 +21,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  FilePreviewDialog,
+  type FilePreviewState,
+} from "@/components/ui/file-preview-dialog";
 import { ApiError } from "@/lib/api";
 import {
   downloadDocumentFile,
@@ -56,6 +60,23 @@ export function BundleFilesSection({ bundleId }: { bundleId: number }) {
   const [exporting, setExporting] = useState<"all" | "selected" | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [exportDone, setExportDone] = useState<string | null>(null);
+  const [previewFile, setPreviewFile] = useState<BundleFile | null>(null);
+  const [previewFetch, setPreviewFetch] = useState<{
+    url: string | null;
+    loading: boolean;
+    error: string | null;
+  }>({ url: null, loading: false, error: null });
+  const previewUrlRef = useRef<string | null>(null);
+
+  function revokePreviewUrl() {
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+    }
+  }
+
+  // Release the object URL when the component unmounts.
+  useEffect(() => () => revokePreviewUrl(), []);
 
   useEffect(() => {
     let active = true;
@@ -129,20 +150,29 @@ export function BundleFilesSection({ bundleId }: { bundleId: number }) {
 
   async function handlePreview(file: BundleFile) {
     setActionError(null);
-    setBusyFileId(file.id);
+    revokePreviewUrl();
+    // Open the in-app preview immediately in a loading state.
+    setPreviewFile(file);
+    setPreviewFetch({ url: null, loading: true, error: null });
     try {
       const blob = await getDocumentFilePreviewBlob(file.document, file.id);
       const url = URL.createObjectURL(blob);
-      window.open(url, "_blank", "noopener,noreferrer");
-      // Give the new tab time to load before releasing the object URL.
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      previewUrlRef.current = url;
+      setPreviewFetch({ url, loading: false, error: null });
     } catch (err) {
-      setActionError(
-        err instanceof ApiError ? err.message : "Could not preview this file.",
-      );
-    } finally {
-      setBusyFileId(null);
+      setPreviewFetch({
+        url: null,
+        loading: false,
+        error:
+          err instanceof ApiError ? err.message : "Could not preview this file.",
+      });
     }
+  }
+
+  function closePreview() {
+    revokePreviewUrl();
+    setPreviewFile(null);
+    setPreviewFetch({ url: null, loading: false, error: null });
   }
 
   async function handleDownload(file: BundleFile) {
@@ -163,7 +193,20 @@ export function BundleFilesSection({ bundleId }: { bundleId: number }) {
     }
   }
 
+  const preview: FilePreviewState | null = previewFile
+    ? {
+        fileName: previewFile.original_filename,
+        contentType: previewFile.content_type,
+        url: previewFetch.url,
+        loading: previewFetch.loading,
+        error: previewFetch.error,
+        onDownload: () => handleDownload(previewFile),
+        downloading: busyFileId === previewFile.id,
+      }
+    : null;
+
   return (
+    <>
     <Card>
       <CardHeader className="flex flex-row items-start justify-between gap-3">
         <div>
@@ -357,5 +400,7 @@ export function BundleFilesSection({ bundleId }: { bundleId: number }) {
         )}
       </CardContent>
     </Card>
+    <FilePreviewDialog preview={preview} onClose={closePreview} />
+    </>
   );
 }
