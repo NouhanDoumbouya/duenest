@@ -322,7 +322,15 @@ class DocumentFileShareLink(models.Model):
     download_count = models.PositiveIntegerField(default=0)
     limit_reached_at = models.DateTimeField(null=True, blank=True)
 
-    # Owner-facing only — never exposed through public share endpoints.
+    # Screenshot deterrence (not prevention — browsers cannot block OS-level
+    # screenshots). When enabled, the public preview shows a dynamic watermark
+    # and/or blurs when the viewer leaves the tab.
+    watermark_enabled = models.BooleanField(default=False)
+    privacy_screen_enabled = models.BooleanField(default=False)
+
+    # Owner-facing only — never exposed through public share endpoints, EXCEPT
+    # recipient_email may appear inside the watermark when watermarking is on
+    # (it marks the copy for the intended recipient, who already knows it).
     label = models.CharField(max_length=120, blank=True)
     recipient_email = models.EmailField(blank=True)
     purpose = models.CharField(max_length=255, blank=True)
@@ -392,6 +400,16 @@ class DocumentFileShareLink(models.Model):
             and not self.is_expired
             and not self.is_limit_reached
         )
+
+    @property
+    def watermark_text(self) -> str:
+        """Recipient marker for the watermark (only used when enabled)."""
+        return self.recipient_email or self.label or ""
+
+    @property
+    def short_id(self) -> str:
+        """A short, non-secret share identifier (token is already in the URL)."""
+        return self.token[:8]
 
 
 class DocumentFileActivity(models.Model):

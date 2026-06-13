@@ -163,6 +163,8 @@ export function DocumentFileShareDialog({
     useState<ShareAccessLimitType>("unlimited");
   const [maxViews, setMaxViews] = useState("3");
   const [maxDownloads, setMaxDownloads] = useState("");
+  const [watermarkEnabled, setWatermarkEnabled] = useState(false);
+  const [privacyScreenEnabled, setPrivacyScreenEnabled] = useState(false);
   const [label, setLabel] = useState("");
   const [recipientEmail, setRecipientEmail] = useState("");
   const [purpose, setPurpose] = useState("");
@@ -260,6 +262,8 @@ export function DocumentFileShareDialog({
         max_views:
           accessLimitType === "limited_count" ? Number(maxViews) : undefined,
         max_downloads: downloadCap,
+        watermark_enabled: watermarkEnabled,
+        privacy_screen_enabled: privacyScreenEnabled,
         label: label.trim(),
         recipient_email: recipientEmail.trim(),
         purpose: purpose.trim(),
@@ -568,6 +572,50 @@ export function DocumentFileShareDialog({
                   </Field>
                 )}
               </div>
+            </div>
+
+            <div className="space-y-3 rounded-xl border border-border p-4">
+              <label className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={watermarkEnabled}
+                  onChange={(event) =>
+                    setWatermarkEnabled(event.target.checked)
+                  }
+                  className="mt-1 size-4 rounded border-input"
+                />
+                <span>
+                  <span className="text-sm font-medium">Add watermark</span>
+                  <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
+                    Overlay “Shared via DueNest”, the recipient, and a timestamp
+                    on the preview to discourage reuse.
+                  </span>
+                </span>
+              </label>
+              <label className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={privacyScreenEnabled}
+                  onChange={(event) =>
+                    setPrivacyScreenEnabled(event.target.checked)
+                  }
+                  className="mt-1 size-4 rounded border-input"
+                />
+                <span>
+                  <span className="text-sm font-medium">
+                    Blur preview when the viewer leaves the tab
+                  </span>
+                  <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
+                    A privacy screen hides the file when the browser tab is not
+                    focused.
+                  </span>
+                </span>
+              </label>
+              <p className="rounded-lg bg-muted/60 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+                DueNest can discourage screenshots with watermarking and
+                view-only controls, but browsers cannot fully prevent OS-level
+                screenshots.
+              </p>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">

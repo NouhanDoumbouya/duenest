@@ -415,6 +415,8 @@ class ShareLinkCreateSerializer(serializers.Serializer):
     max_downloads = serializers.IntegerField(
         required=False, min_value=1, allow_null=True
     )
+    watermark_enabled = serializers.BooleanField(default=False)
+    privacy_screen_enabled = serializers.BooleanField(default=False)
 
     def validate_expires_at(self, value):
         if value <= timezone.now():
@@ -463,6 +465,8 @@ class DocumentFileShareLinkSerializer(serializers.ModelSerializer):
             "max_downloads",
             "download_count",
             "limit_reached_at",
+            "watermark_enabled",
+            "privacy_screen_enabled",
             "label",
             "recipient_email",
             "purpose",
@@ -496,6 +500,14 @@ class PublicSharedFileSerializer(serializers.Serializer):
     is_previewable = serializers.BooleanField(source="file.is_previewable")
     download_allowed = serializers.BooleanField()
     access_code_required = serializers.BooleanField()
+    watermark_enabled = serializers.BooleanField()
+    privacy_screen_enabled = serializers.BooleanField()
+    watermark_text = serializers.SerializerMethodField()
+    short_id = serializers.CharField()
+
+    def get_watermark_text(self, obj):
+        # Only surface the recipient marker when watermarking is on.
+        return obj.watermark_text if obj.watermark_enabled else ""
 
 
 class DocumentFileActivitySerializer(serializers.ModelSerializer):

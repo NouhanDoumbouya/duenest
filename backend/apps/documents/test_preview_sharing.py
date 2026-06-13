@@ -287,11 +287,14 @@ class ShareLinkTests(PreviewSharingBaseTest):
             {
                 "file_name", "content_type", "file_size", "permission",
                 "expires_at", "is_previewable", "download_allowed",
-                "access_code_required",
+                "access_code_required", "watermark_enabled",
+                "privacy_screen_enabled", "watermark_text", "short_id",
             },
         )
         body = str(data)
         self.assertNotIn("secret label", body)
+        # recipient_email is only surfaced (in watermark_text) when watermarking
+        # is enabled; this link has it off, so it must not leak.
         self.assertNotIn("r@x.com", body)
         self.assertNotIn("secret purpose", body)
 
@@ -633,6 +636,43 @@ class AccessLimitTests(PreviewSharingBaseTest):
         self.assertEqual(detail.data["view_count"], 1)
         self.assertEqual(detail.data["max_views"], 3)
         self.assertEqual(detail.data["access_limit_type"], "limited_count")
+
+
+class WatermarkTests(PreviewSharingBaseTest):
+    """Watermark/privacy metadata exposure (deterrence, not prevention)."""
+
+    def make_link(self, **kwargs):
+        f = self.upload(self.alice_doc, self.alice, make_pdf())
+        defaults = dict(
+            owner=self.alice,
+            document=self.alice_doc,
+            file=f,
+            expires_at=timezone.now() + timedelta(days=7),
+        )
+        defaults.update(kwargs)
+        return DocumentFileShareLink.objects.create(**defaults)
+
+    def test_watermark_text_exposed_only_when_enabled(self):
+        link = self.make_link(
+            watermark_enabled=True,
+            privacy_screen_enabled=True,
+            recipient_email="visa@example.edu",
+        )
+        meta = self.client.get(public_meta(link.token))
+        self.assertTrue(meta.data["watermark_enabled"])
+        self.assertTrue(meta.data["privacy_screen_enabled"])
+        self.assertEqual(meta.data["watermark_text"], "visa@example.edu")
+        self.assertEqual(meta.data["short_id"], link.token[:8])
+
+    def test_recipient_email_not_leaked_without_watermark(self):
+        link = self.make_link(
+            watermark_enabled=False, recipient_email="private@example.edu"
+        )
+        meta = self.client.get(public_meta(link.token))
+        self.assertFalse(meta.data["watermark_enabled"])
+        self.assertEqual(meta.data["watermark_text"], "")
+        # The raw recipient email is never a top-level public field.
+        self.assertNotIn("recipient_email", meta.data)
 
 
 class ShareLabelTests(PreviewSharingBaseTest):

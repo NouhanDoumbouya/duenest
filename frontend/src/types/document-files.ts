@@ -41,6 +41,8 @@ export interface DocumentFileShareLink {
   max_downloads: number | null;
   download_count: number;
   limit_reached_at: string | null;
+  watermark_enabled: boolean;
+  privacy_screen_enabled: boolean;
   label: string;
   recipient_email: string;
   purpose: string;
@@ -60,6 +62,8 @@ export interface CreateShareLinkPayload {
   access_limit_type?: ShareAccessLimitType;
   max_views?: number | null;
   max_downloads?: number | null;
+  watermark_enabled?: boolean;
+  privacy_screen_enabled?: boolean;
   label?: string;
   recipient_email?: string;
   purpose?: string;
@@ -99,4 +103,8 @@ export interface PublicSharedFileMetadata {
   is_previewable: boolean;
   download_allowed: boolean;
   access_code_required: boolean;
+  watermark_enabled: boolean;
+  privacy_screen_enabled: boolean;
+  watermark_text: string;
+  short_id: string;
 }

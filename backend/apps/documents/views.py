@@ -764,6 +764,8 @@ class DocumentFileShareLinkListCreateView(_FileScopedMixin, APIView):
             ),
             max_views=data.get("max_views"),
             max_downloads=data.get("max_downloads"),
+            watermark_enabled=bool(data.get("watermark_enabled")),
+            privacy_screen_enabled=bool(data.get("privacy_screen_enabled")),
             label=data.get("label", ""),
             recipient_email=data.get("recipient_email", ""),
             purpose=data.get("purpose", ""),

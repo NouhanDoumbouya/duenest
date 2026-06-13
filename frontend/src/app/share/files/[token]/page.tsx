@@ -15,6 +15,7 @@ import { Logo } from "@/components/layout/logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ApiError } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import {
   downloadSharedFile,
   formatFileSize,
@@ -119,6 +120,16 @@ export default function SharedFilePage() {
     error: null,
   });
   const [downloading, setDownloading] = useState(false);
+  const [tabHidden, setTabHidden] = useState(false);
+
+  useEffect(() => {
+    function onVisibility() {
+      setTabHidden(document.hidden);
+    }
+    document.addEventListener("visibilitychange", onVisibility);
+    return () =>
+      document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
 
   const metadataKey = `${token}:${grant}`;
   const metadataCurrent = metadataState.key === metadataKey;
@@ -322,12 +333,45 @@ export default function SharedFilePage() {
                 previewError={previewError}
                 downloading={downloading}
                 onDownload={handleDownload}
+                privacyActive={Boolean(
+                  metadata.privacy_screen_enabled && tabHidden,
+                )}
               />
             ) : null}
           </div>
         </section>
       </div>
     </main>
+  );
+}
+
+function WatermarkOverlay({ metadata }: { metadata: PublicSharedFileMetadata }) {
+  const stamp = new Date().toLocaleString();
+  const line = [
+    "Shared via DueNest",
+    metadata.watermark_text,
+    `ID ${metadata.short_id}`,
+    stamp,
+  ]
+    .filter(Boolean)
+    .join("  •  ");
+
+  // A repeated, low-opacity diagonal watermark. pointer-events-none keeps the
+  // underlying preview interactive; this is deterrence, not prevention.
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 z-10 flex flex-wrap content-start gap-x-10 gap-y-12 overflow-hidden p-6 opacity-[0.12]"
+    >
+      {Array.from({ length: 36 }).map((_, index) => (
+        <span
+          key={index}
+          className="-rotate-[30deg] whitespace-nowrap text-xs font-semibold text-foreground"
+        >
+          {line}
+        </span>
+      ))}
+    </div>
   );
 }
 
@@ -338,6 +382,7 @@ function SharedFileViewer({
   previewError,
   downloading,
   onDownload,
+  privacyActive,
 }: {
   metadata: PublicSharedFileMetadata;
   previewUrl: string | null;
@@ -345,6 +390,7 @@ function SharedFileViewer({
   previewError: string | null;
   downloading: boolean;
   onDownload: () => void;
+  privacyActive: boolean;
 }) {
   const kind = fileKind(metadata);
 
@@ -378,11 +424,25 @@ function SharedFileViewer({
         )}
       </div>
 
-      <div className="bg-muted/35 p-4 sm:p-6">
-        <p className="mb-4 text-sm text-muted-foreground">
-          This file was shared securely through DueNest.
+      <div
+        className="relative bg-muted/35 p-4 sm:p-6"
+        onContextMenu={(event) => event.preventDefault()}
+      >
+        <p className="mb-3 text-sm text-muted-foreground">
+          This was shared securely through DueNest. Access may expire or be
+          revoked by the owner.
         </p>
+        {!metadata.download_allowed && (
+          <p className="mb-4 inline-flex items-center gap-2 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground">
+            <EyeOff className="size-3.5" />
+            View-only access. Downloading is disabled by the owner.
+          </p>
+        )}
 
+        <div className={cn("relative", privacyActive && "blur-xl")}>
+        {metadata.watermark_enabled && previewUrl && (
+          <WatermarkOverlay metadata={metadata} />
+        )}
         {previewLoading ? (
           <div className="flex min-h-[440px] items-center justify-center gap-2 text-muted-foreground">
             <Loader2 className="size-5 animate-spin" />
@@ -428,6 +488,12 @@ function SharedFileViewer({
             onDownload={onDownload}
             downloading={downloading}
           />
+        )}
+        </div>
+        {privacyActive && (
+          <p className="mt-3 text-center text-xs text-muted-foreground">
+            Preview hidden while this tab is not focused.
+          </p>
         )}
       </div>
     </div>
