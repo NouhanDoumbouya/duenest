@@ -6,6 +6,7 @@ from .models import (
     DocumentFile,
     DocumentFileActivity,
     DocumentFileShareLink,
+    DocumentReminderRule,
 )
 
 
@@ -94,4 +95,22 @@ class DocumentFileActivityAdmin(admin.ModelAdmin):
         "metadata",
         "created_at",
     ]
+    date_hierarchy = "created_at"
+
+
+@admin.register(DocumentReminderRule)
+class DocumentReminderRuleAdmin(admin.ModelAdmin):
+    list_display = [
+        "id",
+        "document",
+        "owner",
+        "trigger_type",
+        "days_before",
+        "is_enabled",
+        "created_at",
+    ]
+    list_filter = ["trigger_type", "is_enabled"]
+    search_fields = ["document__title", "owner__username", "owner__email"]
+    raw_id_fields = ["owner", "document"]
+    readonly_fields = ["created_at", "updated_at"]
     date_hierarchy = "created_at"

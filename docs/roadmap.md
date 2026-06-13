@@ -520,13 +520,13 @@ A working frontend with landing page, auth pages, and dashboard shell.
 
 ## Sprint 4 — Document Vault
 
-**Status:** In Progress (backend metadata foundation complete)  
+**Status:** In Progress (document intelligence foundation complete)
 **Target Date:** Jul 27 – Aug 16, 2026  
 **Goal:** Build the core document management module.
 
 ### Tasks
 
-- [x] Create Document model (metadata only) + DocumentCategory model
+- [x] Create Document model + DocumentCategory model
 - [x] Create document serializer
 - [x] Create document endpoints (list/create/retrieve/update/delete)
 - [x] Add file upload support (backend `DocumentFile` foundation)
@@ -536,14 +536,20 @@ A working frontend with landing page, auth pages, and dashboard shell.
 - [x] Add document update endpoint
 - [x] Add document delete endpoint
 - [x] Add document download endpoint (controlled, owner-only)
-- [ ] Add expiry status logic (auto-calculated)
+- [x] Add expiry status logic (auto-calculated)
+- [x] Add computed document health fields
+- [x] Add search, filter, and sort
+- [x] Add missing-file and missing-expiry detection
+- [x] Add Attention Needed endpoint and dashboard/list UI
+- [x] Add document reminder rule model, API, and workspace UI
 - [x] Add ownership tests
 - [x] Build document vault frontend page (metadata UI)
-- [ ] Build document file upload frontend UI
+- [x] Build document file upload frontend UI
 
 ### Deliverable
 
-Users can upload, view, edit, delete, and download their own documents.
+Users can upload, view, edit, delete, download, search, filter, and understand
+the urgency of their own documents.
 
 ### Definition of Done
 
@@ -552,6 +558,8 @@ Users can upload, view, edit, delete, and download their own documents.
 - User cannot access another user’s document.
 - File upload validates type and size.
 - Expiry status is calculated.
+- Attention Needed is scoped to the authenticated user.
+- Reminder rules can be created and upcoming dates can be calculated.
 - Frontend document vault displays uploaded files.
 
 ---
@@ -795,11 +803,11 @@ stress**.
 3. Frontend document upload UI                     (done)
 4. Backend secure preview/download access          (done)
 5. Frontend in-app document preview                (done)
-6. Smart status and expiry intelligence
-7. Search, filter, and sort
-8. Missing-information detection
-9. Attention Needed inbox
-10. Renewal reminder rules
+6. Smart status and expiry intelligence            (done)
+7. Search, filter, and sort                        (done)
+8. Missing-information detection                   (done)
+9. Attention Needed inbox                          (done)
+10. Renewal reminder rules                         (done: no sending yet)
 11. Renewal preparation checklists
 12. Document detail page upgrade
 13. Calendar/timeline view
@@ -819,16 +827,16 @@ intelligence are solid.
 ### Upcoming branches
 
 ```txt
-backend/document-status-intelligence   frontend/document-status-polish
-backend/document-search-filter         frontend/document-search-filter
-backend/document-attention-inbox       frontend/document-attention-inbox
-backend/document-reminder-rules        frontend/document-reminder-experience
+backend/document-status-intelligence   frontend/document-status-polish        (done)
+backend/document-search-filter         frontend/document-search-filter        (done)
+backend/document-attention-inbox       frontend/document-attention-inbox      (done)
+backend/document-reminder-rules        frontend/document-reminder-experience  (done)
 backend/document-checklists            frontend/document-checklists
 backend/document-ocr-foundation        frontend/document-ocr-review-ui
 ```
 
-The **next implementation branch** should return to status/expiry intelligence
-(step 6) unless the share-link UX needs a dedicated polish pass first.
+The **next implementation branch** should move to renewal preparation checklists
+or calendar/timeline work, while keeping OCR, bundles, and exports deferred.
 
 ---
 

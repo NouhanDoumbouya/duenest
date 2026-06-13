@@ -9,6 +9,7 @@ import {
   FileWarning,
   Plus,
   RefreshCw,
+  ShieldAlert,
   TriangleAlert,
 } from "lucide-react";
 
@@ -24,28 +25,44 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { ApiError } from "@/lib/api";
-import {
-  daysUntil,
-  formatDate,
-  getDocuments,
-  isExpiringSoon,
-} from "@/lib/documents";
+import { formatDate, getAttentionNeeded, getDocuments } from "@/lib/documents";
 import { cn } from "@/lib/utils";
 import type { DocumentRecord } from "@/types/documents";
 
+interface DashboardSummary {
+  total: number;
+  needsAttention: number;
+  expiringSoon: number;
+  renewalDue: number;
+  expired: number;
+}
+
 export default function DashboardPage() {
   const user = useDashboardUser();
-  const [documents, setDocuments] = useState<DocumentRecord[] | null>(null);
-  const [total, setTotal] = useState(0);
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [attention, setAttention] = useState<DocumentRecord[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
-    getDocuments()
-      .then((page) => {
+    Promise.all([
+      getDocuments(),
+      getDocuments({ computed_status: "expiring_soon" }),
+      getDocuments({ computed_status: "renewal_due" }),
+      getDocuments({ computed_status: "expired" }),
+      getAttentionNeeded(),
+    ])
+      .then(([allDocs, expiringSoon, renewalDue, expired, attentionResult]) => {
         if (!active) return;
-        setDocuments(page.results);
-        setTotal(page.count);
+        setSummary({
+          total: allDocs.count,
+          needsAttention: attentionResult.count,
+          expiringSoon: expiringSoon.count,
+          renewalDue: renewalDue.count,
+          expired: expired.count,
+        });
+        setAttention(attentionResult.items);
+        setError(null);
       })
       .catch((err) => {
         if (!active) return;
@@ -54,7 +71,14 @@ export default function DashboardPage() {
             ? err.message
             : "Unable to load your documents.",
         );
-        setDocuments([]);
+        setSummary({
+          total: 0,
+          needsAttention: 0,
+          expiringSoon: 0,
+          renewalDue: 0,
+          expired: 0,
+        });
+        setAttention([]);
       });
     return () => {
       active = false;
@@ -68,54 +92,50 @@ export default function DashboardPage() {
     day: "numeric",
   });
 
-  const docs = documents ?? [];
-  const expiringSoon = docs.filter(isExpiringSoon).length;
-  const renewalDue = docs.filter((d) => d.status === "renewal_due").length;
-  const expired = docs.filter((d) => d.status === "expired").length;
-
-  const stats: Stat[] = [
-    { label: "Documents", value: total, hint: "in your vault", icon: FileText, tone: "blue" },
-    {
-      label: "Expiring soon",
-      value: expiringSoon,
-      hint: "within 30 days",
-      icon: CalendarClock,
-      tone: "amber",
-    },
-    {
-      label: "Renewal due",
-      value: renewalDue,
-      hint: "need attention",
-      icon: RefreshCw,
-      tone: "teal",
-    },
-    {
-      label: "Expired",
-      value: expired,
-      hint: "past their date",
-      icon: TriangleAlert,
-      tone: "slate",
-    },
-  ];
-
-  // Anything that needs a look soon: expired, marked renewal-due, or expiring
-  // within 30 days — ranked by urgency (most overdue first, then soonest).
-  const attention = docs
-    .map((doc) => ({ doc, days: daysUntil(doc.expiry_date) }))
-    .filter(
-      ({ doc, days }) =>
-        doc.status === "expired" ||
-        doc.status === "renewal_due" ||
-        (days !== null && days <= 30),
-    )
-    .sort((a, b) => (a.days ?? 99999) - (b.days ?? 99999))
-    .slice(0, 6);
-
-  const loading = documents === null;
+  const loading = summary === null || attention === null;
+  const stats: Stat[] = summary
+    ? [
+        {
+          label: "Documents",
+          value: summary.total,
+          hint: "in your vault",
+          icon: FileText,
+          tone: "blue",
+        },
+        {
+          label: "Needs attention",
+          value: summary.needsAttention,
+          hint: "ranked by urgency",
+          icon: ShieldAlert,
+          tone: "amber",
+        },
+        {
+          label: "Expiring soon",
+          value: summary.expiringSoon,
+          hint: "within 90 days",
+          icon: CalendarClock,
+          tone: "amber",
+        },
+        {
+          label: "Renewal due",
+          value: summary.renewalDue,
+          hint: "ready to act on",
+          icon: RefreshCw,
+          tone: "teal",
+        },
+        {
+          label: "Expired",
+          value: summary.expired,
+          hint: "past their date",
+          icon: TriangleAlert,
+          tone: "slate",
+        },
+      ]
+    : [];
+  const attentionItems = (attention ?? []).slice(0, 6);
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-8">
-      {/* Welcome */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
@@ -146,16 +166,19 @@ export default function DashboardPage() {
         </p>
       )}
 
-      {/* Stat cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         {loading
-          ? Array.from({ length: 4 }).map((_, i) => (
+          ? Array.from({ length: 5 }).map((_, i) => (
               <Card key={i} className="h-[120px] animate-pulse" />
             ))
           : stats.map((stat) => (
               <Link
                 key={stat.label}
-                href="/dashboard/documents"
+                href={
+                  stat.label === "Needs attention"
+                    ? "/dashboard/documents?quick=needs_attention"
+                    : "/dashboard/documents"
+                }
                 className="rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
               >
                 <StatCard stat={stat} />
@@ -163,8 +186,7 @@ export default function DashboardPage() {
             ))}
       </div>
 
-      {!loading && total === 0 ? (
-        /* Empty state */
+      {!loading && summary?.total === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-4 px-6 py-14 text-center">
             <span className="flex size-12 items-center justify-center rounded-xl bg-accent text-accent-foreground">
@@ -191,85 +213,63 @@ export default function DashboardPage() {
         </Card>
       ) : (
         !loading && (
-          /* Needs attention */
           <Card>
             <CardHeader className="flex-row items-center justify-between">
               <div>
                 <CardTitle className="text-lg">Needs attention</CardTitle>
                 <CardDescription>
-                  Documents that are expiring, due for renewal, or already
-                  expired.
+                  Documents that are expired, due, expiring soon, or missing
+                  key tracking information.
                 </CardDescription>
               </div>
               <Link
-                href="/dashboard/documents"
+                href="/dashboard/documents?quick=needs_attention"
                 className="shrink-0 text-sm font-medium text-primary hover:underline"
               >
                 View all
               </Link>
             </CardHeader>
             <CardContent>
-              {attention.length === 0 ? (
+              {attentionItems.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 py-10 text-center">
                   <span className="flex size-11 items-center justify-center rounded-full bg-brand-success/10 text-brand-success">
                     <FileWarning className="size-5" />
                   </span>
-                  <p className="text-sm text-muted-foreground">
-                    You&apos;re all caught up — nothing needs attention right now.
-                  </p>
+                  <div>
+                    <p className="text-sm font-medium">
+                      Nothing needs attention right now.
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Your tracked documents look calm and up to date.
+                    </p>
+                  </div>
                 </div>
               ) : (
                 <ul className="flex flex-col gap-2">
-                  {attention.map(({ doc, days }) => {
-                    const chip =
-                      days === null
-                        ? null
-                        : days < 0
-                          ? {
-                              urgent: true,
-                              label: `Expired ${Math.abs(days)}d ago`,
-                            }
-                          : days <= 30
-                            ? { urgent: false, label: `in ${days}d` }
-                            : null;
-                    return (
-                      <li key={doc.id}>
-                        <Link
-                          href={`/dashboard/documents/${doc.id}/edit`}
-                          className="flex items-center justify-between gap-3 rounded-xl border border-border px-4 py-3 transition-colors hover:bg-muted/40"
-                        >
-                          <div className="flex min-w-0 items-center gap-3">
-                            <CalendarClock className="size-4 shrink-0 text-muted-foreground" />
-                            <span className="min-w-0">
-                              <span className="block truncate font-medium">
-                                {doc.title}
-                              </span>
-                              <span className="block text-xs text-muted-foreground">
-                                {doc.expiry_date
-                                  ? `Expires ${formatDate(doc.expiry_date)}`
-                                  : "No expiry date set"}
-                              </span>
+                  {attentionItems.map((doc) => (
+                    <li key={doc.id}>
+                      <Link
+                        href={`/dashboard/documents/${doc.id}/edit`}
+                        className="flex items-center justify-between gap-3 rounded-xl border border-border px-4 py-3 transition-colors hover:bg-muted/40"
+                      >
+                        <div className="flex min-w-0 items-center gap-3">
+                          <CalendarClock className="size-4 shrink-0 text-muted-foreground" />
+                          <span className="min-w-0">
+                            <span className="block truncate font-medium">
+                              {doc.title}
                             </span>
-                          </div>
-                          <div className="flex shrink-0 items-center gap-2">
-                            {chip && (
-                              <span
-                                className={cn(
-                                  "rounded-full px-2 py-0.5 text-xs font-medium",
-                                  chip.urgent
-                                    ? "bg-destructive/10 text-destructive"
-                                    : "bg-brand-amber/15 text-brand-amber",
-                                )}
-                              >
-                                {chip.label}
-                              </span>
-                            )}
-                            <DocumentStatusBadge status={doc.status} />
-                          </div>
-                        </Link>
-                      </li>
-                    );
-                  })}
+                            <span className="block text-xs text-muted-foreground">
+                              {doc.status_reason}
+                              {doc.expiry_date
+                                ? ` Expires ${formatDate(doc.expiry_date)}.`
+                                : ""}
+                            </span>
+                          </span>
+                        </div>
+                        <DocumentStatusBadge status={doc.computed_status} />
+                      </Link>
+                    </li>
+                  ))}
                 </ul>
               )}
             </CardContent>

@@ -543,8 +543,9 @@ Required.
 
 # 13.5 Documents API (implemented)
 
-The first implemented core feature. Manages **document metadata only** — no
-file upload, OCR, AI extraction, or reminders yet. Every endpoint requires
+Manages user-owned document metadata and returns computed document intelligence
+fields. File upload/preview/sharing is handled by nested file endpoints below.
+OCR and notification sending are not implemented. Every endpoint requires
 authentication, and all access is scoped to the authenticated user: a document
 that belongs to another user returns `404 Not Found`.
 
@@ -561,6 +562,7 @@ Base path:
 | `GET`    | `/api/v1/documents/:id/`  | Retrieve one of the user's documents |
 | `PATCH`  | `/api/v1/documents/:id/`  | Update one of the user's documents   |
 | `DELETE` | `/api/v1/documents/:id/`  | Delete one of the user's documents   |
+| `GET`    | `/api/v1/documents/attention-needed/` | Documents requiring action |
 
 ### Authentication
 
@@ -606,6 +608,19 @@ set from the authenticated user. `category` is optional and references a
   "renewal_date": "2029-10-01",
   "notes": "Renew before travel.",
   "status": "active",
+  "computed_status": "active",
+  "status_label": "Active",
+  "status_reason": "This document looks up to date.",
+  "urgency_level": "none",
+  "days_until_expiry": 1297,
+  "days_until_renewal": 1205,
+  "is_expired": false,
+  "is_expiring_soon": false,
+  "is_renewal_due": false,
+  "has_file": true,
+  "missing_expiry_date": false,
+  "missing_file": false,
+  "needs_attention": false,
   "created_at": "2026-06-12T10:30:00Z",
   "updated_at": "2026-06-12T10:30:00Z"
 }
@@ -617,12 +632,104 @@ set from the authenticated user. `category` is optional and references a
 active | expired | renewal_due | archived
 ```
 
+Manual `status` remains writable for compatibility and archiving. The backend
+also returns read-only intelligence fields without overwriting user-entered
+status unless the user updates it.
+
+### Computed status values
+
+```txt
+active | expiring_soon | renewal_due | expired | missing_file |
+missing_expiry_date | archived
+```
+
+`needs_attention` is returned as a boolean so the API can preserve the most
+specific `computed_status` while still supporting a focused attention inbox.
+
+### Computed document health fields
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `computed_status` | string | Derived from manual archive state, expiry date, renewal date, and file presence |
+| `status_label` | string | Human-readable label for `computed_status` |
+| `status_reason` | string | Short user-facing explanation |
+| `urgency_level` | string | `none`, `low`, `medium`, `high`, or `critical` |
+| `days_until_expiry` | integer/null | Negative when expired |
+| `days_until_renewal` | integer/null | Negative when renewal date is in the past |
+| `is_expired` | boolean | `expiry_date < today` |
+| `is_expiring_soon` | boolean | Expiry is within 90 days and not expired |
+| `is_renewal_due` | boolean | Renewal date is today/past and the document is not expired |
+| `has_file` | boolean | At least one attached file exists |
+| `missing_expiry_date` | boolean | No expiry date is present |
+| `missing_file` | boolean | No attached files exist |
+| `needs_attention` | boolean | Expired, renewal due, expiring soon, missing file, or missing expiry date |
+
+Archived documents keep `computed_status = "archived"` and do not appear in
+Attention Needed results.
+
+### List search, filters, and ordering
+
+`GET /api/v1/documents/` accepts:
+
+| Parameter | Description |
+| --- | --- |
+| `search` | Searches `title`, `document_type`, `issuer`, `country`, `reference_number`, and `notes` |
+| `status` | Manual stored status: `active`, `expired`, `renewal_due`, `archived` |
+| `computed_status` | Computed status value such as `expiring_soon`, `expired`, `missing_file`, `missing_expiry_date`, `archived` |
+| `category` | Category id or category slug |
+| `document_type` | Case-insensitive partial match |
+| `country` | Case-insensitive partial match |
+| `issuer` | Case-insensitive partial match |
+| `has_file` | Boolean (`true`, `false`, `1`, `0`, `yes`, `no`) |
+| `missing_file` | Boolean |
+| `missing_expiry_date` | Boolean |
+| `needs_attention` | Boolean |
+| `expiry_from` | `YYYY-MM-DD`, filters `expiry_date >= value` |
+| `expiry_to` | `YYYY-MM-DD`, filters `expiry_date <= value` |
+| `expiring_within_days` | Integer; includes non-expired documents expiring within that many days |
+| `ordering` | One of `expiry_date`, `-expiry_date`, `created_at`, `-created_at`, `updated_at`, `-updated_at`, `title`, `-title` |
+
+Invalid `ordering` values fall back to `-created_at`. Invalid dates and invalid
+`expiring_within_days` values are ignored. All search and filter results remain
+scoped to `request.user`.
+
+### Attention Needed
+
+```http
+GET /api/v1/documents/attention-needed/
+```
+
+Returns the authenticated user's non-archived documents where
+`needs_attention = true`, sorted by urgency and relevant dates.
+
+```json
+{
+  "count": 1,
+  "items": [
+    {
+      "id": 1,
+      "title": "Passport",
+      "computed_status": "expiring_soon",
+      "urgency_level": "medium",
+      "status_reason": "Expires in 58 days.",
+      "expiry_date": "2026-08-10",
+      "days_until_expiry": 58,
+      "needs_attention": true
+    }
+  ]
+}
+```
+
+Items use the same document serializer shape as `GET /api/v1/documents/`.
+Attention Needed never exposes another user's documents and does not include
+public/shared-link documents.
+
 ### Validation rules
 
 - `title` is required.
 - `expiry_date` cannot be earlier than `issue_date` (when both are set).
 - `renewal_date` cannot be later than `expiry_date` (when both are set).
-- `owner`, `id`, `created_at`, `updated_at` are read-only.
+- `owner`, `id`, computed health fields, `created_at`, and `updated_at` are read-only.
 
 List responses are paginated using the standard pagination envelope
 (`count`, `next`, `previous`, `results`).
@@ -796,6 +903,99 @@ viewers cannot access this log.
 
 ---
 
+# 13.8 Document Reminder Rules API (implemented)
+
+Reminder rules let users define when DueNest should remind them before a
+document expires or reaches its renewal date. This foundation stores rules and
+calculates upcoming reminder dates only; it does **not** send emails, push
+notifications, WhatsApp, Telegram, SMS, or background notification jobs yet.
+
+All endpoints require authentication. Rules are resolved through an
+owner-owned parent document, so another user's document or rule returns
+`404 Not Found`.
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/v1/documents/:document_id/reminder-rules/` | List reminder rules for a document |
+| `POST` | `/api/v1/documents/:document_id/reminder-rules/` | Create a reminder rule |
+| `GET` | `/api/v1/documents/:document_id/reminder-rules/:rule_id/` | Retrieve one rule |
+| `PATCH` | `/api/v1/documents/:document_id/reminder-rules/:rule_id/` | Update one rule |
+| `DELETE` | `/api/v1/documents/:document_id/reminder-rules/:rule_id/` | Delete one rule |
+| `GET` | `/api/v1/documents/reminders/upcoming/` | List enabled future calculated reminders |
+
+### Trigger types
+
+```txt
+before_expiry
+before_renewal_date
+on_expiry
+```
+
+### Create request
+
+```json
+{
+  "trigger_type": "before_expiry",
+  "days_before": 30,
+  "is_enabled": true
+}
+```
+
+`on_expiry` always uses `days_before = 0`. `days_before` cannot be negative.
+
+### Response
+
+```json
+{
+  "id": 4,
+  "owner": 7,
+  "document": 12,
+  "trigger_type": "before_expiry",
+  "days_before": 30,
+  "is_enabled": true,
+  "upcoming_reminder_date": "2026-07-11",
+  "date_source": "expiry_date",
+  "created_at": "2026-06-13T00:13:00Z",
+  "updated_at": "2026-06-13T00:13:00Z"
+}
+```
+
+### Validation rules
+
+- `before_expiry` and `on_expiry` require the document to have `expiry_date`.
+- `before_renewal_date` requires the document to have `renewal_date`.
+- Users cannot create or manage rules for another user's document.
+- `owner` and `document` are read-only and set from the authenticated request
+  plus URL-scoped parent document.
+
+### Upcoming reminders
+
+```http
+GET /api/v1/documents/reminders/upcoming/
+```
+
+Returns enabled rules for the authenticated user whose calculated reminder date
+is today or in the future, sorted by reminder date and document title.
+
+```json
+{
+  "count": 1,
+  "items": [
+    {
+      "id": 4,
+      "document": 12,
+      "trigger_type": "before_expiry",
+      "days_before": 30,
+      "is_enabled": true,
+      "upcoming_reminder_date": "2026-07-11",
+      "date_source": "expiry_date"
+    }
+  ]
+}
+```
+
+---
+
 # 14. Dashboard API
 
 ## 14.1 Get Dashboard Summary
@@ -887,7 +1087,13 @@ Required.
 
 ---
 
-# 15. Document API
+# 15. Document API (older planning reference)
+
+> Current implementation lives in sections **13.5 Documents API**, **13.6
+> Document Files API**, **13.7 Secure File Sharing and Activity API**, and
+> **13.8 Document Reminder Rules API** above. The examples in this section are
+> retained as an older planning reference and should not be treated as the
+> current API contract.
 
 ## 15.1 List Documents
 
@@ -1258,7 +1464,11 @@ Required.
 
 ---
 
-# 17. Reminder API
+# 17. Reminder API (planned generic reminders)
+
+> Document-specific reminder rules are implemented in section **13.8 Document
+> Reminder Rules API**. The generic reminder endpoints below are still planned
+> for a later notification/reminder module.
 
 ## 17.1 List Reminders
 
@@ -1742,20 +1952,29 @@ GET    /api/v1/documents/:id/files/:file_id/preview/    # controlled, owner-only
 
 Preview is authorized exactly like download (owner-only, no public path).
 
-### Search / filter / calendar — Planned MVP
+### Search, filter, sort, and attention — Implemented
 ```txt
-GET    /api/v1/documents/search/        # ?q=&status=&category=&type=&ordering=
+GET    /api/v1/documents/                    # ?search=&status=&computed_status=&needs_attention=&ordering=
 GET    /api/v1/documents/attention-needed/   # expired / expiring-soon / renewal-due / missing-info
+```
+
+### Calendar — Future
+```txt
 GET    /api/v1/documents/calendar/      # ?from=&to= expiry/renewal events
 ```
 
-### Reminder rules — Planned MVP
+### Reminder rules — Implemented
 ```txt
 GET    /api/v1/documents/:id/reminder-rules/
 POST   /api/v1/documents/:id/reminder-rules/
+GET    /api/v1/documents/:id/reminder-rules/:rule_id/
 PATCH  /api/v1/documents/:id/reminder-rules/:rule_id/
 DELETE /api/v1/documents/:id/reminder-rules/:rule_id/
+GET    /api/v1/documents/reminders/upcoming/
 ```
+
+Reminder rules are stored and upcoming dates are calculated, but real
+notification sending is not implemented yet.
 
 ### Checklists — Planned MVP
 ```txt

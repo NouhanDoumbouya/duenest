@@ -299,11 +299,13 @@ Stores metadata for uploaded user documents.
 
 The actual file is stored outside the database. The database stores file reference information and metadata.
 
-### Implemented (v1 — metadata only)
+### Implemented (v1 — metadata, files, intelligence, and reminder rules)
 
-The first shipped version of this model (`apps.documents`) intentionally stores
-**metadata only**: there are no file fields, OCR, AI, or reminders yet. It also
-differs from the longer-term plan below in a few ways:
+The implemented `apps.documents` module stores document metadata, attached file
+metadata, secure share-link metadata, owner-only file activity, and document
+reminder rules. OCR, AI extraction, stored reminder occurrences, and real
+notification sending are not implemented yet. The implementation differs from
+the longer-term plan below in a few ways:
 
 - Primary keys are auto-increment integers (consistent with the existing
   `users.User` model), not UUIDs — UUIDs can be revisited later.
@@ -312,6 +314,10 @@ differs from the longer-term plan below in a few ways:
 - `category` is a nullable ForeignKey to a new shared `DocumentCategory` model
   (see below) rather than a free-text field.
 - Status choices are `active`, `expired`, `renewal_due`, `archived`.
+- Smart document health (`computed_status`, `urgency_level`,
+  `needs_attention`, etc.) is derived in service/serializer code from dates,
+  files, and manual archive state. These values are not stored as database
+  columns, so user-entered document data is not overwritten by calculations.
 
 Implemented `Document` fields:
 
@@ -364,6 +370,35 @@ enforced through the parent document (`file.document.owner`).
   static media.
 - **TODO (production):** move blobs to private object storage (S3-compatible)
   with signed, time-limited access.
+
+#### Implemented `DocumentReminderRule`
+
+Reminder rules are durable user-owned records used to calculate future reminder
+dates for a document. They do not send notifications yet and do not create
+stored reminder occurrences in this branch.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `id` | BigAutoField | Primary key |
+| `owner` | ForeignKey(User) | `related_name="document_reminder_rules"` |
+| `document` | ForeignKey(Document) | `related_name="reminder_rules"`, `CASCADE` |
+| `trigger_type` | CharField | `before_expiry`, `before_renewal_date`, `on_expiry` |
+| `days_before` | PositiveIntegerField | Number of days before the source date; `0` for `on_expiry` |
+| `is_enabled` | BooleanField | Allows pausing a rule without deleting it |
+| `created_at` / `updated_at` | DateTime | Timestamps |
+
+Indexes: `(owner, is_enabled)` for upcoming reminder lookups and
+`(document, trigger_type)` for nested document-rule management. Default
+ordering is `days_before`, then newest first.
+
+Reminder date calculation:
+
+- `before_expiry`: `document.expiry_date - days_before`
+- `on_expiry`: `document.expiry_date`
+- `before_renewal_date`: `document.renewal_date - days_before`
+
+Validation requires the relevant source date to exist. Rules are always scoped
+through an owner-owned parent document.
 
 > The table below is the **longer-term planned** design (file storage, UUIDs,
 > richer status calculation). It is kept for reference and will be folded into
@@ -1214,13 +1249,14 @@ branch. Every user-owned model is scoped to its owner and follows the existing
 *Future* = later phase.
 
 ### Document — *Implemented*
-- **Purpose:** one important document record (metadata only).
+- **Purpose:** one important document record.
 - **Key fields:** `owner`, `category`, `title`, `document_type`, `issuer`,
   `country`, `reference_number`, `issue_date`, `expiry_date`, `renewal_date`,
   `notes`, `status`, timestamps.
 - **Relationships:** `owner → User`; `category → DocumentCategory`; has many
-  `DocumentFile`.
-- **Security:** owner-scoped; status/expiry will be partly auto-derived (MVP).
+  `DocumentFile`; has many `DocumentReminderRule`.
+- **Security:** owner-scoped. Computed health/status fields are derived from
+  dates, files, and archive state in service/serializer code, not stored.
 
 ### DocumentCategory — *Implemented*
 - **Purpose:** shared, controlled vocabulary (Passport, Visa, Insurance…).
@@ -1258,6 +1294,17 @@ branch. Every user-owned model is scoped to its owner and follows the existing
   `file → DocumentFile`; optional `share_link → DocumentFileShareLink`.
 - **Security:** visible only through owner-scoped file endpoints; public share
   viewers never see the owner's activity log; access codes are never logged.
+
+### DocumentReminderRule — *Implemented*
+- **Purpose:** user-owned rule for calculating future document expiry or renewal
+  reminder dates.
+- **Key fields:** `owner`, `document`, `trigger_type`, `days_before`,
+  `is_enabled`, timestamps.
+- **Relationships:** `owner → User`; `document → Document`.
+- **Security:** managed only through owner-scoped document endpoints; users
+  cannot create, list, update, or delete rules for another user's document.
+- **Limitation:** upcoming reminder dates are calculated from rules; no
+  notification jobs or stored reminder occurrences are created yet.
 
 ### DocumentTemplate — *MVP*
 - **Purpose:** document-type presets (default fields, suggested expiry window,

@@ -10,11 +10,14 @@ from .views import (
     DocumentFileShareLinkDetailView,
     DocumentFileShareLinkListCreateView,
     DocumentFileShareLinkRevokeView,
+    DocumentReminderRuleDetailView,
+    DocumentReminderRuleListCreateView,
     DocumentViewSet,
     PublicSharedFileDownloadView,
     PublicSharedFileMetadataView,
     PublicSharedFilePreviewView,
     PublicSharedFileVerifyCodeView,
+    UpcomingDocumentRemindersView,
 )
 
 router = DefaultRouter()
@@ -64,6 +67,21 @@ urlpatterns = [
         f"{file_base}/<int:file_id>/activity/",
         DocumentFileActivityView.as_view(),
         name="document-file-activity",
+    ),
+    path(
+        "documents/reminders/upcoming/",
+        UpcomingDocumentRemindersView.as_view(),
+        name="document-reminders-upcoming",
+    ),
+    path(
+        "documents/<int:document_id>/reminder-rules/",
+        DocumentReminderRuleListCreateView.as_view(),
+        name="document-reminder-rules",
+    ),
+    path(
+        "documents/<int:document_id>/reminder-rules/<int:rule_id>/",
+        DocumentReminderRuleDetailView.as_view(),
+        name="document-reminder-rule-detail",
     ),
     # Public share endpoints (token-gated, no authentication).
     path(
