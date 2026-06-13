@@ -273,6 +273,11 @@ class DocumentFileShareLink(models.Model):
         VIEW_ONLY = "view_only", "View only"
         DOWNLOAD_ALLOWED = "download_allowed", "View and download"
 
+    class AccessLimitType(models.TextChoices):
+        UNLIMITED = "unlimited", "Unlimited access"
+        ONE_TIME = "one_time", "One-time view"
+        LIMITED_COUNT = "limited_count", "Limited number of views"
+
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -303,6 +308,20 @@ class DocumentFileShareLink(models.Model):
     # Hashed access code only — never stored or returned in plain text.
     access_code_hash = models.CharField(max_length=255, blank=True)
 
+    # Access limits. Enforced server-side on every preview/download. A one-time
+    # link is consumed by the first preview; a limited link counts each view
+    # (and download). max_downloads caps downloads independently.
+    access_limit_type = models.CharField(
+        max_length=20,
+        choices=AccessLimitType.choices,
+        default=AccessLimitType.UNLIMITED,
+    )
+    max_views = models.PositiveIntegerField(null=True, blank=True)
+    view_count = models.PositiveIntegerField(default=0)
+    max_downloads = models.PositiveIntegerField(null=True, blank=True)
+    download_count = models.PositiveIntegerField(default=0)
+    limit_reached_at = models.DateTimeField(null=True, blank=True)
+
     # Owner-facing only — never exposed through public share endpoints.
     label = models.CharField(max_length=120, blank=True)
     recipient_email = models.EmailField(blank=True)
@@ -329,12 +348,50 @@ class DocumentFileShareLink(models.Model):
         return timezone.now() >= self.expires_at
 
     @property
-    def is_active(self) -> bool:
-        return not self.is_revoked and not self.is_expired
-
-    @property
     def download_allowed(self) -> bool:
         return self.permission == self.Permission.DOWNLOAD_ALLOWED
+
+    @property
+    def view_cap(self):
+        """Maximum allowed previews, or None when unlimited."""
+        if self.access_limit_type == self.AccessLimitType.ONE_TIME:
+            return 1
+        if self.access_limit_type == self.AccessLimitType.LIMITED_COUNT:
+            return self.max_views
+        return None
+
+    @property
+    def download_cap(self):
+        """Maximum allowed downloads, or None when uncapped."""
+        caps = []
+        if self.max_downloads:
+            caps.append(self.max_downloads)
+        if self.access_limit_type == self.AccessLimitType.ONE_TIME:
+            caps.append(1)
+        return min(caps) if caps else None
+
+    @property
+    def is_view_limit_reached(self) -> bool:
+        cap = self.view_cap
+        return cap is not None and self.view_count >= cap
+
+    @property
+    def is_download_limit_reached(self) -> bool:
+        cap = self.download_cap
+        return cap is not None and self.download_count >= cap
+
+    @property
+    def is_limit_reached(self) -> bool:
+        """Whether the link can no longer be opened/previewed at all."""
+        return self.is_view_limit_reached
+
+    @property
+    def is_active(self) -> bool:
+        return (
+            not self.is_revoked
+            and not self.is_expired
+            and not self.is_limit_reached
+        )
 
 
 class DocumentFileActivity(models.Model):
@@ -356,6 +413,11 @@ class DocumentFileActivity(models.Model):
         SHARE_REVOKED = "share_revoked", "Share link revoked"
         SHARE_CODE_VERIFIED = "share_access_code_verified", "Access code verified"
         SHARE_CODE_FAILED = "share_access_code_failed", "Access code failed"
+        SHARE_LIMIT_REACHED = "share_limit_reached", "Share access limit reached"
+        SHARE_BLOCKED_LIMIT_REACHED = (
+            "share_blocked_limit_reached",
+            "Share access blocked (limit reached)",
+        )
         FILE_DELETED = "file_deleted", "File deleted"
 
     class ActorType(models.TextChoices):

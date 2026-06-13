@@ -406,10 +406,38 @@ class ShareLinkCreateSerializer(serializers.Serializer):
     recipient_email = serializers.EmailField(required=False, allow_blank=True)
     purpose = serializers.CharField(required=False, allow_blank=True, max_length=255)
 
+    # Access limits.
+    access_limit_type = serializers.ChoiceField(
+        choices=DocumentFileShareLink.AccessLimitType.choices,
+        default=DocumentFileShareLink.AccessLimitType.UNLIMITED,
+    )
+    max_views = serializers.IntegerField(required=False, min_value=1, allow_null=True)
+    max_downloads = serializers.IntegerField(
+        required=False, min_value=1, allow_null=True
+    )
+
     def validate_expires_at(self, value):
         if value <= timezone.now():
             raise serializers.ValidationError("Expiry must be in the future.")
         return value
+
+    def validate(self, attrs):
+        limit_type = attrs.get("access_limit_type")
+        if (
+            limit_type == DocumentFileShareLink.AccessLimitType.LIMITED_COUNT
+            and not attrs.get("max_views")
+        ):
+            raise serializers.ValidationError(
+                {"max_views": "Set how many views this link allows."}
+            )
+        # Downloads can only be capped when downloading is permitted.
+        if attrs.get("max_downloads") and (
+            attrs.get("permission") != DocumentFileShareLink.Permission.DOWNLOAD_ALLOWED
+        ):
+            raise serializers.ValidationError(
+                {"max_downloads": "Enable downloads to set a download limit."}
+            )
+        return attrs
 
 
 class DocumentFileShareLinkSerializer(serializers.ModelSerializer):
@@ -429,6 +457,12 @@ class DocumentFileShareLinkSerializer(serializers.ModelSerializer):
             "expires_at",
             "revoked_at",
             "access_code_required",
+            "access_limit_type",
+            "max_views",
+            "view_count",
+            "max_downloads",
+            "download_count",
+            "limit_reached_at",
             "label",
             "recipient_email",
             "purpose",
@@ -442,6 +476,8 @@ class DocumentFileShareLinkSerializer(serializers.ModelSerializer):
             return "revoked"
         if obj.is_expired:
             return "expired"
+        if obj.is_limit_reached:
+            return "limit_reached"
         return "active"
 
 

@@ -35,6 +35,7 @@ import type {
   DocumentFile,
   DocumentFileActivity,
   DocumentFileShareLink,
+  ShareAccessLimitType,
   ShareLinkPermission,
   ShareLinkStatus,
 } from "@/types/document-files";
@@ -57,6 +58,8 @@ const activityCopy: Record<DocumentFileActivity["action"], string> = {
   share_revoked: "Share link revoked",
   share_access_code_verified: "Access code verified",
   share_access_code_failed: "Access code failed",
+  share_limit_reached: "Access limit reached",
+  share_blocked_limit_reached: "Blocked — limit reached",
   file_deleted: "File deleted",
 };
 
@@ -82,6 +85,26 @@ function statusVariant(status: ShareLinkStatus) {
   if (status === "active") return "bg-brand-success/10 text-brand-success";
   if (status === "revoked") return "bg-destructive/10 text-destructive";
   return "bg-muted text-muted-foreground";
+}
+
+const statusLabel: Record<ShareLinkStatus, string> = {
+  active: "active",
+  expired: "expired",
+  revoked: "revoked",
+  limit_reached: "limit reached",
+};
+
+function accessLimitSummary(link: DocumentFileShareLink): string | null {
+  if (link.access_limit_type === "one_time") {
+    return `One-time view · ${link.view_count}/1 used`;
+  }
+  if (link.access_limit_type === "limited_count" && link.max_views) {
+    return `${link.view_count}/${link.max_views} views used`;
+  }
+  if (link.max_downloads) {
+    return `${link.download_count}/${link.max_downloads} downloads used`;
+  }
+  return null;
 }
 
 function buildExpiry(preset: ExpiryPreset, customValue: string): string | null {
@@ -136,6 +159,10 @@ export function DocumentFileShareDialog({
   const [customExpiry, setCustomExpiry] = useState("");
   const [accessCodeRequired, setAccessCodeRequired] = useState(false);
   const [accessCode, setAccessCode] = useState("");
+  const [accessLimitType, setAccessLimitType] =
+    useState<ShareAccessLimitType>("unlimited");
+  const [maxViews, setMaxViews] = useState("3");
+  const [maxDownloads, setMaxDownloads] = useState("");
   const [label, setLabel] = useState("");
   const [recipientEmail, setRecipientEmail] = useState("");
   const [purpose, setPurpose] = useState("");
@@ -220,11 +247,19 @@ export function DocumentFileShareDialog({
     setCreating(true);
     setCopyMessage(null);
     try {
+      const downloadCap =
+        permission === "download_allowed" && maxDownloads.trim()
+          ? Number(maxDownloads)
+          : undefined;
       const link = await createDocumentFileShareLink(file.document, file.id, {
         permission,
         expires_at: expiresAt,
         access_code_required: accessCodeRequired,
         access_code: accessCodeRequired ? accessCode.trim() : undefined,
+        access_limit_type: accessLimitType,
+        max_views:
+          accessLimitType === "limited_count" ? Number(maxViews) : undefined,
+        max_downloads: downloadCap,
         label: label.trim(),
         recipient_email: recipientEmail.trim(),
         purpose: purpose.trim(),
@@ -484,6 +519,57 @@ export function DocumentFileShareDialog({
               )}
             </div>
 
+            <div className="rounded-xl border border-border p-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Access limit" htmlFor="share-access-limit">
+                  <select
+                    id="share-access-limit"
+                    value={accessLimitType}
+                    onChange={(event) =>
+                      setAccessLimitType(
+                        event.target.value as ShareAccessLimitType,
+                      )
+                    }
+                    className="h-10 w-full rounded-lg border border-input bg-card px-3 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                  >
+                    <option value="unlimited">Unlimited access</option>
+                    <option value="one_time">One-time view</option>
+                    <option value="limited_count">Limited number of views</option>
+                  </select>
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    {accessLimitType === "one_time"
+                      ? "The link works for a single view, then stops."
+                      : accessLimitType === "limited_count"
+                        ? "The link stops after the chosen number of views."
+                        : "The link works until it expires or is revoked."}
+                  </p>
+                </Field>
+                {accessLimitType === "limited_count" && (
+                  <Field label="Maximum views" htmlFor="share-max-views">
+                    <Input
+                      id="share-max-views"
+                      type="number"
+                      min={1}
+                      value={maxViews}
+                      onChange={(event) => setMaxViews(event.target.value)}
+                    />
+                  </Field>
+                )}
+                {permission === "download_allowed" && (
+                  <Field label="Maximum downloads" htmlFor="share-max-downloads">
+                    <Input
+                      id="share-max-downloads"
+                      type="number"
+                      min={1}
+                      value={maxDownloads}
+                      onChange={(event) => setMaxDownloads(event.target.value)}
+                      placeholder="Unlimited"
+                    />
+                  </Field>
+                )}
+              </div>
+            </div>
+
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Label" htmlFor="share-label">
                 <Input
@@ -566,9 +652,15 @@ export function DocumentFileShareDialog({
                           variant="outline"
                           className={statusVariant(link.status)}
                         >
-                          {link.status}
+                          {statusLabel[link.status]}
                         </Badge>
                       </div>
+
+                      {accessLimitSummary(link) && (
+                        <p className="mt-2 text-xs font-medium text-muted-foreground">
+                          {accessLimitSummary(link)}
+                        </p>
+                      )}
 
                       {(link.recipient_email || link.purpose) && (
                         <div className="mt-3 space-y-1 rounded-lg bg-muted/50 p-2 text-xs text-muted-foreground">

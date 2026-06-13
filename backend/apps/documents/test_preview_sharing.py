@@ -557,6 +557,84 @@ class AccessGrantTests(PreviewSharingBaseTest):
         self.assertEqual(resp.status_code, status.HTTP_410_GONE)
 
 
+class AccessLimitTests(PreviewSharingBaseTest):
+    """One-time and limited-count view/download enforcement (server-side)."""
+
+    def make_link(self, *, permission="view_only", limit_type="unlimited",
+                  max_views=None, max_downloads=None):
+        f = self.upload(self.alice_doc, self.alice, make_pdf())
+        link = DocumentFileShareLink.objects.create(
+            owner=self.alice,
+            document=self.alice_doc,
+            file=f,
+            permission=permission,
+            expires_at=timezone.now() + timedelta(days=7),
+            access_limit_type=limit_type,
+            max_views=max_views,
+            max_downloads=max_downloads,
+        )
+        return link
+
+    def test_one_time_view_allows_first_blocks_second(self):
+        link = self.make_link(limit_type="one_time")
+        first = self.consume(self.client.get(public_preview(link.token)))
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        second = self.client.get(public_preview(link.token))
+        self.assertEqual(second.status_code, status.HTTP_410_GONE)
+        self.assertEqual(second.data["state"], "limit_reached")
+
+    def test_one_time_metadata_blocked_after_consumed(self):
+        link = self.make_link(limit_type="one_time")
+        self.consume(self.client.get(public_preview(link.token)))
+        meta = self.client.get(public_meta(link.token))
+        self.assertEqual(meta.status_code, status.HTTP_410_GONE)
+
+    def test_limited_view_count_enforced(self):
+        link = self.make_link(limit_type="limited_count", max_views=2)
+        self.assertEqual(
+            self.consume(self.client.get(public_preview(link.token))).status_code,
+            status.HTTP_200_OK,
+        )
+        self.assertEqual(
+            self.consume(self.client.get(public_preview(link.token))).status_code,
+            status.HTTP_200_OK,
+        )
+        self.assertEqual(
+            self.client.get(public_preview(link.token)).status_code,
+            status.HTTP_410_GONE,
+        )
+        link.refresh_from_db()
+        self.assertEqual(link.view_count, 2)
+        self.assertIsNotNone(link.limit_reached_at)
+
+    def test_limited_download_count_enforced(self):
+        link = self.make_link(
+            permission="download_allowed",
+            limit_type="limited_count",
+            max_views=99,
+            max_downloads=1,
+        )
+        self.assertEqual(
+            self.consume(self.client.get(public_download(link.token))).status_code,
+            status.HTTP_200_OK,
+        )
+        self.assertEqual(
+            self.client.get(public_download(link.token)).status_code,
+            status.HTTP_410_GONE,
+        )
+
+    def test_owner_sees_view_counter(self):
+        link = self.make_link(limit_type="limited_count", max_views=3)
+        self.consume(self.client.get(public_preview(link.token)))
+        self.client.force_authenticate(self.alice)
+        detail = self.client.get(
+            share_link_url(self.alice_doc.id, link.file_id, link.id)
+        )
+        self.assertEqual(detail.data["view_count"], 1)
+        self.assertEqual(detail.data["max_views"], 3)
+        self.assertEqual(detail.data["access_limit_type"], "limited_count")
+
+
 class ShareLabelTests(PreviewSharingBaseTest):
     def test_owner_sees_labels_but_other_user_cannot(self):
         f = self.upload(self.alice_doc, self.alice, make_pdf())

@@ -73,6 +73,14 @@ function errorFromApi(err: unknown): ShareError {
         state,
       };
     }
+    if (state === "limit_reached") {
+      return {
+        title: "This secure link has already been used.",
+        message:
+          "It has reached the access limit set by the sender. Ask them for a new link if you still need access.",
+        state,
+      };
+    }
     return { title: detail, message: detail, state };
   }
 

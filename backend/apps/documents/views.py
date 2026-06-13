@@ -5,7 +5,7 @@ from django.contrib.auth.hashers import check_password, make_password
 from django.core import signing
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError
-from django.db.models import Count, Exists, OuterRef, Q
+from django.db.models import Count, Exists, F, OuterRef, Q
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -758,6 +758,12 @@ class DocumentFileShareLinkListCreateView(_FileScopedMixin, APIView):
             expires_at=data["expires_at"],
             access_code_required=bool(data.get("access_code_required")),
             access_code_hash=access_code_hash,
+            access_limit_type=data.get(
+                "access_limit_type",
+                DocumentFileShareLink.AccessLimitType.UNLIMITED,
+            ),
+            max_views=data.get("max_views"),
+            max_downloads=data.get("max_downloads"),
             label=data.get("label", ""),
             recipient_email=data.get("recipient_email", ""),
             purpose=data.get("purpose", ""),
@@ -1077,6 +1083,59 @@ def _check_access_code(link, request):
     return None
 
 
+_LIMIT_REACHED_DETAIL = (
+    "This secure link has already been used or reached its access limit."
+)
+
+
+def _check_link_usable(link, request):
+    """Block a link whose view/access limit has already been reached."""
+    if link.is_view_limit_reached:
+        log_activity(
+            file=link.file,
+            action=DocumentFileActivity.Action.SHARE_BLOCKED_LIMIT_REACHED,
+            actor_type=DocumentFileActivity.ActorType.SHARED_VIEWER,
+            request=request,
+            share_link=link,
+        )
+        return Response(
+            {"detail": _LIMIT_REACHED_DETAIL, "state": "limit_reached"},
+            status=status.HTTP_410_GONE,
+        )
+    return None
+
+
+def _consume_share_view(link, request):
+    """Atomically count one preview and stamp the limit if it is now reached."""
+    if link.access_limit_type == DocumentFileShareLink.AccessLimitType.UNLIMITED:
+        return
+    DocumentFileShareLink.objects.filter(pk=link.pk).update(
+        view_count=F("view_count") + 1
+    )
+    link.refresh_from_db(fields=["view_count"])
+    if link.is_view_limit_reached and link.limit_reached_at is None:
+        link.limit_reached_at = timezone.now()
+        link.save(update_fields=["limit_reached_at"])
+        log_activity(
+            file=link.file,
+            action=DocumentFileActivity.Action.SHARE_LIMIT_REACHED,
+            actor_type=DocumentFileActivity.ActorType.SHARED_VIEWER,
+            request=request,
+            share_link=link,
+        )
+
+
+def _consume_share_download(link):
+    """Atomically count one download and stamp the limit if it is now reached."""
+    DocumentFileShareLink.objects.filter(pk=link.pk).update(
+        download_count=F("download_count") + 1
+    )
+    link.refresh_from_db(fields=["download_count"])
+    if link.is_download_limit_reached and link.limit_reached_at is None:
+        link.limit_reached_at = timezone.now()
+        link.save(update_fields=["limit_reached_at"])
+
+
 class PublicSharedFileMetadataView(APIView):
     permission_classes = [AllowAny]
 
@@ -1107,6 +1166,10 @@ class PublicSharedFileMetadataView(APIView):
         code_err = _check_access_code(link, request)
         if code_err:
             return code_err
+
+        limit_err = _check_link_usable(link, request)
+        if limit_err:
+            return limit_err
 
         return Response(PublicSharedFileSerializer(link).data)
 
@@ -1174,6 +1237,9 @@ class PublicSharedFilePreviewView(APIView):
         code_err = _check_access_code(link, request)
         if code_err:
             return code_err
+        limit_err = _check_link_usable(link, request)
+        if limit_err:
+            return limit_err
         if not link.file.is_previewable:
             return Response(
                 {
@@ -1189,7 +1255,10 @@ class PublicSharedFilePreviewView(APIView):
             request=request,
             share_link=link,
         )
-        return _inline_file_response(link.file)
+        response = _inline_file_response(link.file)
+        # A successful preview consumes one view (one-time / limited links).
+        _consume_share_view(link, request)
+        return response
 
 
 class PublicSharedFileDownloadView(APIView):
@@ -1210,6 +1279,14 @@ class PublicSharedFileDownloadView(APIView):
                 },
                 status=status.HTTP_403_FORBIDDEN,
             )
+        limit_err = _check_link_usable(link, request)
+        if limit_err:
+            return limit_err
+        if link.is_download_limit_reached:
+            return Response(
+                {"detail": _LIMIT_REACHED_DETAIL, "state": "limit_reached"},
+                status=status.HTTP_410_GONE,
+            )
         log_activity(
             file=link.file,
             action=DocumentFileActivity.Action.SHARE_DOWNLOADED,
@@ -1218,7 +1295,9 @@ class PublicSharedFileDownloadView(APIView):
             share_link=link,
         )
         instance = link.file
-        return _file_response(instance, as_attachment=True)
+        response = _file_response(instance, as_attachment=True)
+        _consume_share_download(link)
+        return response
 
 
 # ---- Checklist templates (read-only, shared catalog) -----------------------
