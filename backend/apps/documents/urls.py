@@ -49,6 +49,7 @@ from .views import (
     DocumentVersionRestoreMetadataView,
     DocumentViewSet,
     EmergencyPackViewSet,
+    PlanUsageView,
     ProofRecordViewSet,
     PublicEmergencyPackItemDownloadView,
     PublicEmergencyPackItemPreviewView,
@@ -185,6 +186,12 @@ urlpatterns = [
         "documents/reminders/upcoming/",
         UpcomingDocumentRemindersView.as_view(),
         name="document-reminders-upcoming",
+    ),
+    # ---- Plan limits foundation: read-only plan + usage snapshot -----------
+    path(
+        "plan/usage/",
+        PlanUsageView.as_view(),
+        name="plan-usage",
     ),
     path(
         "documents/<int:document_id>/reminder-rules/",

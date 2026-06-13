@@ -20,6 +20,9 @@ export type DocumentUrgencyLevel =
   | "high"
   | "critical";
 
+/** Availability of an original / certified copy / translation. */
+export type DocumentAvailability = "yes" | "no" | "unknown";
+
 export interface DocumentRecord {
   id: number;
   owner: number;
@@ -35,6 +38,16 @@ export interface DocumentRecord {
   renewal_date: string | null;
   notes: string;
   status: DocumentStatus;
+  // Physical document location — "where is the original?" details.
+  physical_location_label: string;
+  physical_location_details: string;
+  original_available: DocumentAvailability;
+  certified_copy_available: DocumentAvailability;
+  translation_available: DocumentAvailability;
+  notes_about_original: string;
+  // Soft delete (trash).
+  is_trashed: boolean;
+  trashed_at: string | null;
   computed_status: DocumentComputedStatus;
   status_label: string;
   status_reason: string;
@@ -68,6 +81,12 @@ export interface CreateDocumentRequest {
   notes?: string;
   status?: DocumentStatus;
   category?: number | null;
+  physical_location_label?: string;
+  physical_location_details?: string;
+  original_available?: DocumentAvailability;
+  certified_copy_available?: DocumentAvailability;
+  translation_available?: DocumentAvailability;
+  notes_about_original?: string;
 }
 
 /** Partial update — every field is optional. */

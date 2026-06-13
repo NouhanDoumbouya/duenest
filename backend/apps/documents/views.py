@@ -64,6 +64,9 @@ from .serializers import (
     ShareLinkCreateSerializer,
     TimelineEventSerializer,
 )
+from apps.users import plans as user_plans
+
+from .plan_usage import compute_plan_usage, enforce_plan_limit
 from .services import (
     APPLICABLE_EXTRACTION_FIELDS,
     VERSIONED_FIELDS,
@@ -300,6 +303,8 @@ class DocumentViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     def perform_create(self, serializer):
+        # Free-tier limit guard before anything is written.
+        enforce_plan_limit(self.request.user, user_plans.RESOURCE_DOCUMENTS)
         # Owner comes from the authenticated request, not the request body.
         document = serializer.save(owner=self.request.user)
         record_document_version(
@@ -529,6 +534,7 @@ class DocumentFileListCreateView(_DocumentScopedMixin, generics.ListCreateAPIVie
 
     def create(self, request, *args, **kwargs):
         document = self.get_document()  # 404 unless the caller owns it
+        enforce_plan_limit(request.user, user_plans.RESOURCE_FILES)
 
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -696,6 +702,7 @@ class DocumentFileShareLinkListCreateView(_FileScopedMixin, APIView):
 
     def post(self, request, document_id, file_id):
         file = self.get_file()
+        enforce_plan_limit(request.user, user_plans.RESOURCE_SHARE_LINKS)
         serializer = ShareLinkCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
@@ -824,6 +831,7 @@ class DocumentReminderRuleListCreateView(
     """GET lists reminder rules; POST creates one for the owner-owned document."""
 
     def perform_create(self, serializer):
+        enforce_plan_limit(self.request.user, user_plans.RESOURCE_REMINDERS)
         rule = serializer.save(owner=self.request.user, document=self.get_document())
         _mark_onboarding(self.request, "first_reminder_created")
         _track_product_event(
@@ -1393,6 +1401,7 @@ class DocumentBundleListCreateView(_BundleScopedMixin, generics.ListCreateAPIVie
         return queryset
 
     def perform_create(self, serializer):
+        enforce_plan_limit(self.request.user, user_plans.RESOURCE_BUNDLES)
         bundle = serializer.save(owner=self.request.user)
         _track_product_event(
             self.request,
@@ -2221,6 +2230,7 @@ class EmergencyPackViewSet(viewsets.ModelViewSet):
         return context
 
     def perform_create(self, serializer):
+        enforce_plan_limit(self.request.user, user_plans.RESOURCE_EMERGENCY_PACKS)
         # An optional access code may be supplied at creation.
         plain_code = (serializer.validated_data.pop("access_code", "") or "").strip()
         access_required = bool(
@@ -2600,3 +2610,18 @@ class DocumentActivityTimelineView(APIView):
         events.sort(key=lambda e: e["timestamp"], reverse=True)
         serializer = DocumentActivityEventSerializer(events, many=True)
         return Response({"count": len(events), "items": serializer.data})
+
+
+class PlanUsageView(APIView):
+    """
+    Read-only plan + usage snapshot for the authenticated user.
+
+    Returns the user's plan, per-resource usage (used/limit/remaining), and
+    storage usage so the UI can render a usage card, plan badge, and an upgrade
+    prompt. Ownership is enforced — counts are scoped to ``request.user`` only.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response(compute_plan_usage(request.user))

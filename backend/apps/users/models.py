@@ -31,6 +31,19 @@ class User(AbstractUser):
     # Optional profile picture URL returned by Google.
     avatar_url = models.URLField(blank=True, default="")
 
+    # Billing/plan placeholder. There is no real payment integration yet; this
+    # only drives the internal usage limits in ``apps.users.plans`` so the free
+    # tier can be enforced and an upgrade path can be shown in the UI.
+    class Plan(models.TextChoices):
+        FREE = "free", "Free"
+        PRO_PLACEHOLDER = "pro_placeholder", "Pro (placeholder)"
+
+    plan = models.CharField(
+        max_length=32,
+        choices=Plan.choices,
+        default=Plan.FREE,
+    )
+
 
 class UserOnboardingState(models.Model):
     """

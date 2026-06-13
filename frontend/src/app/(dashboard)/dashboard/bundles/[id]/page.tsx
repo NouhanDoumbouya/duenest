@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 
 import { ReadinessRing } from "@/components/bundles/readiness-ring";
+import { DocumentProofRecords } from "@/components/documents/document-proof-records";
 import { TimelineList } from "@/components/timeline/timeline-list";
 import { Button } from "@/components/ui/button";
 import {
@@ -601,6 +602,20 @@ export default function BundleDetailPage() {
         </CardHeader>
         <CardContent>
           <TimelineList events={events} />
+        </CardContent>
+      </Card>
+
+      {/* Proof of submission for this bundle */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Proof of submission</CardTitle>
+          <CardDescription>
+            Record confirmations and receipts for what you’ve submitted as part
+            of this bundle.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <DocumentProofRecords bundleId={bundleId} />
         </CardContent>
       </Card>
 

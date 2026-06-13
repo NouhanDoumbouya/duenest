@@ -123,6 +123,11 @@ export function uploadDocumentFile(
   });
 }
 
+/**
+ * Move a file to trash (soft delete). DELETE soft-trashes on the backend — the
+ * file is hidden, any existing share links stop working, and it can be restored
+ * or permanently deleted from the Trash.
+ */
 export function deleteDocumentFile(
   documentId: number,
   fileId: number,
@@ -131,6 +136,38 @@ export function deleteDocumentFile(
     method: "DELETE",
     auth: true,
   });
+}
+
+/** List a document's trashed files. */
+export function getTrashedDocumentFiles(
+  documentId: number,
+): Promise<Paginated<DocumentFile>> {
+  return apiFetch<Paginated<DocumentFile>>(
+    `/documents/${documentId}/files/trash/`,
+    { auth: true },
+  );
+}
+
+/** Restore a trashed file. */
+export function restoreDocumentFile(
+  documentId: number,
+  fileId: number,
+): Promise<DocumentFile> {
+  return apiFetch<DocumentFile>(
+    `/documents/${documentId}/files/${fileId}/restore/`,
+    { method: "POST", auth: true },
+  );
+}
+
+/** Permanently delete a trashed file. Irreversible. */
+export function permanentlyDeleteDocumentFile(
+  documentId: number,
+  fileId: number,
+): Promise<void> {
+  return apiFetch<void>(
+    `/documents/${documentId}/files/${fileId}/permanent-delete/`,
+    { method: "DELETE", auth: true },
+  );
 }
 
 /** Build the controlled download endpoint URL (needs an auth header to use). */

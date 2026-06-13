@@ -274,6 +274,7 @@ DueNest should use a custom user model from the beginning because changing the u
 | `is_staff` | Boolean | Yes | Admin access flag |
 | `date_joined` | DateTime | Yes | Account creation time |
 | `updated_at` | DateTime | Yes | Last profile update |
+| `plan` | CharField | Yes | `free` or `pro_placeholder`; default `free`. Drives internal usage limits (see `apps/users/plans.py`). No real billing yet. |
 
 ### Constraints
 

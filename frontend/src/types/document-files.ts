@@ -13,6 +13,8 @@ export interface DocumentFile {
   download_url: string | null;
   preview_url: string | null;
   is_previewable: boolean;
+  is_trashed: boolean;
+  trashed_at: string | null;
   created_at: string;
   updated_at: string;
 }

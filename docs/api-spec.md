@@ -501,10 +501,14 @@ Required.
     "id": "7b9c0c30-12e2-4f5a-a7ab-62e9f4fd7c11",
     "full_name": "Nouhan Doumbouya",
     "email": "nouhan@example.com",
+    "plan": "free",
     "date_joined": "2026-06-05T10:30:00Z"
   }
 }
 ```
+
+The read-only `plan` field is `free` or `pro_placeholder` and drives the usage
+limits described in section 13C.6.
 
 ---
 
@@ -1500,6 +1504,58 @@ GET /api/v1/documents/:document_id/activity/
 Returns a merged owner-only activity timeline for document-level events and
 file/share events. Raw IP addresses, user agents, internal file paths, tokens,
 and access-code data are not exposed.
+
+## 13C.6 Plan limits & usage
+
+A small internal plan foundation. Each user has a `plan` (`free` or
+`pro_placeholder`) exposed read-only on `GET /api/v1/users/me/`. There is **no
+real billing yet** — the plan only drives usage limits. Limits are defined in
+`apps/users/plans.py` and enforced on the relevant create endpoints.
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/v1/plan/usage/` | Read-only plan + per-resource usage snapshot |
+
+### Response: `200 OK`
+
+```json
+{
+  "plan": "free",
+  "plan_label": "Free",
+  "is_free": true,
+  "resources": {
+    "documents": { "resource": "documents", "label": "documents", "used": 3, "limit": 25, "remaining": 22, "at_limit": false, "unlimited": false },
+    "files": { "...": "..." },
+    "bundles": { "...": "..." },
+    "reminders": { "...": "..." },
+    "active_share_links": { "...": "..." },
+    "emergency_packs": { "...": "..." }
+  },
+  "storage": { "used_bytes": 10240, "limit_bytes": 104857600, "remaining_bytes": 104847360, "unlimited": false }
+}
+```
+
+### Limit enforcement
+
+Creating a document, file, bundle, reminder rule, active share link, or
+emergency pack while at the free-tier limit returns:
+
+```http
+403 Forbidden
+```
+
+```json
+{
+  "detail": "You've reached the Free plan limit of 25 documents. Remove some or upgrade to add more.",
+  "code": "plan_limit_exceeded",
+  "resource": "documents",
+  "limit": 25,
+  "plan": "free"
+}
+```
+
+The `pro_placeholder` plan treats every resource as unlimited. Counts are
+strictly owner-scoped; one user's usage never affects another's limits.
 
 ---
 
