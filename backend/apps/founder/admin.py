@@ -6,8 +6,11 @@ from .models import (
     FeatureCompletionItem,
     FeedbackItem,
     FounderAuditLog,
+    InviteCode,
+    InviteCodeUse,
     LaunchChecklistItem,
     ProductEvent,
+    WaitlistEntry,
 )
 
 
@@ -62,6 +65,44 @@ class AppErrorLogAdmin(admin.ModelAdmin):
     raw_id_fields = ["user"]
     readonly_fields = ["created_at"]
     date_hierarchy = "created_at"
+
+
+@admin.register(WaitlistEntry)
+class WaitlistEntryAdmin(admin.ModelAdmin):
+    list_display = ["email", "full_name", "persona", "status", "country", "created_at"]
+    list_filter = ["status", "persona", "country", "created_at"]
+    search_fields = ["email", "full_name", "message", "referral_source"]
+    raw_id_fields = ["invite_code", "invited_by", "accepted_user"]
+    readonly_fields = ["created_at", "updated_at", "invited_at", "accepted_at"]
+    date_hierarchy = "created_at"
+
+
+@admin.register(InviteCode)
+class InviteCodeAdmin(admin.ModelAdmin):
+    list_display = [
+        "code",
+        "label",
+        "is_active",
+        "used_count",
+        "max_uses",
+        "expires_at",
+        "created_at",
+    ]
+    list_filter = ["is_active", "persona_target", "expires_at", "created_at"]
+    search_fields = ["code", "label", "notes", "created_by__email"]
+    raw_id_fields = ["created_by"]
+    readonly_fields = ["used_count", "created_at", "updated_at"]
+    date_hierarchy = "created_at"
+
+
+@admin.register(InviteCodeUse)
+class InviteCodeUseAdmin(admin.ModelAdmin):
+    list_display = ["id", "invite_code", "email", "user", "used_at"]
+    list_filter = ["used_at"]
+    search_fields = ["email", "invite_code__code", "user__email"]
+    raw_id_fields = ["invite_code", "user", "waitlist_entry"]
+    readonly_fields = ["invite_code", "user", "waitlist_entry", "email", "metadata", "used_at"]
+    date_hierarchy = "used_at"
 
 
 @admin.register(FeatureCompletionItem)

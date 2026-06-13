@@ -13,9 +13,11 @@ import {
   LayoutDashboard,
   ListChecks,
   LockKeyhole,
+  MailCheck,
   MapPinned,
   MessageSquare,
   ShieldCheck,
+  TicketCheck,
   UserRoundCheck,
   Users,
 } from "lucide-react";
@@ -30,6 +32,8 @@ import { cn } from "@/lib/utils";
 const nav = [
   { label: "Overview", href: "/founder", icon: LayoutDashboard, exact: true },
   { label: "Analytics", href: "/founder/analytics", icon: BarChart3 },
+  { label: "Waitlist", href: "/founder/waitlist", icon: MailCheck },
+  { label: "Invites", href: "/founder/invites", icon: TicketCheck },
   { label: "Activation", href: "/founder/activation", icon: ListChecks },
   { label: "Feature Adoption", href: "/founder/adoption", icon: Activity },
   { label: "Feature Completion", href: "/founder/features", icon: CheckSquare },
@@ -221,4 +225,3 @@ export function FounderShell({ children }: { children: ReactNode }) {
     </div>
   );
 }
-

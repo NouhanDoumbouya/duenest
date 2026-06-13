@@ -15,6 +15,10 @@ DEBUG = config("DJANGO_DEBUG", default=False, cast=bool)
 # Keep this out of source control; set it via the environment / .env file.
 GOOGLE_OAUTH_CLIENT_ID = config("GOOGLE_OAUTH_CLIENT_ID", default="")
 
+# Controls whether new account creation requires a valid invite code.
+# Existing users can still log in when private beta mode is enabled.
+PRIVATE_BETA_ENABLED = config("PRIVATE_BETA_ENABLED", default=False, cast=bool)
+
 ALLOWED_HOSTS = config(
     "DJANGO_ALLOWED_HOSTS",
     default="localhost,127.0.0.1",
@@ -129,6 +133,10 @@ REST_FRAMEWORK = {
     ),
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
+    "DEFAULT_THROTTLE_RATES": {
+        "waitlist": "5/hour",
+        "invite_validate": "20/hour",
+    },
 }
 
 SIMPLE_JWT = {

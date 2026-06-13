@@ -52,6 +52,8 @@ safe country labels, and product module names.
 ```txt
 /founder
 /founder/analytics
+/founder/waitlist
+/founder/invites
 /founder/activation
 /founder/adoption
 /founder/features
@@ -72,6 +74,7 @@ The `/founder` shell is visually separate from the normal dashboard. Existing
 - Overview dashboard with KPI cards and date-range filter.
 - Native SVG/CSS charts for user growth, active users, documents, files,
   failures, security events, attention breakdown, and feedback categories.
+- Private beta waitlist review and invite-code management.
 - Activation funnel from signup to first document, file, expiry date, reminder,
   checklist/bundle, and secure sharing.
 - Feature adoption dashboard.
@@ -92,6 +95,8 @@ Public/user-facing operational endpoints:
 ```txt
 POST /api/v1/feedback/
 POST /api/v1/errors/client/
+POST /api/v1/waitlist/
+POST /api/v1/invites/validate/
 ```
 
 Founder endpoints:
@@ -100,6 +105,16 @@ Founder endpoints:
 GET   /api/v1/founder/me/
 GET   /api/v1/founder/dashboard/?range=7d|30d|90d|all
 GET   /api/v1/founder/analytics/?range=7d|30d|90d|all
+GET   /api/v1/founder/private-beta/
+GET   /api/v1/founder/waitlist/
+GET   /api/v1/founder/waitlist/:entry_id/
+PATCH /api/v1/founder/waitlist/:entry_id/
+POST  /api/v1/founder/waitlist/:entry_id/create-invite/
+GET   /api/v1/founder/invites/
+POST  /api/v1/founder/invites/
+GET   /api/v1/founder/invites/:invite_id/
+PATCH /api/v1/founder/invites/:invite_id/
+POST  /api/v1/founder/invites/:invite_id/disable/
 GET   /api/v1/founder/activation-funnel/
 GET   /api/v1/founder/feature-adoption/
 GET   /api/v1/founder/feature-completion/
@@ -135,6 +150,8 @@ Founder Console uses:
 - `ProductEvent` for privacy-minimized product analytics events.
 - `FeedbackItem` for user feedback and founder triage.
 - `AppErrorLog` for client/backend failure intake.
+- `WaitlistEntry` for private beta requests.
+- `InviteCode` and `InviteCodeUse` for controlled signup access.
 - `FeatureCompletionItem` for editable feature maturity tracking.
 - `LaunchChecklistItem` for launch readiness tracking.
 - `BetaUserProfile` for founder-only beta metadata.

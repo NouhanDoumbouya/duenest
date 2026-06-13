@@ -15,10 +15,13 @@ from .models import (
     FeatureCompletionItem,
     FeedbackItem,
     FounderAuditLog,
+    InviteCode,
+    InviteCodeUse,
     LaunchChecklistItem,
     ProductEvent,
+    WaitlistEntry,
 )
-from .services import sanitize_metadata
+from .services import create_invite_code, normalize_invite_code, sanitize_metadata
 
 
 User = get_user_model()
@@ -28,6 +31,240 @@ class FounderMeSerializer(serializers.Serializer):
     is_founder = serializers.BooleanField()
     user_id = serializers.IntegerField()
     email = serializers.EmailField()
+
+
+class PrivateBetaStatusSerializer(serializers.Serializer):
+    private_beta_enabled = serializers.BooleanField()
+
+
+class WaitlistCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WaitlistEntry
+        fields = [
+            "id",
+            "full_name",
+            "email",
+            "persona",
+            "country",
+            "message",
+            "referral_source",
+            "status",
+            "created_at",
+        ]
+        read_only_fields = ["id", "status", "created_at"]
+
+    def validate_full_name(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("Full name is required.")
+        return value
+
+    def validate_email(self, value):
+        value = value.strip().lower()
+        active_statuses = [
+            WaitlistEntry.Status.PENDING,
+            WaitlistEntry.Status.INVITED,
+        ]
+        if WaitlistEntry.objects.filter(
+            email__iexact=value,
+            status__in=active_statuses,
+        ).exists():
+            raise serializers.ValidationError(
+                "This email is already on the private beta waitlist."
+            )
+        return value
+
+    def validate_country(self, value):
+        return value.strip()
+
+    def validate_message(self, value):
+        return value.strip()
+
+    def validate_referral_source(self, value):
+        return value.strip()
+
+
+class InviteValidateSerializer(serializers.Serializer):
+    code = serializers.CharField(write_only=True, trim_whitespace=True, max_length=80)
+
+    def validate_code(self, value):
+        return normalize_invite_code(value)
+
+
+class InviteCodeUseSerializer(serializers.ModelSerializer):
+    user_email = serializers.EmailField(source="user.email", read_only=True)
+
+    class Meta:
+        model = InviteCodeUse
+        fields = [
+            "id",
+            "user",
+            "user_email",
+            "waitlist_entry",
+            "email",
+            "used_at",
+        ]
+        read_only_fields = fields
+
+
+class FounderInviteCodeSerializer(serializers.ModelSerializer):
+    created_by_email = serializers.EmailField(source="created_by.email", read_only=True)
+    remaining_uses = serializers.IntegerField(read_only=True)
+    is_expired = serializers.BooleanField(read_only=True)
+    status_label = serializers.CharField(read_only=True)
+    custom_code = serializers.CharField(
+        write_only=True,
+        required=False,
+        allow_blank=True,
+        trim_whitespace=True,
+        max_length=40,
+    )
+    waitlist_entry_id = serializers.IntegerField(
+        write_only=True,
+        required=False,
+        min_value=1,
+    )
+    uses = InviteCodeUseSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = InviteCode
+        fields = [
+            "id",
+            "code",
+            "label",
+            "created_by",
+            "created_by_email",
+            "max_uses",
+            "used_count",
+            "remaining_uses",
+            "expires_at",
+            "is_active",
+            "is_expired",
+            "status_label",
+            "persona_target",
+            "notes",
+            "custom_code",
+            "waitlist_entry_id",
+            "uses",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "code",
+            "created_by",
+            "created_by_email",
+            "used_count",
+            "remaining_uses",
+            "is_expired",
+            "status_label",
+            "uses",
+            "created_at",
+            "updated_at",
+        ]
+
+    def validate_max_uses(self, value):
+        if value < 1:
+            raise serializers.ValidationError("Invite codes need at least one use.")
+        return value
+
+    def validate_custom_code(self, value):
+        if not value:
+            return ""
+        code = normalize_invite_code(value)
+        if len(code) < 6:
+            raise serializers.ValidationError("Use at least 6 characters.")
+        if InviteCode.objects.filter(code=code).exists():
+            raise serializers.ValidationError("This invite code already exists.")
+        return code
+
+    def create(self, validated_data):
+        custom_code = validated_data.pop("custom_code", "")
+        waitlist_entry_id = validated_data.pop("waitlist_entry_id", None)
+        request = self.context.get("request")
+        waitlist_entry = None
+        if waitlist_entry_id is not None:
+            waitlist_entry = WaitlistEntry.objects.filter(pk=waitlist_entry_id).first()
+            if waitlist_entry is None:
+                raise serializers.ValidationError(
+                    {"waitlist_entry_id": "Waitlist entry not found."}
+                )
+        return create_invite_code(
+            created_by=getattr(request, "user", None),
+            request=request,
+            waitlist_entry=waitlist_entry,
+            code=custom_code,
+            **validated_data,
+        )
+
+    def update(self, instance, validated_data):
+        validated_data.pop("custom_code", None)
+        validated_data.pop("waitlist_entry_id", None)
+        return super().update(instance, validated_data)
+
+
+class FounderWaitlistEntrySerializer(serializers.ModelSerializer):
+    invite_code_value = serializers.CharField(source="invite_code.code", read_only=True)
+    invited_by_email = serializers.EmailField(source="invited_by.email", read_only=True)
+    accepted_user_email = serializers.EmailField(
+        source="accepted_user.email",
+        read_only=True,
+    )
+
+    class Meta:
+        model = WaitlistEntry
+        fields = [
+            "id",
+            "full_name",
+            "email",
+            "persona",
+            "country",
+            "message",
+            "referral_source",
+            "status",
+            "founder_notes",
+            "invite_code",
+            "invite_code_value",
+            "invited_by",
+            "invited_by_email",
+            "accepted_user",
+            "accepted_user_email",
+            "invited_at",
+            "accepted_at",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "email",
+            "invite_code",
+            "invite_code_value",
+            "invited_by",
+            "invited_by_email",
+            "accepted_user",
+            "accepted_user_email",
+            "invited_at",
+            "accepted_at",
+            "created_at",
+            "updated_at",
+        ]
+
+    def update(self, instance, validated_data):
+        old_status = instance.status
+        item = super().update(instance, validated_data)
+        updates = []
+        if item.status == WaitlistEntry.Status.INVITED and item.invited_at is None:
+            item.invited_at = timezone.now()
+            updates.append("invited_at")
+        if item.status == WaitlistEntry.Status.ACCEPTED and item.accepted_at is None:
+            item.accepted_at = timezone.now()
+            updates.append("accepted_at")
+        if old_status == WaitlistEntry.Status.ACCEPTED and item.status != old_status:
+            item.accepted_at = None
+            updates.append("accepted_at")
+        if updates:
+            item.save(update_fields=[*updates, "updated_at"])
+        return item
 
 
 class FeedbackCreateSerializer(serializers.ModelSerializer):

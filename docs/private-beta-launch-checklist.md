@@ -20,6 +20,7 @@ not a public production launch checklist.
 - [x] Trust Center, public security page, privacy draft, and terms draft.
 - [x] Account data summary, metadata export request, deletion request, and cancellation.
 - [x] Founder Console V1 for aggregate product health, analytics, activation, adoption, feature completion, feedback, templates, beta users, launch readiness, country activity, errors, security, audit logs, and privacy-safe user support metadata.
+- [x] Public waitlist, invite links, invite-code validation, and founder waitlist/invite management for controlled private beta access.
 
 ## Security Gates
 
@@ -30,6 +31,8 @@ not a public production launch checklist.
 - [x] Demo data is fake, labeled, owner-scoped, and removable.
 - [x] Account deletion is request-based and cancellable while pending.
 - [x] Founder endpoints are staff/superuser-only and avoid document contents, raw OCR text, access codes, share tokens, internal file paths, private notes, exact IP addresses, and physical locations.
+- [x] Waitlist list, waitlist emails, invite notes, and invite management APIs are founder-only.
+- [x] `PRIVATE_BETA_ENABLED=true` requires valid invite codes for new password and first-time Google signups.
 - [ ] Review production token storage strategy before broader launch.
 - [ ] Add production object storage with private buckets and signed/proxied file access.
 - [ ] Add malware/content scanning strategy before accepting broad public uploads.
@@ -42,6 +45,7 @@ not a public production launch checklist.
 - [x] Full backend test suite passes for the current branch.
 - [ ] Run `python manage.py migrate` after pulling changes locally or deploying.
 - [x] Backend tests cover Founder Console access control, dashboard privacy, analytics privacy, activation, adoption, feature completion, launch readiness, beta users, country activity, feedback, template mutation, error logs, security overview, support metadata, audit logging, and product-event sanitization.
+- [x] Backend tests cover waitlist submission, duplicate active waitlist protection, founder waitlist/invite access control, invite validation, invite disable, and private-beta signup enforcement.
 
 ## Frontend Checks
 
@@ -50,6 +54,7 @@ not a public production launch checklist.
 - [x] `/dashboard/trust` Trust Center.
 - [x] `/dashboard/settings/data` data controls.
 - [x] `/demo`, `/security`, `/privacy`, and `/terms` public pages.
+- [x] `/waitlist` public beta request page and `/invite/:code` invite landing page.
 - [x] Mobile dashboard navigation exposes dashboard routes through a hamburger drawer.
 - [x] Frontend lint passes for the current branch.
 - [x] Frontend production build passes for the current branch.
@@ -61,6 +66,7 @@ not a public production launch checklist.
 - Camera scan entry uploads image files only; automated cropping, multi-page scanning, and production OCR are not implemented.
 - Account deletion requests are tracked, but automated deletion execution is not implemented.
 - Notification sending for reminder rules is not implemented.
+- Waitlist confirmation and invite email hooks exist, but no transactional email provider is configured yet.
 - Public legal pages are beta drafts and need review.
 - Local development token storage remains a known production-hardening item.
 - Founder Console V1 does not implement billing analytics, advanced segmentation, consent-based sensitive support access, AI analytics, churn prediction, or a full incident response center.

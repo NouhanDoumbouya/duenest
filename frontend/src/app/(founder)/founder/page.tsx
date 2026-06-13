@@ -8,9 +8,11 @@ import {
   FileText,
   FolderKanban,
   Link2,
+  MailCheck,
   MessageSquare,
   Rocket,
   ShieldCheck,
+  TicketCheck,
   UploadCloud,
   Users,
 } from "lucide-react";
@@ -170,6 +172,20 @@ export default function FounderOverviewPage() {
           hint={`${nf.format(dashboard.active_beta_users)} accepted or active`}
         />
         <FounderStatCard
+          icon={MailCheck}
+          label="Waitlist"
+          value={dashboard.total_waitlist_entries}
+          hint={`${nf.format(dashboard.pending_waitlist_entries)} pending review`}
+          tone={dashboard.pending_waitlist_entries > 0 ? "warn" : "good"}
+        />
+        <FounderStatCard
+          icon={TicketCheck}
+          label="Invite codes"
+          value={dashboard.active_invite_codes}
+          hint={`${dashboard.invite_conversion_percent}% invite conversion`}
+          tone="good"
+        />
+        <FounderStatCard
           icon={Rocket}
           label="Launch readiness"
           value={`${dashboard.launch_readiness_percent}%`}
@@ -210,6 +226,8 @@ export default function FounderOverviewPage() {
         <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {[
             ["/founder/analytics", "Open analytics"],
+            ["/founder/waitlist", "Review waitlist"],
+            ["/founder/invites", "Manage invites"],
             ["/founder/features", "Update feature completion"],
             ["/founder/feedback", "Review feedback"],
             ["/founder/launch", "Check launch readiness"],

@@ -33,11 +33,13 @@ export interface RegisterRequest {
   username: string;
   email: string;
   password: string;
+  invite_code?: string;
 }
 
 /** Payload sent to POST /api/v1/auth/google/ (Google ID token from the client). */
 export interface GoogleAuthRequest {
   id_token: string;
+  invite_code?: string;
 }
 
 /** POST /api/v1/auth/google/ returns tokens plus the user. */

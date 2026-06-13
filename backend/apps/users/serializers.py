@@ -1,5 +1,7 @@
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
+from django.db import transaction
 from rest_framework import serializers
 
 from .models import AccountDeletionRequest, UserOnboardingState
@@ -17,17 +19,68 @@ class UserSerializer(serializers.ModelSerializer):
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, validators=[validate_password])
+    invite_code = serializers.CharField(
+        write_only=True,
+        required=False,
+        allow_blank=True,
+        trim_whitespace=True,
+        max_length=80,
+    )
 
     class Meta:
         model = User
-        fields = ["id", "username", "email", "first_name", "last_name", "password"]
+        fields = [
+            "id",
+            "username",
+            "email",
+            "first_name",
+            "last_name",
+            "password",
+            "invite_code",
+        ]
         read_only_fields = ["id"]
 
+    def validate(self, attrs):
+        invite_code = attrs.get("invite_code", "")
+        if settings.PRIVATE_BETA_ENABLED:
+            if not invite_code:
+                raise serializers.ValidationError(
+                    {"invite_code": "Private beta registration requires an invite code."}
+                )
+            try:
+                from apps.founder.services import InviteCodeError, get_usable_invite_code
+
+                get_usable_invite_code(invite_code)
+            except InviteCodeError as exc:
+                raise serializers.ValidationError({"invite_code": str(exc)}) from exc
+        return attrs
+
     def create(self, validated_data):
+        invite_code = validated_data.pop("invite_code", "")
         password = validated_data.pop("password")
-        user = User(**validated_data)
-        user.set_password(password)
-        user.save()
+        with transaction.atomic():
+            user = User(**validated_data)
+            user.set_password(password)
+            user.save()
+            if settings.PRIVATE_BETA_ENABLED:
+                try:
+                    from apps.founder.services import (
+                        InviteCodeError,
+                        consume_invite_code_for_signup,
+                    )
+
+                    request = self.context.get("request")
+                    consume_invite_code_for_signup(
+                        code=invite_code,
+                        user=user,
+                        email=user.email,
+                        request=request,
+                        metadata={"method": "password"},
+                    )
+                except InviteCodeError as exc:
+                    raise serializers.ValidationError(
+                        {"invite_code": str(exc)}
+                    ) from exc
         return user
 
 
@@ -41,6 +94,13 @@ class GoogleAuthSerializer(serializers.Serializer):
     """
 
     id_token = serializers.CharField(write_only=True, trim_whitespace=True)
+    invite_code = serializers.CharField(
+        write_only=True,
+        required=False,
+        allow_blank=True,
+        trim_whitespace=True,
+        max_length=80,
+    )
 
 
 class UserOnboardingStateSerializer(serializers.ModelSerializer):

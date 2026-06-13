@@ -78,8 +78,8 @@ export default function SecurityPage() {
           <Link href="/privacy" className={cn(buttonVariants({ variant: "outline" }))}>
             Privacy draft
           </Link>
-          <Link href="/register" className={cn(buttonVariants())}>
-            Create account
+          <Link href="/waitlist" className={cn(buttonVariants())}>
+            Join waitlist
           </Link>
         </div>
       </main>

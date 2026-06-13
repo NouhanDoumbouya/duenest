@@ -17,18 +17,22 @@ import type {
   FeedbackStatus,
   FounderAnalytics,
   FounderDashboard,
+  FounderInviteCode,
   FounderRange,
   FounderMe,
   FounderPriority,
   FounderAuditLog,
   FounderUserListItem,
   FounderUserSummary,
+  FounderWaitlistEntry,
   LaunchChecklistItem,
   LaunchReadinessResponse,
   Paginated,
+  PrivateBetaMetrics,
   SecurityOverview,
   SubmitFeedbackRequest,
 } from "@/types/founder";
+import type { WaitlistPersona, WaitlistStatus } from "@/types/private-beta";
 
 function query(params?: Record<string, string | number | boolean | undefined>) {
   if (!params) return "";
@@ -56,6 +60,107 @@ export function getFounderAnalytics(params?: {
   range?: FounderRange;
 }): Promise<FounderAnalytics> {
   return apiFetch<FounderAnalytics>(`/founder/analytics/${query(params)}`, {
+    auth: true,
+  });
+}
+
+export function getPrivateBetaMetrics(): Promise<PrivateBetaMetrics> {
+  return apiFetch<PrivateBetaMetrics>("/founder/private-beta/", {
+    auth: true,
+  });
+}
+
+export function getFounderWaitlist(params?: {
+  search?: string;
+  status?: WaitlistStatus | "";
+  persona?: WaitlistPersona | "";
+  country?: string;
+}): Promise<Paginated<FounderWaitlistEntry>> {
+  return apiFetch<Paginated<FounderWaitlistEntry>>(
+    `/founder/waitlist/${query(params)}`,
+    { auth: true },
+  );
+}
+
+export function updateFounderWaitlistEntry(
+  id: number,
+  payload: Partial<Pick<FounderWaitlistEntry, "status" | "founder_notes" | "persona">>,
+): Promise<FounderWaitlistEntry> {
+  return apiFetch<FounderWaitlistEntry>(`/founder/waitlist/${id}/`, {
+    method: "PATCH",
+    body: payload,
+    auth: true,
+  });
+}
+
+export function createInviteForWaitlistEntry(
+  id: number,
+  payload: {
+    label?: string;
+    custom_code?: string;
+    max_uses?: number;
+    expires_at?: string | null;
+    notes?: string;
+    persona_target?: WaitlistPersona | "";
+  } = {},
+): Promise<FounderInviteCode> {
+  return apiFetch<FounderInviteCode>(
+    `/founder/waitlist/${id}/create-invite/`,
+    {
+      method: "POST",
+      body: payload,
+      auth: true,
+    },
+  );
+}
+
+export function getFounderInvites(params?: {
+  search?: string;
+  is_active?: boolean | "";
+  persona_target?: WaitlistPersona | "";
+}): Promise<Paginated<FounderInviteCode>> {
+  return apiFetch<Paginated<FounderInviteCode>>(
+    `/founder/invites/${query(params)}`,
+    { auth: true },
+  );
+}
+
+export function createFounderInvite(payload: {
+  label: string;
+  custom_code?: string;
+  max_uses: number;
+  expires_at?: string | null;
+  is_active?: boolean;
+  persona_target?: WaitlistPersona | "";
+  notes?: string;
+  waitlist_entry_id?: number;
+}): Promise<FounderInviteCode> {
+  return apiFetch<FounderInviteCode>("/founder/invites/", {
+    method: "POST",
+    body: payload,
+    auth: true,
+  });
+}
+
+export function updateFounderInvite(
+  id: number,
+  payload: Partial<
+    Pick<
+      FounderInviteCode,
+      "label" | "max_uses" | "expires_at" | "is_active" | "persona_target" | "notes"
+    >
+  >,
+): Promise<FounderInviteCode> {
+  return apiFetch<FounderInviteCode>(`/founder/invites/${id}/`, {
+    method: "PATCH",
+    body: payload,
+    auth: true,
+  });
+}
+
+export function disableFounderInvite(id: number): Promise<FounderInviteCode> {
+  return apiFetch<FounderInviteCode>(`/founder/invites/${id}/disable/`, {
+    method: "POST",
     auth: true,
   });
 }

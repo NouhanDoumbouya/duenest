@@ -22,8 +22,11 @@ from .models import (
     FeatureCompletionItem,
     FeedbackItem,
     FounderAuditLog,
+    InviteCode,
+    InviteCodeUse,
     LaunchChecklistItem,
     ProductEvent,
+    WaitlistEntry,
 )
 
 
@@ -65,12 +68,183 @@ class FounderConsoleAPITests(APITestCase):
             "/api/v1/founder/beta-users/",
             "/api/v1/founder/launch-readiness/",
             "/api/v1/founder/country-activity/",
+            "/api/v1/founder/private-beta/",
+            "/api/v1/founder/waitlist/",
+            "/api/v1/founder/invites/",
         ]
 
         for url in urls:
             with self.subTest(url=url):
                 response = self.client.get(url)
                 self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_public_waitlist_submission_and_duplicate_protection(self):
+        response = self.client.post(
+            "/api/v1/waitlist/",
+            {
+                "full_name": "Amina Student",
+                "email": "Amina@example.com",
+                "persona": "international_student",
+                "country": "Malaysia",
+                "message": "I need help tracking visa documents.",
+                "referral_source": "campus",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        entry = WaitlistEntry.objects.get()
+        self.assertEqual(entry.email, "amina@example.com")
+        self.assertEqual(entry.status, WaitlistEntry.Status.PENDING)
+        self.assertNotIn("founder_notes", response.data)
+        self.assertTrue(
+            ProductEvent.objects.filter(
+                event_type=ProductEvent.EventType.WAITLIST_JOINED
+            ).exists()
+        )
+
+        duplicate = self.client.post(
+            "/api/v1/waitlist/",
+            {
+                "full_name": "Amina Student",
+                "email": "amina@example.com",
+                "persona": "international_student",
+            },
+            format="json",
+        )
+
+        self.assertEqual(duplicate.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_invite_validate_endpoint_is_public_but_limited_to_code_health(self):
+        invite = InviteCode.objects.create(
+            code="DN-PUBLIC-123",
+            label="Public validation test",
+            max_uses=3,
+        )
+
+        response = self.client.post(
+            "/api/v1/invites/validate/",
+            {"code": "dn-public-123"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["valid"])
+        self.assertEqual(response.data["remaining_uses"], 3)
+        self.assertNotIn("notes", response.data)
+        self.assertTrue(
+            ProductEvent.objects.filter(
+                event_type=ProductEvent.EventType.INVITE_VALIDATED,
+                object_id=str(invite.id),
+            ).exists()
+        )
+
+    def test_public_invite_validation_rejects_disabled_code(self):
+        InviteCode.objects.create(
+            code="DN-DISABLED",
+            label="Disabled",
+            is_active=False,
+        )
+
+        response = self.client.post(
+            "/api/v1/invites/validate/",
+            {"code": "DN-DISABLED"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(response.data["valid"])
+
+    def test_founder_can_review_waitlist_and_create_invite(self):
+        entry = WaitlistEntry.objects.create(
+            full_name="Omar Freelancer",
+            email="omar@example.com",
+            persona=WaitlistEntry.Persona.FREELANCER,
+            country="UAE",
+            message="Need to track contracts and visas.",
+        )
+
+        self.authenticate(self.founder)
+        list_response = self.client.get("/api/v1/founder/waitlist/?search=omar")
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(list_response.data["count"], 1)
+        self.assertIn("omar@example.com", str(list_response.data))
+
+        update_response = self.client.patch(
+            f"/api/v1/founder/waitlist/{entry.id}/",
+            {"founder_notes": "Strong fit.", "status": "pending"},
+            format="json",
+        )
+        self.assertEqual(update_response.status_code, status.HTTP_200_OK)
+
+        invite_response = self.client.post(
+            f"/api/v1/founder/waitlist/{entry.id}/create-invite/",
+            {"max_uses": 1, "notes": "Send manually."},
+            format="json",
+        )
+
+        self.assertEqual(invite_response.status_code, status.HTTP_201_CREATED)
+        entry.refresh_from_db()
+        self.assertEqual(entry.status, WaitlistEntry.Status.INVITED)
+        self.assertIsNotNone(entry.invite_code)
+        self.assertTrue(
+            FounderAuditLog.objects.filter(action="founder_created_invite").exists()
+        )
+
+    def test_founder_can_create_update_and_disable_invite_code(self):
+        self.authenticate(self.founder)
+        created = self.client.post(
+            "/api/v1/founder/invites/",
+            {
+                "label": "Scholarship cohort",
+                "custom_code": "dn-scholar-1",
+                "max_uses": 2,
+                "persona_target": "scholarship_applicant",
+                "notes": "Manual outreach.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(created.data["code"], "DN-SCHOLAR-1")
+        invite = InviteCode.objects.get(code="DN-SCHOLAR-1")
+
+        updated = self.client.patch(
+            f"/api/v1/founder/invites/{invite.id}/",
+            {"max_uses": 3, "is_active": True},
+            format="json",
+        )
+        self.assertEqual(updated.status_code, status.HTTP_200_OK)
+        self.assertEqual(updated.data["max_uses"], 3)
+
+        disabled = self.client.post(
+            f"/api/v1/founder/invites/{invite.id}/disable/",
+            format="json",
+        )
+        self.assertEqual(disabled.status_code, status.HTTP_200_OK)
+        self.assertFalse(disabled.data["is_active"])
+
+    def test_private_beta_metrics_are_aggregate(self):
+        WaitlistEntry.objects.create(
+            full_name="Private Person",
+            email="private@example.com",
+            persona=WaitlistEntry.Persona.VISA_HOLDER,
+            message="Sensitive visa details should not be in metrics.",
+        )
+        invite = InviteCode.objects.create(code="DN-METRICS", label="Metrics")
+        InviteCodeUse.objects.create(
+            invite_code=invite,
+            user=self.user,
+            email="private@example.com",
+        )
+
+        self.authenticate(self.founder)
+        response = self.client.get("/api/v1/founder/private-beta/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["total_waitlist_entries"], 1)
+        self.assertEqual(response.data["total_invite_uses"], 1)
+        self.assertNotIn("Sensitive visa details", str(response.data))
 
     def test_founder_can_access_founder_dashboard(self):
         Document.objects.create(owner=self.user, title="Passport")

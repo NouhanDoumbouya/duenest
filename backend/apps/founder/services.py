@@ -5,11 +5,14 @@ vault content. This module keeps those aggregate/query rules in one place.
 """
 
 import logging
+import secrets
+import string
 from datetime import timedelta
 from typing import Any
 
 from django.contrib.auth import get_user_model
-from django.db.models import Count, Exists, Max, Min, OuterRef, Q
+from django.db import transaction
+from django.db.models import Count, Exists, F, Max, Min, OuterRef, Q
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 
@@ -42,8 +45,11 @@ from .models import (
     FeatureCompletionItem,
     FeedbackItem,
     FounderAuditLog,
+    InviteCode,
+    InviteCodeUse,
     LaunchChecklistItem,
     ProductEvent,
+    WaitlistEntry,
 )
 
 
@@ -108,6 +114,10 @@ LAUNCH_CHECKLIST_DEFAULTS = [
     ("deployment-ready", "Deployment ready", "Production deploy settings are ready.", "critical"),
     ("founder-console-ready", "Founder console ready", "Founder Console V1 is private, useful, and polished.", "critical"),
 ]
+
+
+class InviteCodeError(ValueError):
+    """Raised when an invite code cannot be used for private-beta signup."""
 
 
 def _is_sensitive_key(key: str) -> bool:
@@ -209,6 +219,241 @@ def log_founder_action(
         )
     except Exception:  # noqa: BLE001 - audit should not break founder workflows
         logger.warning("Failed to record founder audit log", exc_info=True)
+
+
+def normalize_invite_code(value: str) -> str:
+    """Normalize user-entered invite codes without preserving whitespace."""
+    raw = (value or "").strip().upper()
+    normalized = "".join(char for char in raw if char.isalnum() or char == "-")
+    if not normalized:
+        raise InviteCodeError("Invite code is required.")
+    return normalized[:40]
+
+
+def generate_invite_code() -> str:
+    alphabet = string.ascii_uppercase.replace("O", "").replace("I", "") + "23456789"
+    for _ in range(20):
+        token = "".join(secrets.choice(alphabet) for _ in range(10))
+        code = f"DN-{token[:5]}-{token[5:]}"
+        if not InviteCode.objects.filter(code=code).exists():
+            return code
+    raise InviteCodeError("Unable to generate a unique invite code.")
+
+
+def _invite_error_message(invite: InviteCode | None) -> str:
+    if invite is None:
+        return "Invite code is invalid or no longer available."
+    if not invite.is_active:
+        return "This invite code has been disabled."
+    if invite.is_expired:
+        return "This invite code has expired."
+    if invite.remaining_uses <= 0:
+        return "This invite code has already been fully used."
+    return ""
+
+
+def get_usable_invite_code(code: str) -> InviteCode:
+    normalized = normalize_invite_code(code)
+    invite = InviteCode.objects.filter(code=normalized).first()
+    message = _invite_error_message(invite)
+    if message:
+        raise InviteCodeError(message)
+    return invite
+
+
+def send_waitlist_confirmation_email(entry: WaitlistEntry) -> None:
+    """
+    Placeholder email hook for future transactional email integration.
+
+    DueNest does not have an email provider wired yet, so this intentionally
+    logs only safe operational context and never blocks waitlist submission.
+    """
+    logger.info("Waitlist confirmation email deferred for entry %s", entry.id)
+
+
+def send_invite_email(invite: InviteCode, entry: WaitlistEntry | None = None) -> None:
+    """Placeholder invite email hook until a provider is configured."""
+    logger.info(
+        "Invite email deferred for invite %s waitlist_entry=%s",
+        invite.id,
+        entry.id if entry else None,
+    )
+
+
+def create_invite_code(
+    *,
+    label: str,
+    created_by=None,
+    request=None,
+    waitlist_entry: WaitlistEntry | None = None,
+    code: str = "",
+    max_uses: int = 1,
+    expires_at=None,
+    is_active: bool = True,
+    persona_target: str = "",
+    notes: str = "",
+) -> InviteCode:
+    if not code:
+        code = generate_invite_code()
+    else:
+        code = normalize_invite_code(code)
+    if not label and waitlist_entry is not None:
+        label = f"Invite for {waitlist_entry.full_name}"
+    if not persona_target and waitlist_entry is not None:
+        persona_target = waitlist_entry.persona
+
+    invite = InviteCode.objects.create(
+        code=code,
+        label=label.strip() or "Private beta invite",
+        created_by=created_by if getattr(created_by, "is_authenticated", False) else None,
+        max_uses=max_uses,
+        expires_at=expires_at,
+        is_active=is_active,
+        persona_target=persona_target,
+        notes=notes,
+    )
+
+    if waitlist_entry is not None:
+        waitlist_entry.status = WaitlistEntry.Status.INVITED
+        waitlist_entry.invite_code = invite
+        waitlist_entry.invited_by = invite.created_by
+        waitlist_entry.invited_at = timezone.now()
+        waitlist_entry.save(
+            update_fields=[
+                "status",
+                "invite_code",
+                "invited_by",
+                "invited_at",
+                "updated_at",
+            ]
+        )
+        send_invite_email(invite, waitlist_entry)
+
+    track_product_event(
+        event_type=ProductEvent.EventType.INVITE_CREATED,
+        user=invite.created_by,
+        request=request,
+        object_type="invite_code",
+        object_id=invite.id,
+        metadata={
+            "persona_target": invite.persona_target,
+            "has_waitlist_entry": waitlist_entry is not None,
+        },
+    )
+    if request is not None:
+        log_founder_action(
+            request=request,
+            action="founder_created_invite",
+            object_type="invite_code",
+            object_id=invite.id,
+            metadata={
+                "persona_target": invite.persona_target,
+                "waitlist_entry_id": waitlist_entry.id if waitlist_entry else "",
+            },
+        )
+    return invite
+
+
+def _beta_persona_from_waitlist(persona: str) -> str:
+    if persona == WaitlistEntry.Persona.FAMILY_DOCUMENTS:
+        return BetaUserProfile.Persona.FAMILY_USER
+    values = {choice.value for choice in BetaUserProfile.Persona}
+    return persona if persona in values else BetaUserProfile.Persona.OTHER
+
+
+def consume_invite_code_for_signup(
+    *,
+    code: str,
+    user,
+    email: str,
+    request=None,
+    metadata: dict | None = None,
+) -> InviteCodeUse:
+    normalized = normalize_invite_code(code)
+    email_value = (email or "").strip().lower()
+    with transaction.atomic():
+        invite = InviteCode.objects.select_for_update().filter(code=normalized).first()
+        message = _invite_error_message(invite)
+        if message:
+            raise InviteCodeError(message)
+
+        waitlist_entry = (
+            WaitlistEntry.objects.select_for_update()
+            .filter(
+                email__iexact=email_value,
+                status__in=[
+                    WaitlistEntry.Status.PENDING,
+                    WaitlistEntry.Status.INVITED,
+                ],
+            )
+            .order_by("-created_at")
+            .first()
+        )
+
+        use = InviteCodeUse.objects.create(
+            invite_code=invite,
+            user=user,
+            waitlist_entry=waitlist_entry,
+            email=email_value,
+            metadata=sanitize_metadata(metadata or {}),
+        )
+        InviteCode.objects.filter(pk=invite.pk).update(
+            used_count=F("used_count") + 1,
+            updated_at=timezone.now(),
+        )
+
+        if waitlist_entry is not None:
+            waitlist_entry.status = WaitlistEntry.Status.ACCEPTED
+            waitlist_entry.accepted_user = user
+            waitlist_entry.accepted_at = timezone.now()
+            if waitlist_entry.invite_code_id is None:
+                waitlist_entry.invite_code = invite
+            waitlist_entry.save(
+                update_fields=[
+                    "status",
+                    "accepted_user",
+                    "accepted_at",
+                    "invite_code",
+                    "updated_at",
+                ]
+            )
+
+        profile, _ = BetaUserProfile.objects.get_or_create(user=user)
+        profile.invite_status = BetaUserProfile.InviteStatus.ACCEPTED
+        if waitlist_entry is not None:
+            profile.persona = _beta_persona_from_waitlist(waitlist_entry.persona)
+            profile.invited_at = waitlist_entry.invited_at
+        elif invite.persona_target:
+            profile.persona = _beta_persona_from_waitlist(invite.persona_target)
+        if profile.activated_at is None:
+            profile.activated_at = timezone.now()
+        profile.save(
+            update_fields=[
+                "invite_status",
+                "persona",
+                "invited_at",
+                "activated_at",
+                "updated_at",
+            ]
+        )
+
+    track_product_event(
+        event_type=ProductEvent.EventType.INVITE_USED,
+        user=user,
+        request=request,
+        object_type="invite_code",
+        object_id=invite.id,
+        metadata={"persona_target": invite.persona_target},
+    )
+    track_product_event(
+        event_type=ProductEvent.EventType.PRIVATE_BETA_SIGNUP_COMPLETED,
+        user=user,
+        request=request,
+        object_type="user",
+        object_id=user.id,
+        metadata=metadata or {},
+    )
+    return use
 
 
 def _since(days: int):
@@ -388,6 +633,69 @@ def launch_readiness_summary() -> dict:
     }
 
 
+def build_private_beta_metrics() -> dict:
+    waitlist = WaitlistEntry.objects.all()
+    invites = InviteCode.objects.all()
+    now = timezone.now()
+    invited_or_accepted = waitlist.filter(
+        status__in=[WaitlistEntry.Status.INVITED, WaitlistEntry.Status.ACCEPTED]
+    ).count()
+    accepted = waitlist.filter(status=WaitlistEntry.Status.ACCEPTED).count()
+    conversion = (
+        0 if invited_or_accepted == 0 else round((accepted / invited_or_accepted) * 100)
+    )
+    persona_rows = (
+        waitlist.values("persona")
+        .annotate(count=Count("id"))
+        .order_by("persona")
+    )
+    return {
+        "total_waitlist_entries": waitlist.count(),
+        "pending_waitlist_entries": waitlist.filter(
+            status=WaitlistEntry.Status.PENDING
+        ).count(),
+        "invited_waitlist_entries": waitlist.filter(
+            status=WaitlistEntry.Status.INVITED
+        ).count(),
+        "accepted_waitlist_entries": accepted,
+        "rejected_waitlist_entries": waitlist.filter(
+            status=WaitlistEntry.Status.REJECTED
+        ).count(),
+        "waitlist_by_persona": [
+            {
+                "key": row["persona"],
+                "label": WaitlistEntry.Persona(row["persona"]).label,
+                "count": row["count"],
+            }
+            for row in persona_rows
+        ],
+        "active_invite_codes": invites.filter(is_active=True)
+        .filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now))
+        .filter(used_count__lt=F("max_uses"))
+        .count(),
+        "expired_invite_codes": invites.filter(
+            expires_at__isnull=False,
+            expires_at__lte=now,
+        ).count(),
+        "disabled_invite_codes": invites.filter(is_active=False).count(),
+        "used_invite_codes": invites.filter(used_count__gt=0).count(),
+        "total_invite_uses": InviteCodeUse.objects.count(),
+        "invite_conversion_percent": conversion,
+        "recent_waitlist_entries": [
+            {
+                "id": entry.id,
+                "full_name": entry.full_name,
+                "email": entry.email,
+                "persona": entry.persona,
+                "status": entry.status,
+                "country": entry.country,
+                "created_at": entry.created_at,
+            }
+            for entry in waitlist.order_by("-created_at")[:8]
+        ],
+    }
+
+
 def _recent_activity_summary(days: int = 30, limit: int = 10) -> list[dict]:
     rows = (
         ProductEvent.objects.filter(created_at__gte=_since(days))
@@ -433,6 +741,7 @@ def build_founder_dashboard(range_key: str | None = None) -> dict:
     )
     launch = launch_readiness_summary()
     completion = feature_completion_summary()
+    private_beta = build_private_beta_metrics()
 
     return {
         "range_key": selected_range,
@@ -486,6 +795,11 @@ def build_founder_dashboard(range_key: str | None = None) -> dict:
         ).count(),
         "beta_users": beta["beta_users"],
         "active_beta_users": beta["active_beta_users"],
+        "total_waitlist_entries": private_beta["total_waitlist_entries"],
+        "pending_waitlist_entries": private_beta["pending_waitlist_entries"],
+        "accepted_waitlist_entries": private_beta["accepted_waitlist_entries"],
+        "active_invite_codes": private_beta["active_invite_codes"],
+        "invite_conversion_percent": private_beta["invite_conversion_percent"],
         "launch_readiness_percent": launch["percent"],
         "feature_completion_percent": completion["percent"],
         "recent_activity_summary": _recent_activity_summary(),

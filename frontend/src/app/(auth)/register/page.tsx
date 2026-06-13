@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { TicketCheck } from "lucide-react";
 
 import { AuthShell } from "@/components/auth/auth-shell";
 import { GoogleButton } from "@/components/auth/google-button";
@@ -19,15 +20,33 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { register } from "@/lib/auth";
 import { ApiError } from "@/lib/api";
+import { getPrivateBetaStatus } from "@/lib/private-beta";
 
-export default function RegisterPage() {
+function RegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [inviteCode, setInviteCode] = useState(searchParams.get("invite") ?? "");
+  const [privateBetaEnabled, setPrivateBetaEnabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    getPrivateBetaStatus()
+      .then((result) => {
+        if (active) setPrivateBetaEnabled(result.private_beta_enabled);
+      })
+      .catch(() => {
+        if (active) setPrivateBetaEnabled(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -35,7 +54,12 @@ export default function RegisterPage() {
     setSubmitting(true);
 
     try {
-      await register({ username, email, password });
+      await register({
+        username,
+        email,
+        password,
+        invite_code: inviteCode.trim() || undefined,
+      });
       // The current backend register endpoint does not return tokens, so we
       // send the user to /login with a friendly confirmation message.
       router.push("/login?registered=1");
@@ -55,11 +79,28 @@ export default function RegisterPage() {
         <CardHeader className="items-center text-center">
           <CardTitle className="text-2xl">Create your account</CardTitle>
           <CardDescription className="text-[0.95rem]">
-            Start organizing your documents and deadlines — free to begin.
+            {privateBetaEnabled
+              ? "Use your private beta invite to start organizing your documents and deadlines."
+              : "Start organizing your documents and deadlines — free to begin."}
           </CardDescription>
         </CardHeader>
 
         <CardContent className="flex flex-col gap-5">
+          {privateBetaEnabled && (
+            <div className="flex items-start gap-3 rounded-lg border border-primary/20 bg-primary/5 px-3 py-3 text-sm">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <TicketCheck className="size-4" />
+              </span>
+              <div>
+                <p className="font-medium">Private beta access</p>
+                <p className="mt-1 text-muted-foreground">
+                  DueNest is currently invite-only so early access stays
+                  focused and supportable.
+                </p>
+              </div>
+            </div>
+          )}
+
           <GoogleButton />
 
           <div className="flex items-center gap-3">
@@ -123,6 +164,25 @@ export default function RegisterPage() {
               </p>
             </div>
 
+            {(privateBetaEnabled || inviteCode) && (
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="invite_code">Invite code</Label>
+                <Input
+                  id="invite_code"
+                  name="invite_code"
+                  autoComplete="one-time-code"
+                  required={privateBetaEnabled}
+                  className="h-11 uppercase"
+                  value={inviteCode}
+                  onChange={(e) => setInviteCode(e.target.value)}
+                  placeholder="DN-ABCDE-12345"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Enter the code from your DueNest private beta invite.
+                </p>
+              </div>
+            )}
+
             {error && (
               <p
                 className="rounded-lg bg-destructive/10 px-3 py-2.5 text-sm text-destructive"
@@ -153,5 +213,13 @@ export default function RegisterPage() {
         </CardContent>
       </Card>
     </AuthShell>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense>
+      <RegisterForm />
+    </Suspense>
   );
 }

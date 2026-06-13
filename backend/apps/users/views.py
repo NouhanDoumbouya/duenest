@@ -1,4 +1,6 @@
+from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.utils import timezone
 from rest_framework import generics, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -160,6 +162,7 @@ class GoogleAuthView(APIView):
 
         google_id = claims.get("sub")
         email = claims.get("email")
+        invite_code = serializer.validated_data.get("invite_code", "")
 
         # Reject an incomplete Google payload: without these two claims we
         # cannot safely identify or create a user.
@@ -177,7 +180,23 @@ class GoogleAuthView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        user, created = self._get_or_create_user(claims, google_id, email)
+        try:
+            user, created = self._get_or_create_user(
+                claims,
+                google_id,
+                email,
+                invite_code=invite_code,
+                request=request,
+            )
+        except Exception as exc:
+            from apps.founder.services import InviteCodeError
+
+            if isinstance(exc, InviteCodeError):
+                return Response(
+                    {"invite_code": [str(exc)]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            raise
         if created:
             _track_product_event(
                 request,
@@ -206,7 +225,7 @@ class GoogleAuthView(APIView):
             status=status.HTTP_200_OK,
         )
 
-    def _get_or_create_user(self, claims, google_id, email):
+    def _get_or_create_user(self, claims, google_id, email, *, invite_code="", request=None):
         first_name = claims.get("given_name", "")
         last_name = claims.get("family_name", "")
         avatar_url = claims.get("picture", "")
@@ -227,16 +246,36 @@ class GoogleAuthView(APIView):
 
         # 3) Brand new user -> create one with an unusable password, since
         #    authentication will always happen through Google for this account.
-        user = User(
-            username=_unique_username_from_email(email),
-            email=email,
-            first_name=first_name,
-            last_name=last_name,
-            google_id=google_id,
-            avatar_url=avatar_url,
-        )
-        user.set_unusable_password()
-        user.save()
+        if settings.PRIVATE_BETA_ENABLED and not invite_code:
+            from apps.founder.services import InviteCodeError
+
+            raise InviteCodeError("Private beta registration requires an invite code.")
+
+        with transaction.atomic():
+            if settings.PRIVATE_BETA_ENABLED:
+                from apps.founder.services import get_usable_invite_code
+
+                get_usable_invite_code(invite_code)
+            user = User(
+                username=_unique_username_from_email(email),
+                email=email,
+                first_name=first_name,
+                last_name=last_name,
+                google_id=google_id,
+                avatar_url=avatar_url,
+            )
+            user.set_unusable_password()
+            user.save()
+            if settings.PRIVATE_BETA_ENABLED:
+                from apps.founder.services import consume_invite_code_for_signup
+
+                consume_invite_code_for_signup(
+                    code=invite_code,
+                    user=user,
+                    email=email,
+                    request=request,
+                    metadata={"method": "google"},
+                )
         return user, True
 
 

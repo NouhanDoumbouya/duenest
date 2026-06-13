@@ -43,6 +43,8 @@ src/
 │   ├── (marketing)/page.tsx                  # Landing page (/)
 │   ├── (auth)/login/page.tsx                 # /login
 │   ├── (auth)/register/page.tsx              # /register
+│   ├── waitlist/page.tsx                     # /waitlist
+│   ├── invite/[code]/page.tsx                # /invite/:code
 │   ├── (dashboard)/layout.tsx                # Auth gate + shell + user context
 │   ├── (dashboard)/dashboard/page.tsx        # /dashboard (real document summary)
 │   ├── (dashboard)/dashboard/onboarding/     # setup checklist + demo controls
@@ -189,6 +191,11 @@ src/
 - Login → `POST /api/v1/auth/login/`, then redirect to `/dashboard`.
 - Register → `POST /api/v1/auth/register/`, then redirect to `/login` (the
   backend does not return tokens on register yet).
+- Waitlist → `POST /api/v1/waitlist/` from `/waitlist`.
+- Invite landing → `POST /api/v1/invites/validate/` from `/invite/:code`, then
+  continue to `/register?invite=:code`.
+- Private beta status → `GET /api/v1/private-beta/status/`; when enabled, the
+  register form shows an invite-code field and the backend requires it.
 - Tokens are stored in `localStorage` **for development only**.
 
 ### Known TODOs
