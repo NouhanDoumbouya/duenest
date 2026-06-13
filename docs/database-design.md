@@ -1306,6 +1306,92 @@ branch. Every user-owned model is scoped to its owner and follows the existing
 - **Limitation:** upcoming reminder dates are calculated from rules; no
   notification jobs or stored reminder occurrences are created yet.
 
+### DocumentChecklistTemplate — *Implemented*
+- **Purpose:** reusable, shared checklist blueprint (e.g. passport renewal,
+  scholarship application). System templates are seeded via the
+  `seed_checklist_templates` management command.
+- **Key fields:** `title`, `description`, `document_type`, `use_case`,
+  `checklist_type`, `country`, `is_system_template`, `is_active`, `sort_order`,
+  `slug` (stable key for idempotent re-seeding), timestamps.
+- **Relationships:** has many `DocumentChecklistItemTemplate`.
+- **Security:** shared reference data, not user-owned; read-only via the API.
+
+### DocumentChecklistItemTemplate — *Implemented*
+- **Purpose:** one item in a checklist template.
+- **Key fields:** `template`, `title`, `description`, `is_required`,
+  `sort_order`, `suggested_due_offset_days` (days before the checklist due
+  date), `metadata` (JSON).
+- **Relationships:** `template → DocumentChecklistTemplate`.
+
+### DocumentChecklist — *Implemented*
+- **Purpose:** an owner-owned preparation checklist for a document and/or
+  bundle, optionally created from a template.
+- **Key fields:** `owner`, `document` (nullable), `bundle` (nullable),
+  `template` (nullable), `title`, `description`, `checklist_type`, `status`
+  (`not_started`/`in_progress`/`completed`), `progress_percent`, `due_date`,
+  timestamps.
+- **Relationships:** `owner → User`; `document → Document`;
+  `bundle → DocumentBundle`; `template → DocumentChecklistTemplate`; has many
+  `DocumentChecklistItem`.
+- **Security:** strictly owner-scoped; managed only through owner-owned document
+  endpoints.
+- **Computed:** `progress_percent` + `status` are recalculated from items
+  whenever an item changes (completed and skipped both count as resolved).
+
+### DocumentChecklistItem — *Implemented*
+- **Purpose:** one actionable step in a checklist.
+- **Key fields:** `owner`, `checklist`, `title`, `description`, `is_required`,
+  `status` (`pending`/`in_progress`/`completed`/`skipped`), `due_date`,
+  `linked_document` (nullable), `linked_file` (nullable), `completed_at`,
+  `sort_order`, `notes`, timestamps.
+- **Relationships:** `checklist → DocumentChecklist`; optional
+  `linked_document → Document`, `linked_file → DocumentFile` (ownership checked).
+- **Security:** owner-scoped via checklist; linking another user's document/file
+  is rejected.
+
+### DocumentBundle — *Implemented*
+- **Purpose:** an owner-owned grouping of documents/requirements for a renewal,
+  application, travel prep, or proof pack — the "what do I need to prepare"
+  workspace.
+- **Key fields:** `owner`, `title`, `description`, `bundle_type`, `target_date`,
+  `status` (`draft`/`in_progress`/`ready`/`submitted`/`completed`/`archived`),
+  `country`, `authority_or_provider`, `notes`, `readiness_score`, timestamps.
+- **Relationships:** `owner → User`; has many `DocumentBundleRequirement`; has
+  many `DocumentChecklist`.
+- **Security:** strictly owner-scoped.
+- **Computed:** `readiness_score` (0–100) is recalculated from required,
+  non-skipped requirements; a bundle is ready only when every required
+  requirement is attached or completed.
+
+### DocumentBundleRequirement — *Implemented*
+- **Purpose:** one thing a bundle needs (a document, file, proof, payment, or
+  form).
+- **Key fields:** `owner`, `bundle`, `title`, `description`, `is_required`,
+  `requirement_type`, `expected_document_type`, `linked_document` (nullable),
+  `linked_file` (nullable), `status`
+  (`missing`/`attached`/`completed`/`skipped`), `due_date`, `sort_order`,
+  `notes`, timestamps.
+- **Relationships:** `bundle → DocumentBundle`; optional
+  `linked_document → Document`, `linked_file → DocumentFile` (ownership checked).
+- **Security:** owner-scoped via bundle; linked document/file must belong to the
+  same owner.
+
+### DocumentExtraction — *Implemented*
+- **Purpose:** an OCR-assisted detail-extraction attempt for one file, staged
+  for owner review before any document field is changed.
+- **Key fields:** `owner`, `document`, `file`, `extraction_status`
+  (`pending`/`processing`/`completed`/`failed`/`needs_review`), `raw_text`
+  (owner-only, never exposed by the API), `extracted_fields` (JSON),
+  `confidence_score`, `provider` (`manual`/`local_text`/`future_ocr`),
+  `error_message`, `reviewed_at`, `applied_at`, timestamps.
+- **Relationships:** `owner → User`; `document → Document`; `file → DocumentFile`.
+- **Security:** owner-scoped; files are never sent to a third-party service;
+  applying fields requires explicit owner confirmation and only writes the
+  chosen, known document fields.
+
+> The *MVP* / *Future* checklist and bundle entries below are superseded by the
+> *Implemented* models above; they remain as historical planning notes.
+
 ### DocumentTemplate — *MVP*
 - **Purpose:** document-type presets (default fields, suggested expiry window,
   checklist template) to make adding documents fast and consistent.

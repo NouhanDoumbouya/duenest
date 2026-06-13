@@ -996,6 +996,204 @@ is today or in the future, sorted by reminder date and document title.
 
 ---
 
+# 13B. Document Renewal Workspace API (implemented)
+
+The Renewal Workspace moves DueNest from *"something is expiring"* to *"here is
+what you need to prepare."* It adds preparation checklists, application/renewal
+bundles, an aggregated timeline, and an OCR-assisted extraction foundation.
+
+All endpoints require authentication. Every resource is strictly owner-scoped:
+a user can only ever see or change their own checklists, bundles, requirements,
+and extractions. Cross-user access returns `404 Not Found` (the resource is
+simply not in the caller's queryset), never `403`.
+
+## 13B.1 Checklist templates (shared, read-only)
+
+System templates are seeded with the `seed_checklist_templates` management
+command and are shared across all users. They are read-only through the API.
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/v1/documents/checklist-templates/` | List active checklist templates |
+| `GET` | `/api/v1/documents/checklist-templates/:id/` | Retrieve one template + its items |
+
+Seeded templates: passport renewal, visa renewal, student pass renewal,
+insurance renewal, scholarship application, travel document readiness.
+
+## 13B.2 User checklists (nested under a document)
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/v1/documents/:document_id/checklists/` | List a document's checklists |
+| `POST` | `/api/v1/documents/:document_id/checklists/` | Create a blank checklist |
+| `POST` | `/api/v1/documents/:document_id/checklists/from-template/` | Create a checklist + items from a template |
+| `GET` | `/api/v1/documents/:document_id/checklists/:checklist_id/` | Retrieve one checklist |
+| `PATCH` | `/api/v1/documents/:document_id/checklists/:checklist_id/` | Update a checklist |
+| `DELETE` | `/api/v1/documents/:document_id/checklists/:checklist_id/` | Delete a checklist |
+| `POST` | `/api/v1/documents/:document_id/checklists/:checklist_id/items/` | Add an item |
+| `PATCH` | `/api/v1/documents/:document_id/checklists/:checklist_id/items/:item_id/` | Update an item |
+| `DELETE` | `/api/v1/documents/:document_id/checklists/:checklist_id/items/:item_id/` | Delete an item |
+
+- Checklist `progress_percent` and `status` are recalculated from the items
+  whenever an item is created, updated, or deleted. Completed and skipped items
+  both count as resolved; a checklist is `completed` only when every item is
+  resolved.
+- `from-template` request body: `{ "template": <id>, "title?": str,
+  "due_date?": date, "bundle?": <id> }`. When a `due_date` is supplied, item
+  `suggested_due_offset_days` is used to compute each item's `due_date`.
+- A checklist item may link an owner-owned `linked_document` / `linked_file`;
+  linking another user's resource returns `400`.
+
+Checklist response includes a derived `progress` object:
+
+```json
+{
+  "id": 5,
+  "owner": 7,
+  "document": 12,
+  "title": "Passport renewal checklist",
+  "status": "in_progress",
+  "progress_percent": 50,
+  "progress": {
+    "percent": 50,
+    "status": "in_progress",
+    "total_items": 6,
+    "completed_items": 3,
+    "required_incomplete": 2
+  },
+  "items": [ /* DocumentChecklistItem objects */ ]
+}
+```
+
+## 13B.3 Application / renewal bundles (top-level)
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/v1/document-bundles/` | List the user's bundles |
+| `POST` | `/api/v1/document-bundles/` | Create a bundle |
+| `GET` | `/api/v1/document-bundles/:bundle_id/` | Retrieve a bundle + requirements + readiness |
+| `PATCH` | `/api/v1/document-bundles/:bundle_id/` | Update a bundle |
+| `DELETE` | `/api/v1/document-bundles/:bundle_id/` | Delete a bundle |
+| `GET` | `/api/v1/document-bundles/:bundle_id/readiness/` | Fresh readiness breakdown |
+| `POST` | `/api/v1/document-bundles/:bundle_id/requirements/` | Add a requirement |
+| `PATCH` | `/api/v1/document-bundles/:bundle_id/requirements/:requirement_id/` | Update a requirement |
+| `DELETE` | `/api/v1/document-bundles/:bundle_id/requirements/:requirement_id/` | Delete a requirement |
+| `POST` | `/api/v1/document-bundles/:bundle_id/requirements/:requirement_id/link-document/` | Link an owner-owned document |
+| `POST` | `/api/v1/document-bundles/:bundle_id/requirements/:requirement_id/link-file/` | Link an owner-owned file |
+
+- **Readiness** (`readiness_score`, 0–100) is derived from required, non-skipped
+  requirements: a bundle is "ready" only when every required requirement is
+  `attached` or `completed`. Missing required requirements reduce the score
+  proportionally. When there are no required requirements, readiness falls back
+  to optional ones. The score is recalculated whenever a requirement changes.
+- `link-document` / `link-file` accept `{ "document": <id> }` / `{ "file": <id> }`,
+  verify ownership (`404` otherwise), set the link, and flip a `missing`
+  requirement to `attached`.
+- Requirement `status`: `missing`, `attached`, `completed`, `skipped`.
+
+Bundle response includes a `readiness` object:
+
+```json
+{
+  "id": 3,
+  "title": "UK visa renewal 2026",
+  "bundle_type": "renewal",
+  "status": "in_progress",
+  "readiness_score": 50,
+  "missing_required_count": 1,
+  "readiness": {
+    "score": 50,
+    "is_ready": false,
+    "required_total": 2,
+    "required_satisfied": 1,
+    "required_missing": 1,
+    "missing_required_titles": ["Passport photo"]
+  },
+  "requirements": [ /* DocumentBundleRequirement objects */ ]
+}
+```
+
+## 13B.4 Timeline
+
+```http
+GET /api/v1/documents/timeline/
+```
+
+Aggregates the authenticated user's upcoming dates into one ordered feed. Only
+the caller's own events are ever returned.
+
+Query parameters (all optional): `start_date`, `end_date`, `event_type`,
+`document_id`, `bundle_id`.
+
+Event types: `document_expiry`, `document_renewal`, `reminder`,
+`checklist_item_due`, `bundle_target_date`, `bundle_requirement_due`.
+
+```json
+{
+  "count": 2,
+  "items": [
+    {
+      "id": "document_expiry:12",
+      "event_type": "document_expiry",
+      "title": "Passport expires",
+      "description": "Passport expires on this date.",
+      "date": "2026-07-01",
+      "urgency_level": "high",
+      "related_document": 12,
+      "related_bundle": null,
+      "related_checklist": null,
+      "metadata": { "document_type": "passport" }
+    }
+  ]
+}
+```
+
+`urgency_level` is derived from how soon the date is: overdue → `critical`,
+≤7 days → `high`, ≤30 days → `medium`, else `low`.
+
+## 13B.5 OCR-assisted extraction foundation (nested under a file)
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/v1/documents/:document_id/files/:file_id/extractions/` | List a file's extractions |
+| `POST` | `/api/v1/documents/:document_id/files/:file_id/extractions/` | Run a new extraction attempt |
+| `GET` | `/api/v1/documents/:document_id/files/:file_id/extractions/:extraction_id/` | Retrieve one extraction |
+| `PATCH` | `/api/v1/documents/:document_id/files/:file_id/extractions/:extraction_id/` | Stage reviewed fields |
+| `POST` | `/api/v1/documents/:document_id/files/:file_id/extractions/:extraction_id/apply/` | Apply chosen reviewed fields to the document |
+
+This is a safe foundation, not an automatic AI pipeline:
+
+- Extraction uses a pluggable provider abstraction. The current `local_text`
+  provider reads a PDF text layer **only if** an optional library is installed;
+  otherwise it returns a graceful `needs_review` result instead of failing.
+- **Files are never sent to a third-party OCR service.**
+- Extracted values are always *suggestions*. The owner reviews/edits them
+  (`PATCH extracted_fields`), then explicitly applies a chosen subset
+  (`POST .../apply/` with `{ "fields": ["issuer", ...] }`). A document field is
+  never overwritten automatically.
+- Only these fields may be staged/applied: `title`, `document_type`, `issuer`,
+  `country`, `reference_number`, `issue_date`, `expiry_date`, `renewal_date`.
+- `raw_text` is owner-only and is **never** returned by the API; responses
+  expose only a `has_raw_text` boolean.
+
+```json
+{
+  "id": 9,
+  "owner": 7,
+  "document": 12,
+  "file": 4,
+  "extraction_status": "needs_review",
+  "extracted_fields": { "issuer": "HM Passport Office" },
+  "confidence_score": 0.4,
+  "provider": "local_text",
+  "has_raw_text": true,
+  "reviewed_at": null,
+  "applied_at": null
+}
+```
+
+---
+
 # 14. Dashboard API
 
 ## 14.1 Get Dashboard Summary

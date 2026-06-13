@@ -2,6 +2,7 @@ import hashlib
 import secrets
 
 from django.contrib.auth.hashers import check_password, make_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Count, Q
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
@@ -17,22 +18,47 @@ from rest_framework.views import APIView
 
 from .models import (
     Document,
+    DocumentBundle,
+    DocumentBundleRequirement,
+    DocumentChecklist,
+    DocumentChecklistItem,
+    DocumentChecklistTemplate,
+    DocumentExtraction,
     DocumentFile,
     DocumentFileActivity,
     DocumentFileShareLink,
     DocumentReminderRule,
 )
 from .serializers import (
+    BundleReadinessSerializer,
+    ChecklistFromTemplateSerializer,
+    DocumentBundleRequirementSerializer,
+    DocumentBundleSerializer,
+    DocumentChecklistItemSerializer,
+    DocumentChecklistSerializer,
+    DocumentChecklistTemplateSerializer,
+    DocumentExtractionSerializer,
     DocumentFileActivitySerializer,
     DocumentFileSerializer,
     DocumentFileShareLinkSerializer,
     DocumentFileUploadSerializer,
     DocumentReminderRuleSerializer,
     DocumentSerializer,
+    ExtractionApplySerializer,
     PublicSharedFileSerializer,
     ShareLinkCreateSerializer,
+    TimelineEventSerializer,
 )
-from .services import attention_sort_key, get_document_health, log_activity, reminder_date_for_rule
+from .services import (
+    APPLICABLE_EXTRACTION_FIELDS,
+    attention_sort_key,
+    bundle_readiness,
+    build_timeline,
+    extract_file_details,
+    get_document_health,
+    log_activity,
+    reminder_date_for_rule,
+)
 
 
 def _compute_checksum(uploaded) -> str:
@@ -723,3 +749,555 @@ class PublicSharedFileDownloadView(APIView):
         )
         instance = link.file
         return _file_response(instance, as_attachment=True)
+
+
+# ---- Checklist templates (read-only, shared catalog) -----------------------
+
+
+class ChecklistTemplateListView(generics.ListAPIView):
+    """Active checklist templates (system + the user's own, if any later)."""
+
+    serializer_class = DocumentChecklistTemplateSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = DocumentChecklistTemplate.objects.filter(
+            is_active=True
+        ).prefetch_related("item_templates")
+        params = self.request.query_params
+        if params.get("document_type"):
+            queryset = queryset.filter(
+                document_type__icontains=params["document_type"]
+            )
+        if params.get("checklist_type"):
+            queryset = queryset.filter(checklist_type=params["checklist_type"])
+        return queryset
+
+
+class ChecklistTemplateDetailView(generics.RetrieveAPIView):
+    serializer_class = DocumentChecklistTemplateSerializer
+    permission_classes = [IsAuthenticated]
+    lookup_url_kwarg = "template_id"
+
+    def get_queryset(self):
+        return DocumentChecklistTemplate.objects.filter(
+            is_active=True
+        ).prefetch_related("item_templates")
+
+
+# ---- User checklists (nested under a document) -----------------------------
+
+
+class _ChecklistScopedMixin:
+    """Resolve checklists through an owner-owned parent document."""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = DocumentChecklistSerializer
+
+    def get_document(self):
+        return get_object_or_404(
+            Document, pk=self.kwargs["document_id"], owner=self.request.user
+        )
+
+    def get_queryset(self):
+        return (
+            DocumentChecklist.objects.filter(
+                document_id=self.kwargs["document_id"],
+                owner=self.request.user,
+            )
+            .prefetch_related("items")
+            .select_related("document", "bundle", "template")
+        )
+
+
+class DocumentChecklistListCreateView(
+    _ChecklistScopedMixin, generics.ListCreateAPIView
+):
+    """GET lists a document's checklists; POST creates a blank one."""
+
+    def perform_create(self, serializer):
+        document = self.get_document()
+        serializer.save(owner=self.request.user, document=document)
+
+
+class DocumentChecklistFromTemplateView(_ChecklistScopedMixin, APIView):
+    """POST creates a checklist (and its items) from a template."""
+
+    def post(self, request, document_id):
+        document = self.get_document()
+        serializer = ChecklistFromTemplateSerializer(
+            data=request.data, context={"request": request}
+        )
+        serializer.is_valid(raise_exception=True)
+        template = serializer.validated_data["template"]
+        due_date = serializer.validated_data.get("due_date")
+        bundle = serializer.validated_data.get("bundle")
+
+        checklist = DocumentChecklist.objects.create(
+            owner=request.user,
+            document=document,
+            bundle=bundle,
+            template=template,
+            title=serializer.validated_data.get("title") or template.title,
+            description=template.description,
+            checklist_type=template.checklist_type,
+            due_date=due_date,
+        )
+
+        # Materialize template items into owner-owned checklist items.
+        item_templates = template.item_templates.all()
+        items = []
+        for item_template in item_templates:
+            item_due = None
+            if (
+                due_date is not None
+                and item_template.suggested_due_offset_days is not None
+            ):
+                from datetime import timedelta
+
+                item_due = due_date - timedelta(
+                    days=item_template.suggested_due_offset_days
+                )
+            items.append(
+                DocumentChecklistItem(
+                    owner=request.user,
+                    checklist=checklist,
+                    title=item_template.title,
+                    description=item_template.description,
+                    is_required=item_template.is_required,
+                    sort_order=item_template.sort_order,
+                    due_date=item_due,
+                )
+            )
+        DocumentChecklistItem.objects.bulk_create(items)
+        checklist.recalculate_progress()
+
+        output = DocumentChecklistSerializer(
+            checklist, context=self.get_serializer_context()
+        )
+        return Response(output.data, status=status.HTTP_201_CREATED)
+
+    def get_serializer_context(self):
+        return {"request": self.request}
+
+
+class DocumentChecklistDetailView(
+    _ChecklistScopedMixin, generics.RetrieveUpdateDestroyAPIView
+):
+    """GET/PATCH/DELETE one owner-scoped checklist."""
+
+    lookup_url_kwarg = "checklist_id"
+
+
+class _ChecklistItemScopedMixin:
+    """Resolve checklist items through an owner-owned checklist + document."""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = DocumentChecklistItemSerializer
+
+    def get_checklist(self):
+        return get_object_or_404(
+            DocumentChecklist,
+            pk=self.kwargs["checklist_id"],
+            document_id=self.kwargs["document_id"],
+            owner=self.request.user,
+        )
+
+    def get_queryset(self):
+        return DocumentChecklistItem.objects.filter(
+            checklist_id=self.kwargs["checklist_id"],
+            checklist__document_id=self.kwargs["document_id"],
+            owner=self.request.user,
+        )
+
+
+def _sync_item_completion(item):
+    """Keep completed_at in step with the item's status."""
+    if item.status == DocumentChecklistItem.Status.COMPLETED:
+        if item.completed_at is None:
+            item.completed_at = timezone.now()
+    else:
+        item.completed_at = None
+
+
+class DocumentChecklistItemCreateView(
+    _ChecklistItemScopedMixin, generics.CreateAPIView
+):
+    """POST adds an item to an owner-owned checklist."""
+
+    def create(self, request, *args, **kwargs):
+        checklist = self.get_checklist()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        item = serializer.save(owner=request.user, checklist=checklist)
+        _sync_item_completion(item)
+        item.save(update_fields=["completed_at"])
+        checklist.recalculate_progress()
+        return Response(
+            self.get_serializer(item).data, status=status.HTTP_201_CREATED
+        )
+
+
+class DocumentChecklistItemDetailView(
+    _ChecklistItemScopedMixin, generics.RetrieveUpdateDestroyAPIView
+):
+    """PATCH/DELETE one owner-scoped checklist item; recalculates progress."""
+
+    lookup_url_kwarg = "item_id"
+
+    def perform_update(self, serializer):
+        item = serializer.save()
+        _sync_item_completion(item)
+        item.save(update_fields=["completed_at"])
+        item.checklist.recalculate_progress()
+
+    def perform_destroy(self, instance):
+        checklist = instance.checklist
+        instance.delete()
+        checklist.recalculate_progress()
+
+
+# ---- Application / renewal bundles ------------------------------------------
+
+
+class _BundleScopedMixin:
+    permission_classes = [IsAuthenticated]
+    serializer_class = DocumentBundleSerializer
+
+    def get_queryset(self):
+        return DocumentBundle.objects.filter(
+            owner=self.request.user
+        ).prefetch_related("requirements")
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["request"] = self.request
+        return context
+
+
+class DocumentBundleListCreateView(_BundleScopedMixin, generics.ListCreateAPIView):
+    """GET lists the user's bundles; POST creates one."""
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        params = self.request.query_params
+        if params.get("status"):
+            queryset = queryset.filter(status=params["status"])
+        if params.get("bundle_type"):
+            queryset = queryset.filter(bundle_type=params["bundle_type"])
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
+
+
+class DocumentBundleDetailView(
+    _BundleScopedMixin, generics.RetrieveUpdateDestroyAPIView
+):
+    """GET/PATCH/DELETE one owner-scoped bundle."""
+
+    lookup_url_kwarg = "bundle_id"
+
+
+class _BundleRequirementScopedMixin:
+    permission_classes = [IsAuthenticated]
+    serializer_class = DocumentBundleRequirementSerializer
+
+    def get_bundle(self):
+        return get_object_or_404(
+            DocumentBundle, pk=self.kwargs["bundle_id"], owner=self.request.user
+        )
+
+    def get_queryset(self):
+        return DocumentBundleRequirement.objects.filter(
+            bundle_id=self.kwargs["bundle_id"],
+            owner=self.request.user,
+        )
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["request"] = self.request
+        return context
+
+
+class DocumentBundleRequirementCreateView(
+    _BundleRequirementScopedMixin, generics.CreateAPIView
+):
+    """POST adds a requirement to an owner-owned bundle."""
+
+    def create(self, request, *args, **kwargs):
+        bundle = self.get_bundle()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        requirement = serializer.save(owner=request.user, bundle=bundle)
+        bundle.recalculate_readiness()
+        return Response(
+            self.get_serializer(requirement).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class DocumentBundleRequirementDetailView(
+    _BundleRequirementScopedMixin, generics.RetrieveUpdateDestroyAPIView
+):
+    """PATCH/DELETE one owner-scoped requirement; recalculates readiness."""
+
+    lookup_url_kwarg = "requirement_id"
+
+    def perform_update(self, serializer):
+        requirement = serializer.save()
+        requirement.bundle.recalculate_readiness()
+
+    def perform_destroy(self, instance):
+        bundle = instance.bundle
+        instance.delete()
+        bundle.recalculate_readiness()
+
+
+class _RequirementActionMixin(_BundleRequirementScopedMixin):
+    """Shared resolution for link-document / link-file actions."""
+
+    def get_requirement(self):
+        return get_object_or_404(
+            DocumentBundleRequirement,
+            pk=self.kwargs["requirement_id"],
+            bundle_id=self.kwargs["bundle_id"],
+            owner=self.request.user,
+        )
+
+
+class BundleRequirementLinkDocumentView(_RequirementActionMixin, APIView):
+    """POST links an owner-owned document to a requirement (marks attached)."""
+
+    def post(self, request, bundle_id, requirement_id):
+        requirement = self.get_requirement()
+        document = get_object_or_404(
+            Document, pk=request.data.get("document"), owner=request.user
+        )
+        requirement.linked_document = document
+        if requirement.status == DocumentBundleRequirement.Status.MISSING:
+            requirement.status = DocumentBundleRequirement.Status.ATTACHED
+        requirement.save(
+            update_fields=["linked_document", "status", "updated_at"]
+        )
+        requirement.bundle.recalculate_readiness()
+        return Response(
+            DocumentBundleRequirementSerializer(
+                requirement, context={"request": request}
+            ).data
+        )
+
+
+class BundleRequirementLinkFileView(_RequirementActionMixin, APIView):
+    """POST links an owner-owned file to a requirement (marks attached)."""
+
+    def post(self, request, bundle_id, requirement_id):
+        requirement = self.get_requirement()
+        file = get_object_or_404(
+            DocumentFile,
+            pk=request.data.get("file"),
+            document__owner=request.user,
+        )
+        requirement.linked_file = file
+        if requirement.linked_document_id is None:
+            requirement.linked_document = file.document
+        if requirement.status == DocumentBundleRequirement.Status.MISSING:
+            requirement.status = DocumentBundleRequirement.Status.ATTACHED
+        requirement.save(
+            update_fields=[
+                "linked_file",
+                "linked_document",
+                "status",
+                "updated_at",
+            ]
+        )
+        requirement.bundle.recalculate_readiness()
+        return Response(
+            DocumentBundleRequirementSerializer(
+                requirement, context={"request": request}
+            ).data
+        )
+
+
+class BundleReadinessView(APIView):
+    """GET a fresh readiness breakdown for an owner-owned bundle."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, bundle_id):
+        bundle = get_object_or_404(
+            DocumentBundle, pk=bundle_id, owner=request.user
+        )
+        readiness = bundle_readiness(bundle)
+        # Keep the cached score fresh on read, too.
+        if bundle.readiness_score != readiness.score:
+            bundle.readiness_score = readiness.score
+            bundle.save(update_fields=["readiness_score", "updated_at"])
+        return Response(BundleReadinessSerializer(readiness).data)
+
+
+# ---- Timeline ---------------------------------------------------------------
+
+
+class DocumentTimelineView(APIView):
+    """Aggregated, owner-scoped timeline of document + bundle events."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        params = request.query_params
+        start_date = parse_date(params.get("start_date", ""))
+        end_date = parse_date(params.get("end_date", ""))
+        event_type = params.get("event_type") or None
+
+        def _int(name):
+            value = params.get(name)
+            if value and value.isdigit():
+                return int(value)
+            return None
+
+        events = build_timeline(
+            request.user,
+            start_date=start_date,
+            end_date=end_date,
+            event_type=event_type,
+            document_id=_int("document_id"),
+            bundle_id=_int("bundle_id"),
+        )
+        serializer = TimelineEventSerializer(events, many=True)
+        return Response({"count": len(events), "items": serializer.data})
+
+
+# ---- OCR-assisted extraction (foundation) -----------------------------------
+
+
+class _ExtractionScopedMixin:
+    """Resolve extractions through an owner-owned file + document."""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = DocumentExtractionSerializer
+
+    def get_file(self):
+        return get_object_or_404(
+            DocumentFile,
+            pk=self.kwargs["file_id"],
+            document_id=self.kwargs["document_id"],
+            document__owner=self.request.user,
+        )
+
+    def get_queryset(self):
+        return DocumentExtraction.objects.filter(
+            file_id=self.kwargs["file_id"],
+            document_id=self.kwargs["document_id"],
+            owner=self.request.user,
+        )
+
+
+class DocumentExtractionListCreateView(
+    _ExtractionScopedMixin, generics.ListCreateAPIView
+):
+    """
+    GET lists a file's extractions; POST runs a new extraction attempt.
+
+    The foundation never sends files to a third-party service. When no reliable
+    text can be obtained, the record is still created with a graceful
+    ``needs_review`` status so the UI always has something to show.
+    """
+
+    def create(self, request, *args, **kwargs):
+        file = self.get_file()
+        result = extract_file_details(file)
+        extraction = DocumentExtraction.objects.create(
+            owner=request.user,
+            document=file.document,
+            file=file,
+            extraction_status=result.status,
+            raw_text=result.raw_text,
+            extracted_fields=result.extracted_fields,
+            confidence_score=result.confidence_score,
+            provider=result.provider,
+            error_message=result.error_message,
+        )
+        return Response(
+            self.get_serializer(extraction).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class DocumentExtractionDetailView(
+    _ExtractionScopedMixin, generics.RetrieveUpdateAPIView
+):
+    """
+    GET one extraction; PATCH stages reviewed fields before applying.
+
+    Only ``extracted_fields`` is writable here (validated against the known set)
+    and saving marks the extraction reviewed. Applying to the document is a
+    separate, explicit step.
+    """
+
+    lookup_url_kwarg = "extraction_id"
+    http_method_names = ["get", "patch", "head", "options"]
+
+    def perform_update(self, serializer):
+        serializer.save(
+            reviewed_at=timezone.now(),
+            extraction_status=DocumentExtraction.Status.NEEDS_REVIEW,
+        )
+
+
+class DocumentExtractionApplyView(_ExtractionScopedMixin, APIView):
+    """
+    POST applies selected reviewed fields onto the owner's document.
+
+    The document is only ever changed here, never automatically during
+    extraction, and only the explicitly chosen fields are written.
+    """
+
+    def post(self, request, document_id, file_id, extraction_id):
+        extraction = get_object_or_404(
+            DocumentExtraction,
+            pk=extraction_id,
+            file_id=file_id,
+            document_id=document_id,
+            owner=request.user,
+        )
+        serializer = ExtractionApplySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        chosen = serializer.validated_data["fields"]
+
+        document = extraction.document
+        updated = []
+        for field_name in chosen:
+            if field_name not in APPLICABLE_EXTRACTION_FIELDS:
+                continue
+            if field_name not in extraction.extracted_fields:
+                continue
+            value = extraction.extracted_fields[field_name]
+            setattr(document, field_name, value)
+            updated.append(field_name)
+
+        if updated:
+            # Validate cross-field date rules before persisting.
+            try:
+                document.full_clean(validate_unique=False)
+            except DjangoValidationError as exc:
+                return Response(
+                    exc.message_dict, status=status.HTTP_400_BAD_REQUEST
+                )
+            document.save(update_fields=[*updated, "updated_at"])
+
+        extraction.applied_at = timezone.now()
+        extraction.extraction_status = DocumentExtraction.Status.COMPLETED
+        extraction.save(update_fields=["applied_at", "extraction_status", "updated_at"])
+
+        return Response(
+            {
+                "applied_fields": updated,
+                "extraction": DocumentExtractionSerializer(
+                    extraction, context={"request": request}
+                ).data,
+                "document": DocumentSerializer(
+                    document, context={"request": request}
+                ).data,
+            }
+        )

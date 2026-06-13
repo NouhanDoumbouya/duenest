@@ -7,13 +7,26 @@ from rest_framework.reverse import reverse
 from .constants import ALLOWED_CONTENT_TYPES, ALLOWED_EXTENSIONS, MAX_FILE_SIZE
 from .models import (
     Document,
+    DocumentBundle,
+    DocumentBundleRequirement,
     DocumentCategory,
+    DocumentChecklist,
+    DocumentChecklistItem,
+    DocumentChecklistItemTemplate,
+    DocumentChecklistTemplate,
+    DocumentExtraction,
     DocumentFile,
     DocumentFileActivity,
     DocumentFileShareLink,
     DocumentReminderRule,
 )
-from .services import get_document_health, reminder_date_for_rule
+from .services import (
+    APPLICABLE_EXTRACTION_FIELDS,
+    bundle_readiness,
+    checklist_progress,
+    get_document_health,
+    reminder_date_for_rule,
+)
 
 
 class DocumentCategorySerializer(serializers.ModelSerializer):
@@ -392,6 +405,449 @@ class DocumentReminderRuleSerializer(serializers.ModelSerializer):
                     }
                 )
         return attrs
+
+
+# ---- Checklist templates ---------------------------------------------------
+
+
+class DocumentChecklistItemTemplateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DocumentChecklistItemTemplate
+        fields = [
+            "id",
+            "title",
+            "description",
+            "is_required",
+            "sort_order",
+            "suggested_due_offset_days",
+            "metadata",
+        ]
+        read_only_fields = fields
+
+
+class DocumentChecklistTemplateSerializer(serializers.ModelSerializer):
+    item_templates = DocumentChecklistItemTemplateSerializer(
+        many=True, read_only=True
+    )
+    item_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DocumentChecklistTemplate
+        fields = [
+            "id",
+            "title",
+            "description",
+            "document_type",
+            "use_case",
+            "checklist_type",
+            "country",
+            "is_system_template",
+            "is_active",
+            "sort_order",
+            "slug",
+            "item_count",
+            "item_templates",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+    def get_item_count(self, obj):
+        return obj.item_templates.count()
+
+
+# ---- User checklists -------------------------------------------------------
+
+
+class _OwnerScopedRelatedMixin:
+    """
+    Shared ownership validation for linked Document / DocumentFile fields.
+
+    A user must never be able to link another user's document or file, so we
+    re-check ownership against the request user in ``validate`` even though the
+    ids are accepted as plain primary keys.
+    """
+
+    def _request_user(self):
+        request = self.context.get("request")
+        return getattr(request, "user", None)
+
+    def _validate_owned(self, attrs):
+        user = self._request_user()
+        linked_document = attrs.get("linked_document")
+        if linked_document is not None and linked_document.owner_id != getattr(
+            user, "id", None
+        ):
+            raise serializers.ValidationError(
+                {"linked_document": "You can only link your own documents."}
+            )
+        linked_file = attrs.get("linked_file")
+        if linked_file is not None and linked_file.document.owner_id != getattr(
+            user, "id", None
+        ):
+            raise serializers.ValidationError(
+                {"linked_file": "You can only link your own files."}
+            )
+        return attrs
+
+
+class DocumentChecklistItemSerializer(
+    _OwnerScopedRelatedMixin, serializers.ModelSerializer
+):
+    owner = serializers.PrimaryKeyRelatedField(read_only=True)
+    checklist = serializers.PrimaryKeyRelatedField(read_only=True)
+    linked_document = serializers.PrimaryKeyRelatedField(
+        queryset=Document.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+    linked_file = serializers.PrimaryKeyRelatedField(
+        queryset=DocumentFile.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+
+    class Meta:
+        model = DocumentChecklistItem
+        fields = [
+            "id",
+            "owner",
+            "checklist",
+            "title",
+            "description",
+            "is_required",
+            "status",
+            "due_date",
+            "linked_document",
+            "linked_file",
+            "completed_at",
+            "sort_order",
+            "notes",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "owner",
+            "checklist",
+            "completed_at",
+            "created_at",
+            "updated_at",
+        ]
+
+    def validate(self, attrs):
+        return self._validate_owned(attrs)
+
+
+class DocumentChecklistSerializer(serializers.ModelSerializer):
+    owner = serializers.PrimaryKeyRelatedField(read_only=True)
+    document = serializers.PrimaryKeyRelatedField(read_only=True)
+    template = serializers.PrimaryKeyRelatedField(read_only=True)
+    items = DocumentChecklistItemSerializer(many=True, read_only=True)
+    progress = serializers.SerializerMethodField()
+    bundle = serializers.PrimaryKeyRelatedField(
+        queryset=DocumentBundle.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+
+    class Meta:
+        model = DocumentChecklist
+        fields = [
+            "id",
+            "owner",
+            "document",
+            "bundle",
+            "template",
+            "title",
+            "description",
+            "checklist_type",
+            "status",
+            "progress_percent",
+            "due_date",
+            "progress",
+            "items",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "owner",
+            "document",
+            "template",
+            "status",
+            "progress_percent",
+            "progress",
+            "items",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_progress(self, obj):
+        progress = checklist_progress(obj)
+        return {
+            "percent": progress.percent,
+            "status": progress.status,
+            "total_items": progress.total_items,
+            "completed_items": progress.completed_items,
+            "skipped_items": progress.skipped_items,
+            "required_items": progress.required_items,
+            "required_completed": progress.required_completed,
+            "required_incomplete": progress.required_incomplete,
+        }
+
+    def validate_bundle(self, value):
+        user = getattr(self.context.get("request"), "user", None)
+        if value is not None and value.owner_id != getattr(user, "id", None):
+            raise serializers.ValidationError("You can only link your own bundles.")
+        return value
+
+
+class ChecklistFromTemplateSerializer(serializers.Serializer):
+    """Input for creating a checklist from a template."""
+
+    template = serializers.PrimaryKeyRelatedField(
+        queryset=DocumentChecklistTemplate.objects.filter(is_active=True)
+    )
+    title = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    due_date = serializers.DateField(required=False, allow_null=True)
+    bundle = serializers.PrimaryKeyRelatedField(
+        queryset=DocumentBundle.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+
+    def validate_bundle(self, value):
+        user = getattr(self.context.get("request"), "user", None)
+        if value is not None and value.owner_id != getattr(user, "id", None):
+            raise serializers.ValidationError("You can only link your own bundles.")
+        return value
+
+
+# ---- Bundles ---------------------------------------------------------------
+
+
+class DocumentBundleRequirementSerializer(
+    _OwnerScopedRelatedMixin, serializers.ModelSerializer
+):
+    owner = serializers.PrimaryKeyRelatedField(read_only=True)
+    bundle = serializers.PrimaryKeyRelatedField(read_only=True)
+    linked_document = serializers.PrimaryKeyRelatedField(
+        queryset=Document.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+    linked_file = serializers.PrimaryKeyRelatedField(
+        queryset=DocumentFile.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+    is_satisfied = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = DocumentBundleRequirement
+        fields = [
+            "id",
+            "owner",
+            "bundle",
+            "title",
+            "description",
+            "is_required",
+            "requirement_type",
+            "expected_document_type",
+            "linked_document",
+            "linked_file",
+            "status",
+            "is_satisfied",
+            "due_date",
+            "sort_order",
+            "notes",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "owner",
+            "bundle",
+            "is_satisfied",
+            "created_at",
+            "updated_at",
+        ]
+
+    def validate(self, attrs):
+        return self._validate_owned(attrs)
+
+
+class DocumentBundleSerializer(serializers.ModelSerializer):
+    owner = serializers.PrimaryKeyRelatedField(read_only=True)
+    requirements = DocumentBundleRequirementSerializer(many=True, read_only=True)
+    readiness = serializers.SerializerMethodField()
+    requirement_count = serializers.SerializerMethodField()
+    missing_required_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DocumentBundle
+        fields = [
+            "id",
+            "owner",
+            "title",
+            "description",
+            "bundle_type",
+            "target_date",
+            "status",
+            "country",
+            "authority_or_provider",
+            "notes",
+            "readiness_score",
+            "readiness",
+            "requirement_count",
+            "missing_required_count",
+            "requirements",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "owner",
+            "readiness_score",
+            "readiness",
+            "requirement_count",
+            "missing_required_count",
+            "requirements",
+            "created_at",
+            "updated_at",
+        ]
+
+    def _readiness(self, obj):
+        if not hasattr(obj, "_readiness_cache"):
+            obj._readiness_cache = bundle_readiness(obj)
+        return obj._readiness_cache
+
+    def get_readiness(self, obj):
+        readiness = self._readiness(obj)
+        return {
+            "score": readiness.score,
+            "is_ready": readiness.is_ready,
+            "total_requirements": readiness.total_requirements,
+            "required_total": readiness.required_total,
+            "required_satisfied": readiness.required_satisfied,
+            "required_missing": readiness.required_missing,
+            "optional_total": readiness.optional_total,
+            "optional_satisfied": readiness.optional_satisfied,
+            "missing_required_titles": readiness.missing_required_titles,
+        }
+
+    def get_requirement_count(self, obj):
+        return self._readiness(obj).total_requirements
+
+    def get_missing_required_count(self, obj):
+        return self._readiness(obj).required_missing
+
+
+class BundleReadinessSerializer(serializers.Serializer):
+    """Output-only readiness summary for the dedicated readiness endpoint."""
+
+    score = serializers.IntegerField()
+    is_ready = serializers.BooleanField()
+    total_requirements = serializers.IntegerField()
+    required_total = serializers.IntegerField()
+    required_satisfied = serializers.IntegerField()
+    required_missing = serializers.IntegerField()
+    optional_total = serializers.IntegerField()
+    optional_satisfied = serializers.IntegerField()
+    missing_required_titles = serializers.ListField(
+        child=serializers.CharField()
+    )
+
+
+# ---- Timeline --------------------------------------------------------------
+
+
+class TimelineEventSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    event_type = serializers.CharField()
+    title = serializers.CharField()
+    description = serializers.CharField()
+    date = serializers.DateField()
+    urgency_level = serializers.CharField()
+    related_document = serializers.IntegerField(allow_null=True)
+    related_bundle = serializers.IntegerField(allow_null=True)
+    related_checklist = serializers.IntegerField(allow_null=True)
+    metadata = serializers.DictField()
+
+
+# ---- Extraction ------------------------------------------------------------
+
+
+class DocumentExtractionSerializer(serializers.ModelSerializer):
+    owner = serializers.PrimaryKeyRelatedField(read_only=True)
+    document = serializers.PrimaryKeyRelatedField(read_only=True)
+    file = serializers.PrimaryKeyRelatedField(read_only=True)
+    has_raw_text = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DocumentExtraction
+        fields = [
+            "id",
+            "owner",
+            "document",
+            "file",
+            "extraction_status",
+            "extracted_fields",
+            "confidence_score",
+            "provider",
+            "error_message",
+            "has_raw_text",
+            "reviewed_at",
+            "applied_at",
+            "created_at",
+            "updated_at",
+        ]
+        # raw_text is intentionally NOT exposed; only a boolean presence flag is.
+        read_only_fields = [
+            "id",
+            "owner",
+            "document",
+            "file",
+            "extraction_status",
+            "confidence_score",
+            "provider",
+            "error_message",
+            "has_raw_text",
+            "reviewed_at",
+            "applied_at",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_has_raw_text(self, obj):
+        return bool(obj.raw_text)
+
+    def validate_extracted_fields(self, value):
+        """Only allow the known, applicable document fields to be staged."""
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Expected an object of fields.")
+        unknown = set(value) - set(APPLICABLE_EXTRACTION_FIELDS)
+        if unknown:
+            raise serializers.ValidationError(
+                f"Unsupported fields: {', '.join(sorted(unknown))}."
+            )
+        return value
+
+
+class ExtractionApplySerializer(serializers.Serializer):
+    """
+    Owner confirmation of which reviewed fields to apply to the document.
+
+    Only fields listed in ``fields`` are written, and only from the extraction's
+    reviewed ``extracted_fields`` — the client never sends raw values here, so a
+    review step is always required before a document is changed.
+    """
+
+    fields = serializers.ListField(
+        child=serializers.ChoiceField(choices=APPLICABLE_EXTRACTION_FIELDS),
+        allow_empty=False,
+    )
 
 
 class DocumentFileUploadSerializer(serializers.Serializer):

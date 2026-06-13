@@ -181,22 +181,25 @@ This is the recommended sequence. It can be adjusted, but the first paid MVP sho
 8. Missing-information detection *(done: missing file / missing expiry flags)*
 9. "Attention Needed" inbox *(done)*
 10. Renewal reminder rules *(done: rules + calculated upcoming dates; no sending yet)*
-11. Renewal preparation checklists
-12. Document detail page upgrade
-13. Calendar/timeline view
+11. Renewal preparation checklists *(done: templates + per-document checklists + progress)*
+12. Document detail page upgrade *(done: checklists + extracted-details sections added)*
+13. Calendar/timeline view *(done: aggregated timeline API + premium timeline UI)*
 14. Secure share links *(done: file-level links)*
-15. OCR-assisted extraction
-16. Application/renewal bundles
+15. OCR-assisted extraction *(done: review-gated foundation; no third-party OCR)*
+16. Application/renewal bundles *(done: bundles + requirements + readiness score)*
 17. Activity timeline and audit log *(partially done: file activity)*
 18. Version history
 19. Emergency access pack
 20. Export and backup features
 
-> Steps 1–10 are implemented at foundation level, and file-level secure sharing
-> from step 14 has also landed early. Reminder rules calculate upcoming dates
-> but do not send notifications yet. The next implementation branch should move
-> to renewal preparation checklists or calendar/timeline work, unless the
-> intelligence UI needs a dedicated polish pass.
+> Steps 1–16 are implemented at foundation level (with notification sending and
+> version/emergency/export work still ahead). The **Document Renewal Workspace**
+> branch delivered renewal preparation checklists (with shared system
+> templates), application/renewal bundles with a readiness score and missing-
+> item detection, an aggregated calendar/timeline view, and a review-gated
+> OCR-assisted extraction foundation. Files are never sent to a third-party OCR
+> service, and extracted values are only ever applied after explicit owner
+> review.
 
 ---
 
@@ -213,10 +216,14 @@ backend/document-attention-inbox       # done in feature/document-intelligence-f
 frontend/document-attention-inbox      # done in feature/document-intelligence-foundation
 backend/document-reminder-rules        # done in feature/document-intelligence-foundation
 frontend/document-reminder-experience  # done in feature/document-intelligence-foundation
-backend/document-checklists            # checklist templates + per-document items
-frontend/document-checklists           # checklist UI
-backend/document-ocr-foundation        # OCR worker + extraction results (review-gated)
-frontend/document-ocr-review-ui        # OCR review/confirm screen
+backend/document-checklists            # done in feature/document-renewal-workspace
+frontend/document-checklists           # done in feature/document-renewal-workspace
+backend/document-bundles               # done in feature/document-renewal-workspace
+frontend/document-bundles              # done in feature/document-renewal-workspace
+backend/document-timeline              # done in feature/document-renewal-workspace
+frontend/document-timeline             # done in feature/document-renewal-workspace
+backend/document-ocr-foundation        # done in feature/document-renewal-workspace (review-gated, no third-party OCR)
+frontend/document-ocr-review-ui        # done in feature/document-renewal-workspace
 ```
 
 ---

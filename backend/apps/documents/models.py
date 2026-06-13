@@ -331,6 +331,459 @@ class DocumentFileActivity(models.Model):
         return f"{self.action} on file {self.file_id}"
 
 
+class DocumentBundle(models.Model):
+    """
+    An owner-owned grouping of documents and requirements for a renewal,
+    application, travel prep, or proof pack.
+
+    A bundle is the user's "what do I need to prepare" workspace. Its readiness
+    score is derived from its required requirements (see ``services``). Bundles
+    are useful even before OCR exists — they simply track what is needed and
+    whether each item is attached yet.
+    """
+
+    class BundleType(models.TextChoices):
+        RENEWAL = "renewal", "Renewal"
+        APPLICATION = "application", "Application"
+        TRAVEL = "travel", "Travel"
+        EMERGENCY = "emergency", "Emergency"
+        SCHOLARSHIP = "scholarship", "Scholarship"
+        INSURANCE = "insurance", "Insurance"
+        CUSTOM = "custom", "Custom"
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        IN_PROGRESS = "in_progress", "In progress"
+        READY = "ready", "Ready"
+        SUBMITTED = "submitted", "Submitted"
+        COMPLETED = "completed", "Completed"
+        ARCHIVED = "archived", "Archived"
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="document_bundles",
+    )
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    bundle_type = models.CharField(
+        max_length=20,
+        choices=BundleType.choices,
+        default=BundleType.RENEWAL,
+    )
+    target_date = models.DateField(null=True, blank=True)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.DRAFT,
+    )
+    country = models.CharField(max_length=100, blank=True)
+    authority_or_provider = models.CharField(max_length=255, blank=True)
+    notes = models.TextField(blank=True)
+
+    # Cached 0–100 readiness, recomputed from required requirements whenever a
+    # requirement changes. Always recalculated through ``recalculate_readiness``
+    # so it never drifts from the underlying requirements within the API flow.
+    readiness_score = models.PositiveSmallIntegerField(default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["owner", "status"]),
+            models.Index(fields=["owner", "target_date"]),
+        ]
+
+    def __str__(self):
+        return f"{self.title} ({self.owner})"
+
+    def recalculate_readiness(self, *, save=True):
+        """Recompute the cached readiness score from current requirements."""
+        from .services import bundle_readiness
+
+        readiness = bundle_readiness(self)
+        self.readiness_score = readiness.score
+        if save:
+            self.save(update_fields=["readiness_score", "updated_at"])
+        return readiness
+
+
+class DocumentBundleRequirement(models.Model):
+    """
+    A single thing a bundle needs (a document, file, proof, payment, or form).
+
+    A requirement can be linked to an existing owner-owned document and/or file.
+    Required requirements drive the parent bundle's readiness score.
+    """
+
+    class RequirementType(models.TextChoices):
+        DOCUMENT = "document", "Document"
+        FILE = "file", "File"
+        PROOF = "proof", "Proof"
+        PAYMENT = "payment", "Payment"
+        FORM = "form", "Form"
+        OTHER = "other", "Other"
+
+    class Status(models.TextChoices):
+        MISSING = "missing", "Missing"
+        ATTACHED = "attached", "Attached"
+        COMPLETED = "completed", "Completed"
+        SKIPPED = "skipped", "Skipped"
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="document_bundle_requirements",
+    )
+    bundle = models.ForeignKey(
+        DocumentBundle,
+        on_delete=models.CASCADE,
+        related_name="requirements",
+    )
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    is_required = models.BooleanField(default=True)
+    requirement_type = models.CharField(
+        max_length=20,
+        choices=RequirementType.choices,
+        default=RequirementType.DOCUMENT,
+    )
+    expected_document_type = models.CharField(max_length=100, blank=True)
+    linked_document = models.ForeignKey(
+        Document,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="bundle_requirements",
+    )
+    linked_file = models.ForeignKey(
+        DocumentFile,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="bundle_requirements",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.MISSING,
+    )
+    due_date = models.DateField(null=True, blank=True)
+    sort_order = models.PositiveIntegerField(default=0)
+    notes = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["sort_order", "created_at"]
+        indexes = [
+            models.Index(fields=["bundle", "sort_order"]),
+            models.Index(fields=["owner", "status"]),
+        ]
+
+    def __str__(self):
+        return f"{self.title} ({self.bundle_id})"
+
+    @property
+    def is_satisfied(self) -> bool:
+        """A requirement counts as done when attached or completed."""
+        return self.status in {self.Status.ATTACHED, self.Status.COMPLETED}
+
+
+class DocumentChecklistTemplate(models.Model):
+    """
+    A reusable, system- or owner-provided checklist blueprint.
+
+    System templates (``is_system_template=True``) are shared across all users
+    and are seeded via the ``seed_checklist_templates`` management command. They
+    are never user-owned and are read-only through the API.
+    """
+
+    class ChecklistType(models.TextChoices):
+        RENEWAL = "renewal", "Renewal"
+        APPLICATION = "application", "Application"
+        TRAVEL = "travel", "Travel"
+        INSURANCE = "insurance", "Insurance"
+        CUSTOM = "custom", "Custom"
+
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    document_type = models.CharField(max_length=100, blank=True)
+    use_case = models.CharField(max_length=100, blank=True)
+    checklist_type = models.CharField(
+        max_length=20,
+        choices=ChecklistType.choices,
+        default=ChecklistType.RENEWAL,
+    )
+    country = models.CharField(max_length=100, blank=True)
+    is_system_template = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    sort_order = models.PositiveIntegerField(default=0)
+    # Stable key for system templates so re-seeding updates rather than dupes.
+    slug = models.SlugField(max_length=140, unique=True, null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["sort_order", "title"]
+        indexes = [
+            models.Index(fields=["is_active", "sort_order"]),
+        ]
+
+    def __str__(self):
+        return self.title
+
+
+class DocumentChecklistItemTemplate(models.Model):
+    """A single item belonging to a checklist template."""
+
+    template = models.ForeignKey(
+        DocumentChecklistTemplate,
+        on_delete=models.CASCADE,
+        related_name="item_templates",
+    )
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    is_required = models.BooleanField(default=True)
+    sort_order = models.PositiveIntegerField(default=0)
+    # Days from the checklist due date when this item should be done (optional).
+    suggested_due_offset_days = models.IntegerField(null=True, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["sort_order", "id"]
+
+    def __str__(self):
+        return f"{self.title} ({self.template_id})"
+
+
+class DocumentChecklist(models.Model):
+    """
+    An owner-owned preparation checklist, optionally tied to a document and/or
+    bundle and optionally created from a template.
+
+    Progress is derived from its items (see ``services.checklist_progress``) and
+    cached on ``progress_percent`` / ``status`` via ``recalculate_progress``.
+    """
+
+    class ChecklistType(models.TextChoices):
+        RENEWAL = "renewal", "Renewal"
+        APPLICATION = "application", "Application"
+        TRAVEL = "travel", "Travel"
+        INSURANCE = "insurance", "Insurance"
+        CUSTOM = "custom", "Custom"
+
+    class Status(models.TextChoices):
+        NOT_STARTED = "not_started", "Not started"
+        IN_PROGRESS = "in_progress", "In progress"
+        COMPLETED = "completed", "Completed"
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="document_checklists",
+    )
+    document = models.ForeignKey(
+        Document,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="checklists",
+    )
+    bundle = models.ForeignKey(
+        DocumentBundle,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="checklists",
+    )
+    template = models.ForeignKey(
+        DocumentChecklistTemplate,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="checklists",
+    )
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    checklist_type = models.CharField(
+        max_length=20,
+        choices=ChecklistType.choices,
+        default=ChecklistType.RENEWAL,
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.NOT_STARTED,
+    )
+    progress_percent = models.PositiveSmallIntegerField(default=0)
+    due_date = models.DateField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["owner", "status"]),
+            models.Index(fields=["document", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.title} ({self.owner})"
+
+    def recalculate_progress(self, *, save=True):
+        """Recompute cached progress + status from the checklist's items."""
+        from .services import checklist_progress
+
+        progress = checklist_progress(self)
+        self.progress_percent = progress.percent
+        self.status = progress.status
+        if save:
+            self.save(update_fields=["progress_percent", "status", "updated_at"])
+        return progress
+
+
+class DocumentChecklistItem(models.Model):
+    """A single actionable item within an owner-owned checklist."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        IN_PROGRESS = "in_progress", "In progress"
+        COMPLETED = "completed", "Completed"
+        SKIPPED = "skipped", "Skipped"
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="document_checklist_items",
+    )
+    checklist = models.ForeignKey(
+        DocumentChecklist,
+        on_delete=models.CASCADE,
+        related_name="items",
+    )
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    is_required = models.BooleanField(default=True)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    due_date = models.DateField(null=True, blank=True)
+    linked_document = models.ForeignKey(
+        Document,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="checklist_items",
+    )
+    linked_file = models.ForeignKey(
+        DocumentFile,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="checklist_items",
+    )
+    completed_at = models.DateTimeField(null=True, blank=True)
+    sort_order = models.PositiveIntegerField(default=0)
+    notes = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["sort_order", "created_at"]
+        indexes = [
+            models.Index(fields=["checklist", "sort_order"]),
+        ]
+
+    def __str__(self):
+        return f"{self.title} ({self.checklist_id})"
+
+    @property
+    def is_done(self) -> bool:
+        """Completed or skipped items both count as resolved for progress."""
+        return self.status in {self.Status.COMPLETED, self.Status.SKIPPED}
+
+
+class DocumentExtraction(models.Model):
+    """
+    An OCR-assisted detail extraction attempt for one file.
+
+    This is a safe foundation, not an automatic pipeline: extracted fields are
+    always staged for the owner to review and must be explicitly applied. Files
+    are never sent to a third-party service here — see ``services`` for the
+    pluggable provider abstraction (currently manual / local PDF text only).
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        PROCESSING = "processing", "Processing"
+        COMPLETED = "completed", "Completed"
+        FAILED = "failed", "Failed"
+        NEEDS_REVIEW = "needs_review", "Needs review"
+
+    class Provider(models.TextChoices):
+        MANUAL = "manual", "Manual"
+        LOCAL_TEXT = "local_text", "Local text"
+        FUTURE_OCR = "future_ocr", "Future OCR"
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="document_extractions",
+    )
+    document = models.ForeignKey(
+        Document,
+        on_delete=models.CASCADE,
+        related_name="extractions",
+    )
+    file = models.ForeignKey(
+        DocumentFile,
+        on_delete=models.CASCADE,
+        related_name="extractions",
+    )
+    extraction_status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    # Raw text is owner-only and never exposed through public endpoints.
+    raw_text = models.TextField(blank=True)
+    extracted_fields = models.JSONField(default=dict, blank=True)
+    confidence_score = models.FloatField(null=True, blank=True)
+    provider = models.CharField(
+        max_length=20,
+        choices=Provider.choices,
+        default=Provider.LOCAL_TEXT,
+    )
+    error_message = models.TextField(blank=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    applied_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["owner", "created_at"]),
+            models.Index(fields=["file", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"Extraction({self.extraction_status}) for file {self.file_id}"
+
+
 class DocumentReminderRule(models.Model):
     """
     Owner-scoped rule for calculating reminder dates.

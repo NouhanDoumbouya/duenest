@@ -2,6 +2,23 @@ from django.urls import path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
+    BundleReadinessView,
+    BundleRequirementLinkDocumentView,
+    BundleRequirementLinkFileView,
+    ChecklistTemplateDetailView,
+    ChecklistTemplateListView,
+    DocumentBundleDetailView,
+    DocumentBundleListCreateView,
+    DocumentBundleRequirementCreateView,
+    DocumentBundleRequirementDetailView,
+    DocumentChecklistDetailView,
+    DocumentChecklistFromTemplateView,
+    DocumentChecklistItemCreateView,
+    DocumentChecklistItemDetailView,
+    DocumentChecklistListCreateView,
+    DocumentExtractionApplyView,
+    DocumentExtractionDetailView,
+    DocumentExtractionListCreateView,
     DocumentFileActivityView,
     DocumentFileDetailView,
     DocumentFileDownloadView,
@@ -12,6 +29,7 @@ from .views import (
     DocumentFileShareLinkRevokeView,
     DocumentReminderRuleDetailView,
     DocumentReminderRuleListCreateView,
+    DocumentTimelineView,
     DocumentViewSet,
     PublicSharedFileDownloadView,
     PublicSharedFileMetadataView,
@@ -82,6 +100,101 @@ urlpatterns = [
         "documents/<int:document_id>/reminder-rules/<int:rule_id>/",
         DocumentReminderRuleDetailView.as_view(),
         name="document-reminder-rule-detail",
+    ),
+    # ---- Renewal workspace: checklist templates (shared, read-only) --------
+    path(
+        "documents/checklist-templates/",
+        ChecklistTemplateListView.as_view(),
+        name="checklist-templates",
+    ),
+    path(
+        "documents/checklist-templates/<int:template_id>/",
+        ChecklistTemplateDetailView.as_view(),
+        name="checklist-template-detail",
+    ),
+    # ---- Renewal workspace: timeline ---------------------------------------
+    path(
+        "documents/timeline/",
+        DocumentTimelineView.as_view(),
+        name="document-timeline",
+    ),
+    # ---- Renewal workspace: user checklists (nested under a document) ------
+    path(
+        "documents/<int:document_id>/checklists/",
+        DocumentChecklistListCreateView.as_view(),
+        name="document-checklists",
+    ),
+    path(
+        "documents/<int:document_id>/checklists/from-template/",
+        DocumentChecklistFromTemplateView.as_view(),
+        name="document-checklist-from-template",
+    ),
+    path(
+        "documents/<int:document_id>/checklists/<int:checklist_id>/",
+        DocumentChecklistDetailView.as_view(),
+        name="document-checklist-detail",
+    ),
+    path(
+        "documents/<int:document_id>/checklists/<int:checklist_id>/items/",
+        DocumentChecklistItemCreateView.as_view(),
+        name="document-checklist-items",
+    ),
+    path(
+        "documents/<int:document_id>/checklists/<int:checklist_id>/items/<int:item_id>/",
+        DocumentChecklistItemDetailView.as_view(),
+        name="document-checklist-item-detail",
+    ),
+    # ---- Renewal workspace: OCR-assisted extraction (nested under a file) --
+    path(
+        "documents/<int:document_id>/files/<int:file_id>/extractions/",
+        DocumentExtractionListCreateView.as_view(),
+        name="document-file-extractions",
+    ),
+    path(
+        "documents/<int:document_id>/files/<int:file_id>/extractions/<int:extraction_id>/",
+        DocumentExtractionDetailView.as_view(),
+        name="document-file-extraction-detail",
+    ),
+    path(
+        "documents/<int:document_id>/files/<int:file_id>/extractions/<int:extraction_id>/apply/",
+        DocumentExtractionApplyView.as_view(),
+        name="document-file-extraction-apply",
+    ),
+    # ---- Renewal workspace: application / renewal bundles ------------------
+    path(
+        "document-bundles/",
+        DocumentBundleListCreateView.as_view(),
+        name="document-bundles",
+    ),
+    path(
+        "document-bundles/<int:bundle_id>/",
+        DocumentBundleDetailView.as_view(),
+        name="document-bundle-detail",
+    ),
+    path(
+        "document-bundles/<int:bundle_id>/readiness/",
+        BundleReadinessView.as_view(),
+        name="document-bundle-readiness",
+    ),
+    path(
+        "document-bundles/<int:bundle_id>/requirements/",
+        DocumentBundleRequirementCreateView.as_view(),
+        name="document-bundle-requirements",
+    ),
+    path(
+        "document-bundles/<int:bundle_id>/requirements/<int:requirement_id>/",
+        DocumentBundleRequirementDetailView.as_view(),
+        name="document-bundle-requirement-detail",
+    ),
+    path(
+        "document-bundles/<int:bundle_id>/requirements/<int:requirement_id>/link-document/",
+        BundleRequirementLinkDocumentView.as_view(),
+        name="document-bundle-requirement-link-document",
+    ),
+    path(
+        "document-bundles/<int:bundle_id>/requirements/<int:requirement_id>/link-file/",
+        BundleRequirementLinkFileView.as_view(),
+        name="document-bundle-requirement-link-file",
     ),
     # Public share endpoints (token-gated, no authentication).
     path(

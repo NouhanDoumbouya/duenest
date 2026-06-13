@@ -1101,11 +1101,25 @@ justifies extraction.
 - **Attention inbox:** a focused query endpoint composed from status intel.
 - **Reminder rules:** owner-owned rule storage plus synchronous upcoming date
   calculation. No scheduled notification delivery yet.
+- **Renewal workspace:** preparation checklists (with shared system templates),
+  application/renewal bundles, and an aggregated timeline. Progress, readiness
+  scoring, and timeline aggregation are all pure functions in the documents
+  `services` layer — no new services or infrastructure. Checklist progress and
+  bundle readiness are cached on the row and recalculated synchronously whenever
+  a child item/requirement changes.
+- **OCR-assisted extraction foundation:** a synchronous, *review-gated*
+  extraction built on a pluggable provider abstraction (`services.extract_file_details`).
+  The current `local_text` provider reads a PDF text layer only if an optional
+  library is present and otherwise degrades to a graceful `needs_review` result.
+  Files are never sent to a third-party service, and document fields are only
+  written after explicit owner review/apply. This deliberately reuses the
+  existing request/response cycle so no queue or worker is introduced yet.
 
 ### Mid-term (Phase 3–4)
 
-- **OCR worker/service:** an async worker (queue) that produces *review-gated*
-  extraction results; never writes document fields directly.
+- **OCR worker/service:** the synchronous extraction foundation above can later
+  be swapped for an async worker (queue) behind the same provider abstraction;
+  it must remain *review-gated* and never write document fields directly.
 
 ### Later (Phase 5–6)
 
@@ -1125,8 +1139,11 @@ justifies extraction.
 | Search/filter/sort | ✅ Implemented | Saved views / pagination UX later |
 | Attention Needed | ✅ Implemented | Dedicated inbox/timeline later |
 | Reminder rules | ✅ Implemented (calculated dates) | Notification service + scheduled jobs |
+| Renewal checklists + templates | ✅ Implemented | More system templates, sharing later |
+| Application/renewal bundles | ✅ Implemented (readiness score) | Auto-suggested requirements later |
+| Timeline / calendar view | ✅ Implemented (aggregated list) | Full calendar component later |
 | Sharing | ✅ Implemented file-level links | Email delivery, watermarking, redaction later |
-| OCR | — | Async worker, review-gated |
+| OCR-assisted extraction | ✅ Implemented (sync, review-gated foundation) | Async worker + real OCR provider |
 | Audit / export | ✅ File activity log | Document-wide audit + export service |
 
 ---
