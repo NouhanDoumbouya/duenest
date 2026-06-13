@@ -147,13 +147,15 @@ class DocumentAPITests(APITestCase):
         document.refresh_from_db()
         self.assertEqual(document.title, "Bob Doc")
 
-    # 8. Authenticated user can delete their own document.
+    # 8. Authenticated user can move their own document to trash.
     def test_user_can_delete_own_document(self):
         document = Document.objects.create(owner=self.alice, title="Alice Doc")
         self.authenticate(self.alice)
         response = self.client.delete(detail_url(document.id))
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
-        self.assertFalse(Document.objects.filter(id=document.id).exists())
+        document.refresh_from_db()
+        self.assertTrue(document.is_trashed)
+        self.assertIsNotNone(document.trashed_at)
 
     def test_user_cannot_delete_other_users_document(self):
         document = Document.objects.create(owner=self.bob, title="Bob Doc")
@@ -314,7 +316,7 @@ class DocumentFileAPITests(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
-    # 7. Authenticated user can delete their own document file.
+    # 7. Authenticated user can move their own document file to trash.
     def test_user_can_delete_own_file(self):
         self.client.force_authenticate(self.alice)
         created = self.upload(self.alice_doc)
@@ -324,7 +326,9 @@ class DocumentFileAPITests(APITestCase):
             file_detail_url(self.alice_doc.id, file_id)
         )
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
-        self.assertFalse(DocumentFile.objects.filter(id=file_id).exists())
+        file = DocumentFile.objects.get(id=file_id)
+        self.assertTrue(file.is_trashed)
+        self.assertIsNotNone(file.trashed_at)
 
     def test_owner_can_download_own_file(self):
         self.client.force_authenticate(self.alice)

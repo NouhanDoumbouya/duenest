@@ -299,13 +299,14 @@ Stores metadata for uploaded user documents.
 
 The actual file is stored outside the database. The database stores file reference information and metadata.
 
-### Implemented (v1 — metadata, files, intelligence, and reminder rules)
+### Implemented (v1 — metadata, files, intelligence, reminder rules, and vault lifecycle)
 
 The implemented `apps.documents` module stores document metadata, attached file
-metadata, secure share-link metadata, owner-only file activity, and document
-reminder rules. OCR, AI extraction, stored reminder occurrences, and real
-notification sending are not implemented yet. The implementation differs from
-the longer-term plan below in a few ways:
+metadata, secure share-link metadata, owner-only file activity, document
+reminder rules, version snapshots, proof records, emergency access packs,
+recoverable trash, and structured metadata exports. Stored reminder occurrences
+and real notification sending are not implemented yet. The implementation
+differs from the longer-term plan below in a few ways:
 
 - Primary keys are auto-increment integers (consistent with the existing
   `users.User` model), not UUIDs — UUIDs can be revisited later.
@@ -336,6 +337,15 @@ Implemented `Document` fields:
 | `renewal_date` | DateField | No | Optional; not after `expiry_date` |
 | `notes` | TextField | No | User notes |
 | `status` | CharField | Yes | `active`, `expired`, `renewal_due`, `archived` (default `active`) |
+| `physical_location_label` | CharField | No | Owner-only location label for originals/copies |
+| `physical_location_details` | TextField | No | Owner-only storage details |
+| `original_available` | CharField | Yes | `yes`, `no`, `unknown` |
+| `certified_copy_available` | CharField | Yes | `yes`, `no`, `unknown` |
+| `translation_available` | CharField | Yes | `yes`, `no`, `unknown` |
+| `notes_about_original` | TextField | No | Owner-only notes about originals/copies |
+| `is_trashed` | BooleanField | Yes | Soft-delete state |
+| `trashed_at` | DateTime | No | When moved to trash |
+| `deletion_reason` | CharField | No | Optional owner-provided trash reason |
 | `created_at` | DateTime | Yes | Record creation time |
 | `updated_at` | DateTime | Yes | Last update time |
 
@@ -343,8 +353,8 @@ Implemented `DocumentCategory` fields: `id`, `name` (unique), `slug` (unique,
 auto-derived from name), `description`, `created_at`, `updated_at`. Categories
 are a shared controlled vocabulary, not user-owned.
 
-Implemented indexes: `(owner, status)` and `(owner, expiry_date)`; default
-ordering is `-created_at`.
+Implemented indexes: `(owner, status)`, `(owner, expiry_date)`, and
+`(owner, is_trashed)`; default ordering is `-created_at`.
 
 #### Implemented `DocumentFile` (file attachments)
 
@@ -361,13 +371,19 @@ enforced through the parent document (`file.document.owner`).
 | `content_type` | CharField | Client-reported MIME type |
 | `file_size` | PositiveIntegerField | Bytes |
 | `checksum` | CharField(64) | SHA-256 hex of the uploaded bytes |
+| `is_trashed` | BooleanField | Soft-delete state |
+| `trashed_at` | DateTime | When moved to trash |
 | `created_at` / `updated_at` | DateTime | Timestamps |
 
 - Storage path uses a UUID filename (user-supplied names are not trusted for
-  paths). Index on `(document, created_at)`; ordering `-created_at`.
+  paths). Indexes on `(document, created_at)` and `(document, is_trashed)`;
+  ordering `-created_at`.
 - Local files live under `MEDIA_ROOT` (`backend/media/`, git-ignored). They are
   served only through the authenticated download endpoint, never as public
   static media.
+- Trashed files are hidden from active file lists and cannot be served through
+  public share links until restored. Permanent deletion is guarded behind an
+  explicit trash-first flow.
 - **TODO (production):** move blobs to private object storage (S3-compatible)
   with signed, time-limited access.
 
@@ -1252,11 +1268,16 @@ branch. Every user-owned model is scoped to its owner and follows the existing
 - **Purpose:** one important document record.
 - **Key fields:** `owner`, `category`, `title`, `document_type`, `issuer`,
   `country`, `reference_number`, `issue_date`, `expiry_date`, `renewal_date`,
-  `notes`, `status`, timestamps.
+  `notes`, `status`, physical-location/copy-availability fields,
+  `is_trashed`, `trashed_at`, `deletion_reason`, timestamps.
 - **Relationships:** `owner → User`; `category → DocumentCategory`; has many
-  `DocumentFile`; has many `DocumentReminderRule`.
+  `DocumentFile`; has many `DocumentReminderRule`; has many
+  `DocumentVersion`; has many `DocumentActivity`; optional proof/emergency
+  relationships.
 - **Security:** owner-scoped. Computed health/status fields are derived from
-  dates, files, and archive state in service/serializer code, not stored.
+  dates, active files, archive state, and trash state in service/serializer
+  code, not stored. Public share/emergency endpoints never expose the
+  physical-location fields.
 
 ### DocumentCategory — *Implemented*
 - **Purpose:** shared, controlled vocabulary (Passport, Visa, Insurance…).
@@ -1267,11 +1288,13 @@ branch. Every user-owned model is scoped to its owner and follows the existing
 ### DocumentFile — *Implemented*
 - **Purpose:** a file attached to a `Document` (metadata + stored blob).
 - **Key fields:** `document`, `uploaded_by`, `file`, `original_filename`,
-  `content_type`, `file_size`, `checksum`, timestamps.
+  `content_type`, `file_size`, `checksum`, `is_trashed`, `trashed_at`,
+  timestamps.
 - **Relationships:** `document → Document` (cascade).
 - **Security:** ownership via parent document; private storage; controlled
   download and preview only. `is_previewable` is derived from supported MIME
-  type plus extension (PDF/JPEG/PNG).
+  type plus extension (PDF/JPEG/PNG). Trashed files are hidden from active
+  owner lists and unavailable through public share/emergency endpoints.
 
 ### DocumentFileShareLink — *Implemented*
 - **Purpose:** revocable, time-limited public access to one specific
@@ -1389,8 +1412,73 @@ branch. Every user-owned model is scoped to its owner and follows the existing
   applying fields requires explicit owner confirmation and only writes the
   chosen, known document fields.
 
-> The *MVP* / *Future* checklist and bundle entries below are superseded by the
-> *Implemented* models above; they remain as historical planning notes.
+### DocumentVersion — *Implemented*
+- **Purpose:** owner-owned point-in-time metadata snapshots for document history
+  and metadata restore.
+- **Key fields:** `owner`, `document`, optional `file`, `version_number`,
+  `version_type`, metadata snapshot fields, file display snapshot fields,
+  `change_summary`, `created_by`, `metadata`, `created_at`.
+- **Relationships:** `owner → User`; `document → Document`;
+  optional `file → DocumentFile`.
+- **Security:** owner-scoped; never stores or serializes raw file paths. File
+  blobs are not duplicated; file versions reference existing `DocumentFile`
+  rows.
+- **Constraint:** unique `(document, version_number)`.
+
+### DocumentExportRequest — *Implemented*
+- **Purpose:** owner-requested structured metadata export.
+- **Key fields:** `owner`, `export_type`, `status`, generated `file`,
+  `requested_at`, `completed_at`, `expires_at`, `error_message`, `metadata`.
+- **Relationships:** `owner → User`.
+- **Security:** owner-scoped; generated exports exclude raw uploaded files, raw
+  OCR text, share tokens, access-code hashes, and internal storage paths.
+  Export files are served only through authenticated, expiring download routes.
+
+### EmergencyAccessPack — *Implemented*
+- **Purpose:** owner-selected collection of documents/files for emergency use.
+- **Key fields:** `owner`, `title`, `description`, `status`, `access_mode`,
+  `expires_at`, `access_code_required`, `access_code_hash`, public `token`,
+  access timestamps, `metadata`, timestamps.
+- **Relationships:** `owner → User`; has many `EmergencyAccessPackItem`.
+- **Security:** a pack grants access only to explicitly added items, never the
+  whole vault. Public token access requires active/shareable state, optional
+  access code, and non-trashed items. Access codes are hashed.
+
+### EmergencyAccessPackItem — *Implemented*
+- **Purpose:** one selected document and optional selected file inside an
+  emergency access pack.
+- **Key fields:** `owner`, `pack`, `document`, optional `file`, `notes`,
+  `sort_order`, `created_at`.
+- **Relationships:** `owner → User`; `pack → EmergencyAccessPack`;
+  `document → Document`; optional `file → DocumentFile`.
+- **Security:** linked document/file must belong to the pack owner and must not
+  be trashed.
+
+### ProofRecord — *Implemented*
+- **Purpose:** proof of submission, payment, tracking, approval/rejection, or
+  related outcome evidence.
+- **Key fields:** `owner`, `title`, `proof_type`, optional `document`, `bundle`,
+  `checklist`, optional `linked_file`, `reference_number`, `submitted_to`,
+  `submitted_at`, `status`, `notes`, timestamps.
+- **Relationships:** `owner → User`; optional links to `Document`,
+  `DocumentBundle`, `DocumentChecklist`, and `DocumentFile`.
+- **Security:** owner-scoped; every linked object must belong to the same owner
+  and trashed document/file links are rejected.
+
+### DocumentActivity — *Implemented*
+- **Purpose:** document-level owner-facing activity events. The API can merge
+  this with lower-level `DocumentFileActivity` for one document timeline.
+- **Key fields:** `owner`, optional `document`, `action`, `actor_type`, `title`,
+  `description`, optional related file/checklist/bundle/proof, `metadata`,
+  `created_at`.
+- **Relationships:** `owner → User`; optional `document → Document`; optional
+  related owner-owned workflow records.
+- **Security:** owner-only; public activity responses never expose raw IP
+  addresses, user agents, tokens, access codes, or file paths.
+
+> Some *MVP* / *Future* entries below are superseded by the implemented document
+> vault models above; they remain as historical planning notes for features or
+> shapes that still differ from the current implementation.
 
 ### DocumentTemplate — *MVP*
 - **Purpose:** document-type presets (default fields, suggested expiry window,
@@ -1427,21 +1515,21 @@ branch. Every user-owned model is scoped to its owner and follows the existing
 - **Relationships:** `checklist → DocumentChecklist`.
 - **Security:** owner-scoped via checklist.
 
-### DocumentVersion — *Future (Phase 5)*
+### DocumentVersion — *Historical sketch, superseded*
 - **Purpose:** version history for a re-issued file.
 - **Key fields:** `file`, `version_number`, `stored_file`, `is_current`,
   `uploaded_by`, `created_at`.
 - **Relationships:** `file → DocumentFile`.
 - **Security:** owner-scoped; old versions retained until explicit purge.
 
-### DocumentBundle — *Future (Phase 5)*
+### DocumentBundle — *Historical sketch, superseded*
 - **Purpose:** reusable application/renewal pack (e.g. Student Pass Renewal).
 - **Key fields:** `owner`, `name`, `purpose`, `description`, `readiness_score`
   (derived), timestamps.
 - **Relationships:** has many `DocumentBundleItem`.
 - **Security:** owner-scoped.
 
-### DocumentBundleItem — *Future (Phase 5)*
+### DocumentBundleItem — *Historical sketch, superseded*
 - **Purpose:** a required slot in a bundle, optionally linked to a document.
 - **Key fields:** `bundle`, `required_label`, `document` (nullable),
   `is_satisfied` (derived), `sort_order`.
@@ -1474,7 +1562,7 @@ branch. Every user-owned model is scoped to its owner and follows the existing
 - **Relationships:** `document → Document`.
 - **Security:** owner-scoped.
 
-### EmergencyPack — *Future (Phase 6)*
+### EmergencyPack — *Historical sketch, superseded*
 - **Purpose:** a curated, quickly accessible set of critical documents.
 - **Key fields:** `owner`, `name`, `description`; items reference documents/files.
 - **Relationships:** references many `Document`/`DocumentFile`.
@@ -1494,10 +1582,9 @@ The following are intentionally not part of the first database implementation:
 - bank transactions
 - full-text document content indexing
 - vector embeddings
-- document version history
 - external OAuth connections
-- public sharing tables
-- audit log table
+- full-file archive exports
+- enterprise-wide audit log table
 - enterprise organization model
 
 These can be added later without blocking the first MVP.

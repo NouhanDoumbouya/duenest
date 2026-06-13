@@ -74,6 +74,11 @@ class Document(models.Model):
         RENEWAL_DUE = "renewal_due", "Renewal due"
         ARCHIVED = "archived", "Archived"
 
+    class Availability(models.TextChoices):
+        YES = "yes", "Yes"
+        NO = "no", "No"
+        UNKNOWN = "unknown", "Unknown"
+
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -104,6 +109,28 @@ class Document(models.Model):
         default=Status.ACTIVE,
     )
 
+    # Physical document location — sensitive owner-only data describing where the
+    # original/copies live. Never exposed through public share or emergency-pack
+    # endpoints.
+    physical_location_label = models.CharField(max_length=255, blank=True)
+    physical_location_details = models.TextField(blank=True)
+    original_available = models.CharField(
+        max_length=10, choices=Availability.choices, default=Availability.UNKNOWN
+    )
+    certified_copy_available = models.CharField(
+        max_length=10, choices=Availability.choices, default=Availability.UNKNOWN
+    )
+    translation_available = models.CharField(
+        max_length=10, choices=Availability.choices, default=Availability.UNKNOWN
+    )
+    notes_about_original = models.TextField(blank=True)
+
+    # Soft delete (trash). Trashed documents are hidden from active lists,
+    # intelligence, timeline, reminders, and share access until restored.
+    is_trashed = models.BooleanField(default=False)
+    trashed_at = models.DateTimeField(null=True, blank=True)
+    deletion_reason = models.CharField(max_length=255, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -112,6 +139,7 @@ class Document(models.Model):
         indexes = [
             models.Index(fields=["owner", "status"]),
             models.Index(fields=["owner", "expiry_date"]),
+            models.Index(fields=["owner", "is_trashed"]),
         ]
 
     def __str__(self):
@@ -166,6 +194,11 @@ class DocumentFile(models.Model):
     # SHA-256 hex digest of the uploaded bytes (integrity / dedupe aid).
     checksum = models.CharField(max_length=64, blank=True)
 
+    # Soft delete (trash). Trashed files are hidden from active lists and can no
+    # longer be reached through existing share links until restored.
+    is_trashed = models.BooleanField(default=False)
+    trashed_at = models.DateTimeField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -173,6 +206,7 @@ class DocumentFile(models.Model):
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["document", "created_at"]),
+            models.Index(fields=["document", "is_trashed"]),
         ]
 
     def __str__(self):
@@ -827,3 +861,426 @@ class DocumentReminderRule(models.Model):
 
     def __str__(self):
         return f"{self.get_trigger_type_display()} for {self.document_id}"
+
+
+def export_upload_to(instance, filename):
+    """Private storage path for generated export files."""
+    ext = os.path.splitext(filename)[1].lower() or ".json"
+    return f"exports/user_{instance.owner_id}/{uuid.uuid4().hex}{ext}"
+
+
+class DocumentVersion(models.Model):
+    """
+    A point-in-time snapshot of a document's important metadata (and, when a
+    file is involved, that file's display info).
+
+    Versions are owner-owned history. They store *snapshots* of metadata only —
+    never internal file paths — so a user can see what changed and safely
+    restore previous metadata. File blobs are not duplicated here: a version may
+    reference an existing ``DocumentFile`` (see the file-versioning limitation in
+    the docs).
+    """
+
+    class VersionType(models.TextChoices):
+        FILE_UPLOAD = "file_upload", "File uploaded"
+        FILE_REPLACEMENT = "file_replacement", "File replaced"
+        METADATA_SNAPSHOT = "metadata_snapshot", "Metadata snapshot"
+        EXTRACTION_APPLIED = "extraction_applied", "Extraction applied"
+        MANUAL_UPDATE = "manual_update", "Manual update"
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="document_versions",
+    )
+    document = models.ForeignKey(
+        Document,
+        on_delete=models.CASCADE,
+        related_name="versions",
+    )
+    file = models.ForeignKey(
+        DocumentFile,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="versions",
+    )
+    version_number = models.PositiveIntegerField()
+    version_type = models.CharField(
+        max_length=32,
+        choices=VersionType.choices,
+        default=VersionType.METADATA_SNAPSHOT,
+    )
+
+    # Metadata snapshots (state at the time the version was recorded).
+    title_snapshot = models.CharField(max_length=255, blank=True)
+    document_type_snapshot = models.CharField(max_length=100, blank=True)
+    issuer_snapshot = models.CharField(max_length=255, blank=True)
+    country_snapshot = models.CharField(max_length=100, blank=True)
+    reference_number_snapshot = models.CharField(max_length=255, blank=True)
+    issue_date_snapshot = models.DateField(null=True, blank=True)
+    expiry_date_snapshot = models.DateField(null=True, blank=True)
+    renewal_date_snapshot = models.DateField(null=True, blank=True)
+    notes_snapshot = models.TextField(blank=True)
+
+    # File display snapshots (never the storage path).
+    file_name_snapshot = models.CharField(max_length=255, blank=True)
+    file_size_snapshot = models.PositiveIntegerField(null=True, blank=True)
+    file_content_type_snapshot = models.CharField(max_length=120, blank=True)
+
+    change_summary = models.CharField(max_length=255, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_document_versions",
+    )
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-version_number", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["document", "version_number"],
+                name="unique_document_version_number",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["owner", "created_at"]),
+            models.Index(fields=["document", "version_number"]),
+        ]
+
+    def __str__(self):
+        return f"v{self.version_number} of document {self.document_id}"
+
+
+class DocumentExportRequest(models.Model):
+    """
+    A user-requested export of their structured document data.
+
+    Exports contain metadata only (no raw files in this branch). The generated
+    file is stored privately and served through an owner-only, expiring download
+    endpoint. Secrets (share tokens, access codes) and internal paths are never
+    included.
+    """
+
+    class ExportType(models.TextChoices):
+        DOCUMENTS_JSON = "documents_json", "Documents (JSON)"
+        DOCUMENTS_CSV = "documents_csv", "Documents (CSV)"
+        FULL_VAULT_METADATA = "full_vault_metadata", "Full vault metadata (JSON)"
+        FUTURE_FULL_ARCHIVE = "future_full_archive", "Full archive (future)"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        PROCESSING = "processing", "Processing"
+        COMPLETED = "completed", "Completed"
+        FAILED = "failed", "Failed"
+        EXPIRED = "expired", "Expired"
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="document_exports",
+    )
+    export_type = models.CharField(
+        max_length=32,
+        choices=ExportType.choices,
+        default=ExportType.DOCUMENTS_JSON,
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    file = models.FileField(upload_to=export_upload_to, null=True, blank=True)
+    requested_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    error_message = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["-requested_at"]
+        indexes = [
+            models.Index(fields=["owner", "requested_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.export_type} export for {self.owner_id}"
+
+    @property
+    def is_expired(self) -> bool:
+        return self.expires_at is not None and timezone.now() >= self.expires_at
+
+
+class EmergencyAccessPack(models.Model):
+    """
+    A controlled pack of selected documents/files prepared for emergency use.
+
+    A pack grants access ONLY to the items the owner explicitly adds — never the
+    whole vault. When shared, access is token-gated with optional expiry and an
+    optional access code, and can be disabled at any time.
+    """
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        ACTIVE = "active", "Active"
+        DISABLED = "disabled", "Disabled"
+        EXPIRED = "expired", "Expired"
+
+    class AccessMode(models.TextChoices):
+        OWNER_ONLY_PREVIEW = "owner_only_preview", "Owner only (preview)"
+        SHARE_LINK = "share_link", "Shareable link"
+        FUTURE_TRUSTED_CONTACT = "future_trusted_contact", "Trusted contact (future)"
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="emergency_packs",
+    )
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.DRAFT
+    )
+    access_mode = models.CharField(
+        max_length=32,
+        choices=AccessMode.choices,
+        default=AccessMode.OWNER_ONLY_PREVIEW,
+    )
+    expires_at = models.DateTimeField(null=True, blank=True)
+    access_code_required = models.BooleanField(default=False)
+    access_code_hash = models.CharField(max_length=255, blank=True)
+    token = models.CharField(
+        max_length=128, unique=True, null=True, blank=True, db_index=True
+    )
+    last_accessed_at = models.DateTimeField(null=True, blank=True)
+    disabled_at = models.DateTimeField(null=True, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["owner", "status"]),
+        ]
+
+    def __str__(self):
+        return f"{self.title} ({self.owner})"
+
+    @property
+    def is_expired(self) -> bool:
+        return self.expires_at is not None and timezone.now() >= self.expires_at
+
+    @property
+    def is_shareable_now(self) -> bool:
+        """Whether a public token currently grants access."""
+        return (
+            self.access_mode == self.AccessMode.SHARE_LINK
+            and self.status == self.Status.ACTIVE
+            and bool(self.token)
+            and not self.is_expired
+        )
+
+
+class EmergencyAccessPackItem(models.Model):
+    """One selected document (and optional specific file) inside a pack."""
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="emergency_pack_items",
+    )
+    pack = models.ForeignKey(
+        EmergencyAccessPack,
+        on_delete=models.CASCADE,
+        related_name="items",
+    )
+    document = models.ForeignKey(
+        Document,
+        on_delete=models.CASCADE,
+        related_name="emergency_pack_items",
+    )
+    file = models.ForeignKey(
+        DocumentFile,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="emergency_pack_items",
+    )
+    notes = models.CharField(max_length=255, blank=True)
+    sort_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["sort_order", "created_at"]
+        indexes = [
+            models.Index(fields=["pack", "sort_order"]),
+        ]
+
+    def __str__(self):
+        return f"Item doc {self.document_id} in pack {self.pack_id}"
+
+
+class ProofRecord(models.Model):
+    """
+    Proof of submission/payment/outcome connected to a document, bundle,
+    checklist, or file (e.g. a submission confirmation, receipt, tracking
+    number, or approval letter).
+
+    Owner-owned; any linked object must belong to the same owner. Never exposed
+    through public endpoints.
+    """
+
+    class ProofType(models.TextChoices):
+        SUBMISSION_CONFIRMATION = "submission_confirmation", "Submission confirmation"
+        PAYMENT_RECEIPT = "payment_receipt", "Payment receipt"
+        TRACKING_NUMBER = "tracking_number", "Tracking number"
+        APPROVAL_LETTER = "approval_letter", "Approval letter"
+        REJECTION_NOTICE = "rejection_notice", "Rejection notice"
+        EMAIL_CONFIRMATION = "email_confirmation", "Email confirmation"
+        OTHER = "other", "Other"
+
+    class Status(models.TextChoices):
+        SAVED = "saved", "Saved"
+        PENDING = "pending", "Pending"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+        NEEDS_FOLLOW_UP = "needs_follow_up", "Needs follow-up"
+        ARCHIVED = "archived", "Archived"
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="proof_records",
+    )
+    title = models.CharField(max_length=255)
+    proof_type = models.CharField(
+        max_length=32,
+        choices=ProofType.choices,
+        default=ProofType.SUBMISSION_CONFIRMATION,
+    )
+    document = models.ForeignKey(
+        Document,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="proof_records",
+    )
+    bundle = models.ForeignKey(
+        DocumentBundle,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="proof_records",
+    )
+    checklist = models.ForeignKey(
+        DocumentChecklist,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="proof_records",
+    )
+    linked_file = models.ForeignKey(
+        DocumentFile,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="proof_records",
+    )
+    reference_number = models.CharField(max_length=255, blank=True)
+    submitted_to = models.CharField(max_length=255, blank=True)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.SAVED
+    )
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["owner", "created_at"]),
+            models.Index(fields=["document", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.title} ({self.get_proof_type_display()})"
+
+
+class DocumentActivity(models.Model):
+    """
+    Document-scoped, user-facing activity events (created, updated, trashed,
+    checklist/proof/export/emergency actions, etc.).
+
+    This complements the lower-level ``DocumentFileActivity`` (file/share
+    events). The user-facing activity timeline merges both. Owner-only; logging
+    must never break the main flow.
+    """
+
+    class Action(models.TextChoices):
+        DOCUMENT_CREATED = "document_created", "Document created"
+        DOCUMENT_UPDATED = "document_updated", "Document updated"
+        DOCUMENT_TRASHED = "document_trashed", "Document moved to trash"
+        DOCUMENT_RESTORED = "document_restored", "Document restored"
+        DOCUMENT_VERSION_RESTORED = "document_version_restored", "Version restored"
+        FILE_TRASHED = "file_trashed", "File moved to trash"
+        FILE_RESTORED = "file_restored", "File restored"
+        CHECKLIST_CREATED = "checklist_created", "Checklist created"
+        CHECKLIST_ITEM_COMPLETED = "checklist_item_completed", "Checklist item completed"
+        EXTRACTION_REQUESTED = "extraction_requested", "Detail extraction requested"
+        EXTRACTION_APPLIED = "extraction_applied", "Extracted details applied"
+        PROOF_SAVED = "proof_saved", "Proof saved"
+        EXPORT_REQUESTED = "export_requested", "Export requested"
+        EMERGENCY_PACK_CREATED = "emergency_pack_created", "Emergency pack created"
+        EMERGENCY_PACK_OPENED = "emergency_pack_opened", "Emergency pack opened"
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="document_activities",
+    )
+    document = models.ForeignKey(
+        Document,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="activities",
+    )
+    action = models.CharField(max_length=48, choices=Action.choices)
+    actor_type = models.CharField(max_length=32, default="owner")
+    title = models.CharField(max_length=255, blank=True)
+    description = models.CharField(max_length=500, blank=True)
+
+    related_file = models.ForeignKey(
+        DocumentFile, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+",
+    )
+    related_checklist = models.ForeignKey(
+        DocumentChecklist, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+",
+    )
+    related_bundle = models.ForeignKey(
+        DocumentBundle, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+",
+    )
+    related_proof = models.ForeignKey(
+        ProofRecord, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+",
+    )
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["owner", "created_at"]),
+            models.Index(fields=["document", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.action} (doc {self.document_id})"
