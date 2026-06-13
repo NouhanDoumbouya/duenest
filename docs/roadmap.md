@@ -793,8 +793,8 @@ stress**.
 1. Premium authenticated app UI polish            (done)
 2. Backend file upload foundation                 (done)
 3. Frontend document upload UI                     (done)
-4. Backend secure preview/download access
-5. Frontend in-app document preview
+4. Backend secure preview/download access          (done)
+5. Frontend in-app document preview                (done)
 6. Smart status and expiry intelligence
 7. Search, filter, and sort
 8. Missing-information detection
@@ -803,32 +803,32 @@ stress**.
 11. Renewal preparation checklists
 12. Document detail page upgrade
 13. Calendar/timeline view
-14. Secure share links
+14. Secure share links                             (done)
 15. OCR-assisted extraction
 16. Application/renewal bundles
-17. Activity timeline and audit log
+17. File activity timeline and audit log           (partially done)
 18. Version history
 19. Emergency access pack
 20. Export and backup features
 ```
 
-Sharing (14) and OCR (15) deliberately come **after** upload, preview, and
-status intelligence are solid.
+Sharing (14) was implemented early as file-level sharing for the document vault.
+OCR (15) still deliberately comes **after** upload, preview, and status
+intelligence are solid.
 
 ### Upcoming branches
 
 ```txt
-backend/document-preview-access        frontend/document-preview-viewer
 backend/document-status-intelligence   frontend/document-status-polish
 backend/document-search-filter         frontend/document-search-filter
 backend/document-attention-inbox       frontend/document-attention-inbox
 backend/document-reminder-rules        frontend/document-reminder-experience
 backend/document-checklists            frontend/document-checklists
-backend/file-sharing-foundation        frontend/file-sharing-ui
 backend/document-ocr-foundation        frontend/document-ocr-review-ui
 ```
 
-The **next implementation branch** is `backend/document-preview-access` (step 4).
+The **next implementation branch** should return to status/expiry intelligence
+(step 6) unless the share-link UX needs a dedicated polish pass first.
 
 ---
 

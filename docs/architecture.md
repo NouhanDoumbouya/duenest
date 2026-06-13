@@ -1053,15 +1053,21 @@ justifies extraction.
 ### Current (implemented)
 
 - **Frontend document UI** (Next.js): vault list, create/edit workspace, upload.
-- **Backend document API** (DRF): documents + files CRUD, owner-scoped.
+- **Backend document API** (DRF): documents + files CRUD, preview, share links,
+  and activity logs, owner-scoped where private.
 - **Private file storage:** local `MEDIA_ROOT` (dev), never served as public
   static media.
-- **Controlled download endpoint:** authenticated, ownership-checked streaming.
+- **Controlled preview/download endpoints:** authenticated, ownership-checked
+  streaming for owner access. Preview supports PDF/JPEG/PNG inline; DOC/DOCX
+  remain download-only.
+- **Share-link access layer:** token-gated public route for one file only, with
+  server-side expiry, revocation, view-only/download permissions, optional
+  hashed access codes, and owner-only share notes.
+- **Owner-only activity log:** records upload, preview, download, share access,
+  revocation, and access-code events without exposing logs to public viewers.
 
 ### Near-term (MVP layers)
 
-- **Preview/download access layer:** one authorization path serving both inline
-  preview and attachment download.
 - **Status & expiry intelligence:** server-side derivation of status, expiry
   urgency, and missing-information flags (pure functions over existing data —
   no new infrastructure).
@@ -1072,8 +1078,6 @@ justifies extraction.
 
 ### Mid-term (Phase 3–4)
 
-- **Share-link access layer:** a separate, token-gated public route that never
-  touches private endpoints; expiry + revocation enforced on every request.
 - **OCR worker/service:** an async worker (queue) that produces *review-gated*
   extraction results; never writes document fields directly.
 
@@ -1090,12 +1094,12 @@ justifies extraction.
 | --- | --- | --- |
 | Document + file CRUD | ✅ Implemented | — |
 | Private storage + controlled download | ✅ Implemented (local) | Object storage + signed URLs |
-| In-app preview | Planned MVP | — |
+| In-app preview | ✅ Implemented for PDF/JPEG/PNG | More file types later |
 | Status/expiry intelligence | Planned MVP | — |
 | Reminders | Planned MVP (periodic job) | Notification service |
-| Sharing | — | Token-gated access layer |
+| Sharing | ✅ Implemented file-level links | Email delivery, watermarking, redaction later |
 | OCR | — | Async worker, review-gated |
-| Audit / export | — | Activity log + export service |
+| Audit / export | ✅ File activity log | Document-wide audit + export service |
 
 ---
 

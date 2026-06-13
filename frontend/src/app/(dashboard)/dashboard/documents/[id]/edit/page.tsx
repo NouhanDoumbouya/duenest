@@ -6,8 +6,10 @@ import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Loader2 } from "lucide-react";
 
 import { DocumentForm } from "@/components/documents/document-form";
+import { DocumentFileShareDialog } from "@/components/documents/document-file-share-dialog";
 import { DocumentFilesList } from "@/components/documents/document-files-list";
 import { DocumentFileUploader } from "@/components/documents/document-file-uploader";
+import { DocumentFileViewer } from "@/components/documents/document-file-viewer";
 import { DocumentStatusBadge } from "@/components/documents/status-badge";
 import {
   Card,
@@ -42,6 +44,8 @@ export default function EditDocumentPage() {
   const [files, setFiles] = useState<DocumentFile[] | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<DocumentFile | null>(null);
+  const [previewingFile, setPreviewingFile] = useState<DocumentFile | null>(null);
+  const [sharingFile, setSharingFile] = useState<DocumentFile | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
 
@@ -200,7 +204,9 @@ export default function EditDocumentPage() {
               <DocumentFilesList
                 files={files}
                 downloadingId={downloadingId}
+                onPreview={setPreviewingFile}
                 onDownload={handleDownload}
+                onShare={setSharingFile}
                 onRequestDelete={setPendingDelete}
               />
             )}
@@ -221,6 +227,26 @@ export default function EditDocumentPage() {
         onConfirm={handleConfirmDelete}
         onCancel={() => setPendingDelete(null)}
       />
+
+      {previewingFile && (
+        <DocumentFileViewer
+          file={previewingFile}
+          downloading={downloadingId === previewingFile.id}
+          onClose={() => setPreviewingFile(null)}
+          onDownload={handleDownload}
+          onShare={(file) => {
+            setPreviewingFile(null);
+            setSharingFile(file);
+          }}
+        />
+      )}
+
+      {sharingFile && (
+        <DocumentFileShareDialog
+          file={sharingFile}
+          onClose={() => setSharingFile(null)}
+        />
+      )}
     </div>
   );
 }

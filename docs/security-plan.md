@@ -337,7 +337,7 @@ For v0.1, reject executable or script-like files, including:
 .html
 ```
 
-### Implemented: Document file upload (`DocumentFile`)
+### Implemented: Document file upload, preview, sharing, and activity
 
 The shipped file upload foundation enforces:
 
@@ -351,13 +351,31 @@ The shipped file upload foundation enforces:
 - **Safe storage paths:** filenames are replaced with a UUID; the original name
   is stored for display only and never used to build the path. Files live under
   `MEDIA_ROOT` and are **not** served as public static media.
-- **No path leakage:** API responses expose only a controlled `download_url`
-  (itself authenticated), never the internal storage path.
+- **No path leakage:** API responses expose only controlled `download_url` and
+  `preview_url` values (themselves authorized), never the internal storage path.
 - **`uploaded_by`** is set from the request user, read-only to clients.
+- **Preview access:** PDF/JPEG/PNG preview is served inline only through the
+  backend. Preview authorization is the same as download authorization.
+- **File-level share links:** a share link grants controlled access to one
+  specific file only. It does **not** grant access to the user's whole vault,
+  parent document private fields, other files, or dashboard data.
+- **Server-side share permissions:** `view_only` links can preview supported
+  files but cannot download; `download_allowed` links can download. The backend
+  enforces this regardless of frontend state.
+- **Expiry and revocation:** expired and revoked share links are invalid
+  immediately for metadata, preview, and download.
+- **Access codes:** optional access codes are hashed and never stored in plain
+  text. Correct access codes do not bypass expiry, revocation, or permissions.
+- **Owner-only share notes:** labels, recipient email, and purpose notes are
+  owner-facing and are not exposed by public share endpoints.
+- **Owner-only activity:** file activity logs are visible only to the owning
+  user. Public share viewers never see the owner's internal activity log.
 
 TODO (hardening): sniff real content type from magic bytes (the client MIME is
 spoofable) and add antivirus scanning before files are trusted. Production
-should use private object storage with signed URLs.
+preview/download/share access should use authenticated proxy access or private
+object storage with signed, time-limited URLs. Raw public media URLs should not
+be treated as secure access control.
 
 User-uploaded SVG files should be rejected or heavily sanitized because SVG can contain scripts. Brand SVG assets committed by the developer are different from user-uploaded SVG files.
 
@@ -856,12 +874,16 @@ not a later add-on.
 - **No frontend-only access control:** the backend is always the source of
   truth for who can read a file.
 
-### Share links (Phase 3)
+### Share links (implemented file-level access)
 
 - Tokens must be **unguessable** (cryptographically random), never sequential.
 - Every link has an **expiry**; expired links return nothing.
 - Links are **revocable**; revoked links return nothing immediately.
-- Optional **password** protection (hashed, never stored in plaintext).
+- Optional **access-code** protection (hashed, never stored in plaintext).
+- Share links grant access to **one file only**, never the owner's full vault.
+- Permissions are enforced server-side: view-only does not allow download.
+- Correct access codes do not bypass expiry, revocation, or permissions.
+- Owner-only share labels and notes are not exposed publicly by default.
 - **Log access** (timestamp, coarse metadata) for the owner's activity view.
 - Public share routes must not list other files or expose internal paths.
 

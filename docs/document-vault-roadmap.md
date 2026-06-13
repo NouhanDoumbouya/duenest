@@ -90,7 +90,12 @@ Phases are ordered by user value, implementation risk, and product readiness. Ea
 
 **Why it matters:** Sharing is high-trust and high-risk. It must come **after** upload, preview, ownership checks, and secure download are solid.
 
-**Includes:** time-limited share links; revoke links; view-only/download permissions; password-protected links; share activity log; watermarked links; redaction before sharing; (later) email-based sharing, trusted contacts, emergency access.
+**Implemented foundation:** file-level time-limited share links; revoke links;
+view-only/download permissions; optional access-code protection; share activity
+log; owner-facing labels, recipient email, and purpose notes.
+
+**Future hardening:** watermarked links; redaction before sharing; email-based
+sharing; trusted contacts; emergency access.
 
 **Rules:** unguessable tokens; expiry dates; revocation; never expose internal file paths; never list private files publicly; no access after expiry or revocation; log access where possible.
 
@@ -169,8 +174,8 @@ This is the recommended sequence. It can be adjusted, but the first paid MVP sho
 1. Premium authenticated app UI polish *(done)*
 2. Backend file upload foundation *(done)*
 3. Frontend document upload UI *(done)*
-4. Backend secure preview/download access
-5. Frontend in-app document preview
+4. Backend secure preview/download access *(done)*
+5. Frontend in-app document preview *(done)*
 6. Smart status and expiry intelligence
 7. Search, filter, and sort
 8. Missing-information detection
@@ -179,15 +184,17 @@ This is the recommended sequence. It can be adjusted, but the first paid MVP sho
 11. Renewal preparation checklists
 12. Document detail page upgrade
 13. Calendar/timeline view
-14. Secure share links
+14. Secure share links *(done: file-level links)*
 15. OCR-assisted extraction
 16. Application/renewal bundles
-17. Activity timeline and audit log
+17. Activity timeline and audit log *(partially done: file activity)*
 18. Version history
 19. Emergency access pack
 20. Export and backup features
 
-> Steps 1–3 are already implemented (file upload foundation, upload UI, premium polish). The **next implementation branch** should start at step 4 (secure preview/download), then step 5 (in-app preview), then step 6 (status intelligence).
+> Steps 1–5 are implemented, and file-level secure sharing from step 14 has
+> also landed early. The **next implementation branch** should return to step 6
+> (status intelligence), unless the share-link UX needs a dedicated polish pass.
 
 ---
 
@@ -196,8 +203,6 @@ This is the recommended sequence. It can be adjusted, but the first paid MVP sho
 Realistic, focused branches (backend before its matching frontend):
 
 ```txt
-backend/document-preview-access        # signed/streamed preview + download authorization
-frontend/document-preview-viewer       # in-app PDF/image viewer
 backend/document-status-intelligence   # auto status + expiry derivation + missing-info flags
 frontend/document-status-polish        # status/urgency presentation
 backend/document-search-filter         # search, filter, sort, pagination
@@ -208,8 +213,6 @@ backend/document-reminder-rules        # reminder rule model + evaluation
 frontend/document-reminder-experience  # reminder setup + surfacing
 backend/document-checklists            # checklist templates + per-document items
 frontend/document-checklists           # checklist UI
-backend/file-sharing-foundation        # share-link tokens, expiry, revocation, access log
-frontend/file-sharing-ui               # share management + public share view
 backend/document-ocr-foundation        # OCR worker + extraction results (review-gated)
 frontend/document-ocr-review-ui        # OCR review/confirm screen
 ```

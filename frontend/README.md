@@ -49,6 +49,7 @@ src/
 │   │   ├── page.tsx                           #   list + delete
 │   │   ├── new/page.tsx                       #   /dashboard/documents/new
 │   │   └── [id]/edit/page.tsx                 #   workspace: metadata form + attached files
+│   ├── share/files/[token]/page.tsx          # Public shared-file viewer
 │   ├── layout.tsx                            # Root layout + fonts + metadata
 │   └── globals.css                          # Tailwind + DueNest theme tokens
 ├── components/
@@ -57,18 +58,18 @@ src/
 │   ├── auth/                                # auth-shell, google-button
 │   ├── dashboard/                           # stat-card, user-context
 │   ├── documents/                           # document-card/form/status-badge,
-│   │                                        #   document-file-uploader, document-files-list
+│   │                                        #   document-file-uploader/list/viewer/share-dialog
 │   └── ui/                                  # shadcn/ui primitives (+ textarea, confirm-dialog)
 ├── lib/
 │   ├── api.ts                               # fetch wrapper + ApiError (JSON + FormData)
 │   ├── auth.ts                              # login/register/logout + token helpers
 │   ├── documents.ts                         # documents API + date/status helpers
-│   ├── document-files.ts                    # document files API + size/validation helpers
+│   ├── document-files.ts                    # files, preview, sharing, activity helpers
 │   └── utils.ts                             # cn()
 └── types/
     ├── auth.ts                              # User / token / payload types
     ├── documents.ts                         # DocumentRecord / requests / category
-    └── document-files.ts                    # DocumentFile
+    └── document-files.ts                    # file/share/activity/public-share types
 ```
 
 ## Documents management
@@ -87,15 +88,26 @@ src/
 
 - The document workspace (`/dashboard/documents/[id]/edit`) holds both the
   metadata form **and** an **Attached files** section (upload, list, download,
-  delete) on one page. Creating a document redirects straight here so a file can
-  be attached immediately — no extra navigation.
+  preview, share, delete) on one page. Creating a document redirects straight
+  here so a file can be attached immediately — no extra navigation.
 - File calls go through `src/lib/document-files.ts`. Uploads send `FormData`
   via `apiFetch` (which omits `Content-Type` for multipart so the browser sets
-  the boundary). Downloads use an authenticated blob fetch + a temporary anchor,
-  because the controlled download endpoint requires the `Authorization` header.
+  the boundary). Preview and download use authenticated blob fetches because
+  controlled file endpoints require the `Authorization` header.
 - Endpoints: `GET/POST /api/v1/documents/:id/files/`,
   `DELETE /api/v1/documents/:id/files/:file_id/`,
+  `GET /api/v1/documents/:id/files/:file_id/preview/`,
   `GET /api/v1/documents/:id/files/:file_id/download/`.
+- The in-app viewer supports PDF, JPG, and PNG previews. DOC/DOCX files show a
+  download fallback.
+- Share management lives in `DocumentFileShareDialog`: owners can create
+  time-limited file-level links, choose view-only or download-allowed access,
+  require an access code, copy the generated link/code, revoke active links, and
+  view owner-only activity.
+- Public shared links render at `/share/files/[token]` without the dashboard
+  shell. Access-code-protected files keep the code in component state only and
+  pass it to the backend via `X-Access-Code`; codes are not stored in
+  `localStorage`.
 - Client-side validation (type + 10 MB) is UX-only; the backend remains the
   source of truth.
 
