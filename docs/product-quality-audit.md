@@ -45,3 +45,28 @@ Founder Console V1 readiness.
 The first sandboxed `npm run build` attempt failed because Next.js could not
 fetch Google Fonts without network access; the approved rerun completed
 successfully.
+
+## Product Operations UI Refinement Notes
+
+Branch: `feature/product-ops-ui-masterpiece-refinement`
+
+Additional actions in this pass:
+
+- Added reusable product-operations UI primitives for metrics, trust notices,
+  inline alerts, segmented workflows, compact data rows, and drawer shells.
+- Converted Bundle Detail from a long single-column stack into a tabbed
+  workspace with a persistent readiness/action rail.
+- Refined Calendar into an owner-scoped planning surface with summary metrics,
+  a trust notice, shared segmented controls, and an Escape-close event drawer.
+- Refined Secure Rooms into a wider operations layout with room metrics, a
+  compact inventory list, safe empty/loading states, and a creation/trust side
+  panel.
+- Strengthened one-time public share/room security so a successful download
+  consumes the token just like a preview.
+
+Deferred from this pass:
+
+- Dedicated public access-code throttles.
+- Aggregate ZIP file-count/byte caps and chunked ZIP writes.
+- Full route-level App Router `loading.tsx` / `error.tsx` coverage.
+- Browser-based visual QA screenshots across every dashboard and founder route.

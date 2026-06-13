@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
+import { ProductMetric, SegmentedControl } from "@/components/ui/product-ui";
 import type { ChartPoint, FounderBreakdownItem } from "@/types/founder";
 
 const nf = new Intl.NumberFormat();
@@ -28,13 +28,9 @@ export function FounderPageHeader({
             {eyebrow}
           </p>
         )}
-        <h1 className="mt-2 font-heading text-2xl font-semibold tracking-tight sm:text-3xl">
-          {title}
-        </h1>
+        <h1 className="mt-2 text-page-title">{title}</h1>
         {description && (
-          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-            {description}
-          </p>
+          <p className="mt-2 text-page-subtitle">{description}</p>
         )}
       </div>
       {actions && <div className="flex items-center gap-2">{actions}</div>}
@@ -55,29 +51,15 @@ export function FounderStatCard({
   icon: LucideIcon;
   tone?: "default" | "good" | "warn" | "danger";
 }) {
-  const toneClass =
-    tone === "good"
-      ? "bg-brand-success/10 text-brand-success"
-      : tone === "warn"
-        ? "bg-brand-amber/15 text-brand-amber"
-        : tone === "danger"
-          ? "bg-destructive/10 text-destructive"
-          : "bg-primary/10 text-primary";
   return (
-    <Card>
-      <CardContent className="space-y-3">
-        <div className="flex items-start justify-between gap-3">
-          <p className="text-sm text-muted-foreground">{label}</p>
-          <span className={cn("flex size-9 items-center justify-center rounded-lg", toneClass)}>
-            <Icon className="size-4" />
-          </span>
-        </div>
-        <p className="text-3xl font-semibold tracking-tight">
-          {typeof value === "number" ? nf.format(value) : value}
-        </p>
-        <p className="text-xs text-muted-foreground">{hint}</p>
-      </CardContent>
-    </Card>
+    <ProductMetric
+      icon={Icon}
+      label={label}
+      value={typeof value === "number" ? nf.format(value) : value}
+      hint={hint}
+      tone={tone === "default" ? "secure" : tone}
+      className="min-h-[132px]"
+    />
   );
 }
 
@@ -85,7 +67,7 @@ export function RangePicker({
   value,
   onChange,
 }: {
-  value: string;
+  value: "7d" | "30d" | "90d" | "all";
   onChange: (value: "7d" | "30d" | "90d" | "all") => void;
 }) {
   const options: { value: "7d" | "30d" | "90d" | "all"; label: string }[] = [
@@ -95,23 +77,12 @@ export function RangePicker({
     { value: "all", label: "All time" },
   ];
   return (
-    <div className="flex rounded-lg border border-border bg-card p-1">
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          onClick={() => onChange(option.value)}
-          className={cn(
-            "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-            value === option.value
-              ? "bg-primary text-primary-foreground"
-              : "text-muted-foreground hover:bg-muted hover:text-foreground",
-          )}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
+    <SegmentedControl
+      label="Founder analytics range"
+      value={value}
+      options={options}
+      onChange={onChange}
+    />
   );
 }
 
@@ -137,6 +108,7 @@ export function FounderLineChart({
   const path = points
     .map((point, index) => `${index === 0 ? "M" : "L"}${point.x},${point.y}`)
     .join(" ");
+  const total = data.reduce((sum, point) => sum + point.count, 0);
 
   return (
     <Card>
@@ -147,8 +119,14 @@ export function FounderLineChart({
         )}
       </CardHeader>
       <CardContent>
-        {data.length === 0 ? (
-          <p className="py-10 text-sm text-muted-foreground">No data yet.</p>
+        {data.length === 0 || total === 0 ? (
+          <div className="rounded-xl border border-dashed border-border px-4 py-10 text-center">
+            <p className="text-sm font-medium">No signal in this range</p>
+            <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
+              The chart will populate when privacy-safe product events exist
+              for the selected period.
+            </p>
+          </div>
         ) : (
           <div>
             <svg
@@ -162,6 +140,15 @@ export function FounderLineChart({
                 stroke="var(--border)"
                 strokeWidth="1"
               />
+              {[0.25, 0.5, 0.75].map((line) => (
+                <path
+                  key={line}
+                  d={`M0,${height * line} L${width},${height * line}`}
+                  stroke="var(--border)"
+                  strokeDasharray="4 6"
+                  strokeWidth="1"
+                />
+              ))}
               <path
                 d={path}
                 fill="none"
@@ -169,6 +156,7 @@ export function FounderLineChart({
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeWidth="3"
+                className="drop-shadow-sm"
               />
               {points.map((point) => (
                 <circle
@@ -212,7 +200,13 @@ export function FounderBarList({
       </CardHeader>
       <CardContent>
         {items.length === 0 ? (
-          <p className="py-8 text-sm text-muted-foreground">No data yet.</p>
+          <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center">
+            <p className="text-sm font-medium">No breakdown yet</p>
+            <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
+              This section stays intentionally empty until there is enough
+              aggregate activity to summarize.
+            </p>
+          </div>
         ) : (
           <ul className="space-y-3">
             {items.map((item) => (
@@ -223,7 +217,7 @@ export function FounderBarList({
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-muted">
                   <div
-                    className="h-full rounded-full bg-primary"
+                    className="h-full rounded-full bg-primary transition-all duration-300 ease-out motion-reduce:transition-none"
                     style={{ width: `${Math.max(3, (item.count / max) * 100)}%` }}
                   />
                 </div>

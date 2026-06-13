@@ -1126,6 +1126,11 @@ paths. Expiry, revocation, access-code verification, view-only download
 blocking, and one-time/limited access limits are **all enforced server-side**;
 frontend hiding is never the security boundary.
 
+One-time public access is consumed by the first successful sensitive access,
+whether that access is a preview, a direct file download, or a Secure Room ZIP
+download. After consumption, metadata, preview, download, and ZIP routes return
+`410 {state: "limit_reached"}` for that token.
+
 ### Access-code grants
 
 After a viewer verifies an access code, the server issues a short-lived (30 min)

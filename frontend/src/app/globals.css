@@ -156,14 +156,58 @@
     scroll-behavior: smooth;
   }
   h1, h2, h3 {
-    @apply font-heading tracking-tight;
-  }
-  h1 {
-    letter-spacing: -0.02em;
+    @apply font-heading;
+    letter-spacing: 0;
   }
 }
 
 @layer utilities {
+  .text-page-title {
+    @apply font-heading text-2xl leading-tight font-semibold sm:text-3xl;
+    letter-spacing: 0;
+  }
+
+  .text-page-subtitle {
+    @apply max-w-3xl text-sm leading-relaxed text-muted-foreground;
+  }
+
+  .text-section-title {
+    @apply font-heading text-base leading-snug font-medium;
+    letter-spacing: 0;
+  }
+
+  .text-card-title {
+    @apply font-heading text-sm leading-snug font-medium;
+    letter-spacing: 0;
+  }
+
+  .text-metadata {
+    @apply text-xs leading-relaxed text-muted-foreground;
+  }
+
+  .surface-hover {
+    @apply transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-elevated motion-reduce:transform-none motion-reduce:transition-none;
+  }
+
+  .content-fade-in {
+    animation: duenest-fade-up 180ms ease-out both;
+  }
+
+  .tracking-tight {
+    letter-spacing: 0;
+  }
+
+  @keyframes duenest-fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
   /* Subtle technical grid for hero / section backdrops. */
   .bg-grid {
     background-image:
@@ -183,5 +227,15 @@
   .mask-fade-b {
     -webkit-mask-image: linear-gradient(to bottom, black 55%, transparent);
     mask-image: linear-gradient(to bottom, black 55%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .content-fade-in {
+    animation: none;
   }
 }

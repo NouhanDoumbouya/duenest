@@ -391,6 +391,8 @@ class DocumentFileShareLink(models.Model):
     @property
     def is_limit_reached(self) -> bool:
         """Whether the link can no longer be opened/previewed at all."""
+        if self.access_limit_type == self.AccessLimitType.ONE_TIME:
+            return (self.view_count + self.download_count) >= 1
         return self.is_view_limit_reached
 
     @property
@@ -1739,6 +1741,8 @@ class ShareRoom(models.Model):
 
     @property
     def is_limit_reached(self) -> bool:
+        if self.access_limit_type == self.AccessLimitType.ONE_TIME:
+            return (self.view_count + self.download_count) >= 1
         return self.is_view_limit_reached
 
     @property

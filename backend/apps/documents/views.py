@@ -1108,7 +1108,7 @@ _LIMIT_REACHED_DETAIL = (
 
 def _check_link_usable(link, request):
     """Block a link whose view/access limit has already been reached."""
-    if link.is_view_limit_reached:
+    if link.is_limit_reached:
         log_activity(
             file=link.file,
             action=DocumentFileActivity.Action.SHARE_BLOCKED_LIMIT_REACHED,
@@ -1143,15 +1143,24 @@ def _consume_share_view(link, request):
         )
 
 
-def _consume_share_download(link):
+def _consume_share_download(link, request):
     """Atomically count one download and stamp the limit if it is now reached."""
     DocumentFileShareLink.objects.filter(pk=link.pk).update(
         download_count=F("download_count") + 1
     )
     link.refresh_from_db(fields=["download_count"])
-    if link.is_download_limit_reached and link.limit_reached_at is None:
+    if (link.is_download_limit_reached or link.is_limit_reached) and (
+        link.limit_reached_at is None
+    ):
         link.limit_reached_at = timezone.now()
         link.save(update_fields=["limit_reached_at"])
+        log_activity(
+            file=link.file,
+            action=DocumentFileActivity.Action.SHARE_LIMIT_REACHED,
+            actor_type=DocumentFileActivity.ActorType.SHARED_VIEWER,
+            request=request,
+            share_link=link,
+        )
 
 
 class PublicSharedFileMetadataView(APIView):
@@ -1314,7 +1323,7 @@ class PublicSharedFileDownloadView(APIView):
         )
         instance = link.file
         response = _file_response(instance, as_attachment=True)
-        _consume_share_download(link)
+        _consume_share_download(link, request)
         return response
 
 
@@ -3389,7 +3398,7 @@ def _check_room_code(room, request):
 
 
 def _check_room_usable(room, request):
-    if room.is_view_limit_reached:
+    if room.is_limit_reached:
         log_room_activity(
             room=room,
             action=RoomActivity.Action.ROOM_BLOCKED_LIMIT_REACHED,
@@ -3419,14 +3428,22 @@ def _consume_room_view(room, request):
         )
 
 
-def _consume_room_download(room):
+def _consume_room_download(room, request):
     ShareRoom.objects.filter(pk=room.pk).update(
         download_count=F("download_count") + 1
     )
     room.refresh_from_db(fields=["download_count"])
-    if room.is_download_limit_reached and room.limit_reached_at is None:
+    if (room.is_download_limit_reached or room.is_limit_reached) and (
+        room.limit_reached_at is None
+    ):
         room.limit_reached_at = timezone.now()
         room.save(update_fields=["limit_reached_at"])
+        log_room_activity(
+            room=room,
+            action=RoomActivity.Action.ROOM_LIMIT_REACHED,
+            actor_type=RoomActivity.ActorType.SHARED_VIEWER,
+            request=request,
+        )
 
 
 def _resolve_room_file(room, file_id):
@@ -3575,7 +3592,7 @@ class PublicShareRoomFileDownloadView(_PublicRoomFileMixin):
             metadata={"file_id": file.id},
         )
         response = _file_response(file, as_attachment=True)
-        _consume_room_download(room)
+        _consume_room_download(room, request)
         return response
 
 
@@ -3620,7 +3637,7 @@ class PublicShareRoomZipView(APIView):
             request=request,
             metadata={"scope": "room_zip", "files": summary["files_count"]},
         )
-        _consume_room_download(room)
+        _consume_room_download(room, request)
         return _zip_response(spooled, filename, summary)
 
 

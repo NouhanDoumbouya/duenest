@@ -257,3 +257,25 @@ class RoomPublicAccessTests(ShareRoomBaseTest):
             f"/api/v1/public/rooms/{room.token}/files/{self.alice_file.id}/preview/"
         )
         self.assertEqual(second.status_code, status.HTTP_410_GONE)
+
+    def test_one_time_room_download_blocks_later_preview_and_metadata(self):
+        room = self._room_with_file(
+            permission="download_allowed",
+            access_limit_type="one_time",
+        )
+        first = self.consume(
+            self.client.get(
+                f"/api/v1/public/rooms/{room.token}/files/{self.alice_file.id}/download/"
+            )
+        )
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        preview = self.client.get(
+            f"/api/v1/public/rooms/{room.token}/files/{self.alice_file.id}/preview/"
+        )
+        self.assertEqual(preview.status_code, status.HTTP_410_GONE)
+        self.assertEqual(preview.data["state"], "limit_reached")
+        meta = self.client.get(f"/api/v1/public/rooms/{room.token}/")
+        self.assertEqual(meta.status_code, status.HTTP_410_GONE)
+        room.refresh_from_db()
+        self.assertEqual(room.download_count, 1)
+        self.assertIsNotNone(room.limit_reached_at)

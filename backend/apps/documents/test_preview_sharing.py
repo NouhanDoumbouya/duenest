@@ -592,6 +592,22 @@ class AccessLimitTests(PreviewSharingBaseTest):
         meta = self.client.get(public_meta(link.token))
         self.assertEqual(meta.status_code, status.HTTP_410_GONE)
 
+    def test_one_time_download_blocks_later_preview_and_metadata(self):
+        link = self.make_link(
+            permission="download_allowed",
+            limit_type="one_time",
+        )
+        first = self.consume(self.client.get(public_download(link.token)))
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        preview = self.client.get(public_preview(link.token))
+        self.assertEqual(preview.status_code, status.HTTP_410_GONE)
+        self.assertEqual(preview.data["state"], "limit_reached")
+        meta = self.client.get(public_meta(link.token))
+        self.assertEqual(meta.status_code, status.HTTP_410_GONE)
+        link.refresh_from_db()
+        self.assertEqual(link.download_count, 1)
+        self.assertIsNotNone(link.limit_reached_at)
+
     def test_limited_view_count_enforced(self):
         link = self.make_link(limit_type="limited_count", max_views=2)
         self.assertEqual(

@@ -147,6 +147,9 @@ src/
   shell. Access-code-protected files keep the code in component state only and
   pass it to the backend via `X-Access-Code`; codes are not stored in
   `localStorage`.
+- One-time public file shares and Secure Rooms are consumed by the first
+  successful preview or download. After that, metadata, preview, download, and
+  room ZIP access return a limit-reached state from the backend.
 - Client-side validation (type + 10 MB) is UX-only; the backend remains the
   source of truth.
 
@@ -180,6 +183,18 @@ src/
   (`sm` / default / `lg`) and tinted primary shadow.
 - **Patterns:** reusable section/card components live under `components/marketing`,
   `components/dashboard`, and `components/auth` to keep pages thin.
+- **Product operations primitives:** `components/ui/product-ui.tsx` contains
+  shared SaaS patterns used by workspace and founder pages: `ProductMetric`,
+  `TrustNotice`, `InlineAlert`, `SegmentedControl`, `DataRow`,
+  `SectionToolbar`, and drawer shell helpers. Prefer these for operational
+  metrics, tabbed workflows, trust/security notices, compact row lists, and
+  consistent drawer behavior instead of building one-off card stacks.
+- **Workspace composition:** high-density workflows should use `PageContainer`
+  plus `PageHeader`, then split complex pages into tabs, two-column layouts, or
+  a right-side summary rail when that makes the primary task clearer. Bundle
+  detail uses Requirements / Files / Timeline / Proofs / Exports tabs; Calendar
+  uses summary metrics plus Month / Upcoming views; Secure Rooms uses metrics,
+  a compact inventory, and a creation/trust side panel.
 - **Authenticated app conventions:** forms group fields into labelled sections
   (a two-column `label / fields` layout) rather than a flat list; document
   status uses `DocumentStatusBadge` (calm → urgent ring-tinted pills), and

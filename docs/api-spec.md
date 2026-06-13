@@ -2916,10 +2916,11 @@ privacy_screen_enabled bool
 access_code_required / access_code
 ```
 
-Enforcement is server-side: one-time links are consumed by the first preview;
-limited links count each preview (and each download); counters increment
-atomically. Exhausted links return `410 {state: "limit_reached"}`. View-only
-links block download server-side. Public file metadata exposes
+Enforcement is server-side: one-time links are consumed by the first successful
+preview or download; limited links count each preview (and each download);
+counters increment atomically. Exhausted links return
+`410 {state: "limit_reached"}`. View-only links block download server-side.
+Public file metadata exposes
 `watermark_enabled`, `privacy_screen_enabled`, `short_id`, and `watermark_text`
 (only when watermarking is enabled). Screenshot deterrence is **deterrence, not
 prevention** — browsers cannot block OS-level screenshots.
@@ -2950,6 +2951,9 @@ GET  /api/v1/public/rooms/:token/download-zip/            # download_allowed roo
 A room exposes only its explicit items (documents/files/proofs), never the
 whole vault. Expiry, revocation, access codes (grant flow), view-only download
 blocking, and one-time/limited access limits are all enforced server-side.
+One-time rooms are consumed by the first successful file preview, file download,
+or room ZIP download; later metadata/file access returns
+`410 {state: "limit_reached"}`.
 
 ## 28.5 Calendar V1
 
