@@ -7,6 +7,7 @@ isolation, progress/readiness calculation, timeline scoping, and the
 review-before-apply guarantee for extraction.
 """
 
+import json
 import tempfile
 from datetime import timedelta
 from unittest.mock import patch
@@ -30,8 +31,11 @@ from .models import (
     DocumentChecklist,
     DocumentChecklistItem,
     DocumentChecklistTemplate,
+    DocumentExportRequest,
     DocumentExtraction,
     DocumentFile,
+    DocumentFileShareLink,
+    ProofRecord,
 )
 
 User = get_user_model()
@@ -67,6 +71,13 @@ class RenewalWorkspaceBaseTest(APITestCase):
 
     def auth(self, user):
         self.client.force_authenticate(user=user)
+
+    def read_stream(self, response):
+        if getattr(response, "streaming", False):
+            content = b"".join(response.streaming_content)
+            response.close()
+            return content
+        return response.content
 
 
 # ---- Checklist templates ---------------------------------------------------
@@ -296,6 +307,141 @@ class BundleTests(RenewalWorkspaceBaseTest):
             {"title": "X"},
         )
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    @override_settings(MEDIA_ROOT=_TEMP_MEDIA)
+    def test_bundle_export_generates_secret_free_json(self):
+        bundle = DocumentBundle.objects.create(
+            owner=self.alice,
+            title="Visa application",
+            bundle_type="application",
+            authority_or_provider="Immigration office",
+        )
+        file = DocumentFile.objects.create(
+            document=self.alice_doc,
+            uploaded_by=self.alice,
+            file=make_pdf(content=b"%PDF raw bytes that must not export"),
+            original_filename="passport.pdf",
+            content_type="application/pdf",
+            file_size=34,
+        )
+        link = DocumentFileShareLink.objects.create(
+            owner=self.alice,
+            document=self.alice_doc,
+            file=file,
+            expires_at=timezone.now() + timedelta(days=1),
+            access_code_required=True,
+            access_code_hash="hash-that-must-not-export",
+        )
+        DocumentBundleRequirement.objects.create(
+            owner=self.alice,
+            bundle=bundle,
+            title="Passport copy",
+            linked_document=self.alice_doc,
+            linked_file=file,
+            status=DocumentBundleRequirement.Status.ATTACHED,
+        )
+        checklist = DocumentChecklist.objects.create(
+            owner=self.alice,
+            document=self.alice_doc,
+            bundle=bundle,
+            title="Visa checklist",
+        )
+        DocumentChecklistItem.objects.create(
+            owner=self.alice,
+            checklist=checklist,
+            title="Book appointment",
+            status=DocumentChecklistItem.Status.COMPLETED,
+            completed_at=timezone.now(),
+        )
+        checklist.recalculate_progress()
+        ProofRecord.objects.create(
+            owner=self.alice,
+            document=self.alice_doc,
+            bundle=bundle,
+            linked_file=file,
+            title="Submission receipt",
+            reference_number="RECEIPT-123",
+        )
+
+        self.auth(self.alice)
+        response = self.client.post(
+            f"/api/v1/document-bundles/{bundle.id}/exports/",
+            {"export_type": DocumentExportRequest.ExportType.BUNDLE_METADATA_JSON},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["status"], DocumentExportRequest.Status.COMPLETED)
+        self.assertIn(
+            f"/document-bundles/{bundle.id}/exports/",
+            response.data["download_url"],
+        )
+
+        downloaded = self.client.get(response.data["download_url"])
+        self.assertEqual(downloaded.status_code, status.HTTP_200_OK)
+        payload = json.loads(self.read_stream(downloaded).decode("utf-8"))
+        body = json.dumps(payload)
+
+        self.assertEqual(payload["scope"], "bundle")
+        self.assertEqual(payload["bundle"]["id"], bundle.id)
+        self.assertEqual(payload["counts"]["requirements"], 1)
+        self.assertEqual(payload["counts"]["checklists"], 1)
+        self.assertEqual(payload["counts"]["proof_records"], 1)
+        self.assertIn("Alice Passport", body)
+        self.assertIn("Visa checklist", body)
+        self.assertIn("Submission receipt", body)
+        self.assertNotIn(link.token, body)
+        self.assertNotIn("hash-that-must-not-export", body)
+        self.assertNotIn(file.file.name, body)
+        self.assertNotIn("raw bytes that must not export", body)
+
+    @override_settings(MEDIA_ROOT=_TEMP_MEDIA)
+    def test_bundle_export_csv_downloads_requirement_rows(self):
+        bundle = DocumentBundle.objects.create(
+            owner=self.alice, title="Passport renewal", bundle_type="renewal"
+        )
+        DocumentBundleRequirement.objects.create(
+            owner=self.alice,
+            bundle=bundle,
+            title="Passport photo",
+            is_required=True,
+            status=DocumentBundleRequirement.Status.MISSING,
+        )
+        self.auth(self.alice)
+
+        response = self.client.post(
+            f"/api/v1/document-bundles/{bundle.id}/exports/",
+            {"export_type": DocumentExportRequest.ExportType.BUNDLE_REQUIREMENTS_CSV},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        downloaded = self.client.get(response.data["download_url"])
+        self.assertEqual(downloaded.status_code, status.HTTP_200_OK)
+        csv_body = self.read_stream(downloaded).decode("utf-8")
+        self.assertIn("bundle_id,bundle_title,readiness_score", csv_body)
+        self.assertIn("Passport photo", csv_body)
+
+    def test_bundle_export_is_owner_scoped(self):
+        bundle = DocumentBundle.objects.create(
+            owner=self.bob, title="Bob pack", bundle_type="renewal"
+        )
+        self.auth(self.alice)
+        response = self.client.post(
+            f"/api/v1/document-bundles/{bundle.id}/exports/",
+            {"export_type": DocumentExportRequest.ExportType.BUNDLE_METADATA_JSON},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_vault_export_endpoint_rejects_bundle_export_types(self):
+        self.auth(self.alice)
+        response = self.client.post(
+            "/api/v1/document-exports/",
+            {"export_type": DocumentExportRequest.ExportType.BUNDLE_METADATA_JSON},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
 # ---- Timeline --------------------------------------------------------------

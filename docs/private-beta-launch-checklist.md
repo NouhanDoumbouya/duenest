@@ -14,7 +14,7 @@ not a public production launch checklist.
 - [x] File upload, preview, download, activity, trash, restore, and secure file sharing.
 - [x] Renewal reminders, checklists, bundles, readiness scoring, and timeline.
 - [x] OCR-assisted extraction foundation with owner review before apply.
-- [x] Version history, metadata restore, proof records, emergency packs, document activity, and metadata exports.
+- [x] Version history, metadata restore, proof records, emergency packs, document activity, vault metadata exports, and bundle-specific metadata exports.
 - [x] Document onboarding setup checklist and first-use route.
 - [x] Demo data create/clear controls using clearly labeled fake records.
 - [x] Trust Center, public security page, privacy draft, and terms draft.
@@ -38,8 +38,8 @@ not a public production launch checklist.
 ## Backend Checks
 
 - [x] Django migrations exist for new onboarding and deletion-request models.
-- [x] Backend tests cover onboarding state ownership, setup checklist progress, demo owner scope, account summary/deletion, trust summary, and account export scoping.
-- [ ] Full backend test suite should pass before merging.
+- [x] Backend tests cover onboarding state ownership, setup checklist progress, demo owner scope, account summary/deletion, trust summary, account export scoping, and bundle export ownership/secrecy.
+- [x] Full backend test suite passes for the current branch.
 - [ ] Run `python manage.py migrate` after pulling changes locally or deploying.
 - [x] Backend tests cover Founder Console access control, dashboard privacy, activation, adoption, feedback, template mutation, error logs, security overview, support metadata, and product-event sanitization.
 
@@ -50,13 +50,15 @@ not a public production launch checklist.
 - [x] `/dashboard/trust` Trust Center.
 - [x] `/dashboard/settings/data` data controls.
 - [x] `/demo`, `/security`, `/privacy`, and `/terms` public pages.
-- [x] Mobile dashboard navigation exposes the new dashboard routes.
-- [ ] Frontend lint and production build should pass before merging.
+- [x] Mobile dashboard navigation exposes dashboard routes through a hamburger drawer.
+- [x] Frontend lint passes for the current branch.
+- [x] Frontend production build passes for the current branch.
 - [x] `/dashboard/founder` operational console routes and `/dashboard/feedback` user feedback form are implemented.
 
 ## Known Limitations
 
 - Metadata exports do not include raw uploaded file archives.
+- Camera scan entry uploads image files only; automated cropping, multi-page scanning, and production OCR are not implemented.
 - Account deletion requests are tracked, but automated deletion execution is not implemented.
 - Notification sending for reminder rules is not implemented.
 - Public legal pages are beta drafts and need review.

@@ -26,7 +26,8 @@ export const ALLOWED_EXTENSIONS = [
   ".doc",
   ".docx",
 ] as const;
-export const ACCEPT_ATTR = ALLOWED_EXTENSIONS.join(",");
+export const ACCEPT_ATTR = "image/*,application/pdf,.doc,.docx";
+export const SCAN_ACCEPT_ATTR = "image/*";
 
 function getApiErrorMessage(data: unknown, fallback: string): string {
   if (typeof data === "string" && data) return data;

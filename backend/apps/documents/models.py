@@ -970,6 +970,8 @@ class DocumentExportRequest(models.Model):
         DOCUMENTS_JSON = "documents_json", "Documents (JSON)"
         DOCUMENTS_CSV = "documents_csv", "Documents (CSV)"
         FULL_VAULT_METADATA = "full_vault_metadata", "Full vault metadata (JSON)"
+        BUNDLE_METADATA_JSON = "bundle_metadata_json", "Bundle metadata (JSON)"
+        BUNDLE_REQUIREMENTS_CSV = "bundle_requirements_csv", "Bundle requirements (CSV)"
         FUTURE_FULL_ARCHIVE = "future_full_archive", "Full archive (future)"
 
     class Status(models.TextChoices):

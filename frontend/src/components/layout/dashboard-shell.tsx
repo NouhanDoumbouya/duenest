@@ -10,11 +10,13 @@ import {
   LayoutDashboard,
   ListChecks,
   LogOut,
+  Menu,
   MessageSquare,
   Package,
   Settings,
   ShieldCheck,
   Wrench,
+  X,
 } from "lucide-react";
 
 import { Logo } from "@/components/layout/logo";
@@ -46,7 +48,13 @@ function initials(name: string) {
   return letters.toUpperCase() || name.slice(0, 2).toUpperCase();
 }
 
-function NavLinks({ hasFounderAccess }: { hasFounderAccess: boolean }) {
+function NavLinks({
+  hasFounderAccess,
+  onNavigate,
+}: {
+  hasFounderAccess: boolean;
+  onNavigate?: () => void;
+}) {
   const pathname = usePathname();
 
   return (
@@ -64,6 +72,13 @@ function NavLinks({ hasFounderAccess }: { hasFounderAccess: boolean }) {
           <Link
             key={item.label}
             href={item.href}
+            onClick={(event) => {
+              if (item.soon) {
+                event.preventDefault();
+                return;
+              }
+              onNavigate?.();
+            }}
             aria-current={active ? "page" : undefined}
             aria-disabled={item.soon || undefined}
             className={cn(
@@ -96,6 +111,7 @@ function NavLinks({ hasFounderAccess }: { hasFounderAccess: boolean }) {
           </p>
           <Link
             href="/dashboard/founder"
+            onClick={onNavigate}
             aria-current={
               pathname.startsWith("/dashboard/founder") ? "page" : undefined
             }
@@ -115,47 +131,6 @@ function NavLinks({ hasFounderAccess }: { hasFounderAccess: boolean }) {
   );
 }
 
-function MobileNavLinks({ hasFounderAccess }: { hasFounderAccess: boolean }) {
-  const pathname = usePathname();
-  const items = hasFounderAccess
-    ? [
-        ...navItems.filter((item) => !item.soon),
-        { label: "Founder", href: "/dashboard/founder", icon: Wrench },
-      ]
-    : navItems.filter((item) => !item.soon);
-
-  return (
-    <nav
-      className="flex gap-2 overflow-x-auto border-b border-border bg-card px-4 py-2 md:hidden"
-      aria-label="Dashboard"
-    >
-      {items.map((item) => {
-        const Icon = item.icon;
-        const active =
-          item.href === "/dashboard"
-            ? pathname === item.href
-            : pathname.startsWith(item.href);
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            aria-current={active ? "page" : undefined}
-            className={cn(
-              "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium",
-              active
-                ? "border-primary/20 bg-primary text-primary-foreground"
-                : "border-border bg-card text-muted-foreground",
-            )}
-          >
-            <Icon className="size-4" />
-            {item.label}
-          </Link>
-        );
-      })}
-    </nav>
-  );
-}
-
 /**
  * App chrome for authenticated pages: a fixed white command sidebar on desktop,
  * a top bar on mobile, with the page content rendered as children on a soft canvas.
@@ -169,6 +144,7 @@ export function DashboardShell({
 }) {
   const router = useRouter();
   const [hasFounderAccess, setHasFounderAccess] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -183,6 +159,17 @@ export function DashboardShell({
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setMobileNavOpen(false);
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [mobileNavOpen]);
 
   function handleLogout() {
     logout();
@@ -227,13 +214,85 @@ export function DashboardShell({
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Mobile top bar */}
         <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-card/80 px-4 backdrop-blur md:hidden">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setMobileNavOpen(true)}
+            aria-label="Open navigation"
+            aria-expanded={mobileNavOpen}
+          >
+            <Menu className="size-5" />
+          </Button>
           <Logo href="/dashboard" />
-          <Button variant="ghost" size="sm" onClick={handleLogout}>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleLogout}
+            aria-label="Sign out"
+          >
             <LogOut className="size-4" />
-            Sign out
           </Button>
         </header>
-        <MobileNavLinks hasFounderAccess={hasFounderAccess} />
+
+        {mobileNavOpen && (
+          <div className="fixed inset-0 z-50 md:hidden">
+            <button
+              type="button"
+              className="absolute inset-0 bg-background/80 backdrop-blur-sm"
+              aria-label="Close navigation"
+              onClick={() => setMobileNavOpen(false)}
+            />
+            <aside
+              className="absolute inset-y-0 left-0 flex w-[min(20rem,calc(100vw-2rem))] flex-col border-r border-border bg-sidebar shadow-xl"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Dashboard navigation"
+            >
+              <div className="flex h-16 items-center justify-between border-b border-border px-4">
+                <Logo href="/dashboard" />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setMobileNavOpen(false)}
+                  aria-label="Close navigation"
+                >
+                  <X className="size-5" />
+                </Button>
+              </div>
+
+              <NavLinks
+                hasFounderAccess={hasFounderAccess}
+                onNavigate={() => setMobileNavOpen(false)}
+              />
+
+              <div className="border-t border-border p-3">
+                {user && (
+                  <div className="mb-2 flex items-center gap-3 rounded-lg px-2 py-2">
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand-navy text-xs font-semibold text-white ring-2 ring-brand-teal/20">
+                      {initials(user.name)}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">
+                        {user.name}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {user.email}
+                      </p>
+                    </div>
+                  </div>
+                )}
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start text-muted-foreground hover:text-foreground"
+                  onClick={handleLogout}
+                >
+                  <LogOut className="size-4" />
+                  Sign out
+                </Button>
+              </div>
+            </aside>
+          </div>
+        )}
 
         <main className="flex-1 p-4 sm:p-6 lg:p-10">{children}</main>
       </div>

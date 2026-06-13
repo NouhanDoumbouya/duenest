@@ -27,6 +27,7 @@ import { ApiError } from "@/lib/api";
 import { formatDate } from "@/lib/documents";
 import {
   cancelAccountDeletion,
+  downloadDocumentExport,
   getAccountDataSummary,
   requestAccountDeletion,
   requestDataExport,
@@ -118,6 +119,24 @@ export default function DataSettingsPage() {
       load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not create export.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleDownloadExport(exportRequest: DocumentExportRequest) {
+    setBusy("download-export");
+    setError(null);
+    setMessage(null);
+    try {
+      await downloadDocumentExport(exportRequest);
+      setMessage("Export download started.");
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : "Could not download this export.",
+      );
     } finally {
       setBusy(null);
     }
@@ -252,13 +271,21 @@ export default function DataSettingsPage() {
                       )}
                     </p>
                     {latestExport?.download_url && (
-                      <a
-                        href={latestExport.download_url}
-                        className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="mt-3"
+                        onClick={() => handleDownloadExport(latestExport)}
+                        disabled={busy !== null}
                       >
-                        <FileText className="size-4" />
+                        {busy === "download-export" ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                          <FileText className="size-4" />
+                        )}
                         Download export
-                      </a>
+                      </Button>
                     )}
                   </div>
                 )}

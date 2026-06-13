@@ -421,9 +421,9 @@ The shipped file upload foundation enforces:
   emergency packs. Permanent deletion is a separate explicit action.
 - **Version history:** document versions store metadata and file display
   snapshots only; they do not duplicate blobs or expose internal paths.
-- **Structured exports:** metadata exports are owner-only, expire, and exclude
-  raw files, raw OCR text, share tokens, access-code hashes, and internal
-  storage paths.
+- **Structured exports:** vault and bundle metadata exports are owner-only,
+  expire, and exclude raw files, raw OCR text, share tokens, access codes,
+  access-code hashes, and internal storage paths.
 - **Emergency packs:** packs expose only explicitly selected documents/files,
   never the whole vault. Shareable packs use unguessable tokens, optional
   expiry, optional hashed access codes, disable/regenerate controls, and skip
@@ -977,8 +977,11 @@ not a later add-on.
   recoverable flow. **Trashed or purged files must not remain accessible**
   through public file shares or emergency packs.
 - **Exports** are generated on demand, owner-scoped, expiring, and currently
-  metadata-only. They exclude raw files, raw OCR text, share tokens,
-  access-code hashes, and internal storage paths.
+  metadata-only. Vault exports cover account-level document metadata; bundle
+  exports cover one owner-owned bundle's readiness, requirements, linked
+  document/file summaries, checklist progress, and proof summaries. They exclude
+  raw files, raw OCR text, share tokens, access codes, access-code hashes, and
+  internal storage paths.
 - **Account controls** expose owner-scoped data counts, route account export
   through the same metadata export generator, and track deletion as a pending
   request rather than deleting synchronously.

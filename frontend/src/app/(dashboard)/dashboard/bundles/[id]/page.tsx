@@ -6,9 +6,12 @@ import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
   CheckCircle2,
+  Download,
+  FileText,
   Link2,
   Loader2,
   Plus,
+  ShieldCheck,
   Trash2,
 } from "lucide-react";
 
@@ -30,10 +33,13 @@ import {
   BUNDLE_STATUS_LABELS,
   BUNDLE_TYPE_LABELS,
   REQUIREMENT_STATUS_LABELS,
+  createBundleExport,
   createBundleRequirement,
   deleteBundle,
   deleteBundleRequirement,
+  downloadBundleExport,
   getBundle,
+  getBundleExports,
   getTimeline,
   linkRequirementDocument,
   updateBundle,
@@ -43,6 +49,8 @@ import { cn } from "@/lib/utils";
 import type { DocumentRecord } from "@/types/documents";
 import type {
   Bundle,
+  BundleExportRequest,
+  BundleExportType,
   BundleRequirement,
   BundleStatus,
   RequirementStatus,
@@ -64,6 +72,11 @@ const REQUIREMENT_STATUSES: RequirementStatus[] = [
   "completed",
   "skipped",
 ];
+
+const BUNDLE_EXPORT_LABELS: Record<BundleExportType, string> = {
+  bundle_metadata_json: "Full bundle metadata (JSON)",
+  bundle_requirements_csv: "Requirements checklist (CSV)",
+};
 
 const STATUS_STYLES: Record<RequirementStatus, string> = {
   missing: "bg-amber-100 text-amber-700",
@@ -228,15 +241,22 @@ export default function BundleDetailPage() {
   const [bundle, setBundle] = useState<Bundle | null>(null);
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [events, setEvents] = useState<TimelineEvent[]>([]);
+  const [bundleExports, setBundleExports] = useState<BundleExportRequest[]>([]);
   const [loadError, setLoadError] = useState<string | null>(
     validId ? null : "Invalid bundle.",
   );
   const [error, setError] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
 
   const [newTitle, setNewTitle] = useState("");
   const [newRequired, setNewRequired] = useState(true);
+  const [exportType, setExportType] = useState<BundleExportType>(
+    "bundle_metadata_json",
+  );
   const [adding, setAdding] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
+  const [exportBusy, setExportBusy] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -259,6 +279,9 @@ export default function BundleDetailPage() {
     getTimeline({ bundle_id: bundleId })
       .then((res) => active && setEvents(res.items))
       .catch(() => active && setEvents([]));
+    getBundleExports(bundleId)
+      .then((page) => active && setBundleExports(page.results))
+      .catch(() => active && setBundleExports([]));
     return () => {
       active = false;
     };
@@ -318,6 +341,46 @@ export default function BundleDetailPage() {
       setError(err instanceof ApiError ? err.message : "Could not delete.");
       setDeleting(false);
       setConfirmDelete(false);
+    }
+  }
+
+  async function handleCreateExport() {
+    setExportBusy("create");
+    setExportError(null);
+    setExportMessage(null);
+    try {
+      const created = await createBundleExport(bundleId, exportType);
+      setBundleExports((prev) => [
+        created,
+        ...prev.filter((item) => item.id !== created.id),
+      ]);
+      setExportMessage("Bundle export is ready.");
+    } catch (err) {
+      setExportError(
+        err instanceof ApiError
+          ? err.message
+          : "Could not create the bundle export.",
+      );
+    } finally {
+      setExportBusy(null);
+    }
+  }
+
+  async function handleDownloadExport(exportRequest: BundleExportRequest) {
+    setExportBusy(`download-${exportRequest.id}`);
+    setExportError(null);
+    setExportMessage(null);
+    try {
+      await downloadBundleExport(bundleId, exportRequest);
+      setExportMessage("Export download started.");
+    } catch (err) {
+      setExportError(
+        err instanceof ApiError
+          ? err.message
+          : "Could not download this export.",
+      );
+    } finally {
+      setExportBusy(null);
     }
   }
 
@@ -538,6 +601,150 @@ export default function BundleDetailPage() {
         </CardHeader>
         <CardContent>
           <TimelineList events={events} />
+        </CardContent>
+      </Card>
+
+      {/* Bundle export */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-start gap-3">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Download className="size-4" />
+            </span>
+            <div className="min-w-0">
+              <CardTitle className="text-lg">Export bundle</CardTitle>
+              <CardDescription>
+                Download a bundle-specific metadata file for applications,
+                renewals, or handoff review.
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {exportError && (
+            <p
+              className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              role="alert"
+            >
+              {exportError}
+            </p>
+          )}
+          {exportMessage && (
+            <p className="rounded-lg bg-brand-success/10 px-3 py-2 text-sm text-brand-success">
+              {exportMessage}
+            </p>
+          )}
+
+          <div className="flex flex-col gap-3 rounded-xl border border-border bg-muted/25 p-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <label
+                htmlFor="bundle-export-type"
+                className="text-sm font-medium"
+              >
+                Export format
+              </label>
+              <select
+                id="bundle-export-type"
+                value={exportType}
+                onChange={(e) =>
+                  setExportType(e.target.value as BundleExportType)
+                }
+                disabled={exportBusy !== null}
+                className="mt-1 h-9 w-full rounded-lg border border-input bg-card px-3 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:w-[260px]"
+              >
+                {Object.entries(BUNDLE_EXPORT_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-muted-foreground">
+                JSON includes readiness, requirements, linked document/file
+                summaries, checklist progress, and proof records. CSV focuses on
+                requirement rows.
+              </p>
+            </div>
+            <Button
+              type="button"
+              onClick={handleCreateExport}
+              disabled={exportBusy !== null}
+              className="w-full sm:w-auto"
+            >
+              {exportBusy === "create" ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <FileText className="size-4" />
+              )}
+              Create export
+            </Button>
+          </div>
+
+          <div className="rounded-xl border border-border p-3">
+            <div className="flex items-start gap-2 text-sm">
+              <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" />
+              <p className="text-muted-foreground">
+                Exports are owner-only, expire after 7 days, and exclude raw
+                files, share tokens, access codes, raw OCR text, and internal
+                storage paths.
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Recent exports</p>
+            {bundleExports.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border px-4 py-6 text-center">
+                <p className="text-sm text-muted-foreground">
+                  No bundle exports yet.
+                </p>
+              </div>
+            ) : (
+              <ul className="space-y-2">
+                {bundleExports.slice(0, 4).map((exportRequest) => {
+                  const canDownload =
+                    exportRequest.status === "completed" &&
+                    !exportRequest.is_expired &&
+                    Boolean(exportRequest.download_url);
+                  return (
+                    <li
+                      key={exportRequest.id}
+                      className="flex flex-col gap-3 rounded-xl border border-border p-3 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">
+                          {BUNDLE_EXPORT_LABELS[exportRequest.export_type]}
+                        </p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {exportRequest.status} · Requested{" "}
+                          {formatDate(exportRequest.requested_at)}
+                        </p>
+                        {exportRequest.expires_at && (
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            Expires {formatDate(exportRequest.expires_at)}
+                          </p>
+                        )}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDownloadExport(exportRequest)}
+                        disabled={!canDownload || exportBusy !== null}
+                        className="w-full sm:w-auto"
+                      >
+                        {exportBusy === `download-${exportRequest.id}` ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                          <Download className="size-4" />
+                        )}
+                        Download
+                      </Button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
         </CardContent>
       </Card>
 
