@@ -1748,3 +1748,48 @@ Founder Console V1 adds a focused `apps.founder` backend module.
   `metadata`, `resolved`, `resolved_at`, `created_at`.
 - **Security:** stack traces are founder-only and returned only in debug mode.
   Client metadata is sanitized before storage.
+
+---
+
+## Secure Rooms & extended share links (premium sharing)
+
+### `DocumentFileShareLink` (extended)
+
+In addition to the original fields, share links now carry access limits and
+deterrence flags:
+
+- `access_limit_type` — `unlimited | one_time | limited_count`
+- `max_views`, `view_count`, `max_downloads`, `download_count`, `limit_reached_at`
+- `watermark_enabled`, `privacy_screen_enabled`
+
+Counters are incremented atomically (`F()`); limits are enforced server-side on
+every preview/download. `access_code_hash` remains a hash only.
+
+### `ShareRoom`
+
+A controlled, token-gated collection shared with a recipient. Fields mirror the
+share-link model: `owner`, `title`, `description`, `token` (unique, indexed),
+`permission` (`view_only | download_allowed`), `expires_at`, `revoked_at`,
+`access_code_required` + `access_code_hash`, `watermark_enabled`,
+`privacy_screen_enabled`, the same access-limit fields, owner-only
+`recipient_email` / `label` / `purpose`, and timestamps incl. `last_accessed_at`.
+Indexed on `(owner, created_at)`, `token`, `(owner, revoked_at)`, `expires_at`.
+
+### `ShareRoomItem`
+
+One exposed item: FK `room` plus exactly one of `document` / `file` / `proof`
+(validated on create, all owner-owned), `sort_order`, `created_at`. A room only
+ever serves these explicit items — never the rest of the vault.
+
+### `RoomActivity`
+
+Owner-only trail: `owner`, `room`, `action`, `actor_type`, `ip_address`,
+`user_agent`, `metadata`, `created_at`. Access codes are never logged.
+
+### Calendar
+
+DueNest Calendar V1 adds **no new table** — events are aggregated on demand from
+existing models (documents, reminders, bundles, appointments, proofs, share
+links, rooms, emergency packs). Existing date columns (`expiry_date`,
+`renewal_date`, bundle `target_date`, share/room `expires_at`, etc.) back the
+queries; share `token`/`expires_at` and room `token`/`expires_at` are indexed.

@@ -20,7 +20,11 @@ export interface DocumentFile {
 }
 
 export type ShareLinkPermission = "view_only" | "download_allowed";
-export type ShareLinkStatus = "active" | "expired" | "revoked";
+export type ShareLinkStatus = "active" | "expired" | "revoked" | "limit_reached";
+export type ShareAccessLimitType =
+  | "unlimited"
+  | "one_time"
+  | "limited_count";
 
 export interface DocumentFileShareLink {
   id: number;
@@ -31,6 +35,14 @@ export interface DocumentFileShareLink {
   expires_at: string;
   revoked_at: string | null;
   access_code_required: boolean;
+  access_limit_type: ShareAccessLimitType;
+  max_views: number | null;
+  view_count: number;
+  max_downloads: number | null;
+  download_count: number;
+  limit_reached_at: string | null;
+  watermark_enabled: boolean;
+  privacy_screen_enabled: boolean;
   label: string;
   recipient_email: string;
   purpose: string;
@@ -47,6 +59,11 @@ export interface CreateShareLinkPayload {
   expires_at: string;
   access_code_required: boolean;
   access_code?: string;
+  access_limit_type?: ShareAccessLimitType;
+  max_views?: number | null;
+  max_downloads?: number | null;
+  watermark_enabled?: boolean;
+  privacy_screen_enabled?: boolean;
   label?: string;
   recipient_email?: string;
   purpose?: string;
@@ -63,6 +80,8 @@ export type DocumentFileActivityAction =
   | "share_revoked"
   | "share_access_code_verified"
   | "share_access_code_failed"
+  | "share_limit_reached"
+  | "share_blocked_limit_reached"
   | "file_deleted";
 
 export interface DocumentFileActivity {
@@ -84,4 +103,8 @@ export interface PublicSharedFileMetadata {
   is_previewable: boolean;
   download_allowed: boolean;
   access_code_required: boolean;
+  watermark_enabled: boolean;
+  privacy_screen_enabled: boolean;
+  watermark_text: string;
+  short_id: string;
 }

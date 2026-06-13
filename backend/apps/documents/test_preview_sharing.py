@@ -287,11 +287,14 @@ class ShareLinkTests(PreviewSharingBaseTest):
             {
                 "file_name", "content_type", "file_size", "permission",
                 "expires_at", "is_previewable", "download_allowed",
-                "access_code_required",
+                "access_code_required", "watermark_enabled",
+                "privacy_screen_enabled", "watermark_text", "short_id",
             },
         )
         body = str(data)
         self.assertNotIn("secret label", body)
+        # recipient_email is only surfaced (in watermark_text) when watermarking
+        # is enabled; this link has it off, so it must not leak.
         self.assertNotIn("r@x.com", body)
         self.assertNotIn("secret purpose", body)
 
@@ -474,6 +477,202 @@ class AccessCodeTests(PreviewSharingBaseTest):
         detail = self.client.get(share_link_url(self.alice_doc.id, f.id, sid))
         self.assertNotIn("access_code", detail.data)
         self.assertNotIn("access_code_hash", detail.data)
+
+
+class AccessGrantTests(PreviewSharingBaseTest):
+    """
+    After verifying the access code, the viewer receives a short-lived grant and
+    uses it (via ?grant=) to load metadata/preview/download — without the raw
+    code ever being re-sent or stored. This is the fix for the access-code
+    shared-file bug.
+    """
+
+    def make_coded_link(self, permission="view_only", code="482913"):
+        f = self.upload(self.alice_doc, self.alice, make_pdf())
+        from django.contrib.auth.hashers import make_password
+
+        link = DocumentFileShareLink.objects.create(
+            owner=self.alice,
+            document=self.alice_doc,
+            file=f,
+            permission=permission,
+            expires_at=timezone.now() + timedelta(days=7),
+            access_code_required=True,
+            access_code_hash=make_password(code),
+        )
+        return f, link
+
+    def verify(self, token, code="482913"):
+        return self.client.post(
+            public_verify(token), {"access_code": code}, format="json"
+        )
+
+    def test_verify_returns_grant(self):
+        _, link = self.make_coded_link()
+        resp = self.verify(link.token)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn("grant", resp.data)
+        self.assertTrue(resp.data["grant"])
+        self.assertGreater(resp.data["grant_expires_in"], 0)
+
+    def test_grant_unlocks_metadata_preview_and_download(self):
+        _, link = self.make_coded_link(permission="download_allowed")
+        grant = self.verify(link.token).data["grant"]
+        # Metadata
+        meta = self.client.get(f"{public_meta(link.token)}?grant={grant}")
+        self.assertEqual(meta.status_code, status.HTTP_200_OK)
+        # Preview
+        prev = self.consume(
+            self.client.get(f"{public_preview(link.token)}?grant={grant}")
+        )
+        self.assertEqual(prev.status_code, status.HTTP_200_OK)
+        # Download
+        dl = self.consume(
+            self.client.get(f"{public_download(link.token)}?grant={grant}")
+        )
+        self.assertEqual(dl.status_code, status.HTTP_200_OK)
+
+    def test_grant_for_one_link_cannot_unlock_another(self):
+        _, link_a = self.make_coded_link()
+        _, link_b = self.make_coded_link()
+        grant_a = self.verify(link_a.token).data["grant"]
+        # The grant minted for link A must not unlock link B.
+        resp = self.client.get(f"{public_preview(link_b.token)}?grant={grant_a}")
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_invalid_grant_rejected(self):
+        _, link = self.make_coded_link()
+        resp = self.client.get(f"{public_preview(link.token)}?grant=not-a-real-grant")
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_view_only_grant_still_blocks_download(self):
+        _, link = self.make_coded_link(permission="view_only")
+        grant = self.verify(link.token).data["grant"]
+        resp = self.client.get(f"{public_download(link.token)}?grant={grant}")
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_grant_blocked_on_revoked_link(self):
+        _, link = self.make_coded_link()
+        grant = self.verify(link.token).data["grant"]
+        link.revoked_at = timezone.now()
+        link.save(update_fields=["revoked_at"])
+        resp = self.client.get(f"{public_preview(link.token)}?grant={grant}")
+        self.assertEqual(resp.status_code, status.HTTP_410_GONE)
+
+
+class AccessLimitTests(PreviewSharingBaseTest):
+    """One-time and limited-count view/download enforcement (server-side)."""
+
+    def make_link(self, *, permission="view_only", limit_type="unlimited",
+                  max_views=None, max_downloads=None):
+        f = self.upload(self.alice_doc, self.alice, make_pdf())
+        link = DocumentFileShareLink.objects.create(
+            owner=self.alice,
+            document=self.alice_doc,
+            file=f,
+            permission=permission,
+            expires_at=timezone.now() + timedelta(days=7),
+            access_limit_type=limit_type,
+            max_views=max_views,
+            max_downloads=max_downloads,
+        )
+        return link
+
+    def test_one_time_view_allows_first_blocks_second(self):
+        link = self.make_link(limit_type="one_time")
+        first = self.consume(self.client.get(public_preview(link.token)))
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        second = self.client.get(public_preview(link.token))
+        self.assertEqual(second.status_code, status.HTTP_410_GONE)
+        self.assertEqual(second.data["state"], "limit_reached")
+
+    def test_one_time_metadata_blocked_after_consumed(self):
+        link = self.make_link(limit_type="one_time")
+        self.consume(self.client.get(public_preview(link.token)))
+        meta = self.client.get(public_meta(link.token))
+        self.assertEqual(meta.status_code, status.HTTP_410_GONE)
+
+    def test_limited_view_count_enforced(self):
+        link = self.make_link(limit_type="limited_count", max_views=2)
+        self.assertEqual(
+            self.consume(self.client.get(public_preview(link.token))).status_code,
+            status.HTTP_200_OK,
+        )
+        self.assertEqual(
+            self.consume(self.client.get(public_preview(link.token))).status_code,
+            status.HTTP_200_OK,
+        )
+        self.assertEqual(
+            self.client.get(public_preview(link.token)).status_code,
+            status.HTTP_410_GONE,
+        )
+        link.refresh_from_db()
+        self.assertEqual(link.view_count, 2)
+        self.assertIsNotNone(link.limit_reached_at)
+
+    def test_limited_download_count_enforced(self):
+        link = self.make_link(
+            permission="download_allowed",
+            limit_type="limited_count",
+            max_views=99,
+            max_downloads=1,
+        )
+        self.assertEqual(
+            self.consume(self.client.get(public_download(link.token))).status_code,
+            status.HTTP_200_OK,
+        )
+        self.assertEqual(
+            self.client.get(public_download(link.token)).status_code,
+            status.HTTP_410_GONE,
+        )
+
+    def test_owner_sees_view_counter(self):
+        link = self.make_link(limit_type="limited_count", max_views=3)
+        self.consume(self.client.get(public_preview(link.token)))
+        self.client.force_authenticate(self.alice)
+        detail = self.client.get(
+            share_link_url(self.alice_doc.id, link.file_id, link.id)
+        )
+        self.assertEqual(detail.data["view_count"], 1)
+        self.assertEqual(detail.data["max_views"], 3)
+        self.assertEqual(detail.data["access_limit_type"], "limited_count")
+
+
+class WatermarkTests(PreviewSharingBaseTest):
+    """Watermark/privacy metadata exposure (deterrence, not prevention)."""
+
+    def make_link(self, **kwargs):
+        f = self.upload(self.alice_doc, self.alice, make_pdf())
+        defaults = dict(
+            owner=self.alice,
+            document=self.alice_doc,
+            file=f,
+            expires_at=timezone.now() + timedelta(days=7),
+        )
+        defaults.update(kwargs)
+        return DocumentFileShareLink.objects.create(**defaults)
+
+    def test_watermark_text_exposed_only_when_enabled(self):
+        link = self.make_link(
+            watermark_enabled=True,
+            privacy_screen_enabled=True,
+            recipient_email="visa@example.edu",
+        )
+        meta = self.client.get(public_meta(link.token))
+        self.assertTrue(meta.data["watermark_enabled"])
+        self.assertTrue(meta.data["privacy_screen_enabled"])
+        self.assertEqual(meta.data["watermark_text"], "visa@example.edu")
+        self.assertEqual(meta.data["short_id"], link.token[:8])
+
+    def test_recipient_email_not_leaked_without_watermark(self):
+        link = self.make_link(
+            watermark_enabled=False, recipient_email="private@example.edu"
+        )
+        meta = self.client.get(public_meta(link.token))
+        self.assertFalse(meta.data["watermark_enabled"])
+        self.assertEqual(meta.data["watermark_text"], "")
+        # The raw recipient email is never a top-level public field.
+        self.assertNotIn("recipient_email", meta.data)
 
 
 class ShareLabelTests(PreviewSharingBaseTest):

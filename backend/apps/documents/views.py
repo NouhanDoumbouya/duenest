@@ -2,10 +2,11 @@ import hashlib
 import secrets
 
 from django.contrib.auth.hashers import check_password, make_password
+from django.core import signing
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError
-from django.db.models import Count, Exists, OuterRef, Q
-from django.http import FileResponse
+from django.db.models import Count, Exists, F, OuterRef, Q
+from django.http import FileResponse, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -39,6 +40,9 @@ from .models import (
     EmergencyAccessPack,
     EmergencyAccessPackItem,
     ProofRecord,
+    RoomActivity,
+    ShareRoom,
+    ShareRoomItem,
     generate_share_token,
 )
 from .serializers import (
@@ -68,9 +72,15 @@ from .serializers import (
     EmergencyAccessPackSerializer,
     ExtractionApplySerializer,
     ProofRecordSerializer,
+    CalendarEventSerializer,
     PublicEmergencyPackSerializer,
+    PublicShareRoomSerializer,
     PublicSharedFileSerializer,
+    RoomActivitySerializer,
     ShareLinkCreateSerializer,
+    ShareRoomCreateUpdateSerializer,
+    ShareRoomItemCreateSerializer,
+    ShareRoomSerializer,
     TimelineEventSerializer,
 )
 from apps.users import plans as user_plans
@@ -82,7 +92,16 @@ from .services import (
     ExportGenerationError,
     attention_sort_key,
     build_health_overview,
+    build_bundle_zip,
+    build_documents_zip,
     bundle_readiness,
+    build_calendar_events,
+    build_calendar_ics,
+    calendar_events_summary,
+    calendar_summary,
+    collect_bundle_files,
+    collect_room_files,
+    build_room_zip,
     build_timeline,
     scan_missing,
     create_document_export,
@@ -91,6 +110,7 @@ from .services import (
     get_document_health,
     log_activity,
     log_document_activity,
+    log_room_activity,
     record_document_version,
     reminder_date_for_rule,
     summarize_field_changes,
@@ -754,6 +774,14 @@ class DocumentFileShareLinkListCreateView(_FileScopedMixin, APIView):
             expires_at=data["expires_at"],
             access_code_required=bool(data.get("access_code_required")),
             access_code_hash=access_code_hash,
+            access_limit_type=data.get(
+                "access_limit_type",
+                DocumentFileShareLink.AccessLimitType.UNLIMITED,
+            ),
+            max_views=data.get("max_views"),
+            max_downloads=data.get("max_downloads"),
+            watermark_enabled=bool(data.get("watermark_enabled")),
+            privacy_screen_enabled=bool(data.get("privacy_screen_enabled")),
             label=data.get("label", ""),
             recipient_email=data.get("recipient_email", ""),
             purpose=data.get("purpose", ""),
@@ -981,12 +1009,57 @@ def _resolve_share_link(token, request=None):
     return link, None
 
 
+# Short-lived access grant issued after a viewer verifies the access code.
+# This lets the viewer load the preview/download without the frontend storing or
+# re-sending the raw code on every request. The grant is bound to a single share
+# token and expires quickly. A grant for token A can never unlock token B.
+SHARE_GRANT_SALT = "duenest.share.access-grant"
+SHARE_GRANT_MAX_AGE = 60 * 30  # 30 minutes
+
+
+def issue_share_grant(token: str) -> str:
+    """Return a signed, time-stamped grant bound to ``token``."""
+    return signing.TimestampSigner(salt=SHARE_GRANT_SALT).sign(token)
+
+
+def share_grant_is_valid(token: str, grant: str) -> bool:
+    """Whether ``grant`` is an unexpired grant issued for ``token``."""
+    if not grant:
+        return False
+    try:
+        value = signing.TimestampSigner(salt=SHARE_GRANT_SALT).unsign(
+            grant, max_age=SHARE_GRANT_MAX_AGE
+        )
+    except signing.BadSignature:
+        return False
+    return secrets.compare_digest(value, token)
+
+
+def _has_verified_grant(link, request) -> bool:
+    """
+    True when the request carries a valid access grant for this share link.
+
+    The grant is read from the ``grant`` query param (preferred — it avoids a
+    CORS preflight on cross-origin previews) or the ``X-Share-Grant`` header.
+    """
+    grant = request.query_params.get("grant") or request.headers.get(
+        "X-Share-Grant", ""
+    )
+    return share_grant_is_valid(link.token, grant)
+
+
 def _check_access_code(link, request):
     """
     Return an error Response if a required access code is missing/wrong, else
-    None. The code is read from the X-Access-Code header (never the URL).
+    None.
+
+    Access is granted when EITHER a valid short-lived grant is presented (issued
+    by the verify-code endpoint) OR the raw code is supplied in the
+    ``X-Access-Code`` header. The code is never read from the URL.
     """
     if not link.access_code_required:
+        return None
+    if _has_verified_grant(link, request):
         return None
     code = request.headers.get("X-Access-Code", "").strip()
     if not code:
@@ -1028,6 +1101,59 @@ def _check_access_code(link, request):
     return None
 
 
+_LIMIT_REACHED_DETAIL = (
+    "This secure link has already been used or reached its access limit."
+)
+
+
+def _check_link_usable(link, request):
+    """Block a link whose view/access limit has already been reached."""
+    if link.is_view_limit_reached:
+        log_activity(
+            file=link.file,
+            action=DocumentFileActivity.Action.SHARE_BLOCKED_LIMIT_REACHED,
+            actor_type=DocumentFileActivity.ActorType.SHARED_VIEWER,
+            request=request,
+            share_link=link,
+        )
+        return Response(
+            {"detail": _LIMIT_REACHED_DETAIL, "state": "limit_reached"},
+            status=status.HTTP_410_GONE,
+        )
+    return None
+
+
+def _consume_share_view(link, request):
+    """Atomically count one preview and stamp the limit if it is now reached."""
+    if link.access_limit_type == DocumentFileShareLink.AccessLimitType.UNLIMITED:
+        return
+    DocumentFileShareLink.objects.filter(pk=link.pk).update(
+        view_count=F("view_count") + 1
+    )
+    link.refresh_from_db(fields=["view_count"])
+    if link.is_view_limit_reached and link.limit_reached_at is None:
+        link.limit_reached_at = timezone.now()
+        link.save(update_fields=["limit_reached_at"])
+        log_activity(
+            file=link.file,
+            action=DocumentFileActivity.Action.SHARE_LIMIT_REACHED,
+            actor_type=DocumentFileActivity.ActorType.SHARED_VIEWER,
+            request=request,
+            share_link=link,
+        )
+
+
+def _consume_share_download(link):
+    """Atomically count one download and stamp the limit if it is now reached."""
+    DocumentFileShareLink.objects.filter(pk=link.pk).update(
+        download_count=F("download_count") + 1
+    )
+    link.refresh_from_db(fields=["download_count"])
+    if link.is_download_limit_reached and link.limit_reached_at is None:
+        link.limit_reached_at = timezone.now()
+        link.save(update_fields=["limit_reached_at"])
+
+
 class PublicSharedFileMetadataView(APIView):
     permission_classes = [AllowAny]
 
@@ -1059,6 +1185,10 @@ class PublicSharedFileMetadataView(APIView):
         if code_err:
             return code_err
 
+        limit_err = _check_link_usable(link, request)
+        if limit_err:
+            return limit_err
+
         return Response(PublicSharedFileSerializer(link).data)
 
 
@@ -1081,7 +1211,15 @@ class PublicSharedFileVerifyCodeView(APIView):
                 request=request,
                 share_link=link,
             )
-            return Response({"detail": "Access code verified."})
+            # Hand back a short-lived grant so the viewer can load the preview
+            # and download without the browser re-sending the raw code.
+            return Response(
+                {
+                    "detail": "Access code verified.",
+                    "grant": issue_share_grant(link.token),
+                    "grant_expires_in": SHARE_GRANT_MAX_AGE,
+                }
+            )
 
         log_activity(
             file=link.file,
@@ -1117,6 +1255,9 @@ class PublicSharedFilePreviewView(APIView):
         code_err = _check_access_code(link, request)
         if code_err:
             return code_err
+        limit_err = _check_link_usable(link, request)
+        if limit_err:
+            return limit_err
         if not link.file.is_previewable:
             return Response(
                 {
@@ -1132,7 +1273,10 @@ class PublicSharedFilePreviewView(APIView):
             request=request,
             share_link=link,
         )
-        return _inline_file_response(link.file)
+        response = _inline_file_response(link.file)
+        # A successful preview consumes one view (one-time / limited links).
+        _consume_share_view(link, request)
+        return response
 
 
 class PublicSharedFileDownloadView(APIView):
@@ -1153,6 +1297,14 @@ class PublicSharedFileDownloadView(APIView):
                 },
                 status=status.HTTP_403_FORBIDDEN,
             )
+        limit_err = _check_link_usable(link, request)
+        if limit_err:
+            return limit_err
+        if link.is_download_limit_reached:
+            return Response(
+                {"detail": _LIMIT_REACHED_DETAIL, "state": "limit_reached"},
+                status=status.HTTP_410_GONE,
+            )
         log_activity(
             file=link.file,
             action=DocumentFileActivity.Action.SHARE_DOWNLOADED,
@@ -1161,7 +1313,9 @@ class PublicSharedFileDownloadView(APIView):
             share_link=link,
         )
         instance = link.file
-        return _file_response(instance, as_attachment=True)
+        response = _file_response(instance, as_attachment=True)
+        _consume_share_download(link)
+        return response
 
 
 # ---- Checklist templates (read-only, shared catalog) -----------------------
@@ -1448,6 +1602,191 @@ class DocumentBundleDetailView(
     """GET/PATCH/DELETE one owner-scoped bundle."""
 
     lookup_url_kwarg = "bundle_id"
+
+
+class DocumentBundleFilesView(APIView):
+    """
+    List every available file reachable from a bundle's requirements, plus the
+    requirements still missing a usable file. Owner-scoped; exposes only safe
+    file metadata (never internal storage paths). Feeds the bundle Files tab and
+    the ZIP export summary.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, bundle_id):
+        bundle = get_object_or_404(
+            DocumentBundle, pk=bundle_id, owner=request.user
+        )
+        result = collect_bundle_files(bundle)
+
+        files = []
+        for entry in result.files:
+            data = DocumentFileSerializer(
+                entry.file, context={"request": request}
+            ).data
+            data.update(
+                {
+                    "requirement_id": entry.requirement_id,
+                    "requirement_title": entry.requirement_title,
+                    "document_title": entry.document_title,
+                    "available": True,
+                }
+            )
+            files.append(data)
+
+        missing = [
+            {
+                "requirement_id": m.requirement_id,
+                "requirement_title": m.requirement_title,
+                "document_id": m.document_id,
+                "document_title": m.document_title,
+                "reason": m.reason,
+            }
+            for m in result.missing
+        ]
+
+        document_ids = {entry.document_id for entry in result.files}
+        return Response(
+            {
+                "files": files,
+                "missing_files": missing,
+                "summary": {
+                    "total_files": len(files),
+                    "total_size": result.total_size,
+                    "documents_count": len(document_ids),
+                    "missing_count": len(missing),
+                },
+            }
+        )
+
+
+def _zip_response(spooled, filename, summary):
+    """Stream a built ZIP back as an attachment with a safe summary header."""
+    response = FileResponse(
+        spooled,
+        as_attachment=True,
+        filename=filename,
+        content_type="application/zip",
+    )
+    # Expose a small, non-sensitive summary so the client can confirm contents.
+    response["X-Export-Files-Count"] = str(summary.get("files_count", 0))
+    response["X-Export-Skipped-Count"] = str(summary.get("skipped_count", 0))
+    return response
+
+
+def _parse_file_ids(request):
+    """Return a clean list of int file ids from the request body, or None."""
+    raw = request.data.get("file_ids")
+    if not isinstance(raw, (list, tuple)) or not raw:
+        return None
+    ids = []
+    for value in raw:
+        try:
+            ids.append(int(value))
+        except (TypeError, ValueError):
+            continue
+    return ids or None
+
+
+class DocumentBundleExportFilesView(APIView):
+    """POST → stream a ZIP of every available file in an owner-owned bundle."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, bundle_id):
+        bundle = get_object_or_404(
+            DocumentBundle, pk=bundle_id, owner=request.user
+        )
+        spooled, filename, summary = build_bundle_zip(request.user, bundle)
+        if summary["files_count"] == 0:
+            spooled.close()
+            return Response(
+                {
+                    "detail": "This bundle has no files to export yet.",
+                    "state": "no_files",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        _track_product_event(
+            request,
+            "export_requested",
+            object_type="document_bundle",
+            object_id=bundle.id,
+            metadata={"scope": "bundle_zip", "files": summary["files_count"]},
+        )
+        return _zip_response(spooled, filename, summary)
+
+
+class DocumentBundleExportSelectedFilesView(APIView):
+    """POST {file_ids:[…]} → stream a ZIP of the selected bundle files."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, bundle_id):
+        bundle = get_object_or_404(
+            DocumentBundle, pk=bundle_id, owner=request.user
+        )
+        file_ids = _parse_file_ids(request)
+        if file_ids is None:
+            return Response(
+                {"detail": "Select at least one file to export."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        spooled, filename, summary = build_bundle_zip(
+            request.user, bundle, file_ids=file_ids
+        )
+        if summary["files_count"] == 0:
+            spooled.close()
+            return Response(
+                {
+                    "detail": "None of the selected files are available to export.",
+                    "state": "no_files",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        _track_product_event(
+            request,
+            "export_requested",
+            object_type="document_bundle",
+            object_id=bundle.id,
+            metadata={
+                "scope": "bundle_zip_selected",
+                "files": summary["files_count"],
+            },
+        )
+        return _zip_response(spooled, filename, summary)
+
+
+class DocumentFilesExportSelectedView(APIView):
+    """POST {file_ids:[…]} → stream a ZIP of selected owned document files."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        file_ids = _parse_file_ids(request)
+        if file_ids is None:
+            return Response(
+                {"detail": "Select at least one file to export."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        spooled, filename, summary = build_documents_zip(request.user, file_ids)
+        if summary["files_count"] == 0:
+            spooled.close()
+            return Response(
+                {
+                    "detail": "None of the selected files are available to export.",
+                    "state": "no_files",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        _track_product_event(
+            request,
+            "export_requested",
+            object_type="document_file",
+            metadata={"scope": "documents_zip", "files": summary["files_count"]},
+        )
+        return _zip_response(spooled, filename, summary)
 
 
 class _BundleRequirementScopedMixin:
@@ -2813,3 +3152,548 @@ class DocumentHealthOverviewView(APIView):
 
     def get(self, request):
         return Response(build_health_overview(request.user))
+
+
+# ---- Secure rooms (owner) --------------------------------------------------
+
+
+class ShareRoomListCreateView(APIView):
+    """GET lists the user's rooms; POST creates one."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        rooms = (
+            ShareRoom.objects.filter(owner=request.user)
+            .prefetch_related("items")
+            .all()
+        )
+        return Response(ShareRoomSerializer(rooms, many=True).data)
+
+    def post(self, request):
+        enforce_plan_limit(request.user, user_plans.RESOURCE_SHARE_LINKS)
+        serializer = ShareRoomCreateUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        plain_code = None
+        access_code_hash = ""
+        if data.get("access_code_required"):
+            plain_code = (
+                (data.pop("access_code", "") or "").strip()
+                or f"{secrets.randbelow(1_000_000):06d}"
+            )
+            access_code_hash = make_password(plain_code)
+        data.pop("access_code", None)
+
+        room = ShareRoom.objects.create(
+            owner=request.user,
+            access_code_hash=access_code_hash,
+            **data,
+        )
+        log_room_activity(
+            room=room,
+            action=RoomActivity.Action.ROOM_CREATED,
+            actor_type=RoomActivity.ActorType.OWNER,
+            request=request,
+        )
+        _track_product_event(
+            request,
+            "share_room_created",
+            object_type="share_room",
+            object_id=room.id,
+            metadata={"permission": room.permission},
+        )
+        payload = ShareRoomSerializer(room).data
+        if plain_code is not None:
+            payload["access_code"] = plain_code
+        return Response(payload, status=status.HTTP_201_CREATED)
+
+
+class _OwnedRoomMixin:
+    permission_classes = [IsAuthenticated]
+
+    def get_room(self):
+        return get_object_or_404(
+            ShareRoom, pk=self.kwargs["room_id"], owner=self.request.user
+        )
+
+
+class ShareRoomDetailView(_OwnedRoomMixin, APIView):
+    """GET/PATCH/DELETE one owner-scoped room."""
+
+    def get(self, request, room_id):
+        return Response(ShareRoomSerializer(self.get_room()).data)
+
+    def patch(self, request, room_id):
+        room = self.get_room()
+        serializer = ShareRoomCreateUpdateSerializer(
+            room, data=request.data, partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        plain_code = None
+        if "access_code" in data:
+            code = (data.pop("access_code", "") or "").strip()
+            if data.get("access_code_required", room.access_code_required) and code:
+                room.access_code_hash = make_password(code)
+                plain_code = code
+        serializer.save()
+        if plain_code is not None:
+            room.save(update_fields=["access_code_hash"])
+        payload = ShareRoomSerializer(room).data
+        if plain_code is not None:
+            payload["access_code"] = plain_code
+        return Response(payload)
+
+    def delete(self, request, room_id):
+        self.get_room().delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ShareRoomItemsView(_OwnedRoomMixin, APIView):
+    """POST adds one owner-owned document/file/proof to the room."""
+
+    def post(self, request, room_id):
+        room = self.get_room()
+        serializer = ShareRoomItemCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        document = file = proof = None
+        if data.get("document"):
+            document = get_object_or_404(
+                Document, pk=data["document"], owner=request.user
+            )
+        elif data.get("file"):
+            file = get_object_or_404(
+                DocumentFile, pk=data["file"], document__owner=request.user
+            )
+        elif data.get("proof"):
+            proof = get_object_or_404(
+                ProofRecord, pk=data["proof"], owner=request.user
+            )
+
+        item = ShareRoomItem.objects.create(
+            room=room,
+            document=document,
+            file=file,
+            proof=proof,
+            sort_order=data.get("sort_order", 0),
+        )
+        room.save(update_fields=["updated_at"])
+        return Response(
+            ShareRoomSerializer(room).data, status=status.HTTP_201_CREATED
+        )
+
+
+class ShareRoomItemDeleteView(_OwnedRoomMixin, APIView):
+    """DELETE removes one item from the room."""
+
+    def delete(self, request, room_id, item_id):
+        room = self.get_room()
+        item = get_object_or_404(ShareRoomItem, pk=item_id, room=room)
+        item.delete()
+        room.save(update_fields=["updated_at"])
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ShareRoomRevokeView(_OwnedRoomMixin, APIView):
+    """POST revokes a room immediately."""
+
+    def post(self, request, room_id):
+        room = self.get_room()
+        if not room.is_revoked:
+            room.revoked_at = timezone.now()
+            room.save(update_fields=["revoked_at"])
+            log_room_activity(
+                room=room,
+                action=RoomActivity.Action.ROOM_REVOKED,
+                actor_type=RoomActivity.ActorType.OWNER,
+                request=request,
+            )
+        return Response(ShareRoomSerializer(room).data)
+
+
+class ShareRoomActivityView(_OwnedRoomMixin, APIView):
+    """GET the owner-only activity trail for a room."""
+
+    def get(self, request, room_id):
+        room = self.get_room()
+        activity = room.activities.all()[:100]
+        return Response(RoomActivitySerializer(activity, many=True).data)
+
+
+# ---- Secure rooms (public, token-gated) ------------------------------------
+
+
+def _resolve_room(token, request=None):
+    """Return (room, error_response). error_response is None when usable."""
+    try:
+        room = ShareRoom.objects.get(token=token)
+    except ShareRoom.DoesNotExist:
+        return None, Response(
+            {"detail": "This room is invalid.", "state": "invalid"},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    if room.is_revoked:
+        return None, Response(
+            {
+                "detail": "This room is no longer available. The owner revoked access.",
+                "state": "revoked",
+            },
+            status=status.HTTP_410_GONE,
+        )
+    if room.is_expired:
+        return None, Response(
+            {"detail": "This room has expired.", "state": "expired"},
+            status=status.HTTP_410_GONE,
+        )
+    return room, None
+
+
+def _check_room_code(room, request):
+    if not room.access_code_required:
+        return None
+    grant = request.query_params.get("grant") or request.headers.get(
+        "X-Share-Grant", ""
+    )
+    if share_grant_is_valid(room.token, grant):
+        return None
+    code = request.headers.get("X-Access-Code", "").strip()
+    if not code:
+        return Response(
+            {
+                "detail": "This room is protected. Enter the access code "
+                "provided by the sender.",
+                "state": "requires_code",
+                "access_code_required": True,
+            },
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    if not check_password(code, room.access_code_hash):
+        log_room_activity(
+            room=room,
+            action=RoomActivity.Action.ROOM_CODE_FAILED,
+            actor_type=RoomActivity.ActorType.SHARED_VIEWER,
+            request=request,
+        )
+        return Response(
+            {
+                "detail": "That code does not match. Check the code and try again.",
+                "state": "wrong_code",
+            },
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    return None
+
+
+def _check_room_usable(room, request):
+    if room.is_view_limit_reached:
+        log_room_activity(
+            room=room,
+            action=RoomActivity.Action.ROOM_BLOCKED_LIMIT_REACHED,
+            actor_type=RoomActivity.ActorType.SHARED_VIEWER,
+            request=request,
+        )
+        return Response(
+            {"detail": _LIMIT_REACHED_DETAIL, "state": "limit_reached"},
+            status=status.HTTP_410_GONE,
+        )
+    return None
+
+
+def _consume_room_view(room, request):
+    if room.access_limit_type == ShareRoom.AccessLimitType.UNLIMITED:
+        return
+    ShareRoom.objects.filter(pk=room.pk).update(view_count=F("view_count") + 1)
+    room.refresh_from_db(fields=["view_count"])
+    if room.is_view_limit_reached and room.limit_reached_at is None:
+        room.limit_reached_at = timezone.now()
+        room.save(update_fields=["limit_reached_at"])
+        log_room_activity(
+            room=room,
+            action=RoomActivity.Action.ROOM_LIMIT_REACHED,
+            actor_type=RoomActivity.ActorType.SHARED_VIEWER,
+            request=request,
+        )
+
+
+def _consume_room_download(room):
+    ShareRoom.objects.filter(pk=room.pk).update(
+        download_count=F("download_count") + 1
+    )
+    room.refresh_from_db(fields=["download_count"])
+    if room.is_download_limit_reached and room.limit_reached_at is None:
+        room.limit_reached_at = timezone.now()
+        room.save(update_fields=["limit_reached_at"])
+
+
+def _resolve_room_file(room, file_id):
+    """Return a DocumentFile only if it is exposed by this room, else None."""
+    entries = collect_room_files(room).files
+    for entry in entries:
+        if entry.file.id == int(file_id):
+            return entry.file
+    return None
+
+
+class PublicShareRoomMetadataView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, token):
+        room, err = _resolve_room(token, request=request)
+        if err:
+            return err
+        room.last_accessed_at = timezone.now()
+        room.save(update_fields=["last_accessed_at"])
+        log_room_activity(
+            room=room,
+            action=RoomActivity.Action.ROOM_OPENED,
+            actor_type=RoomActivity.ActorType.SHARED_VIEWER,
+            request=request,
+        )
+        code_err = _check_room_code(room, request)
+        if code_err:
+            return code_err
+        limit_err = _check_room_usable(room, request)
+        if limit_err:
+            return limit_err
+        files = collect_room_files(room).files
+        return Response(
+            PublicShareRoomSerializer(room, context={"room_files": files}).data
+        )
+
+
+class PublicShareRoomVerifyCodeView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, token):
+        room, err = _resolve_room(token, request=request)
+        if err:
+            return err
+        if not room.access_code_required:
+            return Response({"detail": "Access code verified."})
+        code = str(request.data.get("access_code", "")).strip()
+        if code and check_password(code, room.access_code_hash):
+            log_room_activity(
+                room=room,
+                action=RoomActivity.Action.ROOM_CODE_VERIFIED,
+                actor_type=RoomActivity.ActorType.SHARED_VIEWER,
+                request=request,
+            )
+            return Response(
+                {
+                    "detail": "Access code verified.",
+                    "grant": issue_share_grant(room.token),
+                    "grant_expires_in": SHARE_GRANT_MAX_AGE,
+                }
+            )
+        log_room_activity(
+            room=room,
+            action=RoomActivity.Action.ROOM_CODE_FAILED,
+            actor_type=RoomActivity.ActorType.SHARED_VIEWER,
+            request=request,
+        )
+        return Response(
+            {"detail": "Invalid access code.", "state": "wrong_code"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+
+class _PublicRoomFileMixin(APIView):
+    permission_classes = [AllowAny]
+
+    def resolve(self, request, token, file_id):
+        room, err = _resolve_room(token, request=request)
+        if err:
+            return None, None, err
+        code_err = _check_room_code(room, request)
+        if code_err:
+            return None, None, code_err
+        limit_err = _check_room_usable(room, request)
+        if limit_err:
+            return None, None, limit_err
+        file = _resolve_room_file(room, file_id)
+        if file is None:
+            return None, None, Response(
+                {"detail": "This file is not part of this room.", "state": "not_found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return room, file, None
+
+
+class PublicShareRoomFilePreviewView(_PublicRoomFileMixin):
+    def get(self, request, token, file_id):
+        room, file, err = self.resolve(request, token, file_id)
+        if err:
+            return err
+        if not file.is_previewable:
+            return Response(
+                {
+                    "detail": "Preview is not available for this file type.",
+                    "state": "unsupported_preview",
+                },
+                status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            )
+        log_room_activity(
+            room=room,
+            action=RoomActivity.Action.ROOM_PREVIEWED,
+            actor_type=RoomActivity.ActorType.SHARED_VIEWER,
+            request=request,
+            metadata={"file_id": file.id},
+        )
+        response = _inline_file_response(file)
+        _consume_room_view(room, request)
+        return response
+
+
+class PublicShareRoomFileDownloadView(_PublicRoomFileMixin):
+    def get(self, request, token, file_id):
+        room, file, err = self.resolve(request, token, file_id)
+        if err:
+            return err
+        if not room.download_allowed:
+            return Response(
+                {
+                    "detail": "This room is view-only. Downloading is disabled "
+                    "by the owner.",
+                    "state": "download_not_allowed",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if room.is_download_limit_reached:
+            return Response(
+                {"detail": _LIMIT_REACHED_DETAIL, "state": "limit_reached"},
+                status=status.HTTP_410_GONE,
+            )
+        log_room_activity(
+            room=room,
+            action=RoomActivity.Action.ROOM_DOWNLOADED,
+            actor_type=RoomActivity.ActorType.SHARED_VIEWER,
+            request=request,
+            metadata={"file_id": file.id},
+        )
+        response = _file_response(file, as_attachment=True)
+        _consume_room_download(room)
+        return response
+
+
+class PublicShareRoomZipView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, token):
+        room, err = _resolve_room(token, request=request)
+        if err:
+            return err
+        code_err = _check_room_code(room, request)
+        if code_err:
+            return code_err
+        limit_err = _check_room_usable(room, request)
+        if limit_err:
+            return limit_err
+        if not room.download_allowed:
+            return Response(
+                {
+                    "detail": "This room is view-only. Downloading is disabled "
+                    "by the owner.",
+                    "state": "download_not_allowed",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if room.is_download_limit_reached:
+            return Response(
+                {"detail": _LIMIT_REACHED_DETAIL, "state": "limit_reached"},
+                status=status.HTTP_410_GONE,
+            )
+        spooled, filename, summary = build_room_zip(room)
+        if summary["files_count"] == 0:
+            spooled.close()
+            return Response(
+                {"detail": "This room has no files to download.", "state": "no_files"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        log_room_activity(
+            room=room,
+            action=RoomActivity.Action.ROOM_DOWNLOADED,
+            actor_type=RoomActivity.ActorType.SHARED_VIEWER,
+            request=request,
+            metadata={"scope": "room_zip", "files": summary["files_count"]},
+        )
+        _consume_room_download(room)
+        return _zip_response(spooled, filename, summary)
+
+
+# ---- Calendar V1 -----------------------------------------------------------
+
+
+def _parse_calendar_filters(request):
+    """Shared parsing of start/end/type/urgency/search query params."""
+    params = request.query_params
+    start = parse_date(params.get("start", "")) if params.get("start") else None
+    end = parse_date(params.get("end", "")) if params.get("end") else None
+    types = (
+        {t.strip() for t in params.get("type", "").split(",") if t.strip()}
+        or None
+    )
+    urgencies = (
+        {u.strip() for u in params.get("urgency", "").split(",") if u.strip()}
+        or None
+    )
+    search = params.get("search") or None
+    return start, end, types, urgencies, search
+
+
+class CalendarEventsView(APIView):
+    """Owner-scoped aggregated calendar events + a per-response summary."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        start, end, types, urgencies, search = _parse_calendar_filters(request)
+        events = build_calendar_events(
+            request.user,
+            start_date=start,
+            end_date=end,
+            types=types,
+            urgencies=urgencies,
+            search=search,
+        )
+        return Response(
+            {
+                "events": CalendarEventSerializer(events, many=True).data,
+                "summary": calendar_events_summary(events),
+            }
+        )
+
+
+class CalendarSummaryView(APIView):
+    """Owner-scoped high-level calendar summary (counts + next key dates)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response(calendar_summary(request.user))
+
+
+class CalendarIcsExportView(APIView):
+    """One-way .ics export of the owner's calendar (no tokens/codes/paths)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        start, end, types, urgencies, search = _parse_calendar_filters(request)
+        events = build_calendar_events(
+            request.user,
+            start_date=start,
+            end_date=end,
+            types=types,
+            urgencies=urgencies,
+            search=search,
+        )
+        ics = build_calendar_ics(events)
+        response = HttpResponse(ics, content_type="text/calendar; charset=utf-8")
+        response["Content-Disposition"] = (
+            'attachment; filename="duenest-calendar.ics"'
+        )
+        return response

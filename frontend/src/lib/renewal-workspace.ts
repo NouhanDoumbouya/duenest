@@ -11,6 +11,7 @@ import type {
   Bundle,
   BundleExportRequest,
   BundleExportType,
+  BundleFilesResponse,
   BundleReadiness,
   BundleRequirement,
   Checklist,
@@ -141,6 +142,13 @@ export function getBundles(params?: {
 
 export function getBundle(bundleId: number): Promise<Bundle> {
   return apiFetch<Bundle>(`/document-bundles/${bundleId}/`, { auth: true });
+}
+
+export function getBundleFiles(bundleId: number): Promise<BundleFilesResponse> {
+  return apiFetch<BundleFilesResponse>(
+    `/document-bundles/${bundleId}/files/`,
+    { auth: true },
+  );
 }
 
 export function createBundle(payload: CreateBundleRequest): Promise<Bundle> {
@@ -319,6 +327,92 @@ export async function downloadBundleExport(
   const ext =
     exportRequest.export_type === "bundle_requirements_csv" ? "csv" : "json";
   saveBlob(blob, `duenest-bundle-${bundleId}-export.${ext}`);
+}
+
+function filenameFromDisposition(
+  header: string | null,
+  fallback: string,
+): string {
+  if (!header) return fallback;
+  const utf8 = /filename\*=UTF-8''([^;]+)/i.exec(header);
+  if (utf8) return decodeURIComponent(utf8[1]);
+  const plain = /filename="?([^";]+)"?/i.exec(header);
+  return plain ? plain[1] : fallback;
+}
+
+/**
+ * POST a JSON body to an endpoint that streams back a ZIP, then trigger a
+ * browser "save". Returns nothing; throws ApiError on failure (the backend
+ * returns a JSON error body in that case).
+ */
+async function postZipAndSave(
+  path: string,
+  body: Record<string, unknown> | undefined,
+  fallbackName: string,
+): Promise<void> {
+  const headers = new Headers();
+  headers.set("Accept", "*/*");
+  const token = getAccessToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  if (body) headers.set("Content-Type", "application/json");
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      method: "POST",
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch {
+    throw new ApiError("Unable to reach the server. Please try again.", 0, null);
+  }
+
+  if (!response.ok) {
+    const isJson = response.headers
+      .get("content-type")
+      ?.includes("application/json");
+    const data: unknown = isJson ? await response.json() : null;
+    throw new ApiError(
+      getApiErrorMessage(data, "We could not prepare this ZIP. Please try again."),
+      response.status,
+      data,
+    );
+  }
+
+  const name = filenameFromDisposition(
+    response.headers.get("content-disposition"),
+    fallbackName,
+  );
+  saveBlob(await response.blob(), name);
+}
+
+export function exportBundleFilesZip(bundleId: number): Promise<void> {
+  return postZipAndSave(
+    `/document-bundles/${bundleId}/export-files/`,
+    undefined,
+    `duenest-bundle-${bundleId}.zip`,
+  );
+}
+
+export function exportSelectedBundleFilesZip(
+  bundleId: number,
+  fileIds: number[],
+): Promise<void> {
+  return postZipAndSave(
+    `/document-bundles/${bundleId}/export-selected-files/`,
+    { file_ids: fileIds },
+    `duenest-bundle-${bundleId}-selected.zip`,
+  );
+}
+
+export function exportSelectedDocumentFilesZip(
+  fileIds: number[],
+): Promise<void> {
+  return postZipAndSave(
+    `/documents/files/export-selected/`,
+    { file_ids: fileIds },
+    `duenest-files.zip`,
+  );
 }
 
 // ---- Timeline --------------------------------------------------------------

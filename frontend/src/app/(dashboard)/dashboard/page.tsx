@@ -14,6 +14,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 
+import { CalendarUpcomingWidget } from "@/components/dashboard/calendar-upcoming-widget";
 import { StatCard, type Stat } from "@/components/dashboard/stat-card";
 import { useDashboardUser } from "@/components/dashboard/user-context";
 import { DocumentStatusBadge } from "@/components/documents/status-badge";
@@ -305,8 +306,10 @@ export default function DashboardPage() {
             )}
           </SectionCard>
 
-          {/* Side rail: reminders + recent */}
+          {/* Side rail: upcoming dates + reminders + recent */}
           <div className="flex flex-col gap-6">
+            <CalendarUpcomingWidget />
+
             <SectionCard
               title="Upcoming reminders"
               action={

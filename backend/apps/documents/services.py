@@ -673,6 +673,28 @@ def log_activity(
         logger.warning("Failed to record file activity", exc_info=True)
 
 
+def log_room_activity(
+    *, room, action, actor_type, request=None, metadata: dict | None = None
+) -> None:
+    """Record one secure-room activity entry. Never raises; codes are not logged."""
+    from .models import RoomActivity
+
+    try:
+        RoomActivity.objects.create(
+            owner_id=room.owner_id,
+            room=room,
+            action=action,
+            actor_type=actor_type,
+            ip_address=client_ip(request) if request is not None else None,
+            user_agent=(
+                request.META.get("HTTP_USER_AGENT", "")[:1000] if request else ""
+            ),
+            metadata=metadata or {},
+        )
+    except Exception:  # noqa: BLE001 — logging must never break the flow
+        logger.warning("Failed to record room activity", exc_info=True)
+
+
 # ---- Checklist progress ----------------------------------------------------
 
 
@@ -793,6 +815,239 @@ def bundle_readiness(bundle) -> BundleReadiness:
         is_ready=is_ready,
         missing_required_titles=[r.title for r in missing_required],
     )
+
+
+# ---- Bundle files -----------------------------------------------------------
+
+
+@dataclass
+class BundleFileEntry:
+    """An available file reachable from a bundle, with its requirement context."""
+
+    file: object  # DocumentFile
+    requirement_id: int
+    requirement_title: str
+    document_id: int
+    document_title: str
+
+
+@dataclass
+class BundleMissingItem:
+    """A bundle requirement that points at a document/file but has nothing usable."""
+
+    requirement_id: int
+    requirement_title: str
+    document_id: int | None
+    document_title: str | None
+    reason: str  # "no_file" | "file_trashed" | "document_trashed"
+
+
+@dataclass
+class BundleFilesResult:
+    files: list
+    missing: list
+
+    @property
+    def total_size(self) -> int:
+        return sum(entry.file.file_size for entry in self.files)
+
+
+def collect_bundle_files(bundle) -> BundleFilesResult:
+    """
+    Gather the available files reachable from a bundle's requirements, plus the
+    requirements that are still missing a usable file.
+
+    Sources, per requirement:
+      * an explicitly linked file → that single file
+      * a linked document (no explicit file) → all of the document's live files
+
+    Trashed/deleted files and trashed documents are excluded from ``files`` and
+    surfaced in ``missing`` instead. Files are de-duplicated across requirements.
+    Owner isolation is the caller's responsibility (resolve the bundle by owner).
+    """
+    files: list[BundleFileEntry] = []
+    missing: list[BundleMissingItem] = []
+    seen_file_ids: set[int] = set()
+
+    requirements = (
+        bundle.requirements.select_related(
+            "linked_document", "linked_file", "linked_file__document"
+        )
+        .prefetch_related("linked_document__files")
+        .all()
+    )
+
+    for req in requirements:
+        if req.linked_file_id:
+            f = req.linked_file
+            doc = f.document
+            if f.is_trashed or doc.is_trashed:
+                missing.append(
+                    BundleMissingItem(
+                        requirement_id=req.id,
+                        requirement_title=req.title,
+                        document_id=doc.id,
+                        document_title=doc.title,
+                        reason="document_trashed" if doc.is_trashed else "file_trashed",
+                    )
+                )
+            elif f.id not in seen_file_ids:
+                seen_file_ids.add(f.id)
+                files.append(
+                    BundleFileEntry(
+                        file=f,
+                        requirement_id=req.id,
+                        requirement_title=req.title,
+                        document_id=doc.id,
+                        document_title=doc.title,
+                    )
+                )
+        elif req.linked_document_id:
+            doc = req.linked_document
+            if doc.is_trashed:
+                missing.append(
+                    BundleMissingItem(
+                        requirement_id=req.id,
+                        requirement_title=req.title,
+                        document_id=doc.id,
+                        document_title=doc.title,
+                        reason="document_trashed",
+                    )
+                )
+                continue
+            live_files = [x for x in doc.files.all() if not x.is_trashed]
+            if not live_files:
+                missing.append(
+                    BundleMissingItem(
+                        requirement_id=req.id,
+                        requirement_title=req.title,
+                        document_id=doc.id,
+                        document_title=doc.title,
+                        reason="no_file",
+                    )
+                )
+                continue
+            for f in live_files:
+                if f.id in seen_file_ids:
+                    continue
+                seen_file_ids.add(f.id)
+                files.append(
+                    BundleFileEntry(
+                        file=f,
+                        requirement_id=req.id,
+                        requirement_title=req.title,
+                        document_id=doc.id,
+                        document_title=doc.title,
+                    )
+                )
+
+    return BundleFilesResult(files=files, missing=missing)
+
+
+# ---- Secure room files ------------------------------------------------------
+
+
+@dataclass
+class RoomFileEntry:
+    file: object  # DocumentFile
+    source_label: str
+    item_id: int
+
+
+@dataclass
+class RoomFilesResult:
+    files: list
+    missing: list
+
+    @property
+    def total_size(self) -> int:
+        return sum(entry.file.file_size for entry in self.files)
+
+
+def collect_room_files(room) -> RoomFilesResult:
+    """
+    Gather the live files exposed by a secure room's items (files, documents,
+    proofs), de-duplicated. Trashed files/documents are excluded and reported as
+    missing. The room never exposes anything beyond its explicit items.
+    """
+    files: list[RoomFileEntry] = []
+    missing: list = []
+    seen: set[int] = set()
+
+    items = (
+        room.items.select_related(
+            "document",
+            "file",
+            "file__document",
+            "proof",
+            "proof__linked_file",
+            "proof__linked_file__document",
+        )
+        .prefetch_related("document__files")
+        .all()
+    )
+
+    def _add(f, label, item_id):
+        if f.id in seen:
+            return
+        seen.add(f.id)
+        files.append(RoomFileEntry(file=f, source_label=label, item_id=item_id))
+
+    for item in items:
+        if item.file_id:
+            f = item.file
+            if f.is_trashed or f.document.is_trashed:
+                missing.append({"item_id": item.id, "reason": "file_trashed"})
+            else:
+                _add(f, f.document.title, item.id)
+        elif item.document_id:
+            doc = item.document
+            if doc.is_trashed:
+                missing.append({"item_id": item.id, "reason": "document_trashed"})
+                continue
+            live = [x for x in doc.files.all() if not x.is_trashed]
+            if not live:
+                missing.append({"item_id": item.id, "reason": "no_file"})
+            for f in live:
+                _add(f, doc.title, item.id)
+        elif item.proof_id:
+            proof = item.proof
+            f = proof.linked_file
+            if f and not f.is_trashed and not f.document.is_trashed:
+                _add(f, f"Proof: {proof.title}", item.id)
+            else:
+                missing.append({"item_id": item.id, "reason": "no_file"})
+
+    return RoomFilesResult(files=files, missing=missing)
+
+
+def build_room_zip(room):
+    """Build a streamable ZIP of a room's files (used when downloads allowed)."""
+    import tempfile
+    import zipfile
+
+    result = collect_room_files(room)
+    root = _safe_path_component(room.title, "room")
+    used: set = set()
+    included = 0
+
+    spooled = tempfile.SpooledTemporaryFile(max_size=8 * 1024 * 1024)
+    with zipfile.ZipFile(spooled, "w", zipfile.ZIP_DEFLATED) as zf:
+        for entry in result.files:
+            folder = _safe_path_component(entry.source_label, "files")
+            filename = _safe_path_component(
+                entry.file.original_filename, f"file-{entry.file.id}"
+            )
+            arcname = _dedupe_arcname(f"{root}/{folder}/{filename}", used)
+            if _write_file_to_zip(zf, arcname, entry.file):
+                included += 1
+
+    spooled.seek(0)
+    zip_filename = (
+        f"{_slugify_filename(room.title, 'room')}_"
+        f"{timezone.localdate().isoformat()}.zip"
+    )
+    return spooled, zip_filename, {"files_count": included}
 
 
 # ---- Timeline aggregation --------------------------------------------------
@@ -1014,6 +1269,423 @@ def build_timeline(
 
     events.sort(key=lambda e: (e.date, e.title.lower()))
     return events
+
+
+# ---- Calendar aggregation --------------------------------------------------
+
+
+@dataclass
+class CalendarEvent:
+    id: str
+    source_type: str
+    source_id: int
+    title: str
+    description: str
+    event_type: str
+    date: date
+    urgency: str
+    category: str
+    linked_resource_type: str
+    linked_resource_id: int | None
+    linked_resource_url: str
+    status: str = ""
+    end_date: date | None = None
+    metadata: dict = field(default_factory=dict)
+
+
+# event_type -> filter category (the ?type= query groups).
+CALENDAR_CATEGORIES = {
+    "document_expiry": "documents",
+    "renewal_due": "documents",
+    "last_safe_action": "documents",
+    "reminder": "reminders",
+    "bundle_deadline": "bundles",
+    "appointment": "appointments",
+    "proof_submission": "proofs",
+    "share_expiry": "shares",
+    "room_expiry": "rooms",
+    "emergency_pack_expiry": "emergency",
+}
+
+CALENDAR_EVENT_TYPES = tuple(CALENDAR_CATEGORIES.keys())
+
+
+def calendar_urgency(event_date: date, today: date) -> str:
+    """Normalized urgency label for the calendar (overdue…normal)."""
+    days = (event_date - today).days
+    if days < 0:
+        return "overdue"
+    if days <= 3:
+        return "critical"
+    if days <= 14:
+        return "soon"
+    if days <= 30:
+        return "upcoming"
+    return "normal"
+
+
+def build_calendar_events(
+    user,
+    *,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    types: set | None = None,
+    urgencies: set | None = None,
+    search: str | None = None,
+) -> list:
+    """
+    Aggregate the authenticated user's date-based events for the calendar.
+
+    Strictly owner-scoped. Pulls from documents, reminders, bundles,
+    appointments, proofs, share links, secure rooms, and emergency packs, and
+    normalizes them into a single CalendarEvent shape. No tokens, access codes,
+    or internal paths are ever included.
+    """
+    from .models import (
+        DocumentAppointment,
+        DocumentBundle,
+        DocumentFileShareLink,
+        DocumentReminderRule,
+        EmergencyAccessPack,
+        ProofRecord,
+        ShareRoom,
+    )
+
+    today = timezone.localdate()
+    events: list[CalendarEvent] = []
+    search_lower = (search or "").strip().lower()
+
+    def in_range(value) -> bool:
+        if value is None:
+            return False
+        if start_date and value < start_date:
+            return False
+        if end_date and value > end_date:
+            return False
+        return True
+
+    def wants(event_type: str) -> bool:
+        if types and CALENDAR_CATEGORIES.get(event_type) not in types:
+            return False
+        return True
+
+    def add(
+        *,
+        event_type,
+        source_type,
+        source_id,
+        title,
+        description,
+        when,
+        linked_type,
+        linked_id,
+        url,
+        status="",
+        metadata=None,
+    ):
+        if not wants(event_type) or not in_range(when):
+            return
+        urgency = calendar_urgency(when, today)
+        if urgencies and urgency not in urgencies:
+            return
+        if search_lower and search_lower not in title.lower():
+            return
+        events.append(
+            CalendarEvent(
+                id=f"{event_type}:{source_id}",
+                source_type=source_type,
+                source_id=source_id,
+                title=title,
+                description=description,
+                event_type=event_type,
+                date=when,
+                urgency=urgency,
+                category=CALENDAR_CATEGORIES[event_type],
+                linked_resource_type=linked_type,
+                linked_resource_id=linked_id,
+                linked_resource_url=url,
+                status=status,
+                metadata=metadata or {},
+            )
+        )
+
+    # Documents: expiry, renewal, last safe action.
+    documents = Document.objects.filter(owner=user, is_trashed=False).exclude(
+        status=Document.Status.ARCHIVED
+    )
+    for doc in documents:
+        url = f"/dashboard/documents/{doc.pk}"
+        add(
+            event_type="document_expiry",
+            source_type="document",
+            source_id=doc.pk,
+            title=f"{doc.title} expires",
+            description=f"{doc.title} expires on this date.",
+            when=doc.expiry_date,
+            linked_type="document",
+            linked_id=doc.pk,
+            url=url,
+            metadata={"document_type": doc.document_type},
+        )
+        add(
+            event_type="renewal_due",
+            source_type="document",
+            source_id=doc.pk,
+            title=f"Renew {doc.title}",
+            description=f"Renewal due for {doc.title}.",
+            when=doc.renewal_date,
+            linked_type="document",
+            linked_id=doc.pk,
+            url=url,
+            metadata={"document_type": doc.document_type},
+        )
+        add(
+            event_type="last_safe_action",
+            source_type="document",
+            source_id=doc.pk,
+            title=f"Act on {doc.title}",
+            description=f"Last safe action date for {doc.title}.",
+            when=doc.last_safe_action_date,
+            linked_type="document",
+            linked_id=doc.pk,
+            url=url,
+        )
+
+    # Reminders.
+    rules = (
+        DocumentReminderRule.objects.filter(owner=user, is_enabled=True)
+        .exclude(document__is_trashed=True)
+        .select_related("document")
+    )
+    for rule in rules:
+        add(
+            event_type="reminder",
+            source_type="reminder_rule",
+            source_id=rule.pk,
+            title=f"Reminder: {rule.document.title}",
+            description=rule.get_trigger_type_display(),
+            when=reminder_date_for_rule(rule),
+            linked_type="document",
+            linked_id=rule.document_id,
+            url=f"/dashboard/documents/{rule.document_id}",
+            metadata={"days_before": rule.days_before},
+        )
+
+    # Bundle deadlines.
+    bundles = DocumentBundle.objects.filter(owner=user).exclude(
+        status=DocumentBundle.Status.ARCHIVED
+    )
+    for bundle in bundles:
+        add(
+            event_type="bundle_deadline",
+            source_type="bundle",
+            source_id=bundle.pk,
+            title=f"{bundle.title} deadline",
+            description=f"Target date for the “{bundle.title}” pack.",
+            when=bundle.target_date,
+            linked_type="bundle",
+            linked_id=bundle.pk,
+            url=f"/dashboard/bundles/{bundle.pk}",
+            status=bundle.status,
+            metadata={"bundle_type": bundle.bundle_type},
+        )
+
+    # Appointments.
+    appointments = (
+        DocumentAppointment.objects.filter(owner=user)
+        .exclude(document__is_trashed=True)
+        .select_related("document")
+    )
+    for appt in appointments:
+        appt_date = appt.appointment_at.date() if appt.appointment_at else None
+        add(
+            event_type="appointment",
+            source_type="appointment",
+            source_id=appt.pk,
+            title=appt.title,
+            description=f"Appointment ({appt.get_status_display()}).",
+            when=appt_date,
+            linked_type="document" if appt.document_id else "bundle",
+            linked_id=appt.document_id or appt.bundle_id,
+            url=(
+                f"/dashboard/documents/{appt.document_id}"
+                if appt.document_id
+                else f"/dashboard/bundles/{appt.bundle_id}"
+                if appt.bundle_id
+                else "/dashboard/calendar"
+            ),
+            status=appt.status,
+        )
+
+    # Proof submissions.
+    proofs = (
+        ProofRecord.objects.filter(owner=user)
+        .exclude(document__is_trashed=True)
+        .select_related("document", "bundle")
+    )
+    for proof in proofs:
+        proof_date = proof.submitted_at.date() if proof.submitted_at else None
+        add(
+            event_type="proof_submission",
+            source_type="proof",
+            source_id=proof.pk,
+            title=proof.title,
+            description=f"Proof / submission ({proof.get_status_display()}).",
+            when=proof_date,
+            linked_type="document" if proof.document_id else "bundle",
+            linked_id=proof.document_id or proof.bundle_id,
+            url=(
+                f"/dashboard/documents/{proof.document_id}"
+                if proof.document_id
+                else f"/dashboard/bundles/{proof.bundle_id}"
+                if proof.bundle_id
+                else "/dashboard/calendar"
+            ),
+            status=proof.status,
+        )
+
+    # Share link expiries (active links only).
+    links = (
+        DocumentFileShareLink.objects.filter(owner=user, revoked_at__isnull=True)
+        .exclude(file__is_trashed=True)
+        .select_related("file")
+    )
+    for link in links:
+        add(
+            event_type="share_expiry",
+            source_type="share_link",
+            source_id=link.pk,
+            title=f"Share expires: {link.file.original_filename}",
+            description="A shared file link expires on this date.",
+            when=link.expires_at.date() if link.expires_at else None,
+            linked_type="document",
+            linked_id=link.document_id,
+            url=f"/dashboard/documents/{link.document_id}",
+        )
+
+    # Secure room expiries (active rooms only).
+    rooms = ShareRoom.objects.filter(owner=user, revoked_at__isnull=True)
+    for room in rooms:
+        add(
+            event_type="room_expiry",
+            source_type="share_room",
+            source_id=room.pk,
+            title=f"Room expires: {room.title}",
+            description="A secure room expires on this date.",
+            when=room.expires_at.date() if room.expires_at else None,
+            linked_type="room",
+            linked_id=room.pk,
+            url=f"/dashboard/share-rooms/{room.pk}",
+        )
+
+    # Emergency pack expiries.
+    packs = EmergencyAccessPack.objects.filter(owner=user)
+    for pack in packs:
+        add(
+            event_type="emergency_pack_expiry",
+            source_type="emergency_pack",
+            source_id=pack.pk,
+            title=f"Emergency pack expires: {pack.title}",
+            description="An emergency access pack expires on this date.",
+            when=pack.expires_at.date() if pack.expires_at else None,
+            linked_type="emergency_pack",
+            linked_id=pack.pk,
+            url="/dashboard/emergency",
+        )
+
+    events.sort(key=lambda e: (e.date, e.title.lower()))
+    return events
+
+
+def calendar_summary(user) -> dict:
+    """High-level counts + next key dates for the calendar header/widget."""
+    today = timezone.localdate()
+    all_events = build_calendar_events(user)
+
+    def next_date(event_type):
+        for ev in all_events:
+            if ev.event_type == event_type and ev.date >= today:
+                return ev.date.isoformat()
+        return None
+
+    overdue = [e for e in all_events if e.urgency == "overdue"]
+    due_today = [e for e in all_events if e.date == today]
+    week = [e for e in all_events if today <= e.date <= today + timedelta(days=7)]
+    month = [e for e in all_events if today <= e.date <= today + timedelta(days=30)]
+
+    return {
+        "due_today": len(due_today),
+        "overdue": len(overdue),
+        "next_7_days": len(week),
+        "next_30_days": len(month),
+        "next_expiry": next_date("document_expiry"),
+        "next_renewal": next_date("renewal_due"),
+        "next_bundle_deadline": next_date("bundle_deadline"),
+        "next_share_expiry": next_date("share_expiry"),
+        "next_room_expiry": next_date("room_expiry"),
+    }
+
+
+def calendar_events_summary(events: list, today: date | None = None) -> dict:
+    """Per-response summary counts for a list of calendar events."""
+    today = today or timezone.localdate()
+    by_category: dict = {}
+    for e in events:
+        by_category[e.category] = by_category.get(e.category, 0) + 1
+    return {
+        "total_events": len(events),
+        "overdue_count": sum(1 for e in events if e.urgency == "overdue"),
+        "due_today_count": sum(1 for e in events if e.date == today),
+        "due_this_week_count": sum(
+            1 for e in events if today <= e.date <= today + timedelta(days=7)
+        ),
+        "expiring_this_month_count": sum(
+            1 for e in events if today <= e.date <= today + timedelta(days=30)
+        ),
+        "document_events_count": by_category.get("documents", 0),
+        "reminder_events_count": by_category.get("reminders", 0),
+        "bundle_events_count": by_category.get("bundles", 0),
+        "share_events_count": by_category.get("shares", 0),
+        "room_events_count": by_category.get("rooms", 0),
+    }
+
+
+def build_calendar_ics(events: list, *, calendar_name: str = "DueNest") -> str:
+    """
+    Render calendar events as a one-way .ics document.
+
+    Safe titles only — no tokens, access codes, file paths, or document numbers.
+    """
+    lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//DueNest//Calendar V1//EN",
+        f"X-WR-CALNAME:{calendar_name}",
+    ]
+    stamp = timezone.now().strftime("%Y%m%dT%H%M%SZ")
+
+    def esc(text: str) -> str:
+        return (
+            (text or "")
+            .replace("\\", "\\\\")
+            .replace(";", "\\;")
+            .replace(",", "\\,")
+            .replace("\n", "\\n")
+        )
+
+    for ev in events:
+        date_str = ev.date.strftime("%Y%m%d")
+        lines += [
+            "BEGIN:VEVENT",
+            f"UID:{ev.id}@duenest",
+            f"DTSTAMP:{stamp}",
+            f"DTSTART;VALUE=DATE:{date_str}",
+            f"SUMMARY:{esc('DueNest: ' + ev.title)}",
+            f"DESCRIPTION:{esc(ev.description)}",
+            "END:VEVENT",
+        ]
+    lines.append("END:VCALENDAR")
+    return "\r\n".join(lines) + "\r\n"
 
 
 # ---- OCR-assisted extraction (pluggable provider) --------------------------
@@ -1979,3 +2651,262 @@ def create_bundle_export(user, bundle, export_type: str) -> DocumentExportReques
         metadata={"export_type": export.export_type, "bundle_id": bundle.id},
     )
     return export
+
+
+# ---- File ZIP exports -------------------------------------------------------
+
+
+def _safe_path_component(name: str, fallback: str = "file") -> str:
+    """Sanitize a single ZIP path segment (no separators, no traversal)."""
+    import re
+
+    cleaned = re.sub(r"[^\w\-. ]", "_", (name or "").strip(), flags=re.UNICODE)
+    cleaned = cleaned.strip(". ").strip()
+    return cleaned or fallback
+
+
+def _slugify_filename(name: str, fallback: str = "export") -> str:
+    import re
+
+    slug = re.sub(r"[^\w]+", "_", (name or "").strip().lower(), flags=re.UNICODE)
+    return slug.strip("_") or fallback
+
+
+def _dedupe_arcname(arcname: str, used: set) -> str:
+    """Return a unique arcname, appending ' (2)', ' (3)', … before the suffix."""
+    if arcname not in used:
+        used.add(arcname)
+        return arcname
+    directory, _, filename = arcname.rpartition("/")
+    stem, dot, ext = filename.rpartition(".")
+    counter = 2
+    while True:
+        if dot:
+            candidate_name = f"{stem} ({counter}).{ext}"
+        else:
+            candidate_name = f"{filename} ({counter})"
+        candidate = f"{directory}/{candidate_name}" if directory else candidate_name
+        if candidate not in used:
+            used.add(candidate)
+            return candidate
+        counter += 1
+
+
+def _write_file_to_zip(zf, arcname, document_file) -> bool:
+    """Stream one file into the archive. Returns False if it is missing."""
+    import zipfile
+
+    try:
+        with document_file.file.open("rb") as fh:
+            zf.writestr(
+                zipfile.ZipInfo(arcname), fh.read(), zipfile.ZIP_DEFLATED
+            )
+    except (FileNotFoundError, OSError, ValueError):
+        return False
+    return True
+
+
+def build_bundle_manifest(
+    user, bundle, included_files: list, missing: list, warnings: list
+) -> dict:
+    """
+    Build the bundle_manifest.json payload that travels inside the ZIP.
+
+    Reuses the safe metadata export (no internal paths, tokens, or access codes)
+    and adds the concrete list of files that were packaged.
+    """
+    payload = build_bundle_export_payload(
+        user, bundle, DocumentExportRequest.ExportType.BUNDLE_METADATA_JSON
+    )
+    included_documents = sorted(
+        {f["document"] for f in included_files if f.get("document")}
+    )
+    return {
+        "bundle_name": bundle.title,
+        "bundle_type": bundle.bundle_type,
+        "deadline": bundle.target_date.isoformat() if bundle.target_date else "",
+        "readiness_score": payload["readiness"]["score"],
+        "exported_at": timezone.now().isoformat(),
+        "included_documents": included_documents,
+        "included_files": included_files,
+        "missing_required_items": payload["readiness"]["missing_required_titles"],
+        "missing_files": [
+            {
+                "requirement": m.requirement_title,
+                "document": m.document_title,
+                "reason": m.reason,
+            }
+            for m in missing
+        ],
+        "proof_records_summary": {
+            "total": payload["counts"]["proof_records"],
+        },
+        "checklist_progress_summary": [
+            {
+                "title": c["title"],
+                "progress_percent": c["progress_percent"],
+                "status": c["status"],
+            }
+            for c in payload["checklists"]
+        ],
+        "warnings": warnings,
+    }
+
+
+def build_bundle_zip(user, bundle, *, file_ids=None):
+    """
+    Build a streamable ZIP of a bundle's files plus a manifest.
+
+    Returns ``(spooled_file, zip_filename, summary)``. Trashed/unavailable files
+    are never included; selected exports keep only owned files in ``file_ids``;
+    physically-missing files are skipped and reported in the manifest warnings.
+    No internal storage path is ever exposed.
+    """
+    import tempfile
+    import zipfile
+
+    result = collect_bundle_files(bundle)
+    entries = result.files
+    if file_ids is not None:
+        wanted = {int(fid) for fid in file_ids}
+        entries = [e for e in entries if e.file.id in wanted]
+
+    root = _safe_path_component(bundle.title, "bundle")
+    used_arcnames: set = set()
+    included_files: list = []
+    warnings: list = []
+    skipped = 0
+
+    spooled = tempfile.SpooledTemporaryFile(max_size=8 * 1024 * 1024)
+    with zipfile.ZipFile(spooled, "w", zipfile.ZIP_DEFLATED) as zf:
+        for entry in entries:
+            folder = _safe_path_component(
+                entry.requirement_title or entry.document_title, "files"
+            )
+            filename = _safe_path_component(
+                entry.file.original_filename, f"file-{entry.file.id}"
+            )
+            arcname = _dedupe_arcname(f"{root}/{folder}/{filename}", used_arcnames)
+            if not _write_file_to_zip(zf, arcname, entry.file):
+                skipped += 1
+                warnings.append(
+                    f"“{entry.file.original_filename}” was missing from storage "
+                    "and was skipped."
+                )
+                continue
+            included_files.append(
+                {
+                    "path": arcname,
+                    "filename": entry.file.original_filename,
+                    "document": entry.document_title,
+                    "requirement": entry.requirement_title,
+                    "size": entry.file.file_size,
+                    "content_type": entry.file.content_type,
+                }
+            )
+
+        # Warn about expired documents that were included.
+        today = timezone.localdate()
+        doc_ids = {e.document_id for e in entries}
+        for doc in Document.objects.filter(
+            id__in=doc_ids, owner=user, expiry_date__lt=today
+        ):
+            warnings.append(f"“{doc.title}” is expired.")
+
+        manifest = build_bundle_manifest(
+            user, bundle, included_files, result.missing, warnings
+        )
+        zf.writestr(
+            f"{root}/bundle_manifest.json", json.dumps(manifest, indent=2)
+        )
+
+    spooled.seek(0)
+    zip_filename = (
+        f"{_slugify_filename(bundle.title, 'bundle')}_{today.isoformat()}.zip"
+    )
+    summary = {
+        "documents_count": len(
+            {f["document"] for f in included_files if f.get("document")}
+        ),
+        "files_count": len(included_files),
+        "missing_count": len(result.missing),
+        "skipped_count": skipped,
+    }
+
+    log_document_activity(
+        owner=user,
+        action=DocumentActivity.Action.EXPORT_REQUESTED,
+        title="Bundle files exported (ZIP)",
+        description=bundle.title,
+        related_bundle=bundle,
+        metadata={"scope": "bundle_zip", "bundle_id": bundle.id, **summary},
+    )
+    return spooled, zip_filename, summary
+
+
+def build_documents_zip(user, file_ids):
+    """
+    Build a streamable ZIP of selected owned document files (outside any bundle).
+
+    Only the caller's own, non-trashed files are included. Files are grouped by
+    their document title. Returns ``(spooled_file, zip_filename, summary)``.
+    """
+    import tempfile
+    import zipfile
+
+    files = list(
+        DocumentFile.objects.filter(
+            id__in=[int(f) for f in file_ids],
+            document__owner=user,
+            is_trashed=False,
+            document__is_trashed=False,
+        ).select_related("document")
+    )
+
+    root = "DueNest_Files"
+    used_arcnames: set = set()
+    included_files: list = []
+    warnings: list = []
+    skipped = 0
+
+    spooled = tempfile.SpooledTemporaryFile(max_size=8 * 1024 * 1024)
+    with zipfile.ZipFile(spooled, "w", zipfile.ZIP_DEFLATED) as zf:
+        for f in files:
+            folder = _safe_path_component(f.document.title, "Document")
+            filename = _safe_path_component(f.original_filename, f"file-{f.id}")
+            arcname = _dedupe_arcname(f"{root}/{folder}/{filename}", used_arcnames)
+            if not _write_file_to_zip(zf, arcname, f):
+                skipped += 1
+                warnings.append(
+                    f"“{f.original_filename}” was missing from storage and was skipped."
+                )
+                continue
+            included_files.append(
+                {
+                    "path": arcname,
+                    "filename": f.original_filename,
+                    "document": f.document.title,
+                    "size": f.file_size,
+                    "content_type": f.content_type,
+                }
+            )
+        manifest = {
+            "exported_at": timezone.now().isoformat(),
+            "scope": "documents",
+            "included_files": included_files,
+            "warnings": warnings,
+        }
+        zf.writestr(f"{root}/manifest.json", json.dumps(manifest, indent=2))
+
+    spooled.seek(0)
+    zip_filename = f"duenest_files_{timezone.localdate().isoformat()}.zip"
+    summary = {"files_count": len(included_files), "skipped_count": skipped}
+
+    log_document_activity(
+        owner=user,
+        action=DocumentActivity.Action.EXPORT_REQUESTED,
+        title="Document files exported (ZIP)",
+        description=f"{len(included_files)} file(s)",
+        metadata={"scope": "documents_zip", **summary},
+    )
+    return spooled, zip_filename, summary

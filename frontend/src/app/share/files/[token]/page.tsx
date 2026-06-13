@@ -15,6 +15,7 @@ import { Logo } from "@/components/layout/logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ApiError } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import {
   downloadSharedFile,
   formatFileSize,
@@ -73,6 +74,14 @@ function errorFromApi(err: unknown): ShareError {
         state,
       };
     }
+    if (state === "limit_reached") {
+      return {
+        title: "This secure link has already been used.",
+        message:
+          "It has reached the access limit set by the sender. Ask them for a new link if you still need access.",
+        state,
+      };
+    }
     return { title: detail, message: detail, state };
   }
 
@@ -99,7 +108,9 @@ export default function SharedFilePage() {
     requiresCode: false,
     error: null,
   });
-  const [verifiedCode, setVerifiedCode] = useState("");
+  // Short-lived grant returned after the access code is verified. The raw code
+  // is never kept in state or storage — only this scoped, expiring grant.
+  const [grant, setGrant] = useState("");
   const [codeInput, setCodeInput] = useState("");
   const [codeError, setCodeError] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
@@ -109,15 +120,25 @@ export default function SharedFilePage() {
     error: null,
   });
   const [downloading, setDownloading] = useState(false);
+  const [tabHidden, setTabHidden] = useState(false);
 
-  const metadataKey = `${token}:${verifiedCode}`;
+  useEffect(() => {
+    function onVisibility() {
+      setTabHidden(document.hidden);
+    }
+    document.addEventListener("visibilitychange", onVisibility);
+    return () =>
+      document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
+
+  const metadataKey = `${token}:${grant}`;
   const metadataCurrent = metadataState.key === metadataKey;
   const metadata = metadataCurrent ? metadataState.metadata : null;
   const requiresCode = metadataCurrent && metadataState.requiresCode;
   const error = metadataCurrent ? metadataState.error : null;
   const loading = !metadataCurrent;
   const previewKey = metadata
-    ? `${token}:${verifiedCode}:${metadata.file_name}:${metadata.expires_at}`
+    ? `${token}:${grant}:${metadata.file_name}:${metadata.expires_at}`
     : "";
   const previewUrl = previewState.key === previewKey ? previewState.url : null;
   const previewError =
@@ -127,9 +148,9 @@ export default function SharedFilePage() {
 
   useEffect(() => {
     let active = true;
-    const key = `${token}:${verifiedCode}`;
+    const key = `${token}:${grant}`;
 
-    getSharedFileMetadata(token, verifiedCode || undefined)
+    getSharedFileMetadata(token, grant || undefined)
       .then((result) => {
         if (!active) return;
         setMetadataState({
@@ -167,7 +188,7 @@ export default function SharedFilePage() {
     return () => {
       active = false;
     };
-  }, [token, verifiedCode]);
+  }, [token, grant]);
 
   useEffect(() => {
     let active = true;
@@ -177,8 +198,8 @@ export default function SharedFilePage() {
       return () => undefined;
     }
 
-    const key = `${token}:${verifiedCode}:${metadata.file_name}:${metadata.expires_at}`;
-    getSharedFilePreviewBlob(token, verifiedCode || undefined)
+    const key = `${token}:${grant}:${metadata.file_name}:${metadata.expires_at}`;
+    getSharedFilePreviewBlob(token, grant || undefined)
       .then((blob) => {
         if (!active) return;
         objectUrl = URL.createObjectURL(blob);
@@ -200,7 +221,7 @@ export default function SharedFilePage() {
       active = false;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [metadata, token, verifiedCode]);
+  }, [metadata, token, grant]);
 
   async function handleVerify(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -212,8 +233,9 @@ export default function SharedFilePage() {
     setVerifying(true);
     setCodeError(null);
     try {
-      await verifySharedFileAccessCode(token, code);
-      setVerifiedCode(code);
+      const result = await verifySharedFileAccessCode(token, code);
+      // Switch to grant-based access; the raw code is discarded here.
+      setGrant(result.grant ?? "");
     } catch (err) {
       setCodeError(
         err instanceof ApiError
@@ -229,7 +251,7 @@ export default function SharedFilePage() {
     if (!metadata) return;
     setDownloading(true);
     try {
-      await downloadSharedFile(token, metadata.file_name, verifiedCode || undefined);
+      await downloadSharedFile(token, metadata.file_name, grant || undefined);
     } catch (err) {
       setPreviewState((current) => ({
         ...current,
@@ -311,12 +333,45 @@ export default function SharedFilePage() {
                 previewError={previewError}
                 downloading={downloading}
                 onDownload={handleDownload}
+                privacyActive={Boolean(
+                  metadata.privacy_screen_enabled && tabHidden,
+                )}
               />
             ) : null}
           </div>
         </section>
       </div>
     </main>
+  );
+}
+
+function WatermarkOverlay({ metadata }: { metadata: PublicSharedFileMetadata }) {
+  const stamp = new Date().toLocaleString();
+  const line = [
+    "Shared via DueNest",
+    metadata.watermark_text,
+    `ID ${metadata.short_id}`,
+    stamp,
+  ]
+    .filter(Boolean)
+    .join("  •  ");
+
+  // A repeated, low-opacity diagonal watermark. pointer-events-none keeps the
+  // underlying preview interactive; this is deterrence, not prevention.
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 z-10 flex flex-wrap content-start gap-x-10 gap-y-12 overflow-hidden p-6 opacity-[0.12]"
+    >
+      {Array.from({ length: 36 }).map((_, index) => (
+        <span
+          key={index}
+          className="-rotate-[30deg] whitespace-nowrap text-xs font-semibold text-foreground"
+        >
+          {line}
+        </span>
+      ))}
+    </div>
   );
 }
 
@@ -327,6 +382,7 @@ function SharedFileViewer({
   previewError,
   downloading,
   onDownload,
+  privacyActive,
 }: {
   metadata: PublicSharedFileMetadata;
   previewUrl: string | null;
@@ -334,6 +390,7 @@ function SharedFileViewer({
   previewError: string | null;
   downloading: boolean;
   onDownload: () => void;
+  privacyActive: boolean;
 }) {
   const kind = fileKind(metadata);
 
@@ -367,11 +424,25 @@ function SharedFileViewer({
         )}
       </div>
 
-      <div className="bg-muted/35 p-4 sm:p-6">
-        <p className="mb-4 text-sm text-muted-foreground">
-          This file was shared securely through DueNest.
+      <div
+        className="relative bg-muted/35 p-4 sm:p-6"
+        onContextMenu={(event) => event.preventDefault()}
+      >
+        <p className="mb-3 text-sm text-muted-foreground">
+          This was shared securely through DueNest. Access may expire or be
+          revoked by the owner.
         </p>
+        {!metadata.download_allowed && (
+          <p className="mb-4 inline-flex items-center gap-2 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground">
+            <EyeOff className="size-3.5" />
+            View-only access. Downloading is disabled by the owner.
+          </p>
+        )}
 
+        <div className={cn("relative", privacyActive && "blur-xl")}>
+        {metadata.watermark_enabled && previewUrl && (
+          <WatermarkOverlay metadata={metadata} />
+        )}
         {previewLoading ? (
           <div className="flex min-h-[440px] items-center justify-center gap-2 text-muted-foreground">
             <Loader2 className="size-5 animate-spin" />
@@ -417,6 +488,12 @@ function SharedFileViewer({
             onDownload={onDownload}
             downloading={downloading}
           />
+        )}
+        </div>
+        {privacyActive && (
+          <p className="mt-3 text-center text-xs text-muted-foreground">
+            Preview hidden while this tab is not focused.
+          </p>
         )}
       </div>
     </div>

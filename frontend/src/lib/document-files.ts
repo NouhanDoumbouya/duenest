@@ -271,22 +271,36 @@ export function getDocumentFileActivity(
 
 // ---- Public shared-file helpers -------------------------------------------
 
+// After the viewer verifies an access code, the backend returns a short-lived
+// grant. We send that grant as a `?grant=` query param on later requests rather
+// than re-sending the raw code. The query param (vs a custom header) also avoids
+// a CORS preflight on the cross-origin preview/download requests.
+function withGrant(path: string, grant?: string): string {
+  if (!grant) return path;
+  const sep = path.includes("?") ? "&" : "?";
+  return `${path}${sep}grant=${encodeURIComponent(grant)}`;
+}
+
+export interface SharedFileAccessGrant {
+  detail: string;
+  grant?: string;
+  grant_expires_in?: number;
+}
+
 export function getSharedFileMetadata(
   token: string,
-  accessCode?: string,
+  grant?: string,
 ): Promise<PublicSharedFileMetadata> {
-  const headers = accessCode ? { "X-Access-Code": accessCode } : undefined;
   return apiFetch<PublicSharedFileMetadata>(
-    `/share/files/${encodeURIComponent(token)}/`,
-    { headers },
+    withGrant(`/share/files/${encodeURIComponent(token)}/`, grant),
   );
 }
 
 export function verifySharedFileAccessCode(
   token: string,
   accessCode: string,
-): Promise<{ detail: string }> {
-  return apiFetch<{ detail: string }>(
+): Promise<SharedFileAccessGrant> {
+  return apiFetch<SharedFileAccessGrant>(
     `/share/files/${encodeURIComponent(token)}/verify-code/`,
     {
       method: "POST",
@@ -297,30 +311,30 @@ export function verifySharedFileAccessCode(
 
 export function getSharedFilePreviewBlob(
   token: string,
-  accessCode?: string,
+  grant?: string,
 ): Promise<Blob> {
-  return fetchBlob(`/share/files/${encodeURIComponent(token)}/preview/`, {
-    accessCode,
-    fallbackError: "Could not preview this shared file.",
-  });
+  return fetchBlob(
+    withGrant(`/share/files/${encodeURIComponent(token)}/preview/`, grant),
+    { fallbackError: "Could not preview this shared file." },
+  );
 }
 
 export function getSharedFileDownloadBlob(
   token: string,
-  accessCode?: string,
+  grant?: string,
 ): Promise<Blob> {
-  return fetchBlob(`/share/files/${encodeURIComponent(token)}/download/`, {
-    accessCode,
-    fallbackError: "Could not download this shared file.",
-  });
+  return fetchBlob(
+    withGrant(`/share/files/${encodeURIComponent(token)}/download/`, grant),
+    { fallbackError: "Could not download this shared file." },
+  );
 }
 
 export async function downloadSharedFile(
   token: string,
   filename: string,
-  accessCode?: string,
+  grant?: string,
 ): Promise<void> {
-  const blob = await getSharedFileDownloadBlob(token, accessCode);
+  const blob = await getSharedFileDownloadBlob(token, grant);
   saveBlob(blob, filename);
 }
 

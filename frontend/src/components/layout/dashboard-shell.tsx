@@ -6,7 +6,9 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   BellRing,
   CalendarClock,
+  CalendarDays,
   CreditCard,
+  DoorClosed,
   FileText,
   LayoutDashboard,
   LifeBuoy,
@@ -51,6 +53,7 @@ const navGroups: NavGroup[] = [
       { label: "Documents", href: "/dashboard/documents", icon: FileText },
       { label: "Attention", href: "/dashboard/attention", icon: ShieldAlert },
       { label: "Reminders", href: "/dashboard/reminders", icon: BellRing },
+      { label: "Calendar", href: "/dashboard/calendar", icon: CalendarDays },
       { label: "Timeline", href: "/dashboard/timeline", icon: CalendarClock },
     ],
   },
@@ -58,6 +61,7 @@ const navGroups: NavGroup[] = [
     heading: "Packs & sharing",
     items: [
       { label: "Bundles", href: "/dashboard/bundles", icon: Package },
+      { label: "Secure rooms", href: "/dashboard/share-rooms", icon: DoorClosed },
       { label: "Emergency access", href: "/dashboard/emergency", icon: LifeBuoy },
       { label: "Trash", href: "/dashboard/trash", icon: Trash2 },
     ],

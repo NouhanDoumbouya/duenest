@@ -2863,3 +2863,105 @@ uses approximate country metadata only and does not return raw IP addresses,
 GPS data, street-level location, or city-level drilldowns.
 
 See `docs/founder-console.md` for response intent and operational boundaries.
+
+---
+
+# 28. Premium Sharing, Bundles, Secure Rooms & Calendar V1
+
+This section documents the sharing, export, secure-room, and calendar
+endpoints added in the `premium-sharing-bundle-rooms-calendar` work. All
+authenticated endpoints are strictly owner-scoped. Public (token-gated)
+endpoints expose only the single shared resource and never the rest of the
+vault, tokens, access-code hashes, or internal storage paths.
+
+## 28.1 Access-code share flow (grant-based)
+
+A share link or room with `access_code_required` is unlocked as follows:
+
+1. `GET /share/files/:token/` (or `/public/rooms/:token/`) returns
+   `403 {state: "requires_code"}` until verified.
+2. `POST /share/files/:token/verify-code/` with `{access_code}` returns
+   `{detail, grant, grant_expires_in}` on success. The grant is a short-lived
+   (30 min) signed token bound to that single share token.
+3. The viewer passes `?grant=<grant>` on metadata/preview/download. The raw
+   code is never stored in the browser and a grant for one token can never
+   unlock another. The legacy `X-Access-Code` header is still accepted.
+
+## 28.2 Bundle files & ZIP export
+
+```
+GET  /api/v1/document-bundles/:id/files/                  # safe file metadata + missing items
+POST /api/v1/document-bundles/:id/export-files/           # ZIP of all files
+POST /api/v1/document-bundles/:id/export-selected-files/  # body: {file_ids:[…]}
+POST /api/v1/documents/files/export-selected/             # body: {file_ids:[…]} (normal bulk)
+```
+
+ZIPs are organised `Pack/Requirement/file.pdf` with a `bundle_manifest.json`
+(name, type, deadline, readiness, included documents/files, missing required
+items, proof/checklist summaries, warnings for expired docs / skipped missing
+files). Trashed/unavailable files and other users' files are never included;
+no internal paths, tokens, or access-code hashes appear in the manifest.
+
+## 28.3 Share link access limits, view-only & watermarking
+
+Share-link create (`POST …/share-links/`) accepts, in addition to
+`permission` and `expires_at`:
+
+```
+access_limit_type   unlimited | one_time | limited_count
+max_views           required when limited_count
+max_downloads       optional (download_allowed links only)
+watermark_enabled   bool
+privacy_screen_enabled bool
+access_code_required / access_code
+```
+
+Enforcement is server-side: one-time links are consumed by the first preview;
+limited links count each preview (and each download); counters increment
+atomically. Exhausted links return `410 {state: "limit_reached"}`. View-only
+links block download server-side. Public file metadata exposes
+`watermark_enabled`, `privacy_screen_enabled`, `short_id`, and `watermark_text`
+(only when watermarking is enabled). Screenshot deterrence is **deterrence, not
+prevention** — browsers cannot block OS-level screenshots.
+
+## 28.4 Secure Rooms
+
+Owner (auth):
+
+```
+GET/POST          /api/v1/share-rooms/
+GET/PATCH/DELETE  /api/v1/share-rooms/:id/
+POST              /api/v1/share-rooms/:id/items/         # {document|file|proof}
+DELETE            /api/v1/share-rooms/:id/items/:item_id/
+POST              /api/v1/share-rooms/:id/revoke/
+GET               /api/v1/share-rooms/:id/activity/
+```
+
+Public (token-gated):
+
+```
+GET  /api/v1/public/rooms/:token/                         # metadata + included files only
+POST /api/v1/public/rooms/:token/verify-code/             # → grant
+GET  /api/v1/public/rooms/:token/files/:file_id/preview/
+GET  /api/v1/public/rooms/:token/files/:file_id/download/
+GET  /api/v1/public/rooms/:token/download-zip/            # download_allowed rooms only
+```
+
+A room exposes only its explicit items (documents/files/proofs), never the
+whole vault. Expiry, revocation, access codes (grant flow), view-only download
+blocking, and one-time/limited access limits are all enforced server-side.
+
+## 28.5 Calendar V1
+
+```
+GET /api/v1/calendar/events/   ?start&end&type&urgency&search   # events + summary
+GET /api/v1/calendar/summary/                                   # counts + next key dates
+GET /api/v1/calendar/export.ics                                 # one-way .ics
+```
+
+`type` groups: `documents,reminders,bundles,appointments,proofs,shares,rooms,emergency`.
+`urgency`: `overdue,critical,soon,upcoming,normal`. Events are aggregated from
+existing models (no duplicate table), owner-scoped, and carry a
+`linked_resource_url` back to the right workspace page. The `.ics` export is
+one-way and uses safe `DueNest: …` titles only — no tokens, access codes,
+internal paths, or sensitive numbers. **No Google/Outlook/two-way sync exists.**

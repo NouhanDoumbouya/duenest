@@ -14,7 +14,25 @@ from .views import (
     DocumentActivityTimelineView,
     DocumentAppointmentViewSet,
     DocumentBundleDetailView,
+    DocumentBundleExportFilesView,
+    DocumentBundleExportSelectedFilesView,
+    DocumentBundleFilesView,
     DocumentBundleListCreateView,
+    CalendarEventsView,
+    CalendarIcsExportView,
+    CalendarSummaryView,
+    DocumentFilesExportSelectedView,
+    PublicShareRoomFileDownloadView,
+    PublicShareRoomFilePreviewView,
+    PublicShareRoomMetadataView,
+    PublicShareRoomVerifyCodeView,
+    PublicShareRoomZipView,
+    ShareRoomActivityView,
+    ShareRoomDetailView,
+    ShareRoomItemDeleteView,
+    ShareRoomItemsView,
+    ShareRoomListCreateView,
+    ShareRoomRevokeView,
     DocumentBundleRequirementCreateView,
     DocumentBundleRequirementDetailView,
     DocumentHealthOverviewView,
@@ -106,6 +124,11 @@ urlpatterns = [
         f"{file_base}/<int:pk>/preview/",
         DocumentFilePreviewView.as_view(),
         name="document-file-preview",
+    ),
+    path(
+        "documents/files/export-selected/",
+        DocumentFilesExportSelectedView.as_view(),
+        name="documents-files-export-selected",
     ),
     path(
         f"{file_base}/<int:file_id>/trash/",
@@ -311,6 +334,21 @@ urlpatterns = [
         name="document-bundle-readiness",
     ),
     path(
+        "document-bundles/<int:bundle_id>/files/",
+        DocumentBundleFilesView.as_view(),
+        name="document-bundle-files",
+    ),
+    path(
+        "document-bundles/<int:bundle_id>/export-files/",
+        DocumentBundleExportFilesView.as_view(),
+        name="document-bundle-export-files",
+    ),
+    path(
+        "document-bundles/<int:bundle_id>/export-selected-files/",
+        DocumentBundleExportSelectedFilesView.as_view(),
+        name="document-bundle-export-selected-files",
+    ),
+    path(
         "document-bundles/<int:bundle_id>/exports/",
         BundleExportListCreateView.as_view(),
         name="document-bundle-exports",
@@ -344,6 +382,79 @@ urlpatterns = [
         "document-bundles/<int:bundle_id>/requirements/<int:requirement_id>/link-file/",
         BundleRequirementLinkFileView.as_view(),
         name="document-bundle-requirement-link-file",
+    ),
+    # ---- Calendar V1 -------------------------------------------------------
+    path(
+        "calendar/events/",
+        CalendarEventsView.as_view(),
+        name="calendar-events",
+    ),
+    path(
+        "calendar/summary/",
+        CalendarSummaryView.as_view(),
+        name="calendar-summary",
+    ),
+    path(
+        "calendar/export.ics",
+        CalendarIcsExportView.as_view(),
+        name="calendar-export-ics",
+    ),
+    # ---- Secure rooms (owner) ----------------------------------------------
+    path(
+        "share-rooms/",
+        ShareRoomListCreateView.as_view(),
+        name="share-rooms",
+    ),
+    path(
+        "share-rooms/<int:room_id>/",
+        ShareRoomDetailView.as_view(),
+        name="share-room-detail",
+    ),
+    path(
+        "share-rooms/<int:room_id>/items/",
+        ShareRoomItemsView.as_view(),
+        name="share-room-items",
+    ),
+    path(
+        "share-rooms/<int:room_id>/items/<int:item_id>/",
+        ShareRoomItemDeleteView.as_view(),
+        name="share-room-item-detail",
+    ),
+    path(
+        "share-rooms/<int:room_id>/revoke/",
+        ShareRoomRevokeView.as_view(),
+        name="share-room-revoke",
+    ),
+    path(
+        "share-rooms/<int:room_id>/activity/",
+        ShareRoomActivityView.as_view(),
+        name="share-room-activity",
+    ),
+    # ---- Secure rooms (public, token-gated) --------------------------------
+    path(
+        "public/rooms/<str:token>/",
+        PublicShareRoomMetadataView.as_view(),
+        name="public-room",
+    ),
+    path(
+        "public/rooms/<str:token>/verify-code/",
+        PublicShareRoomVerifyCodeView.as_view(),
+        name="public-room-verify-code",
+    ),
+    path(
+        "public/rooms/<str:token>/files/<int:file_id>/preview/",
+        PublicShareRoomFilePreviewView.as_view(),
+        name="public-room-file-preview",
+    ),
+    path(
+        "public/rooms/<str:token>/files/<int:file_id>/download/",
+        PublicShareRoomFileDownloadView.as_view(),
+        name="public-room-file-download",
+    ),
+    path(
+        "public/rooms/<str:token>/download-zip/",
+        PublicShareRoomZipView.as_view(),
+        name="public-room-download-zip",
     ),
     # Public share endpoints (token-gated, no authentication).
     path(
