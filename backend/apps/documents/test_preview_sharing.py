@@ -476,6 +476,87 @@ class AccessCodeTests(PreviewSharingBaseTest):
         self.assertNotIn("access_code_hash", detail.data)
 
 
+class AccessGrantTests(PreviewSharingBaseTest):
+    """
+    After verifying the access code, the viewer receives a short-lived grant and
+    uses it (via ?grant=) to load metadata/preview/download — without the raw
+    code ever being re-sent or stored. This is the fix for the access-code
+    shared-file bug.
+    """
+
+    def make_coded_link(self, permission="view_only", code="482913"):
+        f = self.upload(self.alice_doc, self.alice, make_pdf())
+        from django.contrib.auth.hashers import make_password
+
+        link = DocumentFileShareLink.objects.create(
+            owner=self.alice,
+            document=self.alice_doc,
+            file=f,
+            permission=permission,
+            expires_at=timezone.now() + timedelta(days=7),
+            access_code_required=True,
+            access_code_hash=make_password(code),
+        )
+        return f, link
+
+    def verify(self, token, code="482913"):
+        return self.client.post(
+            public_verify(token), {"access_code": code}, format="json"
+        )
+
+    def test_verify_returns_grant(self):
+        _, link = self.make_coded_link()
+        resp = self.verify(link.token)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn("grant", resp.data)
+        self.assertTrue(resp.data["grant"])
+        self.assertGreater(resp.data["grant_expires_in"], 0)
+
+    def test_grant_unlocks_metadata_preview_and_download(self):
+        _, link = self.make_coded_link(permission="download_allowed")
+        grant = self.verify(link.token).data["grant"]
+        # Metadata
+        meta = self.client.get(f"{public_meta(link.token)}?grant={grant}")
+        self.assertEqual(meta.status_code, status.HTTP_200_OK)
+        # Preview
+        prev = self.consume(
+            self.client.get(f"{public_preview(link.token)}?grant={grant}")
+        )
+        self.assertEqual(prev.status_code, status.HTTP_200_OK)
+        # Download
+        dl = self.consume(
+            self.client.get(f"{public_download(link.token)}?grant={grant}")
+        )
+        self.assertEqual(dl.status_code, status.HTTP_200_OK)
+
+    def test_grant_for_one_link_cannot_unlock_another(self):
+        _, link_a = self.make_coded_link()
+        _, link_b = self.make_coded_link()
+        grant_a = self.verify(link_a.token).data["grant"]
+        # The grant minted for link A must not unlock link B.
+        resp = self.client.get(f"{public_preview(link_b.token)}?grant={grant_a}")
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_invalid_grant_rejected(self):
+        _, link = self.make_coded_link()
+        resp = self.client.get(f"{public_preview(link.token)}?grant=not-a-real-grant")
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_view_only_grant_still_blocks_download(self):
+        _, link = self.make_coded_link(permission="view_only")
+        grant = self.verify(link.token).data["grant"]
+        resp = self.client.get(f"{public_download(link.token)}?grant={grant}")
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_grant_blocked_on_revoked_link(self):
+        _, link = self.make_coded_link()
+        grant = self.verify(link.token).data["grant"]
+        link.revoked_at = timezone.now()
+        link.save(update_fields=["revoked_at"])
+        resp = self.client.get(f"{public_preview(link.token)}?grant={grant}")
+        self.assertEqual(resp.status_code, status.HTTP_410_GONE)
+
+
 class ShareLabelTests(PreviewSharingBaseTest):
     def test_owner_sees_labels_but_other_user_cannot(self):
         f = self.upload(self.alice_doc, self.alice, make_pdf())

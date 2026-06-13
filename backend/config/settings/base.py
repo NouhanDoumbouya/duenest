@@ -2,6 +2,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import dj_database_url
+from corsheaders.defaults import default_headers as cors_default_headers
 from decouple import config
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -59,6 +60,15 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+
+# Allow the custom headers used by the public share/room flow in addition to
+# the django-cors-headers defaults. The grant is normally passed as a query
+# param (no preflight), but the raw-code header path must work cross-origin too.
+CORS_ALLOW_HEADERS = (
+    *cors_default_headers,
+    "x-access-code",
+    "x-share-grant",
+)
 
 ROOT_URLCONF = "config.urls"
 

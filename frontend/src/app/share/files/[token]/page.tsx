@@ -99,7 +99,9 @@ export default function SharedFilePage() {
     requiresCode: false,
     error: null,
   });
-  const [verifiedCode, setVerifiedCode] = useState("");
+  // Short-lived grant returned after the access code is verified. The raw code
+  // is never kept in state or storage — only this scoped, expiring grant.
+  const [grant, setGrant] = useState("");
   const [codeInput, setCodeInput] = useState("");
   const [codeError, setCodeError] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
@@ -110,14 +112,14 @@ export default function SharedFilePage() {
   });
   const [downloading, setDownloading] = useState(false);
 
-  const metadataKey = `${token}:${verifiedCode}`;
+  const metadataKey = `${token}:${grant}`;
   const metadataCurrent = metadataState.key === metadataKey;
   const metadata = metadataCurrent ? metadataState.metadata : null;
   const requiresCode = metadataCurrent && metadataState.requiresCode;
   const error = metadataCurrent ? metadataState.error : null;
   const loading = !metadataCurrent;
   const previewKey = metadata
-    ? `${token}:${verifiedCode}:${metadata.file_name}:${metadata.expires_at}`
+    ? `${token}:${grant}:${metadata.file_name}:${metadata.expires_at}`
     : "";
   const previewUrl = previewState.key === previewKey ? previewState.url : null;
   const previewError =
@@ -127,9 +129,9 @@ export default function SharedFilePage() {
 
   useEffect(() => {
     let active = true;
-    const key = `${token}:${verifiedCode}`;
+    const key = `${token}:${grant}`;
 
-    getSharedFileMetadata(token, verifiedCode || undefined)
+    getSharedFileMetadata(token, grant || undefined)
       .then((result) => {
         if (!active) return;
         setMetadataState({
@@ -167,7 +169,7 @@ export default function SharedFilePage() {
     return () => {
       active = false;
     };
-  }, [token, verifiedCode]);
+  }, [token, grant]);
 
   useEffect(() => {
     let active = true;
@@ -177,8 +179,8 @@ export default function SharedFilePage() {
       return () => undefined;
     }
 
-    const key = `${token}:${verifiedCode}:${metadata.file_name}:${metadata.expires_at}`;
-    getSharedFilePreviewBlob(token, verifiedCode || undefined)
+    const key = `${token}:${grant}:${metadata.file_name}:${metadata.expires_at}`;
+    getSharedFilePreviewBlob(token, grant || undefined)
       .then((blob) => {
         if (!active) return;
         objectUrl = URL.createObjectURL(blob);
@@ -200,7 +202,7 @@ export default function SharedFilePage() {
       active = false;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [metadata, token, verifiedCode]);
+  }, [metadata, token, grant]);
 
   async function handleVerify(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -212,8 +214,9 @@ export default function SharedFilePage() {
     setVerifying(true);
     setCodeError(null);
     try {
-      await verifySharedFileAccessCode(token, code);
-      setVerifiedCode(code);
+      const result = await verifySharedFileAccessCode(token, code);
+      // Switch to grant-based access; the raw code is discarded here.
+      setGrant(result.grant ?? "");
     } catch (err) {
       setCodeError(
         err instanceof ApiError
@@ -229,7 +232,7 @@ export default function SharedFilePage() {
     if (!metadata) return;
     setDownloading(true);
     try {
-      await downloadSharedFile(token, metadata.file_name, verifiedCode || undefined);
+      await downloadSharedFile(token, metadata.file_name, grant || undefined);
     } catch (err) {
       setPreviewState((current) => ({
         ...current,

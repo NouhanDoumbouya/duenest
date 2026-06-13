@@ -2,6 +2,7 @@ import hashlib
 import secrets
 
 from django.contrib.auth.hashers import check_password, make_password
+from django.core import signing
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError
 from django.db.models import Count, Exists, OuterRef, Q
@@ -981,12 +982,57 @@ def _resolve_share_link(token, request=None):
     return link, None
 
 
+# Short-lived access grant issued after a viewer verifies the access code.
+# This lets the viewer load the preview/download without the frontend storing or
+# re-sending the raw code on every request. The grant is bound to a single share
+# token and expires quickly. A grant for token A can never unlock token B.
+SHARE_GRANT_SALT = "duenest.share.access-grant"
+SHARE_GRANT_MAX_AGE = 60 * 30  # 30 minutes
+
+
+def issue_share_grant(token: str) -> str:
+    """Return a signed, time-stamped grant bound to ``token``."""
+    return signing.TimestampSigner(salt=SHARE_GRANT_SALT).sign(token)
+
+
+def share_grant_is_valid(token: str, grant: str) -> bool:
+    """Whether ``grant`` is an unexpired grant issued for ``token``."""
+    if not grant:
+        return False
+    try:
+        value = signing.TimestampSigner(salt=SHARE_GRANT_SALT).unsign(
+            grant, max_age=SHARE_GRANT_MAX_AGE
+        )
+    except signing.BadSignature:
+        return False
+    return secrets.compare_digest(value, token)
+
+
+def _has_verified_grant(link, request) -> bool:
+    """
+    True when the request carries a valid access grant for this share link.
+
+    The grant is read from the ``grant`` query param (preferred — it avoids a
+    CORS preflight on cross-origin previews) or the ``X-Share-Grant`` header.
+    """
+    grant = request.query_params.get("grant") or request.headers.get(
+        "X-Share-Grant", ""
+    )
+    return share_grant_is_valid(link.token, grant)
+
+
 def _check_access_code(link, request):
     """
     Return an error Response if a required access code is missing/wrong, else
-    None. The code is read from the X-Access-Code header (never the URL).
+    None.
+
+    Access is granted when EITHER a valid short-lived grant is presented (issued
+    by the verify-code endpoint) OR the raw code is supplied in the
+    ``X-Access-Code`` header. The code is never read from the URL.
     """
     if not link.access_code_required:
+        return None
+    if _has_verified_grant(link, request):
         return None
     code = request.headers.get("X-Access-Code", "").strip()
     if not code:
@@ -1081,7 +1127,15 @@ class PublicSharedFileVerifyCodeView(APIView):
                 request=request,
                 share_link=link,
             )
-            return Response({"detail": "Access code verified."})
+            # Hand back a short-lived grant so the viewer can load the preview
+            # and download without the browser re-sending the raw code.
+            return Response(
+                {
+                    "detail": "Access code verified.",
+                    "grant": issue_share_grant(link.token),
+                    "grant_expires_in": SHARE_GRANT_MAX_AGE,
+                }
+            )
 
         log_activity(
             file=link.file,
