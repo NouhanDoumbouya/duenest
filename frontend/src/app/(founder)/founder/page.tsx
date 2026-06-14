@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -17,6 +17,10 @@ import {
   Users,
 } from "lucide-react";
 
+import {
+  FounderActionCenter,
+  type FounderActionItem,
+} from "@/components/founder/action-center";
 import {
   FounderBarList,
   FounderLineChart,
@@ -66,6 +70,73 @@ export default function FounderOverviewPage() {
     };
   }, [range]);
 
+  // Turn raw signals into a prioritized "what needs attention" list.
+  const actionItems = useMemo<FounderActionItem[]>(() => {
+    if (!dashboard) return [];
+    const items: FounderActionItem[] = [];
+    if (dashboard.open_error_items > 0) {
+      items.push({
+        id: "errors",
+        tone: "danger",
+        icon: AlertTriangle,
+        title: `Resolve ${nf.format(dashboard.open_error_items)} open ${dashboard.open_error_items === 1 ? "error" : "errors"}`,
+        subtitle: "Unresolved failure records",
+        href: "/founder/errors",
+      });
+    }
+    if (dashboard.security_events_in_range > 0) {
+      items.push({
+        id: "security",
+        tone: "warn",
+        icon: ShieldCheck,
+        title: `Review ${nf.format(dashboard.security_events_in_range)} security ${dashboard.security_events_in_range === 1 ? "event" : "events"}`,
+        subtitle: "Check for unusual behavior",
+        href: "/founder/security",
+      });
+    }
+    if (dashboard.open_feedback_items > 0) {
+      items.push({
+        id: "feedback",
+        tone: "warn",
+        icon: MessageSquare,
+        title: `Review ${nf.format(dashboard.open_feedback_items)} unresolved feedback ${dashboard.open_feedback_items === 1 ? "item" : "items"}`,
+        subtitle: "Decide what to act on next",
+        href: "/founder/feedback",
+      });
+    }
+    if (dashboard.pending_waitlist_entries > 0) {
+      items.push({
+        id: "waitlist",
+        tone: "warn",
+        icon: MailCheck,
+        title: `${nf.format(dashboard.pending_waitlist_entries)} waitlist ${dashboard.pending_waitlist_entries === 1 ? "applicant" : "applicants"} awaiting review`,
+        subtitle: "Decide who to invite next",
+        href: "/founder/waitlist",
+      });
+    }
+    if (dashboard.launch_readiness_percent < 80) {
+      items.push({
+        id: "launch",
+        tone: "warn",
+        icon: Rocket,
+        title: `Launch readiness is ${dashboard.launch_readiness_percent}%`,
+        subtitle: "Review what blocks launch",
+        href: "/founder/launch",
+      });
+    }
+    if (dashboard.feature_completion_percent < 100) {
+      items.push({
+        id: "features",
+        tone: "neutral",
+        icon: FolderKanban,
+        title: `Feature completion is ${dashboard.feature_completion_percent}%`,
+        subtitle: "Track launch maturity",
+        href: "/founder/features",
+      });
+    }
+    return items;
+  }, [dashboard]);
+
   if (error) {
     return (
       <p className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -99,6 +170,8 @@ export default function FounderOverviewPage() {
         description="A private operating view for DueNest usage, activation, feedback, errors, security, beta readiness, and launch progress."
         actions={<RangePicker value={range} onChange={setRange} />}
       />
+
+      <FounderActionCenter items={actionItems} />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <FounderStatCard
@@ -221,7 +294,7 @@ export default function FounderOverviewPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Founder actions</CardTitle>
+          <CardTitle className="text-lg">Jump to</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {[

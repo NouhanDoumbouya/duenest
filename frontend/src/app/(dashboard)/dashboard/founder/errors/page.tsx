@@ -1,8 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Inbox, Loader2, ShieldAlert } from "lucide-react";
 
+import {
+  FounderPageHeader,
+  FounderStatCard,
+} from "@/components/founder/founder-ui";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,10 +46,21 @@ export default function FounderErrorsPage() {
     };
   }, [resolvedFilter]);
 
+  const [resolvedFlash, setResolvedFlash] = useState(false);
+
   const selected = useMemo(
     () => (items ?? []).find((item) => item.id === selectedId) ?? null,
     [items, selectedId],
   );
+
+  const counts = useMemo(() => {
+    const list = items ?? [];
+    const unresolved = list.filter((i) => !i.resolved).length;
+    const critical = list.filter(
+      (i) => !i.resolved && (i.severity === "critical" || i.severity === "error"),
+    ).length;
+    return { total: list.length, unresolved, critical };
+  }, [items]);
 
   async function markResolved() {
     if (!selected) return;
@@ -55,6 +70,8 @@ export default function FounderErrorsPage() {
       setItems((current) =>
         (current ?? []).map((item) => (item.id === updated.id ? updated : item)),
       );
+      setResolvedFlash(true);
+      setTimeout(() => setResolvedFlash(false), 2200);
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message : "Unable to update error state.",
@@ -66,19 +83,44 @@ export default function FounderErrorsPage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h2 className="font-heading text-2xl font-semibold">
-          Error monitoring
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Lightweight frontend/backend error intake for private beta triage.
-          Stack traces are not exposed in production responses.
-        </p>
+      <FounderPageHeader
+        eyebrow="Operations"
+        title="Error monitoring"
+        description="Lightweight frontend/backend error intake for triage. Stack traces are never exposed in production responses."
+      />
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <FounderStatCard
+          icon={AlertTriangle}
+          label="Unresolved"
+          value={counts.unresolved}
+          hint="Open failure records in view"
+          tone={counts.unresolved > 0 ? "danger" : "good"}
+        />
+        <FounderStatCard
+          icon={ShieldAlert}
+          label="Critical / error"
+          value={counts.critical}
+          hint="Unresolved, high severity"
+          tone={counts.critical > 0 ? "warn" : "good"}
+        />
+        <FounderStatCard
+          icon={CheckCircle2}
+          label="In this view"
+          value={counts.total}
+          hint="Matching the current filter"
+        />
       </div>
 
       {error && (
         <p className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {error}
+        </p>
+      )}
+
+      {resolvedFlash && (
+        <p className="rounded-lg bg-brand-success/10 px-4 py-3 text-sm font-medium text-brand-success">
+          Marked resolved.
         </p>
       )}
 
@@ -117,9 +159,25 @@ export default function FounderErrorsPage() {
             {items === null ? (
               <div className="h-[320px] animate-pulse rounded-lg bg-muted" />
             ) : items.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No errors match this filter.
-              </p>
+              <div className="flex flex-col items-center gap-3 py-10 text-center">
+                <span className="flex size-11 items-center justify-center rounded-xl bg-brand-success/10 text-brand-success">
+                  {resolvedFilter === false ? (
+                    <CheckCircle2 className="size-5" />
+                  ) : (
+                    <Inbox className="size-5" />
+                  )}
+                </span>
+                <p className="text-sm font-medium">
+                  {resolvedFilter === false
+                    ? "Nothing is breaking right now."
+                    : "No errors match this filter."}
+                </p>
+                <p className="max-w-xs text-xs text-muted-foreground">
+                  {resolvedFilter === false
+                    ? "No unresolved errors have been reported. New failures will appear here for triage."
+                    : "Try a different filter to see other records."}
+                </p>
+              </div>
             ) : (
               <ul className="space-y-2">
                 {items.map((item) => (

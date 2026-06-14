@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, MessageSquare, Save } from "lucide-react";
+import { Inbox, Loader2, MessageSquare, Save, ShieldCheck } from "lucide-react";
 
+import { FounderPageHeader } from "@/components/founder/founder-ui";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -99,6 +100,11 @@ export default function FounderFeedbackPage() {
     [items, selectedId],
   );
 
+  const needsDecision = useMemo(
+    () => (items ?? []).filter((item) => item.status === "new").length,
+    [items],
+  );
+
   async function saveSelected() {
     if (!selected) return;
     setSaving(true);
@@ -124,12 +130,24 @@ export default function FounderFeedbackPage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h2 className="font-heading text-2xl font-semibold">Feedback board</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Review beta feedback, prioritize issues, and keep founder notes
-          without asking users to expose private documents.
-        </p>
+      <FounderPageHeader
+        eyebrow="Product discovery"
+        title="Feedback board"
+        description="Review beta feedback, prioritize what to act on, and keep founder notes — so you always know what to do next."
+      />
+
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-sm">
+          <Inbox className="size-4 text-primary" />
+          <span className="font-medium">{needsDecision}</span>
+          <span className="text-muted-foreground">
+            {needsDecision === 1 ? "item needs a decision" : "items need a decision"}
+          </span>
+        </span>
+        <span className="inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1.5 text-xs text-muted-foreground">
+          <ShieldCheck className="size-3.5 text-brand-success" />
+          Keep notes safe — never paste private document contents here.
+        </span>
       </div>
 
       {error && (

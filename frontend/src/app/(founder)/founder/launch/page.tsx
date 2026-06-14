@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { CheckCircle2, Loader2, Save } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { CheckCircle2, Loader2, Rocket, Save, ShieldAlert } from "lucide-react";
 
 import { FounderPageHeader, FounderStatCard } from "@/components/founder/founder-ui";
+import { FounderInsightPanel } from "@/components/founder/insight-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -87,6 +88,48 @@ export default function FounderLaunchPage() {
     }
   }
 
+  // Blocker breakdown for the cockpit summary + insight panel.
+  const blockers = useMemo(() => {
+    const items = data?.items ?? [];
+    const open = items.filter((i) => !i.is_complete);
+    const critical = open.filter((i) => i.priority === "critical");
+    const high = open.filter((i) => i.priority === "high");
+    const complete = items.filter((i) => i.is_complete).length;
+    return { open, critical, high, complete };
+  }, [data]);
+
+  const insights = useMemo(() => {
+    if (!data) return [];
+    if (blockers.open.length === 0) {
+      return [
+        {
+          tone: "good" as const,
+          text: "Every tracked launch item is marked complete. Re-verify the riskiest ones before you ship.",
+        },
+      ];
+    }
+    const items: { tone: "neutral" | "good" | "warn"; text: string }[] = [];
+    if (blockers.critical.length > 0) {
+      items.push({
+        tone: "warn",
+        text: `Critical blockers: ${blockers.critical.map((i) => i.label).join(", ")}. These must close before launch.`,
+      });
+    }
+    if (blockers.high.length > 0) {
+      items.push({
+        tone: "warn",
+        text: `${blockers.high.length} high-priority ${blockers.high.length === 1 ? "item" : "items"} still open — schedule these next.`,
+      });
+    }
+    if (blockers.critical.length === 0 && blockers.high.length === 0) {
+      items.push({
+        tone: "neutral",
+        text: "Only lower-priority items remain — you're close. Confirm each is genuinely done.",
+      });
+    }
+    return items;
+  }, [data, blockers]);
+
   if (error) {
     return (
       <p className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -107,15 +150,38 @@ export default function FounderLaunchPage() {
         description="A practical cockpit for private beta and launch blockers. Keep it honest: complete means the feature is actually ready."
       />
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <FounderStatCard
-          icon={CheckCircle2}
+          icon={Rocket}
           label="Launch readiness"
           value={`${data.summary.percent}%`}
           hint={`${data.summary.complete ?? 0} of ${data.summary.total} complete`}
           tone={data.summary.percent >= 80 ? "good" : "warn"}
         />
+        <FounderStatCard
+          icon={ShieldAlert}
+          label="Critical blockers"
+          value={blockers.critical.length}
+          hint="Open, priority critical"
+          tone={blockers.critical.length > 0 ? "danger" : "good"}
+        />
+        <FounderStatCard
+          icon={ShieldAlert}
+          label="High blockers"
+          value={blockers.high.length}
+          hint="Open, priority high"
+          tone={blockers.high.length > 0 ? "warn" : "good"}
+        />
+        <FounderStatCard
+          icon={CheckCircle2}
+          label="Completed"
+          value={blockers.complete}
+          hint={`of ${data.summary.total} tracked items`}
+          tone="good"
+        />
       </div>
+
+      <FounderInsightPanel title="What blocks launch" insights={insights} />
 
       <div className="grid gap-4 lg:grid-cols-2">
         {data.items.map((item) => {

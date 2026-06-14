@@ -447,6 +447,8 @@ export function SubscriptionForm({
         </Field>
       </Section>
 
+      <LiveSummary form={form} />
+
       <div className="flex flex-wrap gap-2">
         <Button type="submit" disabled={saving}>
           {saving && <Loader2 className="size-4 animate-spin" />}
@@ -537,6 +539,45 @@ function toInput(form: FormState): SubscriptionInput {
     last_used_date: form.last_used_date || null,
     notes: form.notes,
   };
+}
+
+function LiveSummary({ form }: { form: FormState }) {
+  const cycleLabel = form.billing_cycle
+    ? form.billing_cycle.replaceAll("_", " ")
+    : "—";
+  const cost =
+    form.amount.trim().length > 0
+      ? `${form.currency || ""} ${form.amount}`.trim()
+      : "—";
+  const rows: [string, string][] = [
+    ["Subscription", form.name.trim() || "—"],
+    ["Cost", cost === "—" ? "—" : `${cost} / ${cycleLabel}`],
+    ["Auto-renew", form.auto_renew ? "On" : "Off"],
+    ["Next billing", form.next_billing_date || "—"],
+    [
+      "Cancellation deadline",
+      form.cancellation_deadline || "Not set",
+    ],
+    ["Reminder", `${form.reminder_days_before || "0"} days before`],
+  ];
+  return (
+    <section className="rounded-2xl border border-primary/20 bg-primary/5 p-4 shadow-card sm:p-5">
+      <div className="mb-3">
+        <h2 className="text-sm font-semibold">Summary</h2>
+        <p className="text-xs text-muted-foreground">
+          A quick recap of what DueNest will track and remind you about.
+        </p>
+      </div>
+      <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
+        {rows.map(([label, value]) => (
+          <div key={label} className="flex items-center justify-between gap-3 text-sm">
+            <dt className="text-muted-foreground">{label}</dt>
+            <dd className="truncate font-medium">{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
 }
 
 function Section({

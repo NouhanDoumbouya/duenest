@@ -99,6 +99,7 @@ function WaitlistRow({
       const link = inviteLink(invite.code);
       await navigator.clipboard?.writeText(link);
       setCopyState("Invite link copied");
+      window.setTimeout(() => setCopyState(""), 2200);
       onChanged();
     } finally {
       setSaving(false);

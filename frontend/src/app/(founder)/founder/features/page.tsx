@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { CheckCircle2, Loader2, Save } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { CheckCircle2, FileText, FlaskConical, Loader2, Save, ShieldAlert } from "lucide-react";
 
 import { FounderPageHeader, FounderStatCard } from "@/components/founder/founder-ui";
+import { FounderInsightPanel } from "@/components/founder/insight-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -112,6 +113,39 @@ export default function FounderFeatureCompletionPage() {
     }
   }
 
+  const maturity = useMemo(() => {
+    const items = data?.items ?? [];
+    const notReady = items.filter((i) => i.status !== "ready");
+    const criticalIncomplete = notReady.filter((i) => i.priority === "critical");
+    const missingTests = items.filter((i) => !i.tests_done);
+    const missingDocs = items.filter((i) => !i.docs_done);
+    return { notReady, criticalIncomplete, missingTests, missingDocs };
+  }, [data]);
+
+  const insights = useMemo(() => {
+    if (!data) return [];
+    const items: { tone: "neutral" | "good" | "warn"; text: string }[] = [];
+    if (maturity.criticalIncomplete.length > 0) {
+      items.push({
+        tone: "warn",
+        text: `Critical features not yet ready: ${maturity.criticalIncomplete.map((i) => i.feature_name).join(", ")}.`,
+      });
+    }
+    if (maturity.missingTests.length > 0) {
+      items.push({
+        tone: "neutral",
+        text: `${maturity.missingTests.length} ${maturity.missingTests.length === 1 ? "feature is" : "features are"} missing tests — a common launch risk.`,
+      });
+    }
+    if (maturity.notReady.length === 0) {
+      items.push({
+        tone: "good",
+        text: "Every tracked feature is marked ready. Re-verify the critical ones before launch.",
+      });
+    }
+    return items;
+  }, [data, maturity]);
+
   if (error) {
     return (
       <p className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -132,7 +166,7 @@ export default function FounderFeatureCompletionPage() {
         description="An internal tracker for what is backend-ready, frontend-ready, tested, documented, and polished before launch."
       />
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <FounderStatCard
           icon={CheckCircle2}
           label="Feature readiness"
@@ -140,7 +174,30 @@ export default function FounderFeatureCompletionPage() {
           hint={`${data.summary.ready ?? 0} of ${data.summary.total} fully ready`}
           tone={data.summary.percent >= 80 ? "good" : "warn"}
         />
+        <FounderStatCard
+          icon={ShieldAlert}
+          label="Critical not ready"
+          value={maturity.criticalIncomplete.length}
+          hint="Priority critical, status not ready"
+          tone={maturity.criticalIncomplete.length > 0 ? "danger" : "good"}
+        />
+        <FounderStatCard
+          icon={FlaskConical}
+          label="Missing tests"
+          value={maturity.missingTests.length}
+          hint="Features without tests done"
+          tone={maturity.missingTests.length > 0 ? "warn" : "good"}
+        />
+        <FounderStatCard
+          icon={FileText}
+          label="Missing docs"
+          value={maturity.missingDocs.length}
+          hint="Features without docs done"
+          tone={maturity.missingDocs.length > 0 ? "warn" : "good"}
+        />
       </div>
+
+      <FounderInsightPanel title="Launch maturity" insights={insights} />
 
       <div className="space-y-3">
         {data.items.map((item) => {

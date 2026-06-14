@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Save, Search, UserRoundCheck } from "lucide-react";
+import { Loader2, Save, Search, ShieldCheck, Sparkles, UserRoundCheck } from "lucide-react";
 
 import { FounderPageHeader, FounderStatCard } from "@/components/founder/founder-ui";
 import { Badge } from "@/components/ui/badge";
@@ -102,6 +102,14 @@ export default function FounderBetaPage() {
     items?.filter((item) => ["accepted", "active"].includes(item.invite_status))
       .length ?? 0;
 
+  // A "strong" beta user is active and has engaged meaningfully — a good
+  // candidate for an interview or a deeper testing relationship.
+  const isStrong = (item: BetaUserProfile) =>
+    ["accepted", "active"].includes(item.invite_status) &&
+    item.document_count >= 1 &&
+    (item.reminder_count >= 1 || item.feedback_count >= 1);
+  const strongCount = items?.filter(isStrong).length ?? 0;
+
   return (
     <div className="space-y-6">
       <FounderPageHeader
@@ -109,6 +117,11 @@ export default function FounderBetaPage() {
         title="Beta Users"
         description="Track beta personas, invite status, activation, usage summaries, and founder notes without exposing private document contents."
       />
+
+      <span className="inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1.5 text-xs text-muted-foreground">
+        <ShieldCheck className="size-3.5 text-brand-success" />
+        Usage counts only — private document contents are never shown here.
+      </span>
 
       {error && (
         <p className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -129,6 +142,13 @@ export default function FounderBetaPage() {
           value={activeCount}
           hint="Users past invitation"
           tone="good"
+        />
+        <FounderStatCard
+          icon={Sparkles}
+          label="Strong profiles"
+          value={strongCount}
+          hint="Active with real engagement"
+          tone={strongCount > 0 ? "good" : "default"}
         />
       </div>
 
@@ -183,6 +203,12 @@ export default function FounderBetaPage() {
                         </h2>
                         <Badge variant="outline">{label(draft.invite_status)}</Badge>
                         <Badge variant="secondary">{label(draft.persona)}</Badge>
+                        {isStrong(item) && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-brand-success/10 px-2 py-0.5 text-xs font-medium text-brand-success">
+                            <Sparkles className="size-3" />
+                            Strong
+                          </span>
+                        )}
                       </div>
                       <p className="mt-1 text-sm text-muted-foreground">
                         {item.document_count} docs · {item.file_count} files ·{" "}

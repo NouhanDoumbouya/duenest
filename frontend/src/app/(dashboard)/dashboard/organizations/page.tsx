@@ -121,11 +121,11 @@ export default function OrganizationsPage() {
         </div>
       ) : organizations.length === 0 ? (
         <Card>
-          <CardContent>
+          <CardContent className="space-y-5">
             <EmptyState
               icon={Building2}
-              title="No organizations yet."
-              description="Create a shared workspace for a student association, club, NGO, or team to manage documents and deadlines together."
+              title="Create a shared workspace"
+              description="Collect documents from members, track missing files, and prepare team bundles without WhatsApp chaos. Members only see what you request — never the rest of your vault."
               action={
                 <Link
                   href="/dashboard/organizations/new"
@@ -136,6 +136,28 @@ export default function OrganizationsPage() {
                 </Link>
               }
             />
+            <div className="mx-auto max-w-xl">
+              <p className="text-center text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                Great for
+              </p>
+              <div className="mt-2 flex flex-wrap justify-center gap-2">
+                {[
+                  "Student association",
+                  "Scholarship team",
+                  "NGO",
+                  "Club",
+                  "Small business",
+                  "Event team",
+                ].map((example) => (
+                  <span
+                    key={example}
+                    className="rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground"
+                  >
+                    {example}
+                  </span>
+                ))}
+              </div>
+            </div>
           </CardContent>
         </Card>
       ) : (
