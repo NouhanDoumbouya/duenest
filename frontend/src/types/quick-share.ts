@@ -115,6 +115,15 @@ export interface QuickShareListItem {
   last_accessed_at: string | null;
 }
 
+export interface QuickShareActivity {
+  id: number;
+  action: string;
+  actor_type: "owner" | "receiver" | "system";
+  safe_summary: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
 export interface CreateQuickSharePayload {
   mode: QuickShareMode;
   share_method?: QuickShareMethod;

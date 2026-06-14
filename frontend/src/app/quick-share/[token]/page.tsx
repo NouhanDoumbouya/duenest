@@ -295,6 +295,9 @@ export default function QuickShareClaimPage() {
           ? () => handleDownload(previewFile)
           : undefined,
         downloading: busyFileId === previewFile.file_id,
+        watermark: metadata?.watermark_enabled
+          ? `${metadata.watermark_text || metadata.sender_name} · ${metadata.short_id}`
+          : undefined,
       }
     : null;
 

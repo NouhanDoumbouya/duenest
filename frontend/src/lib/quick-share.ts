@@ -8,6 +8,7 @@ import { API_BASE_URL, ApiError, apiFetch } from "./api";
 import { getAccessToken } from "./auth";
 import type {
   CreateQuickSharePayload,
+  QuickShareActivity,
   QuickShareClaimSummary,
   QuickShareListItem,
   QuickSharePublic,
@@ -35,6 +36,15 @@ export function createQuickShare(
     body: payload,
     auth: true,
   });
+}
+
+export function getQuickShareActivity(
+  id: number,
+): Promise<QuickShareActivity[]> {
+  return apiFetch<QuickShareActivity[]>(
+    `/quick-share/sessions/${id}/activity/`,
+    { auth: true },
+  );
 }
 
 export function revokeQuickShare(id: number): Promise<QuickShareSession> {

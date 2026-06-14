@@ -11,6 +11,7 @@ import {
   Eye,
   EyeOff,
   FileText,
+  History,
   Link2,
   Loader2,
   ShieldCheck,
@@ -30,6 +31,7 @@ import {
   approveQuickShareClaim,
   denyQuickShareClaim,
   getQuickShare,
+  getQuickShareActivity,
   revokeQuickShare,
 } from "@/lib/quick-share";
 import {
@@ -39,6 +41,7 @@ import {
 } from "@/components/quick-share/shared";
 import { cn } from "@/lib/utils";
 import type {
+  QuickShareActivity,
   QuickShareClaimSummary,
   QuickShareSession,
 } from "@/types/quick-share";
@@ -48,6 +51,7 @@ export default function QuickShareDetailPage() {
   const sessionId = Number(params.id);
 
   const [session, setSession] = useState<QuickShareSession | null>(null);
+  const [activity, setActivity] = useState<QuickShareActivity[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<"link" | "code" | null>(null);
   const [revealCode, setRevealCode] = useState(false);
@@ -66,6 +70,10 @@ export default function QuickShareDetailPage() {
       const data = await getQuickShare(sessionId);
       setSession(data);
       setError(null);
+      // The activity trail is non-critical; never let it block the page.
+      getQuickShareActivity(sessionId)
+        .then(setActivity)
+        .catch(() => setActivity([]));
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message : "Could not load this Quick Share.",
@@ -439,6 +447,9 @@ export default function QuickShareDetailPage() {
         </div>
       )}
 
+      {/* Activity log */}
+      <ActivityLog activity={activity} />
+
       {/* Revoke */}
       {!inactive && (
         <div className="flex flex-col items-center gap-2 pt-2">
@@ -466,6 +477,69 @@ export default function QuickShareDetailPage() {
         onCancel={() => setConfirmRevoke(false)}
       />
     </PageContainer>
+  );
+}
+
+function formatActivityTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function ActivityLog({ activity }: { activity: QuickShareActivity[] | null }) {
+  return (
+    <div className="rounded-2xl border border-border bg-card p-4 shadow-card">
+      <p className="flex items-center gap-2 text-sm font-semibold">
+        <History className="size-4" />
+        Activity
+      </p>
+      {activity === null ? (
+        <div className="mt-3 space-y-2">
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="h-6 w-full rounded-md" />
+          ))}
+        </div>
+      ) : activity.length === 0 ? (
+        <p className="mt-3 text-sm text-muted-foreground">
+          No activity yet. You&apos;ll see opens, accepts, previews, downloads,
+          and revokes here as they happen.
+        </p>
+      ) : (
+        <ol className="mt-3 space-y-3">
+          {activity.map((entry) => (
+            <li key={entry.id} className="flex items-start gap-3">
+              <span
+                className={cn(
+                  "mt-1.5 size-2 shrink-0 rounded-full",
+                  entry.actor_type === "owner"
+                    ? "bg-primary"
+                    : entry.actor_type === "receiver"
+                      ? "bg-brand-success"
+                      : "bg-muted-foreground/40",
+                )}
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm">
+                  {entry.safe_summary || entry.action.replace(/_/g, " ")}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {formatActivityTime(entry.created_at)}
+                </p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+      <p className="mt-3 text-xs text-muted-foreground">
+        We record actions to keep you in control — never access codes or file
+        contents.
+      </p>
+    </div>
   );
 }
 

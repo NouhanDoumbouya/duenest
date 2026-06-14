@@ -1276,9 +1276,10 @@ alone:
    _(explicit method picker across all three — **shipped, Phase 3**)_
 4. Shared by Me / Shared with Me management — shipped (V1)
 5. Bundle sharing — **shipped (Phase 2)**
-6. Premium secure viewer — partial; polish planned
+6. Premium secure viewer — **shipped (Phase 4: watermark overlay)**
 7. Watermark / view-only / download control — shipped (V1)
-8. Expiry / revocation / activity logs — shipped (V1)
+8. Expiry / revocation / activity logs — shipped (V1; activity now surfaced in
+   the sender UI, Phase 4)
 
 ### Shipped: Phase 1 — real DueNest code + Receive flow
 
@@ -1313,6 +1314,24 @@ nothing is overpromised. The create wizard becomes a four-step flow
 (Select → Method → Protection → Review) with an explicit method choice, and the
 sender's result screen leads with the chosen method (primary "Copy secure link"
 for `link`, an emphasized DueNest code for `code`, the QR hero for `qr`).
+
+### Shipped: Phase 4 — secure-viewer polish + activity surfacing
+
+Two reuse-only frontend additions (no new backend):
+
+* **Activity log surfacing** — the sender's Quick Share detail screen now renders
+  the owner activity trail from the existing
+  `GET /quick-share/sessions/:id/activity/` endpoint (opens, accepts, previews,
+  downloads, approvals, revokes), with a skeleton/empty state and a reminder that
+  codes and file contents are never recorded. The fetch is non-blocking so it
+  never holds up the page.
+* **Premium secure viewer** — the shared `FilePreviewDialog` gains an optional,
+  backward-compatible tiled diagonal **watermark overlay** (`pointer-events-none`,
+  so the preview stays interactive). The Quick Share viewer passes
+  `watermark_text`/sender + `short_id` when `watermark_enabled`, delivering on the
+  watermark promise visibly (previously only a "Watermarked" chip was shown).
+
+This completes the planned Quick Share 2.0 phases (1–4).
 
 ### Guardrail: no fake "Nearby Share"
 
