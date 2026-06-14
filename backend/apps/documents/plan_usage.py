@@ -65,7 +65,18 @@ def count_resource(user, resource: str) -> int:
     if resource == plans.RESOURCE_REMINDERS:
         return DocumentReminderRule.objects.filter(owner=user).count()
     if resource == plans.RESOURCE_SHARE_LINKS:
-        return _active_share_links(user).count()
+        # Active single-file share links plus active Quick Share QR sessions.
+        from apps.quick_share.models import QuickShareSession
+
+        now = timezone.now()
+        quick = (
+            QuickShareSession.objects.filter(
+                owner=user, revoked_at__isnull=True, expires_at__gt=now
+            )
+            .exclude(status=QuickShareSession.Status.CONSUMED)
+            .count()
+        )
+        return _active_share_links(user).count() + quick
     if resource == plans.RESOURCE_EMERGENCY_PACKS:
         return EmergencyAccessPack.objects.filter(owner=user).count()
     if resource == plans.RESOURCE_SUBSCRIPTIONS:

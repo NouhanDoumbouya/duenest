@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   CheckCircle2,
+  ExternalLink,
   FileText,
   Loader2,
   Lock,
@@ -196,18 +197,26 @@ export default function TrustCenterPage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Link
+            {/* Public reference pages live outside the dashboard shell, so open
+                them in a new tab to keep the user in their workspace. */}
+            <a
               href="/security"
+              target="_blank"
+              rel="noopener noreferrer"
               className={cn(buttonVariants({ variant: "outline" }))}
             >
               Security page
-            </Link>
-            <Link
+              <ExternalLink className="size-4" />
+            </a>
+            <a
               href="/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
               className={cn(buttonVariants({ variant: "outline" }))}
             >
               Privacy draft
-            </Link>
+              <ExternalLink className="size-4" />
+            </a>
             <Link
               href="/dashboard/settings/data"
               className={cn(buttonVariants())}

@@ -1232,3 +1232,36 @@ Founder analytics:
 - Founder analytics must not expose organization names, member lists, document
   titles, filenames, file contents, invite tokens, upload tokens, room tokens,
   private notes, or internal file paths.
+
+## Quick Share QR V1 security
+
+Quick Share reuses the Secure Rooms security model and adds account-to-account
+claim controls. Core guarantees:
+
+* The QR/claim URL contains only the random session token
+  (`secrets.token_urlsafe(32)`), never file ids, storage paths, access codes, or
+  permission payloads.
+* `access_code_hash` is hashed with Django's `make_password` and never
+  serialized; raw access codes are never stored or logged. Access codes are sent
+  via the `X-Access-Code` header and re-verified on every request, throttled at
+  `quick_share_code` (10/min) with generic error states.
+* A session exposes only its explicitly attached files. Trashed files and files
+  the owner no longer owns are excluded automatically, so revoking/trashing a
+  file removes it from the share immediately.
+* Expiry, revocation, one-time consumption, and max-claim limits are enforced
+  server-side via a single state guard. Owner revoke takes effect on the next
+  request.
+* View-only download and save-copy are blocked server-side regardless of the
+  client. Save-copy is honoured only when `save_copy_allowed` is set; the copy is
+  re-created from fresh bytes, owned by the receiver, with no sender token,
+  access code, or internal metadata carried over.
+* Account-to-account file access requires the authenticated receiver to hold an
+  accepted (and, when required, sender-approved) claim. Cross-account access to
+  unrelated files returns 404; non-owners cannot revoke or manage a session.
+* Activity logging records safe events only and never stores raw IP addresses,
+  tokens, access codes, or file paths — only a coarse user-agent summary.
+
+Non-goals / limitations: QR codes cannot prevent OS-level screenshots
+(watermarking is deterrence only); saved copies cannot be revoked after the
+receiver saves them; in-browser camera scanning is not implemented; emergency
+and organization-collection QR surfaces are deferred to later iterations.

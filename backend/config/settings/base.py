@@ -48,6 +48,7 @@ LOCAL_APPS = [
     "apps.subscriptions.apps.SubscriptionsConfig",
     "apps.organizations.apps.OrganizationsConfig",
     "apps.founder.apps.FounderConfig",
+    "apps.quick_share.apps.QuickShareConfig",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -148,6 +149,8 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "waitlist": "5/hour",
         "invite_validate": "20/hour",
+        # Quick Share public access-code attempts (anti brute-force).
+        "quick_share_code": "10/min",
     },
 }
 

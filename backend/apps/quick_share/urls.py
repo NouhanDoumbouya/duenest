@@ -1,0 +1,106 @@
+from django.urls import path
+
+from .views import (
+    QuickShareAcceptView,
+    QuickShareActivityView,
+    QuickShareApproveClaimView,
+    QuickShareClaimMetadataView,
+    QuickShareDeclineView,
+    QuickShareDenyClaimView,
+    QuickShareFileDownloadView,
+    QuickShareFilePreviewView,
+    QuickShareSaveCopyView,
+    QuickShareSessionDetailView,
+    QuickShareSessionListCreateView,
+    QuickShareSessionRevokeView,
+    QuickShareVerifyCodeView,
+    SharedWithMeDetailView,
+    SharedWithMeListView,
+    SharedWithMeRemoveView,
+)
+
+urlpatterns = [
+    # Owner sender endpoints
+    path(
+        "quick-share/sessions/",
+        QuickShareSessionListCreateView.as_view(),
+        name="quick-share-sessions",
+    ),
+    path(
+        "quick-share/sessions/<int:session_id>/",
+        QuickShareSessionDetailView.as_view(),
+        name="quick-share-session-detail",
+    ),
+    path(
+        "quick-share/sessions/<int:session_id>/revoke/",
+        QuickShareSessionRevokeView.as_view(),
+        name="quick-share-session-revoke",
+    ),
+    path(
+        "quick-share/sessions/<int:session_id>/approve-claim/",
+        QuickShareApproveClaimView.as_view(),
+        name="quick-share-approve-claim",
+    ),
+    path(
+        "quick-share/sessions/<int:session_id>/deny-claim/",
+        QuickShareDenyClaimView.as_view(),
+        name="quick-share-deny-claim",
+    ),
+    path(
+        "quick-share/sessions/<int:session_id>/activity/",
+        QuickShareActivityView.as_view(),
+        name="quick-share-session-activity",
+    ),
+    # Claim endpoints (token-gated)
+    path(
+        "quick-share/claim/<str:token>/",
+        QuickShareClaimMetadataView.as_view(),
+        name="quick-share-claim",
+    ),
+    path(
+        "quick-share/claim/<str:token>/verify-code/",
+        QuickShareVerifyCodeView.as_view(),
+        name="quick-share-verify-code",
+    ),
+    path(
+        "quick-share/claim/<str:token>/accept/",
+        QuickShareAcceptView.as_view(),
+        name="quick-share-accept",
+    ),
+    path(
+        "quick-share/claim/<str:token>/decline/",
+        QuickShareDeclineView.as_view(),
+        name="quick-share-decline",
+    ),
+    path(
+        "quick-share/claim/<str:token>/files/<int:file_id>/preview/",
+        QuickShareFilePreviewView.as_view(),
+        name="quick-share-file-preview",
+    ),
+    path(
+        "quick-share/claim/<str:token>/files/<int:file_id>/download/",
+        QuickShareFileDownloadView.as_view(),
+        name="quick-share-file-download",
+    ),
+    path(
+        "quick-share/claim/<str:token>/files/<int:file_id>/save-copy/",
+        QuickShareSaveCopyView.as_view(),
+        name="quick-share-file-save-copy",
+    ),
+    # Shared with me (receiver)
+    path(
+        "shared-with-me/",
+        SharedWithMeListView.as_view(),
+        name="shared-with-me",
+    ),
+    path(
+        "shared-with-me/<int:claim_id>/",
+        SharedWithMeDetailView.as_view(),
+        name="shared-with-me-detail",
+    ),
+    path(
+        "shared-with-me/<int:claim_id>/remove/",
+        SharedWithMeRemoveView.as_view(),
+        name="shared-with-me-remove",
+    ),
+]
