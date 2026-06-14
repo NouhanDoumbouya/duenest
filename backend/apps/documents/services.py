@@ -2751,16 +2751,20 @@ def _dedupe_arcname(arcname: str, used: set) -> str:
 
 
 def _write_file_to_zip(zf, arcname, document_file) -> bool:
-    """Stream one file into the archive. Returns False if it is missing."""
+    """Write one (decrypted) file into the archive. Returns False if missing.
+
+    Callers must have verified the requester has access to the bundle and its
+    files before exporting — decryption is permission-first."""
     import zipfile
 
+    from .file_encryption import read_plaintext
+    from apps.core.security.encryption import DecryptionError
+
     try:
-        with document_file.file.open("rb") as fh:
-            zf.writestr(
-                zipfile.ZipInfo(arcname), fh.read(), zipfile.ZIP_DEFLATED
-            )
-    except (FileNotFoundError, OSError, ValueError):
+        plaintext = read_plaintext(document_file)
+    except (FileNotFoundError, OSError, ValueError, DecryptionError):
         return False
+    zf.writestr(zipfile.ZipInfo(arcname), plaintext, zipfile.ZIP_DEFLATED)
     return True
 
 

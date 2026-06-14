@@ -9,16 +9,18 @@ these helpers ever return tokens, access-code hashes, or storage paths.
 from __future__ import annotations
 
 import hashlib
+import io
 import logging
 import os
 
-from django.core.files.base import ContentFile
 from django.db import transaction
 from django.db.models import F
 from django.http import FileResponse
 from django.utils import timezone
 from django.utils.http import content_disposition_header
 
+from apps.core.security.encryption import DecryptionError
+from apps.documents.file_encryption import encrypt_bytes_into_record, read_plaintext
 from apps.documents.models import Document, DocumentFile
 
 from .models import (
@@ -212,12 +214,15 @@ def resolve_session_file(session: QuickShareSession, file_id):
 
 
 def _file_response(file: DocumentFile, *, as_attachment: bool):
+    # Permission-first: callers validate the claim/token/code/scope before this.
     try:
-        opened = file.file.open("rb")
-    except (FileNotFoundError, ValueError):
+        plaintext = read_plaintext(file)
+    except (FileNotFoundError, ValueError, DecryptionError):
         return None
     response = FileResponse(
-        opened, as_attachment=as_attachment, filename=file.original_filename
+        io.BytesIO(plaintext),
+        as_attachment=as_attachment,
+        filename=file.original_filename,
     )
     if file.content_type:
         response["Content-Type"] = file.content_type
@@ -417,11 +422,9 @@ def save_copy_to_vault(session, receiver, source_file, *, target_document_id=Non
             notes="Saved from a DueNest Quick Share.",
         )
 
-    try:
-        source_file.file.open("rb")
-        content = source_file.file.read()
-    finally:
-        source_file.file.close()
+    # Decrypt the source (the claim was already validated by the caller), then
+    # re-encrypt fresh bytes under the receiver's own new record.
+    content = read_plaintext(source_file)
 
     checksum = hashlib.sha256(content).hexdigest()
     new_file = DocumentFile(
@@ -434,7 +437,7 @@ def save_copy_to_vault(session, receiver, source_file, *, target_document_id=Non
     )
     # Use only the base filename so no source storage path is reused.
     base_name = os.path.basename(source_file.original_filename or "file")
-    new_file.file.save(base_name, ContentFile(content), save=False)
+    encrypt_bytes_into_record(new_file, content, base_name)
     new_file.save()
 
     log_activity(

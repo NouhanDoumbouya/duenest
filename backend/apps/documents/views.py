@@ -1,4 +1,5 @@
 import hashlib
+import io
 import secrets
 
 from django.contrib.auth.hashers import check_password, make_password
@@ -86,6 +87,8 @@ from .serializers import (
 from apps.users import plans as user_plans
 
 from .plan_usage import compute_plan_usage, enforce_plan_limit
+from apps.core.security.encryption import DecryptionError
+from .file_encryption import encrypt_uploaded_file, read_plaintext
 from .services import (
     APPLICABLE_EXTRACTION_FIELDS,
     VERSIONED_FIELDS,
@@ -162,16 +165,34 @@ def _compute_checksum(uploaded) -> str:
 
 
 def _file_response(instance, *, as_attachment: bool):
+    """
+    Decrypt (for encrypted files) and stream a DocumentFile.
+
+    Callers MUST have already verified authorization, ownership/scope, trash,
+    and any share/emergency/room revoke-expiry-code checks before reaching here
+    (permission-first decryption rule — see docs/ENCRYPTION.md).
+    """
     try:
-        opened_file = instance.file.open("rb")
+        plaintext = read_plaintext(instance)
     except (FileNotFoundError, ValueError):
         return Response(
             {"detail": "This file is no longer available."},
             status=status.HTTP_404_NOT_FOUND,
         )
+    except DecryptionError:
+        # No crypto detail to the user; no plaintext returned.
+        return Response(
+            {
+                "detail": (
+                    "We could not open this file securely. Please try again or "
+                    "contact support."
+                )
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
     response = FileResponse(
-        opened_file,
+        io.BytesIO(plaintext),
         as_attachment=as_attachment,
         filename=instance.original_filename,
     )
@@ -590,15 +611,10 @@ class DocumentFileListCreateView(_DocumentScopedMixin, generics.ListCreateAPIVie
         serializer.is_valid(raise_exception=True)
         uploaded = serializer.validated_data["file"]
 
-        checksum = _compute_checksum(uploaded)
-        instance = DocumentFile.objects.create(
-            document=document,
-            uploaded_by=request.user,  # set from the session, not the client
-            file=uploaded,
-            original_filename=uploaded.name[:255],
-            content_type=uploaded.content_type or "",
-            file_size=uploaded.size,
-            checksum=checksum,
+        # uploaded_by comes from the session, not the client. Bytes are
+        # encrypted at rest inside _create_document_file before persistence.
+        instance = _create_document_file(
+            uploaded=uploaded, user=request.user, document=document
         )
 
         output = DocumentFileSerializer(
@@ -734,16 +750,21 @@ def _owned_file_queryset(user, *, include_trashed=False, only_inbox=False):
 
 
 def _create_document_file(*, uploaded, user, document=None):
+    """Create a DocumentFile, encrypting the bytes at rest before they are
+    persisted. Never stores plaintext content."""
     checksum = _compute_checksum(uploaded)
-    return DocumentFile.objects.create(
+    instance = DocumentFile(
         document=document,
         uploaded_by=user,
-        file=uploaded,
         original_filename=uploaded.name[:255],
         content_type=uploaded.content_type or "",
         file_size=uploaded.size,
         checksum=checksum,
     )
+    # Encrypt-then-store: attaches ciphertext + envelope metadata to instance.
+    encrypt_uploaded_file(instance, uploaded)
+    instance.save()
+    return instance
 
 
 class FileInboxListCreateView(generics.ListCreateAPIView):

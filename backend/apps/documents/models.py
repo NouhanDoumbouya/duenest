@@ -232,6 +232,38 @@ class DocumentFile(models.Model):
     # SHA-256 hex digest of the uploaded bytes (integrity / dedupe aid).
     checksum = models.CharField(max_length=64, blank=True)
 
+    # ---- Application-level encryption at rest (see docs/ENCRYPTION.md) -----
+    # Immutable identity used to bind ciphertext to this record via AES-GCM AAD.
+    file_uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+
+    class EncryptionStatus(models.TextChoices):
+        PLAINTEXT_LEGACY = "plaintext_legacy", "Plaintext legacy"
+        ENCRYPTING = "encrypting", "Encrypting"
+        ENCRYPTED = "encrypted", "Encrypted"
+        ENCRYPTION_FAILED = "encryption_failed", "Encryption failed"
+
+    encryption_status = models.CharField(
+        max_length=32,
+        choices=EncryptionStatus.choices,
+        default=EncryptionStatus.PLAINTEXT_LEGACY,
+        db_index=True,
+    )
+    encryption_algorithm = models.CharField(max_length=64, default="AES-256-GCM")
+    encryption_version = models.PositiveSmallIntegerField(default=1)
+    # Which KEK version wrapped this file's DEK (needed to unwrap/rotate).
+    kek_version = models.CharField(max_length=32, blank=True, db_index=True)
+    wrapped_dek = models.BinaryField(null=True, blank=True)
+    nonce = models.BinaryField(null=True, blank=True)
+    # GCM tag is appended to ciphertext by AESGCM; kept nullable for clarity and
+    # potential future streaming formats. Not required for the current format.
+    gcm_tag = models.BinaryField(null=True, blank=True)
+    # SHA-256 of the ENCRYPTED bytes (storage integrity; not plaintext).
+    ciphertext_sha256 = models.CharField(max_length=64, blank=True)
+    plaintext_size_bytes = models.BigIntegerField(null=True, blank=True)
+    ciphertext_size_bytes = models.BigIntegerField(null=True, blank=True)
+    encrypted_at = models.DateTimeField(null=True, blank=True)
+    encryption_error = models.CharField(max_length=255, blank=True)
+
     # Soft delete (trash). Trashed files are hidden from active lists and can no
     # longer be reached through existing share links until restored.
     is_trashed = models.BooleanField(default=False)

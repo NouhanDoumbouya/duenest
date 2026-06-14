@@ -137,6 +137,35 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# ---------------------------------------------------------------------------
+# Application-level file/field encryption (see docs/ENCRYPTION.md).
+#
+# Key Encryption Keys (KEKs) are loaded ONLY from the environment and are never
+# stored in the database, logged, or committed. The active version wraps new
+# per-file/per-field data keys; historical versions must stay configured while
+# any record still references them.
+# ---------------------------------------------------------------------------
+DUENEST_ACTIVE_KEK_VERSION = config("DUENEST_ACTIVE_KEK_VERSION", default="")
+
+# Collect DUENEST_KEK_<VERSION>_B64 values into {version: base64_string}. The
+# raw base64 is decoded/validated lazily by apps.core.security.key_provider so a
+# malformed key fails closed at use rather than silently.
+DUENEST_KEKS = {}
+for _kek_suffix in ("V1", "V2", "V3", "V4", "V5"):
+    _kek_value = config(f"DUENEST_KEK_{_kek_suffix}_B64", default="")
+    if _kek_value:
+        DUENEST_KEKS[_kek_suffix.lower()] = _kek_value
+
+# Secure password hashing. Django's default PBKDF2 is kept as the primary
+# hasher (no extra dependency). Argon2 is the recommended future upgrade once
+# `argon2-cffi` is installed and supported by the deployment environment; see
+# docs/ENCRYPTION.md. Never store or reversibly encrypt passwords.
+PASSWORD_HASHERS = [
+    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher",
+    "django.contrib.auth.hashers.BCryptSHA256PasswordHasher",
+]
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
