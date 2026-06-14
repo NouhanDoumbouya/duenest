@@ -1274,7 +1274,7 @@ alone:
 2. Share by DueNest code — **shipped (Phase 1)**
 3. Share by QR — shipped (V1)
 4. Shared by Me / Shared with Me management — shipped (V1)
-5. Bundle sharing — planned (Phase 2)
+5. Bundle sharing — **shipped (Phase 2)**
 6. Premium secure viewer — partial; polish planned
 7. Watermark / view-only / download control — shipped (V1)
 8. Expiry / revocation / activity logs — shipped (V1)
@@ -1291,6 +1291,17 @@ off to the existing guarded claim flow; it is rate-limited (`quick_share_receive
 share screen. This replaces the previous cosmetic "fallback code" (which was
 derived from the token and had no resolve path); `fallback_code` is retained as a
 serializer alias of `dn_code` for backward compatibility.
+
+### Shipped: Phase 2 — bundle sharing
+
+`QuickShareItem` gains an optional `bundle` FK, so a whole bundle can be shared
+as one item that expands to the bundle's currently available files (via the
+canonical `collect_bundle_files`), keeping the share in sync with the bundle over
+time. The create endpoint accepts `bundle_ids[]` alongside `file_ids[]`
+(owner-validated; empty bundles skipped). The owner list/detail `file_count` now
+reflects the real expanded file count. The Quick Share wizard's picker gains a
+**Bundles** section, and the selected-summary/review steps show bundles
+distinctly from individual files.
 
 ### Guardrail: no fake "Nearby Share"
 

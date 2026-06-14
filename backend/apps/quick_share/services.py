@@ -171,9 +171,21 @@ def session_files(session: QuickShareSession):
     """
     files = []
     seen = set()
-    items = session.items.select_related("file", "document").all()
+    items = session.items.select_related("file", "document", "bundle").all()
     for item in items:
         file = item.file
+        if file is None and item.bundle_id:
+            # Bundle item: expose all of the bundle's currently available files,
+            # using the same canonical file-set as the rest of the app. Owner
+            # isolation was enforced when the bundle was attached.
+            from apps.documents.services import collect_bundle_files
+
+            for entry in collect_bundle_files(item.bundle).files:
+                doc_file = entry.file
+                if doc_file.id not in seen:
+                    seen.add(doc_file.id)
+                    files.append((item, doc_file))
+            continue
         if file is None and item.document_id:
             # Document-level item: expose its current active files.
             for doc_file in item.document.files.filter(

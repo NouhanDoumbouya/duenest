@@ -122,6 +122,8 @@ export interface CreateQuickSharePayload {
   require_sender_approval: boolean;
   watermark_enabled: boolean;
   file_ids: number[];
+  // Whole bundles to share; each exposes its currently available files.
+  bundle_ids?: number[];
 }
 
 export interface QuickSharePublic {

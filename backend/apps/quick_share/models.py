@@ -236,6 +236,15 @@ class QuickShareItem(models.Model):
         blank=True,
         related_name="quick_share_items",
     )
+    # A bundle item shares all of the bundle's currently available files, so the
+    # share tracks the bundle's contents over time (like a document-level item).
+    bundle = models.ForeignKey(
+        "documents.DocumentBundle",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="quick_share_items",
+    )
     display_name = models.CharField(max_length=255, blank=True)
     order = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)

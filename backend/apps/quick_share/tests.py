@@ -25,7 +25,12 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from apps.documents.models import Document, DocumentFile
+from apps.documents.models import (
+    Document,
+    DocumentBundle,
+    DocumentBundleRequirement,
+    DocumentFile,
+)
 
 from .models import QuickShareClaim, QuickShareItem, QuickShareSession
 
@@ -552,3 +557,108 @@ class ReceiveCodeTests(QuickShareBaseTest):
         body = str(resp.data)
         self.assertNotIn("access_code_hash", body)
         self.assertNotIn("123456", body)
+
+
+class BundleSharingTests(QuickShareBaseTest):
+    """Phase 2: sharing a whole bundle exposes its current files."""
+
+    def make_bundle(self, owner, files):
+        bundle = DocumentBundle.objects.create(owner=owner, title="Visa pack")
+        for order, file in enumerate(files):
+            DocumentBundleRequirement.objects.create(
+                owner=owner,
+                bundle=bundle,
+                title=f"Item {order}",
+                requirement_type=DocumentBundleRequirement.RequirementType.FILE,
+                linked_file=file,
+                linked_document=file.document,
+                status=DocumentBundleRequirement.Status.ATTACHED,
+            )
+        return bundle
+
+    def test_share_bundle_exposes_its_files(self):
+        bundle = self.make_bundle(self.alice, [self.alice_file, self.alice_file2])
+        self.client.force_authenticate(self.alice)
+        resp = self.client.post(
+            "/api/v1/quick-share/sessions/",
+            {
+                "permission": "view_only",
+                "expires_at": (timezone.now() + timedelta(minutes=10)).isoformat(),
+                "bundle_ids": [bundle.id],
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.data)
+        self.assertEqual(resp.data["file_count"], 2)
+        names = {f["name"] for f in resp.data["files"]}
+        self.assertEqual(names, {"passport.pdf", "visa.pdf"})
+        # Stored as a single bundle item that expands to the files.
+        session = QuickShareSession.objects.get(id=resp.data["id"])
+        self.assertEqual(session.items.count(), 1)
+        self.assertEqual(session.items.get().bundle_id, bundle.id)
+
+    def test_cannot_share_another_users_bundle(self):
+        bundle = self.make_bundle(self.bob, [self.bob_file])
+        self.client.force_authenticate(self.alice)
+        resp = self.client.post(
+            "/api/v1/quick-share/sessions/",
+            {
+                "expires_at": (timezone.now() + timedelta(minutes=10)).isoformat(),
+                "bundle_ids": [bundle.id],
+            },
+            format="json",
+        )
+        # Bob's bundle is skipped; with nothing valid the create is rejected.
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_empty_bundle_rejected(self):
+        bundle = DocumentBundle.objects.create(owner=self.alice, title="Empty")
+        self.client.force_authenticate(self.alice)
+        resp = self.client.post(
+            "/api/v1/quick-share/sessions/",
+            {
+                "expires_at": (timezone.now() + timedelta(minutes=10)).isoformat(),
+                "bundle_ids": [bundle.id],
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_receiver_sees_only_bundle_files(self):
+        bundle = self.make_bundle(self.alice, [self.alice_file])
+        session = QuickShareSession.objects.create(
+            owner=self.alice,
+            mode=QuickShareSession.Mode.ACCOUNT_TO_ACCOUNT,
+            permission=QuickShareSession.Permission.VIEW_ONLY,
+            expires_at=timezone.now() + timedelta(minutes=10),
+        )
+        QuickShareItem.objects.create(session=session, bundle=bundle, order=0)
+        self.client.force_authenticate(self.bob)
+        resp = self.client.get(f"/api/v1/quick-share/claim/{session.token}/")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        names = {f["name"] for f in resp.data["files"]}
+        self.assertEqual(names, {"passport.pdf"})
+        self.assertNotIn("bob.pdf", str(resp.data))
+
+    def test_bundle_reflects_added_file(self):
+        bundle = self.make_bundle(self.alice, [self.alice_file])
+        session = QuickShareSession.objects.create(
+            owner=self.alice,
+            permission=QuickShareSession.Permission.VIEW_ONLY,
+            expires_at=timezone.now() + timedelta(minutes=10),
+        )
+        QuickShareItem.objects.create(session=session, bundle=bundle, order=0)
+        # Add another requirement/file to the bundle after sharing.
+        DocumentBundleRequirement.objects.create(
+            owner=self.alice,
+            bundle=bundle,
+            title="Extra",
+            requirement_type=DocumentBundleRequirement.RequirementType.FILE,
+            linked_file=self.alice_file2,
+            linked_document=self.alice_file2.document,
+            status=DocumentBundleRequirement.Status.ATTACHED,
+        )
+        self.client.force_authenticate(self.bob)
+        resp = self.client.get(f"/api/v1/quick-share/claim/{session.token}/")
+        names = {f["name"] for f in resp.data["files"]}
+        self.assertEqual(names, {"passport.pdf", "visa.pdf"})

@@ -3404,8 +3404,12 @@ GET    /api/v1/quick-share/sessions/:id/activity/
 Create body: `mode`, `title?`, `purpose?`, `permission`, `expires_at`,
 `access_code_required`, `access_code?` (write-only; auto-generated when required
 but blank), `one_time`, `max_claims?`, `require_sender_approval`,
-`watermark_enabled`, `file_ids[]` (each must be owned by the requester; others
-are skipped, and a session with no valid files is rejected). The create response
+`watermark_enabled`, `file_ids[]`, and `bundle_ids[]` (both must be owned by the
+requester; others are skipped, and a session with no valid files/bundles is
+rejected). A bundle is attached as a single item that exposes all of its
+currently available files (the same file-set as `document-bundles/:id/files/`),
+so the share reflects the bundle's contents over time; an empty bundle is
+skipped. The create response
 includes the one-time plain `access_code` (when generated), the session `token`
 for the owner to build the QR, and the `dn_code` — a short, human-typable DueNest
 code (e.g. `DN-4KQ7-PXMR`) the owner can read out for the "Receive code" flow.

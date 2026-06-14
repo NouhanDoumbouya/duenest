@@ -12,6 +12,7 @@ import {
   Eye,
   FileText,
   KeyRound,
+  Layers,
   Loader2,
   Save,
   ShieldCheck,
@@ -31,6 +32,7 @@ import { formatFileSize } from "@/lib/document-files";
 import { createQuickShare } from "@/lib/quick-share";
 import {
   FilePicker,
+  type SelectedBundle,
   type SelectedFile,
 } from "@/components/quick-share/file-picker";
 import { looksSensitive } from "@/components/quick-share/shared";
@@ -64,6 +66,9 @@ export default function NewQuickSharePage() {
   const [step, setStep] = useState(0);
 
   const [selected, setSelected] = useState<Map<number, SelectedFile>>(new Map());
+  const [selectedBundles, setSelectedBundles] = useState<
+    Map<number, SelectedBundle>
+  >(new Map());
   const [title, setTitle] = useState("");
   const [mode, setMode] = useState<QuickShareMode>("account_to_account");
   const [permission, setPermission] = useState<QuickSharePermission>("view_only");
@@ -77,6 +82,10 @@ export default function NewQuickSharePage() {
   const [error, setError] = useState<string | null>(null);
 
   const selectedList = useMemo(() => Array.from(selected.values()), [selected]);
+  const selectedBundleList = useMemo(
+    () => Array.from(selectedBundles.values()),
+    [selectedBundles],
+  );
   const hasSensitive = selectedList.some((f) => looksSensitive(f.name));
 
   function toggleFile(file: SelectedFile) {
@@ -84,6 +93,15 @@ export default function NewQuickSharePage() {
       const next = new Map(prev);
       if (next.has(file.id)) next.delete(file.id);
       else next.set(file.id, file);
+      return next;
+    });
+  }
+
+  function toggleBundle(bundle: SelectedBundle) {
+    setSelectedBundles((prev) => {
+      const next = new Map(prev);
+      if (next.has(bundle.id)) next.delete(bundle.id);
+      else next.set(bundle.id, bundle);
       return next;
     });
   }
@@ -110,6 +128,7 @@ export default function NewQuickSharePage() {
       require_sender_approval: mode === "account_to_account" ? requireApproval : false,
       watermark_enabled: watermark,
       file_ids: selectedList.map((f) => f.id),
+      bundle_ids: selectedBundleList.map((b) => b.id),
     };
     try {
       const session = await createQuickShare(payload);
@@ -130,7 +149,8 @@ export default function NewQuickSharePage() {
     }
   }
 
-  const canNext = step === 0 ? selected.size > 0 : true;
+  const canNext =
+    step === 0 ? selected.size > 0 || selectedBundles.size > 0 : true;
 
   return (
     <PageContainer width="narrow">
@@ -164,16 +184,26 @@ export default function NewQuickSharePage() {
               private.
             </p>
             <div className="mt-4">
-              <FilePicker selected={selected} onToggle={toggleFile} />
+              <FilePicker
+                selected={selected}
+                onToggle={toggleFile}
+                selectedBundles={selectedBundles}
+                onToggleBundle={toggleBundle}
+              />
             </div>
           </div>
 
-          {selected.size > 0 && (
+          {(selected.size > 0 || selectedBundles.size > 0) && (
             <SelectedSummary
               files={selectedList}
+              bundles={selectedBundleList}
               onRemove={(id) => {
                 const f = selected.get(id);
                 if (f) toggleFile(f);
+              }}
+              onRemoveBundle={(id) => {
+                const b = selectedBundles.get(id);
+                if (b) toggleBundle(b);
               }}
             />
           )}
@@ -304,6 +334,7 @@ export default function NewQuickSharePage() {
       {step === 2 && (
         <ReviewStep
           files={selectedList}
+          bundles={selectedBundleList}
           title={title}
           mode={mode}
           permission={permission}
@@ -522,17 +553,47 @@ function RecommendedBanner({ onApply }: { onApply: () => void }) {
 
 function SelectedSummary({
   files,
+  bundles,
   onRemove,
+  onRemoveBundle,
 }: {
   files: SelectedFile[];
+  bundles: SelectedBundle[];
   onRemove: (id: number) => void;
+  onRemoveBundle: (id: number) => void;
 }) {
+  const totalCount = files.length + bundles.length;
   return (
     <div className="rounded-2xl border border-border bg-card p-4 shadow-card">
       <p className="text-sm font-semibold">
-        {files.length} file{files.length === 1 ? "" : "s"} selected
+        {totalCount} item{totalCount === 1 ? "" : "s"} selected
       </p>
       <ul className="mt-3 space-y-2">
+        {bundles.map((bundle) => (
+          <li
+            key={`bundle-${bundle.id}`}
+            className="flex items-center gap-3 rounded-lg bg-muted/40 p-2"
+          >
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+              <Layers className="size-4" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm">{bundle.title}</span>
+              <span className="block text-xs text-muted-foreground">
+                Bundle · {bundle.requirementCount} item
+                {bundle.requirementCount === 1 ? "" : "s"}
+              </span>
+            </span>
+            <button
+              type="button"
+              onClick={() => onRemoveBundle(bundle.id)}
+              className="flex size-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-card hover:text-foreground"
+              aria-label={`Remove ${bundle.title}`}
+            >
+              <X className="size-4" />
+            </button>
+          </li>
+        ))}
         {files.map((file) => (
           <li
             key={file.id}
@@ -573,6 +634,7 @@ function SelectedSummary({
 
 function ReviewStep({
   files,
+  bundles,
   title,
   mode,
   permission,
@@ -584,6 +646,7 @@ function ReviewStep({
   hasSensitive,
 }: {
   files: SelectedFile[];
+  bundles: SelectedBundle[];
   title: string;
   mode: QuickShareMode;
   permission: QuickSharePermission;
@@ -600,8 +663,15 @@ function ReviewStep({
       : permission === "download_allowed"
         ? "Allow download"
         : "Allow save copy";
+  const itemsLabel = [
+    files.length > 0 && `${files.length} file${files.length === 1 ? "" : "s"}`,
+    bundles.length > 0 &&
+      `${bundles.length} bundle${bundles.length === 1 ? "" : "s"}`,
+  ]
+    .filter(Boolean)
+    .join(" + ");
   const rows: [string, string][] = [
-    ["Files", `${files.length} selected`],
+    ["Sharing", itemsLabel || "Nothing selected"],
     ["Recipient", mode === "account_to_account" ? "A DueNest user" : "Anyone with the QR"],
     ["Access", permLabel],
     ["Expires in", expiryLabel],
@@ -647,8 +717,21 @@ function ReviewStep({
         </dl>
       </div>
       <div className="rounded-2xl border border-border bg-card p-4 shadow-card">
-        <p className="text-sm font-semibold">Files</p>
+        <p className="text-sm font-semibold">Selected</p>
         <ul className="mt-3 space-y-2">
+          {bundles.map((bundle) => (
+            <li key={`bundle-${bundle.id}`} className="flex items-center gap-3">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+                <Layers className="size-4" />
+              </span>
+              <span className="min-w-0 flex-1 truncate text-sm">
+                {bundle.title}
+              </span>
+              <span className="shrink-0 text-xs text-muted-foreground">
+                Bundle
+              </span>
+            </li>
+          ))}
           {files.map((file) => (
             <li key={file.id} className="flex items-center gap-3">
               <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
