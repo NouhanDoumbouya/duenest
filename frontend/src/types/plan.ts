@@ -10,7 +10,13 @@ export type PlanResourceKey =
   | "reminders"
   | "active_share_links"
   | "emergency_packs"
-  | "subscriptions";
+  | "subscriptions"
+  | "organizations"
+  | "organization_documents"
+  | "organization_members"
+  | "organization_document_requests"
+  | "organization_campaigns"
+  | "organization_secure_rooms";
 
 export interface PlanResourceUsage {
   resource: PlanResourceKey;

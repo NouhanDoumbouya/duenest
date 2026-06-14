@@ -74,6 +74,50 @@ def count_resource(user, resource: str) -> int:
         from apps.subscriptions.models import Subscription
 
         return Subscription.objects.filter(owner=user, is_archived=False).count()
+    if resource in {
+        plans.RESOURCE_ORGANIZATIONS,
+        plans.RESOURCE_ORGANIZATION_DOCUMENTS,
+        plans.RESOURCE_ORGANIZATION_MEMBERS,
+        plans.RESOURCE_ORGANIZATION_REQUESTS,
+        plans.RESOURCE_ORGANIZATION_CAMPAIGNS,
+        plans.RESOURCE_ORGANIZATION_ROOMS,
+    }:
+        from apps.organizations.models import (
+            DocumentCollectionCampaign,
+            DocumentRequest,
+            Organization,
+            OrganizationDocument,
+            OrganizationInvite,
+            OrganizationMembership,
+            OrganizationSecureRoom,
+        )
+
+        owned_orgs = Organization.objects.filter(created_by=user, archived_at__isnull=True)
+        if resource == plans.RESOURCE_ORGANIZATIONS:
+            return owned_orgs.count()
+        if resource == plans.RESOURCE_ORGANIZATION_DOCUMENTS:
+            return OrganizationDocument.objects.filter(
+                organization__in=owned_orgs,
+                is_archived=False,
+            ).count()
+        if resource == plans.RESOURCE_ORGANIZATION_MEMBERS:
+            active_members = OrganizationMembership.objects.filter(
+                organization__in=owned_orgs,
+                status=OrganizationMembership.Status.ACTIVE,
+            ).count()
+            pending_invites = OrganizationInvite.objects.filter(
+                organization__in=owned_orgs,
+                status=OrganizationInvite.Status.PENDING,
+            ).count()
+            return active_members + pending_invites
+        if resource == plans.RESOURCE_ORGANIZATION_REQUESTS:
+            return DocumentRequest.objects.filter(organization__in=owned_orgs).count()
+        if resource == plans.RESOURCE_ORGANIZATION_CAMPAIGNS:
+            return DocumentCollectionCampaign.objects.filter(
+                organization__in=owned_orgs
+            ).count()
+        if resource == plans.RESOURCE_ORGANIZATION_ROOMS:
+            return OrganizationSecureRoom.objects.filter(organization__in=owned_orgs).count()
     return 0
 
 

@@ -3089,3 +3089,138 @@ helper and reported through the existing plan usage endpoint.
 * **Deferred in V1:** receipt *file* uploads (payment records are metadata-only),
   automatic cancellation, live FX, and email/push reminder delivery (reminders
   are in-app via Calendar/Timeline only).
+
+## 30. Organization Workspace V1
+
+Organization Workspace V1 adds a separate organization-scoped document
+operations module. It does not retrofit personal vault rows into shared rows.
+Personal documents remain owner-scoped and are not visible inside an
+organization unless a future explicit copy/attach flow is implemented.
+
+### 30.1 Organizations
+
+Protected endpoints:
+
+```txt
+GET    /api/v1/organizations/
+POST   /api/v1/organizations/
+GET    /api/v1/organizations/:id/
+PATCH  /api/v1/organizations/:id/
+DELETE /api/v1/organizations/:id/
+```
+
+`POST` creates the organization and an active owner membership for the
+authenticated user. `DELETE` archives the organization and is owner-only.
+Lists are paginated by DRF.
+
+### 30.2 Members and invites
+
+```txt
+GET    /api/v1/organizations/:id/members/
+PATCH  /api/v1/organizations/:id/members/:membership_id/
+DELETE /api/v1/organizations/:id/members/:membership_id/
+GET    /api/v1/organizations/:id/invites/
+POST   /api/v1/organizations/:id/invites/
+POST   /api/v1/organizations/:id/invites/bulk/
+POST   /api/v1/organizations/:id/invites/:invite_id/revoke/
+GET    /api/v1/organization-invites/:token/
+POST   /api/v1/organization-invites/:token/accept/
+```
+
+Roles are `owner`, `admin`, `member`, and `viewer`. Admins cannot remove or
+change owners. The last active owner cannot be removed or demoted. Invite
+tokens are unguessable, expire, can be revoked, and can only be accepted by the
+matching authenticated email when an email is present.
+
+### 30.3 Organization documents and files
+
+```txt
+GET  /api/v1/organizations/:id/documents/
+POST /api/v1/organizations/:id/documents/
+GET  /api/v1/organizations/:id/documents/:document_id/
+PATCH /api/v1/organizations/:id/documents/:document_id/
+DELETE /api/v1/organizations/:id/documents/:document_id/
+GET  /api/v1/organizations/:id/documents/:document_id/files/
+POST /api/v1/organizations/:id/documents/:document_id/files/
+```
+
+Files use multipart upload and the same V1 size/type rules as personal
+document files. File responses expose safe metadata only, not internal paths.
+Organization file preview/download endpoints are deferred in V1.
+
+### 30.4 Document requests and public upload
+
+```txt
+GET    /api/v1/organizations/:id/document-requests/
+POST   /api/v1/organizations/:id/document-requests/
+GET    /api/v1/organizations/:id/document-requests/:request_id/
+PATCH  /api/v1/organizations/:id/document-requests/:request_id/
+DELETE /api/v1/organizations/:id/document-requests/:request_id/
+POST   /api/v1/organizations/:id/document-requests/:request_id/submit/
+POST   /api/v1/organizations/:id/document-requests/:request_id/approve/
+POST   /api/v1/organizations/:id/document-requests/:request_id/reject/
+POST   /api/v1/organizations/:id/document-requests/:request_id/request-changes/
+POST   /api/v1/organizations/:id/document-requests/:request_id/remind/
+GET    /api/v1/public/document-requests/:token/
+POST   /api/v1/public/document-requests/:token/upload/
+```
+
+Internal members submit with authentication. Public upload links submit only to
+one request and expose no workspace data. Upload tokens are unguessable and
+expire. Reminder email delivery is deferred; the V1 remind endpoint records a
+safe activity entry and timestamp.
+
+### 30.5 Campaigns, bundles, rooms, templates, and reports
+
+```txt
+GET    /api/v1/organizations/:id/campaigns/
+POST   /api/v1/organizations/:id/campaigns/
+GET    /api/v1/organizations/:id/campaigns/:campaign_id/
+PATCH  /api/v1/organizations/:id/campaigns/:campaign_id/
+DELETE /api/v1/organizations/:id/campaigns/:campaign_id/
+POST   /api/v1/organizations/:id/campaigns/:campaign_id/activate/
+POST   /api/v1/organizations/:id/campaigns/:campaign_id/cancel/
+GET    /api/v1/organizations/:id/bundles/
+POST   /api/v1/organizations/:id/bundles/
+GET    /api/v1/organizations/:id/secure-rooms/
+POST   /api/v1/organizations/:id/secure-rooms/
+POST   /api/v1/organizations/:id/secure-rooms/:room_id/revoke/
+GET    /api/v1/public/organization-secure-rooms/:token/
+GET    /api/v1/organizations/:id/request-templates/
+POST   /api/v1/organizations/:id/request-templates/
+GET    /api/v1/organizations/:id/readiness-report/
+```
+
+Campaigns support requirements, target members, and aggregate progress.
+Organization bundles are a V1 readiness foundation. Organization secure rooms
+can expose selected organization document metadata publicly when active, not
+personal vault data. Public organization room file download/ZIP export is
+deferred in V1.
+
+### 30.6 Summary, tasks, calendar, and activity
+
+```txt
+GET /api/v1/organizations/:id/summary/
+GET /api/v1/organizations/:id/my-tasks/
+GET /api/v1/organizations/:id/calendar/
+GET /api/v1/organizations/:id/timeline/
+GET /api/v1/organizations/:id/activity/
+```
+
+The summary returns member/document/request/campaign/bundle/room counts,
+readiness score/status, recent activity, upcoming deadline count, and a
+rule-based next recommended action. Calendar and timeline are organization
+scoped and include safe summaries only.
+
+### 30.7 Plan usage and limitations
+
+Plan usage now reports `organizations`, `organization_documents`,
+`organization_members`, `organization_document_requests`,
+`organization_campaigns`, and `organization_secure_rooms`. Free limits are
+enforced through the existing plan-limit helper. There is no Stripe, checkout,
+or billing flow.
+
+Deferred V1 items: personal-to-organization copy/attach, organization file
+preview/download, secure room downloads, room access codes, email delivery,
+CSV/PDF exports, full template/playbook generation, and unified organization
+search.

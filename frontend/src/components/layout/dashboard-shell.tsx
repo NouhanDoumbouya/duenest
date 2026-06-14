@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   BellRing,
+  Building2,
   CalendarClock,
   CalendarDays,
   CreditCard,
@@ -57,6 +58,7 @@ const navGroups: NavGroup[] = [
       { label: "Subscriptions", href: "/dashboard/subscriptions", icon: RefreshCw },
       { label: "Calendar", href: "/dashboard/calendar", icon: CalendarDays },
       { label: "Timeline", href: "/dashboard/timeline", icon: CalendarClock },
+      { label: "Organizations", href: "/dashboard/organizations", icon: Building2 },
     ],
   },
   {

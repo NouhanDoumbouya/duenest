@@ -28,6 +28,12 @@ RESOURCE_REMINDERS = "reminders"
 RESOURCE_SHARE_LINKS = "active_share_links"
 RESOURCE_EMERGENCY_PACKS = "emergency_packs"
 RESOURCE_SUBSCRIPTIONS = "subscriptions"
+RESOURCE_ORGANIZATIONS = "organizations"
+RESOURCE_ORGANIZATION_DOCUMENTS = "organization_documents"
+RESOURCE_ORGANIZATION_MEMBERS = "organization_members"
+RESOURCE_ORGANIZATION_REQUESTS = "organization_document_requests"
+RESOURCE_ORGANIZATION_CAMPAIGNS = "organization_campaigns"
+RESOURCE_ORGANIZATION_ROOMS = "organization_secure_rooms"
 
 # Human-friendly labels for each tracked resource (used in error messages/UI).
 RESOURCE_LABELS = {
@@ -38,6 +44,12 @@ RESOURCE_LABELS = {
     RESOURCE_SHARE_LINKS: "active share links",
     RESOURCE_EMERGENCY_PACKS: "emergency access packs",
     RESOURCE_SUBSCRIPTIONS: "subscriptions",
+    RESOURCE_ORGANIZATIONS: "organizations",
+    RESOURCE_ORGANIZATION_DOCUMENTS: "organization documents",
+    RESOURCE_ORGANIZATION_MEMBERS: "organization members",
+    RESOURCE_ORGANIZATION_REQUESTS: "organization document requests",
+    RESOURCE_ORGANIZATION_CAMPAIGNS: "organization campaigns",
+    RESOURCE_ORGANIZATION_ROOMS: "organization secure rooms",
 }
 
 # Storage is reported but not hard-enforced on its own (the file count limit is
@@ -54,6 +66,12 @@ PLAN_LIMITS = {
         RESOURCE_SHARE_LINKS: 5,
         RESOURCE_EMERGENCY_PACKS: 1,
         RESOURCE_SUBSCRIPTIONS: 10,
+        RESOURCE_ORGANIZATIONS: 1,
+        RESOURCE_ORGANIZATION_DOCUMENTS: 25,
+        RESOURCE_ORGANIZATION_MEMBERS: 3,
+        RESOURCE_ORGANIZATION_REQUESTS: 20,
+        RESOURCE_ORGANIZATION_CAMPAIGNS: 3,
+        RESOURCE_ORGANIZATION_ROOMS: 1,
         "storage_bytes": FREE_STORAGE_BYTES,
     },
     PLAN_PRO_PLACEHOLDER: {
@@ -64,6 +82,12 @@ PLAN_LIMITS = {
         RESOURCE_SHARE_LINKS: None,
         RESOURCE_EMERGENCY_PACKS: None,
         RESOURCE_SUBSCRIPTIONS: None,
+        RESOURCE_ORGANIZATIONS: None,
+        RESOURCE_ORGANIZATION_DOCUMENTS: None,
+        RESOURCE_ORGANIZATION_MEMBERS: None,
+        RESOURCE_ORGANIZATION_REQUESTS: None,
+        RESOURCE_ORGANIZATION_CAMPAIGNS: None,
+        RESOURCE_ORGANIZATION_ROOMS: None,
         "storage_bytes": None,
     },
 }
@@ -77,6 +101,12 @@ ENFORCED_RESOURCES = (
     RESOURCE_SHARE_LINKS,
     RESOURCE_EMERGENCY_PACKS,
     RESOURCE_SUBSCRIPTIONS,
+    RESOURCE_ORGANIZATIONS,
+    RESOURCE_ORGANIZATION_DOCUMENTS,
+    RESOURCE_ORGANIZATION_MEMBERS,
+    RESOURCE_ORGANIZATION_REQUESTS,
+    RESOURCE_ORGANIZATION_CAMPAIGNS,
+    RESOURCE_ORGANIZATION_ROOMS,
 )
 
 

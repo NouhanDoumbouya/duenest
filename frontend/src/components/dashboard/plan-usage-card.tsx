@@ -23,6 +23,12 @@ const RESOURCE_ORDER: Array<keyof PlanUsage["resources"]> = [
   "reminders",
   "active_share_links",
   "emergency_packs",
+  "organizations",
+  "organization_documents",
+  "organization_members",
+  "organization_document_requests",
+  "organization_campaigns",
+  "organization_secure_rooms",
 ];
 
 function UsageRow({ usage }: { usage: PlanResourceUsage }) {

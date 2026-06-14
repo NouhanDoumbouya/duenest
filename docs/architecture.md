@@ -123,6 +123,24 @@ The correct strategy for this stage is:
 
 > Build a clean modular monolith first. Extract services later only when there is evidence.
 
+### 4.1.1 Organization Workspace V1 boundary
+
+Organization Workspace V1 is implemented as a dedicated `organizations` backend
+app plus typed Next.js frontend routes under `/dashboard/organizations`.
+
+The branch intentionally uses separate organization-owned models for documents,
+files, requests, campaigns, bundles, secure rooms, templates, activity, and
+readiness reports. It does not retrofit the personal vault `Document`,
+`DocumentBundle`, or `ShareRoom` rows with nullable organization ownership.
+That keeps the personal vault and organization workspace clearly separated
+while still delivering a usable team document operations foundation.
+
+Public organization upload and room pages are token-scoped and lightweight:
+`/org-request/:token` submits to one request, and `/org-room/:token` displays
+active selected room metadata. Organization room file byte-serving, ZIP export,
+room access codes, and personal-to-organization copy/attach are deferred until
+they can reuse hardened sharing rules safely.
+
 ---
 
 ### 4.2 Django REST Framework for the Backend

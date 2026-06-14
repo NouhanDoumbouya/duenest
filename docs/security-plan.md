@@ -1179,3 +1179,56 @@ not inspect bank data, real service usage, browser activity, email, or files.
 Founder analytics expose subscription usage only as aggregate adoption counts.
 They must not expose subscription names, account emails, provider names,
 payment labels, exact per-user amounts, or private notes.
+
+## Organization Workspace V1 security
+
+Organization Workspace V1 introduces shared resources without changing the
+personal vault security boundary.
+
+Backend enforcement rules:
+
+- Every organization workspace endpoint requires JWT authentication.
+- The user must have an active `OrganizationMembership` for the organization.
+- Suspended, left, removed, or non-members are denied immediately.
+- Mutations require role checks. Owners/admins manage members, invites,
+  requests, campaigns, bundles, and rooms. Members can view and submit assigned
+  work. Viewers cannot mutate resources.
+- Admins cannot remove or change owners, and the last active owner cannot be
+  removed or demoted.
+- Every nested resource lookup is scoped by `organization`.
+- Serializer validation rejects cross-organization references such as assigning
+  a request to a member from another organization or adding another
+  organization's document to a room.
+- Organization resources are separate models; personal vault documents do not
+  appear in organization workspaces.
+
+Public-link rules:
+
+- Organization invite tokens are unguessable, expiring, revocable, and accepted
+  only by an authenticated user whose email matches the invite when present.
+- Public document request upload tokens are unguessable, expiring, and scoped
+  to one `DocumentRequest`. They expose only request metadata and accept only a
+  file submission for that request.
+- Public organization secure rooms expose active room metadata and selected
+  organization document/file metadata only. Tokens, internal paths, access
+  codes, personal documents, and other organization records are not exposed.
+- Public organization room file download/ZIP export is deferred in V1, so the
+  public room endpoint does not serve file bytes.
+
+File upload rules:
+
+- Organization document files and request submissions reuse the existing V1
+  file size and file type allowlist.
+- Responses expose original filename, content type, size, and timestamps, not
+  storage paths.
+- Activity logs store safe summaries only. They do not store file contents,
+  tokens, access codes, raw private document numbers, or internal paths.
+
+Founder analytics:
+
+- Organization workspace metrics are aggregate only: total organizations, active
+  organizations, average members per organization, organization document count,
+  request count, campaign count, room count, and adoption counts.
+- Founder analytics must not expose organization names, member lists, document
+  titles, filenames, file contents, invite tokens, upload tokens, room tokens,
+  private notes, or internal file paths.

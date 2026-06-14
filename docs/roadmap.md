@@ -120,6 +120,7 @@ DueNest will be built in this order:
 | MVP implementation | Not Started |
 | Documents module gaps (trash/restore, bundles, proof of submission, physical location, emergency access packs, plan limits foundation) | Completed |
 | Document intelligence polish (confidence score, what-is-missing scanner, health overview, last safe action date, tags, custom fields, lifecycle status, renewal history, appointments, cost tracking) | Completed |
+| Organization / Team Workspace V1 | Completed |
 
 ---
 
@@ -247,6 +248,16 @@ Planned features:
 - role-based access control
 - shared renewals
 - member invitations
+
+Status note: Organization / Team Workspace V1 is now implemented as a safe
+foundation for small teams and community organizations. It includes
+organization roles, invites, organization documents/files, document requests,
+public upload links, collection campaigns, bundles, secure room metadata,
+calendar/timeline/activity summaries, readiness reports, plan usage, founder
+aggregate metrics, and frontend routes. Deferred items include family
+workspaces, shared renewals, personal-to-organization copy/attach, organization
+file preview/download, secure room downloads/ZIP export, email delivery,
+advanced templates, and billing.
 
 ### v1.0 — SaaS-Ready Release
 

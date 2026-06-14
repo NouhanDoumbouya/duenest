@@ -47,6 +47,13 @@ export interface FounderDashboard {
   total_bundles: number;
   total_exports: number;
   total_emergency_packs: number;
+  total_organizations: number;
+  active_organizations: number;
+  average_members_per_organization: number;
+  total_organization_documents: number;
+  total_organization_document_requests: number;
+  total_organization_campaigns: number;
+  total_organization_secure_rooms: number;
   total_feedback_items: number;
   open_feedback_items: number;
   open_error_items: number;
@@ -129,6 +136,8 @@ export interface FeatureAdoption {
   emergency_pack_used_count: number;
   proof_records_used_count: number;
   trash_restore_used_count: number;
+  subscriptions_used_count: number;
+  organization_workspace_used_count: number;
   features: FeatureMetric[];
 }
 
