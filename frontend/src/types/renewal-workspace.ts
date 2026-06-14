@@ -314,7 +314,10 @@ export type TimelineEventType =
   | "reminder"
   | "checklist_item_due"
   | "bundle_target_date"
-  | "bundle_requirement_due";
+  | "bundle_requirement_due"
+  | "subscription_renewal"
+  | "subscription_cancellation_deadline"
+  | "subscription_trial_ending";
 
 export type TimelineUrgency = "low" | "medium" | "high" | "critical";
 
@@ -328,6 +331,7 @@ export interface TimelineEvent {
   related_document: number | null;
   related_bundle: number | null;
   related_checklist: number | null;
+  related_subscription: number | null;
   metadata: Record<string, unknown>;
 }
 

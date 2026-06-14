@@ -18,6 +18,7 @@ import {
   Loader2,
   Package,
   Plus,
+  RefreshCw,
   Share2,
   ShieldAlert,
   ShieldCheck,
@@ -71,6 +72,9 @@ const TYPE_LABEL: Record<string, string> = {
   share_expiry: "Shared link",
   room_expiry: "Secure room",
   emergency_pack_expiry: "Emergency",
+  subscription_renewal: "Subscription",
+  subscription_cancellation_deadline: "Cancel by",
+  subscription_trial_ending: "Trial ends",
 };
 
 const CATEGORY_META: Record<
@@ -125,6 +129,12 @@ const CATEGORY_META: Record<
     chip: "border-destructive/25 bg-destructive/10 text-destructive",
     dot: "bg-destructive",
   },
+  subscriptions: {
+    label: "Subscription",
+    icon: RefreshCw,
+    chip: "border-indigo-200 bg-indigo-50 text-indigo-700",
+    dot: "bg-indigo-500",
+  },
 };
 
 const URGENCY_META: Record<
@@ -176,6 +186,7 @@ const FILTERS: {
   { key: "appointments", label: "Appointments", categories: ["appointments"] },
   { key: "proofs", label: "Proofs", categories: ["proofs"] },
   { key: "shares", label: "Shares/Rooms", categories: ["shares", "rooms"] },
+  { key: "subscriptions", label: "Subscriptions", categories: ["subscriptions"] },
   { key: "overdue", label: "Overdue", urgency: "overdue" },
 ];
 

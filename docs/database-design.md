@@ -1793,3 +1793,28 @@ existing models (documents, reminders, bundles, appointments, proofs, share
 links, rooms, emergency packs). Existing date columns (`expiry_date`,
 `renewal_date`, bundle `target_date`, share/room `expires_at`, etc.) back the
 queries; share `token`/`expires_at` and room `token`/`expires_at` are indexed.
+
+## Subscription Tracker V1
+
+Three owner-scoped tables in the `subscriptions` app:
+
+* **SubscriptionCategory** — grouping vocabulary (Streaming, Software, Insurance,
+  …). V1 ships 13 system categories (`is_system=True`, `owner` null); the
+  nullable `owner` is reserved for future user-defined categories. Seeded by a
+  data migration.
+* **Subscription** — the tracked recurring payment. Owner FK (CASCADE), optional
+  category FK (SET_NULL). Money is `amount` (Decimal, `MinValueValidator(0)`) +
+  3-letter `currency` (no FX conversion). `billing_cycle` (weekly/monthly/
+  quarterly/yearly/custom) with optional `custom_interval_count`/`_unit`. Dates:
+  `start_date`, `next_billing_date`, `cancellation_deadline`. Flags: `auto_renew`,
+  `reminder_days_before`. Value tracking: `importance`, `last_used_date`. Soft
+  archive via `is_archived`/`archived_at`. `payment_method_label` is a human
+  label only — a validator rejects full card numbers; **no card/CVV/bank data is
+  stored**. Indexed on `(owner,status)`, `(owner,next_billing_date)`,
+  `(owner,is_archived)`.
+* **SubscriptionPaymentRecord** — owner-entered payment log (amount, currency,
+  `paid_on`, optional billing-period range, notes). Metadata-only in V1; receipt
+  file attachments are deferred.
+
+Calendar/Timeline add **no new table** — subscription events are aggregated on
+demand from `Subscription` date columns.

@@ -514,6 +514,9 @@ export const TIMELINE_EVENT_LABELS: Record<string, string> = {
   checklist_item_due: "Checklist task",
   bundle_target_date: "Bundle target",
   bundle_requirement_due: "Bundle requirement",
+  subscription_renewal: "Subscription renewal",
+  subscription_cancellation_deadline: "Cancellation deadline",
+  subscription_trial_ending: "Trial ending",
 };
 
 export const EXTRACTABLE_FIELD_LABELS: Record<ExtractableField, string> = {

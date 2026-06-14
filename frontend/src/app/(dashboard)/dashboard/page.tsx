@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 
 import { CalendarUpcomingWidget } from "@/components/dashboard/calendar-upcoming-widget";
+import { SubscriptionRenewalsWidget } from "@/components/dashboard/subscription-renewals-widget";
 import { StatCard, type Stat } from "@/components/dashboard/stat-card";
 import { useDashboardUser } from "@/components/dashboard/user-context";
 import { DocumentStatusBadge } from "@/components/documents/status-badge";
@@ -309,6 +310,8 @@ export default function DashboardPage() {
           {/* Side rail: upcoming dates + reminders + recent */}
           <div className="flex flex-col gap-6">
             <CalendarUpcomingWidget />
+
+            <SubscriptionRenewalsWidget />
 
             <SectionCard
               title="Upcoming reminders"

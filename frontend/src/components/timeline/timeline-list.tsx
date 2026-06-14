@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import {
+  AlertCircle,
   BadgeCheck,
   BellRing,
   CalendarCheck,
@@ -38,6 +39,12 @@ const EVENT_META: Record<string, { label: string; icon: LucideIcon }> = {
   checklist_item_due: { label: "Checklist task", icon: ListChecks },
   bundle_target_date: { label: "Bundle deadline", icon: PackageCheck },
   bundle_requirement_due: { label: "Bundle requirement", icon: BadgeCheck },
+  subscription_renewal: { label: "Subscription renewal", icon: RefreshCw },
+  subscription_cancellation_deadline: {
+    label: "Cancellation deadline",
+    icon: AlertCircle,
+  },
+  subscription_trial_ending: { label: "Trial ending", icon: RefreshCw },
   // Future-proofing for calendar-style events, should they ever appear here.
   share_expiry: { label: "Shared link", icon: Share2 },
   room_expiry: { label: "Secure room", icon: ShieldCheck },
@@ -136,6 +143,8 @@ export function eventHref(event: TimelineEvent): string | null {
   if (event.related_bundle) return `/dashboard/bundles/${event.related_bundle}`;
   if (event.related_document)
     return `/dashboard/documents/${event.related_document}`;
+  if (event.related_subscription)
+    return `/dashboard/subscriptions/${event.related_subscription}`;
   if (event.event_type === "reminder") return "/dashboard/reminders";
   return null;
 }
@@ -143,6 +152,7 @@ export function eventHref(event: TimelineEvent): string | null {
 export function eventActionLabel(event: TimelineEvent): string {
   if (event.related_bundle) return "Open bundle";
   if (event.related_document) return "Open document";
+  if (event.related_subscription) return "Open subscription";
   if (event.event_type === "reminder") return "Edit reminder";
   return "View details";
 }

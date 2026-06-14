@@ -1156,3 +1156,23 @@ own events. Aggregation excludes other users' data, share tokens, access codes,
 internal file paths, and founder/operational data. The one-way `.ics` export
 uses safe `DueNest: …` titles only and omits tokens, codes, paths, and sensitive
 numbers. There is no Google/Outlook or two-way external calendar sync.
+
+## Subscription Tracker V1
+
+The Subscription / Recurring Renewal Tracker is authenticated and strictly
+owner-scoped: `owner` is set from the request (never the client) and every
+query filters by owner, so one user can never read or mutate another's
+subscriptions or payment records (cross-user access returns `404`).
+
+Sensitive payment data is deliberately not stored. There is no card number, CVV,
+or banking credential field anywhere in the schema; `payment_method_label` is a
+human label only (e.g. "Visa ending 1234") and both a model validator and the
+serializer reject values that look like a full card number. There is no Stripe,
+bank API, or payment automation in this feature.
+
+Subscription events reaching Calendar/Timeline carry only safe summaries
+(name, amount, currency, dates) — never account emails or payment labels.
+Founder analytics must remain aggregate and must not expose subscription names,
+account emails, provider names, payment labels, exact per-user amounts, or
+private notes; founder-console subscription metrics are deferred until they can
+meet that bar.

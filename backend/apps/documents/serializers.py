@@ -1007,6 +1007,7 @@ class TimelineEventSerializer(serializers.Serializer):
     related_document = serializers.IntegerField(allow_null=True)
     related_bundle = serializers.IntegerField(allow_null=True)
     related_checklist = serializers.IntegerField(allow_null=True)
+    related_subscription = serializers.IntegerField(allow_null=True)
     metadata = serializers.DictField()
 
 

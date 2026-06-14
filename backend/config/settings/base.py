@@ -45,6 +45,7 @@ LOCAL_APPS = [
     "apps.core.apps.CoreConfig",
     "apps.users.apps.UsersConfig",
     "apps.documents.apps.DocumentsConfig",
+    "apps.subscriptions.apps.SubscriptionsConfig",
     "apps.founder.apps.FounderConfig",
 ]
 

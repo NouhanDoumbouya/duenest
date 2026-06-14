@@ -10,7 +10,10 @@ export type CalendarEventType =
   | "proof_submission"
   | "share_expiry"
   | "room_expiry"
-  | "emergency_pack_expiry";
+  | "emergency_pack_expiry"
+  | "subscription_renewal"
+  | "subscription_cancellation_deadline"
+  | "subscription_trial_ending";
 
 export type CalendarUrgency =
   | "overdue"
@@ -27,7 +30,8 @@ export type CalendarCategory =
   | "proofs"
   | "shares"
   | "rooms"
-  | "emergency";
+  | "emergency"
+  | "subscriptions";
 
 export interface CalendarEvent {
   id: string;
