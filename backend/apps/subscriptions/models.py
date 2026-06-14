@@ -138,6 +138,9 @@ class Subscription(models.Model):
 
     name = models.CharField(max_length=200)
     provider = models.CharField(max_length=200, blank=True)
+    # Optional reference to a curated frontend template (e.g. "netflix") used to
+    # show a brand logo/accent. Blank for fully custom subscriptions.
+    provider_key = models.CharField(max_length=64, blank=True, db_index=True)
     plan_name = models.CharField(max_length=200, blank=True)
     account_email = models.EmailField(blank=True)
     website_url = models.URLField(blank=True)

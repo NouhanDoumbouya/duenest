@@ -12,6 +12,7 @@ import {
   Pencil,
 } from "lucide-react";
 
+import { SubscriptionAvatar } from "@/components/subscriptions/subscription-avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -180,10 +181,21 @@ export default function SubscriptionDetailPage() {
                 </Badge>
               )}
             </div>
-            <h1 className="mt-3 text-page-title">{sub.name}</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {[sub.provider, sub.plan_name].filter(Boolean).join(" | ") || "Subscription"}
-            </p>
+            <div className="mt-3 flex items-center gap-3">
+              <SubscriptionAvatar
+                name={sub.name}
+                providerKey={sub.provider_key}
+                provider={sub.provider}
+                size={48}
+              />
+              <div className="min-w-0">
+                <h1 className="text-page-title">{sub.name}</h1>
+                <p className="text-sm text-muted-foreground">
+                  {[sub.provider, sub.plan_name].filter(Boolean).join(" | ") ||
+                    "Subscription"}
+                </p>
+              </div>
+            </div>
             <p className="mt-3 text-lg font-semibold">
               {money(sub.amount, sub.currency)}{" "}
               <span className="text-sm font-normal text-muted-foreground">

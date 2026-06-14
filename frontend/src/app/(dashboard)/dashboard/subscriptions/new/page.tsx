@@ -9,6 +9,7 @@ import {
   SubscriptionForm,
   type SubscriptionPrefill,
 } from "@/components/subscriptions/subscription-form";
+import { SubscriptionAvatar } from "@/components/subscriptions/subscription-avatar";
 import { Input } from "@/components/ui/input";
 import { PageContainer } from "@/components/ui/page-container";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,7 +18,7 @@ import {
   listSubscriptionCategories,
 } from "@/lib/subscriptions";
 import {
-  SUBSCRIPTION_TEMPLATES,
+  findSubscriptionTemplates,
   groupTemplates,
   type SubscriptionTemplate,
 } from "@/lib/subscription-templates";
@@ -37,15 +38,14 @@ export default function NewSubscriptionPage() {
       .catch(() => setCategories([]));
   }, []);
 
-  const filteredTemplates = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return SUBSCRIPTION_TEMPLATES;
-    return SUBSCRIPTION_TEMPLATES.filter(
-      (t) =>
-        t.name.toLowerCase().includes(q) ||
-        t.provider.toLowerCase().includes(q),
-    );
-  }, [search]);
+  const filteredTemplates = useMemo(
+    () => findSubscriptionTemplates(search),
+    [search],
+  );
+  const popularTemplates = useMemo(
+    () => filteredTemplates.filter((t) => t.isPopular),
+    [filteredTemplates],
+  );
 
   const prefill: SubscriptionPrefill | undefined = useMemo(() => {
     if (!selected || !categories) return undefined;
@@ -53,6 +53,7 @@ export default function NewSubscriptionPage() {
     return {
       name: selected.name,
       provider: selected.provider,
+      provider_key: selected.key,
       category: category ? String(category.id) : "",
       website_url: selected.website_url,
       billing_cycle: selected.billing_cycle,
@@ -121,6 +122,22 @@ export default function NewSubscriptionPage() {
               </div>
             ) : (
               <div className="mt-4 space-y-4">
+                {!search && popularTemplates.length > 0 && (
+                  <div>
+                    <p className="mb-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                      Popular
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {popularTemplates.map((template) => (
+                        <TemplateChip
+                          key={`popular-${template.key}`}
+                          template={template}
+                          onSelect={() => setSelected(template)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {groupTemplates(filteredTemplates).map(({ group, items }) => (
                   <div key={group}>
                     <p className="mb-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
@@ -128,20 +145,11 @@ export default function NewSubscriptionPage() {
                     </p>
                     <div className="flex flex-wrap gap-2">
                       {items.map((template) => (
-                        <button
-                          key={template.name}
-                          type="button"
-                          onClick={() => setSelected(template)}
-                          className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-sm transition-colors hover:border-primary/40 hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-                        >
-                          <span
-                            aria-hidden
-                            className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground"
-                          >
-                            {template.shortLabel}
-                          </span>
-                          {template.name}
-                        </button>
+                        <TemplateChip
+                          key={template.key}
+                          template={template}
+                          onSelect={() => setSelected(template)}
+                        />
                       ))}
                     </div>
                   </div>
@@ -155,14 +163,15 @@ export default function NewSubscriptionPage() {
               </div>
             )}
             <p className="mt-3 text-xs text-muted-foreground">
-              Templates pre-fill the details but never the price - you always
-              enter your own amount and currency.
+              Templates pre-fill the details but never the price — you always
+              enter your own amount and currency. DueNest is not affiliated with
+              these brands.
             </p>
           </section>
 
           <SubscriptionForm
             // Remount when the chosen template changes so prefilled defaults apply.
-            key={selected?.name ?? "blank"}
+            key={selected?.key ?? "blank"}
             prefill={prefill}
             categories={categories}
             submitLabel="Add subscription"
@@ -175,5 +184,28 @@ export default function NewSubscriptionPage() {
         </>
       )}
     </PageContainer>
+  );
+}
+
+function TemplateChip({
+  template,
+  onSelect,
+}: {
+  template: SubscriptionTemplate;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className="inline-flex items-center gap-2 rounded-full border border-border bg-card py-1 pr-3 pl-1 text-sm transition-colors hover:border-primary/40 hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+    >
+      <SubscriptionAvatar
+        name={template.name}
+        providerKey={template.key}
+        size={24}
+      />
+      {template.name}
+    </button>
   );
 }

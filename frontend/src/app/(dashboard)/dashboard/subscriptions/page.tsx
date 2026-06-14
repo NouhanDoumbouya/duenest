@@ -24,6 +24,7 @@ import {
   Wallet,
 } from "lucide-react";
 
+import { SubscriptionAvatar } from "@/components/subscriptions/subscription-avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -180,13 +181,6 @@ function formatDate(value: string | null): string {
     month: "short",
     day: "numeric",
   });
-}
-
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 // A single, human, decision-oriented sentence built from the summary.
@@ -842,15 +836,12 @@ function SubscriptionCard({
           href={`/dashboard/subscriptions/${sub.id}`}
           className="flex min-w-0 flex-1 items-start gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
         >
-          <span
-            className={cn(
-              "flex shrink-0 items-center justify-center rounded-xl bg-accent font-semibold text-accent-foreground",
-              compact ? "size-9 text-xs" : "size-11 text-sm",
-            )}
-            aria-hidden
-          >
-            {initials(sub.name)}
-          </span>
+          <SubscriptionAvatar
+            name={sub.name}
+            providerKey={sub.provider_key}
+            provider={sub.provider}
+            size={compact ? 36 : 44}
+          />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               {sub.pinned && (
