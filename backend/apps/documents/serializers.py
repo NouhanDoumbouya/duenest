@@ -4,6 +4,7 @@ from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.reverse import reverse
 
+from apps.core.security.encryption import encrypt_field_value
 from .constants import ALLOWED_CONTENT_TYPES, ALLOWED_EXTENSIONS, MAX_FILE_SIZE
 from .models import (
     Document,
@@ -716,7 +717,9 @@ class DocumentChecklistTemplateSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_item_count(self, obj):
-        return obj.item_templates.count()
+        # item_templates is prefetched and fully serialized; len() reuses the
+        # prefetch cache instead of issuing a separate COUNT per row.
+        return len(obj.item_templates.all())
 
 
 # ---- User checklists -------------------------------------------------------
@@ -1372,6 +1375,7 @@ class EmergencyAccessPackSerializer(serializers.ModelSerializer):
     items = EmergencyAccessPackItemSerializer(many=True, read_only=True)
     item_count = serializers.SerializerMethodField()
     share_url_path = serializers.SerializerMethodField()
+    public_url_path = serializers.SerializerMethodField()
     is_expired = serializers.BooleanField(read_only=True)
     access_code = serializers.CharField(
         write_only=True,
@@ -1393,6 +1397,7 @@ class EmergencyAccessPackSerializer(serializers.ModelSerializer):
             "access_code_required",
             "access_code",
             "share_url_path",
+            "public_url_path",
             "last_accessed_at",
             "disabled_at",
             "is_expired",
@@ -1409,6 +1414,7 @@ class EmergencyAccessPackSerializer(serializers.ModelSerializer):
             "owner",
             "status",
             "share_url_path",
+            "public_url_path",
             "last_accessed_at",
             "disabled_at",
             "is_expired",
@@ -1419,13 +1425,23 @@ class EmergencyAccessPackSerializer(serializers.ModelSerializer):
         ]
 
     def get_item_count(self, obj):
-        return obj.items.count()
+        # items is prefetched and fully serialized; len() reuses the prefetch
+        # cache instead of issuing a separate COUNT per row.
+        return len(obj.items.all())
 
     def get_share_url_path(self, obj):
-        # Relative public path; only present while the pack is shareable now.
+        # Relative public API path; only present while the pack is shareable now.
         if not obj.is_shareable_now:
             return None
         return f"/api/v1/share/emergency-packs/{obj.token}/"
+
+    def get_public_url_path(self, obj):
+        # Relative frontend viewer path the owner shares with trusted people.
+        # The token is already exposed to the (authenticated) owner via
+        # share_url_path, so this adds no new disclosure.
+        if not obj.is_shareable_now:
+            return None
+        return f"/emergency/{obj.token}/"
 
     def validate(self, attrs):
         access_required = attrs.get(
@@ -1480,6 +1496,11 @@ class ProofRecordSerializer(serializers.ModelSerializer):
     owner = serializers.PrimaryKeyRelatedField(read_only=True)
     document_title = serializers.CharField(
         source="document.title", read_only=True, default=None
+    )
+    # notes is stored encrypted at rest (notes_ciphertext); handled explicitly
+    # in create/update/to_representation rather than mapped to a column.
+    notes = serializers.CharField(
+        required=False, allow_blank=True, default="", trim_whitespace=False
     )
 
     class Meta:
@@ -1544,6 +1565,38 @@ class ProofRecordSerializer(serializers.ModelSerializer):
                     {"linked_file": "You cannot link a trashed file."}
                 )
         return attrs
+
+    # ---- Encrypted notes (AES-256-GCM, AAD-bound to this record) -----------
+
+    _NOTES_UNSET = object()
+
+    def create(self, validated_data):
+        notes = validated_data.pop("notes", "")
+        instance = super().create(validated_data)
+        self._store_notes(instance, notes)
+        return instance
+
+    def update(self, instance, validated_data):
+        notes = validated_data.pop("notes", self._NOTES_UNSET)
+        instance = super().update(instance, validated_data)
+        if notes is not self._NOTES_UNSET:
+            self._store_notes(instance, notes)
+        return instance
+
+    def _store_notes(self, instance, notes):
+        if notes:
+            instance.notes_ciphertext = encrypt_field_value(
+                notes, model="proofrecord", field="notes", record_id=instance.pk
+            )
+        else:
+            instance.notes_ciphertext = None
+        instance.notes = ""  # never persist plaintext
+        instance.save(update_fields=["notes_ciphertext", "notes"])
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["notes"] = instance.decrypt_notes()
+        return data
 
 
 class DocumentActivityEventSerializer(serializers.Serializer):
@@ -1831,7 +1884,9 @@ class ShareRoomSerializer(serializers.ModelSerializer):
         return "active"
 
     def get_item_count(self, obj):
-        return obj.items.count()
+        # items is prefetched and fully serialized; len() reuses the prefetch
+        # cache instead of issuing a separate COUNT per row.
+        return len(obj.items.all())
 
     def get_file_count(self, obj):
         return len(collect_room_files(obj).files)

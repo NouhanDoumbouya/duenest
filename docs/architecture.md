@@ -666,9 +666,9 @@ authenticated user's queryset.
 need action, sorted by urgency and dates.
 
 `DocumentReminderRule` stores user-owned reminder preferences and calculates
-upcoming reminder dates from `expiry_date` or `renewal_date`. This is a
-foundation only: no Celery task, notification record, email, push, SMS, or
-messaging delivery is sent by this branch.
+upcoming reminder dates from `expiry_date` or `renewal_date`. Due reminder
+delivery is handled by the notifications app through a cron-compatible Django
+management command rather than Celery.
 
 ---
 
@@ -710,7 +710,20 @@ Uploaded documents should be:
 
 ## 17. Background Job Architecture
 
-DueNest will use Celery workers for asynchronous tasks.
+DueNest does not currently ship Celery/Redis. Scheduled reminder delivery uses
+the Django management command foundation below, which can be run by cron or a
+platform scheduler:
+
+```bash
+python manage.py process_due_notifications --limit 100
+python manage.py process_due_notifications --dry-run
+```
+
+The command creates missing notification records, sends email when enabled and
+configured, records in-app delivery, and uses stable `dedupe_key` values so
+repeated runs are idempotent.
+
+DueNest may later use Celery workers for asynchronous tasks.
 
 ```mermaid
 flowchart LR
@@ -723,14 +736,15 @@ flowchart LR
 
 ### Background Jobs in v0.1
 
-- Planned: create reminder/notification records when notification delivery is
-  introduced.
-- Current implementation: document reminder rules and upcoming reminder dates
-  are calculated synchronously by authenticated API endpoints.
+- Implemented: cron-compatible notification generation/delivery command.
+- Implemented: document reminder rules and upcoming reminder dates are still
+  calculated synchronously by authenticated API endpoints.
+- Deferred: Celery beat/worker, Redis broker, push, SMS, WhatsApp, Telegram,
+  daily digests, bounce handling, and production email monitoring.
 
 ### Future Background Jobs
 
-- Send email reminders
+- Move email reminders to a queue when volume requires it
 - Process uploaded PDFs
 - Run OCR extraction
 - Call AI extraction service
@@ -742,32 +756,27 @@ flowchart LR
 
 ## 18. Notification Architecture
 
-v0.1 will start with in-app notifications.
+v0.1 includes owner-scoped in-app notifications plus email reminder delivery
+through Django's email backend.
+
+Implemented pieces:
+
+- `apps.notifications.Notification`
+- `apps.notifications.NotificationPreference`
+- `/api/v1/notifications/` inbox endpoints
+- `/dashboard/notifications` notification center
+- `/dashboard/notifications/settings` preferences page
+- `process_due_notifications` management command
+- privacy-safe text/HTML email templates
 
 Future notification channels:
 
-- email
 - push notifications
 - WhatsApp
 - Telegram
 - calendar reminders
 
 The notification system should be channel-agnostic over time.
-
-Possible future model:
-
-```txt
-Notification
-- user
-- title
-- message
-- type
-- channel
-- status
-- read_at
-- sent_at
-- created_at
-```
 
 ---
 
@@ -1134,8 +1143,11 @@ justifies extraction.
   no new infrastructure).
 - **Search/filter layer:** query params + indexing on the documents table.
 - **Attention inbox:** a focused query endpoint composed from status intel.
-- **Reminder rules:** owner-owned rule storage plus synchronous upcoming date
-  calculation. No scheduled notification delivery yet.
+- **Reminder rules and notifications:** owner-owned reminder rules plus
+  synchronous upcoming date calculation, with due delivery through the
+  `process_due_notifications` management command. The command creates in-app
+  notification records, sends privacy-safe email when enabled/configured, and
+  prevents duplicate delivery with stable `dedupe_key` values.
 - **Renewal workspace:** preparation checklists (with shared system templates),
   application/renewal bundles, and an aggregated timeline. Progress, readiness
   scoring, and timeline aggregation are all pure functions in the documents
@@ -1161,7 +1173,8 @@ justifies extraction.
 
 ### Later (Phase 5–6)
 
-- **Notification service:** in-app → email → optional push.
+- **Notification service:** current in-app/email command foundation → queued
+  workers, digest delivery, optional push.
 - **Full archive export service:** file ZIP/full-archive generation, likely
   async when file volume grows.
 - **Production storage:** S3-compatible private object storage with signed URLs.

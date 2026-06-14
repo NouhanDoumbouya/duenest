@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, RotateCcw, Trash2 } from "lucide-react";
+import { RotateCcw, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/lib/api";
 import {
   formatDate,
@@ -185,10 +186,20 @@ export default function TrashPage() {
       )}
 
       {docs === null ? (
-        <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">
-          <Loader2 className="size-5 animate-spin" />
-          <span>Loading trash…</span>
-        </div>
+        <ul className="space-y-3" aria-busy="true" aria-label="Loading trash">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <li
+              key={i}
+              className="flex items-center gap-3 rounded-xl border border-border bg-card p-4"
+            >
+              <div className="min-w-0 flex-1 space-y-2">
+                <Skeleton className="h-4 w-1/2" />
+                <Skeleton className="h-3 w-1/3" />
+              </div>
+              <Skeleton className="h-8 w-20" />
+            </li>
+          ))}
+        </ul>
       ) : docs.length === 0 && (files ?? []).length === 0 ? (
         <div className="rounded-xl border border-dashed border-border">
           <EmptyState

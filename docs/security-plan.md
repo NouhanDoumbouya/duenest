@@ -703,21 +703,37 @@ AI results should not overwrite user-confirmed data unless the user approves it.
 
 Reminders and notifications must also respect user ownership.
 
-### Implemented: document reminder rules
+### Implemented: document reminder rules and notification delivery
 
 Document reminder rules are stored owner-only and nested under owner-owned
-documents. The current implementation calculates upcoming reminder dates but
-does not send email, push, SMS, WhatsApp, Telegram, or in-app notifications yet.
+documents. The notification app creates owner-scoped `Notification` records
+from due document, subscription, checklist/bundle, organization, share-room,
+quick-share, emergency access, and security/account events.
+
+Email delivery runs only through the notification service layer and the
+`process_due_notifications` management command. Development defaults to
+Django's console email backend; production must configure a real transactional
+provider, authenticated sending domain, monitoring, and bounce handling before
+email is considered production-ready.
 
 ### Rules
 
 - Users can only see their own reminders.
 - Users can only see their own notifications.
 - Users can only manage reminder rules for documents they own.
-- Background jobs must scope queries correctly.
-- Notification messages should not expose unnecessary sensitive data.
-- Email reminders should avoid attaching sensitive documents.
-- Email reminders should use safe wording.
+- Notification generation must scope every query by user ownership or
+  organization membership/role.
+- Duplicate reminder records and repeat email delivery are prevented by a
+  stable unique `dedupe_key`.
+- Notification metadata is sanitized and must not store access codes, share
+  tokens, emergency tokens, encryption keys, raw OCR text, file paths, private
+  notes, or decrypted document contents.
+- Email reminders must never attach files or include full document/file
+  contents, decrypted previews, public access tokens, access codes, payment
+  credentials, raw OCR text, or private notes.
+- Email reminders should drive users back to authenticated DueNest pages.
+- Delivery logs may include notification id, user id, notification type,
+  delivery status, safe error category, and timestamp only.
 
 Example safe reminder:
 
@@ -725,7 +741,8 @@ Example safe reminder:
 Your passport document is expiring soon. Please review it in DueNest.
 ```
 
-Avoid including highly sensitive details in email bodies unless the user explicitly configures that later.
+Avoid including highly sensitive details in email bodies unless a future,
+explicit, separately reviewed user setting is added.
 
 ---
 

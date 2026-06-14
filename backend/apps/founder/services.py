@@ -1420,6 +1420,44 @@ def build_security_overview() -> dict:
             }
             for event in recent
         ],
+        "encryption": _build_encryption_overview(),
+    }
+
+
+def _build_encryption_overview() -> dict:
+    """Privacy-safe, aggregate encryption status for the founder console.
+
+    Exposes only counts and the active KEK version — never key material,
+    wrapped DEKs, file paths, names, or decrypted content."""
+    from apps.core.security import key_provider
+    from apps.documents.models import DocumentFile
+
+    Status = DocumentFile.EncryptionStatus
+    by_status = dict(
+        DocumentFile.objects.values_list("encryption_status")
+        .annotate(total=Count("id"))
+        .values_list("encryption_status", "total")
+    )
+    by_key_version = dict(
+        DocumentFile.objects.filter(encryption_status=Status.ENCRYPTED)
+        .exclude(kek_version="")
+        .values_list("kek_version")
+        .annotate(total=Count("id"))
+        .values_list("kek_version", "total")
+    )
+    try:
+        active_version = key_provider.get_active_kek_version()
+    except key_provider.KeyConfigurationError:
+        active_version = ""
+    plaintext_legacy = by_status.get(Status.PLAINTEXT_LEGACY, 0)
+    return {
+        "encrypted_files": by_status.get(Status.ENCRYPTED, 0),
+        "plaintext_legacy_files": plaintext_legacy,
+        "encryption_failed_files": by_status.get(Status.ENCRYPTION_FAILED, 0),
+        "active_kek_version": active_version,
+        "files_by_key_version": by_key_version,
+        # A launch blocker until every legacy file has been migrated.
+        "legacy_migration_complete": plaintext_legacy == 0,
     }
 
 

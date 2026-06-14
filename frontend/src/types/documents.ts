@@ -181,6 +181,9 @@ export interface DocumentListParams {
   tag?: number | string;
   lifecycle_status?: DocumentLifecycleStatus;
   ordering?: DocumentOrdering;
+  /** Override the page size (capped server-side). Useful for count-only or
+   * small-preview requests so a full page of heavy objects isn't serialized. */
+  page_size?: number;
 }
 
 export interface AttentionNeededResponse {

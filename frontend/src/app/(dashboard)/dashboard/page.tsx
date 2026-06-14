@@ -36,9 +36,15 @@ import {
   getDocuments,
   getUpcomingDocumentReminders,
 } from "@/lib/documents";
+import {
+  formatNotificationTime,
+  getNotificationSummary,
+  NOTIFICATION_SEVERITY_LABELS,
+} from "@/lib/notifications";
 import { getDocumentSetupChecklist, getOnboardingState } from "@/lib/onboarding";
 import { cn } from "@/lib/utils";
 import type { DocumentRecord, DocumentReminderRule } from "@/types/documents";
+import type { NotificationRecord } from "@/types/notifications";
 import type {
   DocumentSetupChecklist,
   OnboardingState,
@@ -50,6 +56,8 @@ interface DashboardData {
   expiringSoon: number;
   missingFiles: number;
   upcomingReminders: number;
+  unreadNotifications: number;
+  urgentNotifications: number;
 }
 
 const QUICK_ACTIONS = [
@@ -70,12 +78,19 @@ function reminderWhen(rule: DocumentReminderRule): string {
   return `In ${days} days`;
 }
 
+function notificationHref(notification: NotificationRecord): string {
+  return notification.action_url?.startsWith("/")
+    ? notification.action_url
+    : "/dashboard/notifications";
+}
+
 export default function DashboardPage() {
   const user = useDashboardUser();
   const [data, setData] = useState<DashboardData | null>(null);
   const [attention, setAttention] = useState<DocumentRecord[] | null>(null);
   const [recent, setRecent] = useState<DocumentRecord[]>([]);
   const [reminders, setReminders] = useState<DocumentReminderRule[]>([]);
+  const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [setupChecklist, setSetupChecklist] =
     useState<DocumentSetupChecklist | null>(null);
   const [onboardingState, setOnboardingState] =
@@ -85,12 +100,16 @@ export default function DashboardPage() {
   useEffect(() => {
     let active = true;
     Promise.all([
-      getDocuments(),
-      getDocuments({ computed_status: "expiring_soon" }),
-      getDocuments({ missing_file: true }),
-      getDocuments({ ordering: "-updated_at" }),
+      // These three only need the paginated `count`, so request a single row
+      // instead of serializing a full page of heavy document objects.
+      getDocuments({ page_size: 1 }),
+      getDocuments({ computed_status: "expiring_soon", page_size: 1 }),
+      getDocuments({ missing_file: true, page_size: 1 }),
+      // The "recent" widget shows at most 5 items.
+      getDocuments({ ordering: "-updated_at", page_size: 5 }),
       getAttentionNeeded(),
       getUpcomingDocumentReminders(),
+      getNotificationSummary(),
       getDocumentSetupChecklist(),
       getOnboardingState(),
     ])
@@ -102,6 +121,7 @@ export default function DashboardPage() {
           recentDocs,
           attentionResult,
           remindersResult,
+          notificationSummary,
           checklistResult,
           onboardingResult,
         ]) => {
@@ -112,10 +132,13 @@ export default function DashboardPage() {
             expiringSoon: expiringSoon.count,
             missingFiles: missingFiles.count,
             upcomingReminders: remindersResult.count,
+            unreadNotifications: notificationSummary.unread_count,
+            urgentNotifications: notificationSummary.urgent_count,
           });
           setAttention(attentionResult.items);
           setRecent(recentDocs.results.slice(0, 5));
           setReminders(remindersResult.items.slice(0, 4));
+          setNotifications(notificationSummary.latest.slice(0, 3));
           setSetupChecklist(checklistResult);
           setOnboardingState(onboardingResult);
           setError(null);
@@ -134,8 +157,11 @@ export default function DashboardPage() {
           expiringSoon: 0,
           missingFiles: 0,
           upcomingReminders: 0,
+          unreadNotifications: 0,
+          urgentNotifications: 0,
         });
         setAttention([]);
+        setNotifications([]);
       });
     return () => {
       active = false;
@@ -158,11 +184,48 @@ export default function DashboardPage() {
 
   const stats: Stat[] = data
     ? [
-        { label: "Documents", value: data.total, hint: "in your vault", icon: FileText, tone: "blue" },
-        { label: "Needs attention", value: data.needsAttention, hint: "ranked by urgency", icon: ShieldAlert, tone: "amber" },
-        { label: "Expiring soon", value: data.expiringSoon, hint: "within 90 days", icon: CalendarClock, tone: "amber" },
-        { label: "Missing files", value: data.missingFiles, hint: "no file attached", icon: Paperclip, tone: "slate" },
-        { label: "Upcoming reminders", value: data.upcomingReminders, hint: "scheduled ahead", icon: BellRing, tone: "teal" },
+        {
+          label: "Documents",
+          value: data.total,
+          hint: "in your vault",
+          icon: FileText,
+          tone: "blue",
+        },
+        {
+          label: "Needs attention",
+          value: data.needsAttention,
+          hint: "ranked by urgency",
+          icon: ShieldAlert,
+          tone: "amber",
+        },
+        {
+          label: "Expiring soon",
+          value: data.expiringSoon,
+          hint: "within 90 days",
+          icon: CalendarClock,
+          tone: "amber",
+        },
+        {
+          label: "Missing files",
+          value: data.missingFiles,
+          hint: "no file attached",
+          icon: Paperclip,
+          tone: "slate",
+        },
+        {
+          label: "Upcoming reminders",
+          value: data.upcomingReminders,
+          hint: "scheduled ahead",
+          icon: BellRing,
+          tone: "teal",
+        },
+        {
+          label: "Unread notifications",
+          value: data.unreadNotifications,
+          hint: `${data.urgentNotifications} urgent`,
+          icon: BellRing,
+          tone: "teal",
+        },
       ]
     : [];
   const statHref: Record<string, string> = {
@@ -170,6 +233,7 @@ export default function DashboardPage() {
     "Expiring soon": "/dashboard/documents?quick=expiring_soon",
     "Missing files": "/dashboard/documents?quick=missing_file",
     "Upcoming reminders": "/dashboard/reminders",
+    "Unread notifications": "/dashboard/notifications",
   };
   const attentionItems = (attention ?? []).slice(0, 5);
   const isEmptyVault = !loading && data?.total === 0;
@@ -209,9 +273,9 @@ export default function DashboardPage() {
       )}
 
       {/* Metrics */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {loading
-          ? Array.from({ length: 5 }).map((_, i) => (
+          ? Array.from({ length: 6 }).map((_, i) => (
               <Skeleton key={i} className="h-[124px] w-full rounded-xl" />
             ))
           : stats.map((stat) => (
@@ -310,6 +374,56 @@ export default function DashboardPage() {
 
           {/* Side rail: upcoming dates + reminders + recent */}
           <div className="flex flex-col gap-6">
+            <SectionCard
+              title="Today’s reminders"
+              action={
+                <Link
+                  href="/dashboard/notifications"
+                  className="text-sm font-medium text-primary hover:underline"
+                >
+                  Open
+                </Link>
+              }
+            >
+              {loading ? (
+                <div className="space-y-2">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <Skeleton key={i} className="h-12 w-full" />
+                  ))}
+                </div>
+              ) : notifications.length === 0 ? (
+                <p className="py-2 text-sm text-muted-foreground">
+                  No unread notifications right now.
+                </p>
+              ) : (
+                <ul className="space-y-3">
+                  {notifications.map((notification) => (
+                    <li key={notification.id}>
+                      <Link
+                        href={notificationHref(notification)}
+                        className="block rounded-lg border border-border px-3 py-2 transition-colors hover:border-primary/40 hover:bg-muted/40"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="line-clamp-2 text-sm font-medium">
+                            {notification.title}
+                          </span>
+                          <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[0.68rem] font-medium text-muted-foreground">
+                            {NOTIFICATION_SEVERITY_LABELS[notification.severity]}
+                          </span>
+                        </div>
+                        <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                          {notification.message}
+                        </p>
+                        <p className="mt-2 text-[0.68rem] font-medium text-muted-foreground">
+                          {formatNotificationTime(notification.created_at)}
+                        </p>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </SectionCard>
+
             <CalendarUpcomingWidget />
 
             <OrganizationsWidget />

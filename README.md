@@ -806,15 +806,15 @@ Build the reminder and notification foundation.
 ### Tasks
 
 * [ ] Create reminder model
-* [ ] Create notification model
+* [x] Create notification model
 * [ ] Add reminder API endpoints
-* [ ] Add notification API endpoints
+* [x] Add notification API endpoints
 * [ ] Configure Celery
 * [ ] Configure Redis
-* [ ] Add background reminder jobs
-* [ ] Add in-app notifications
-* [ ] Add email reminder foundation
-* [ ] Add reminder preferences
+* [x] Add background reminder jobs
+* [x] Add in-app notifications
+* [x] Add email reminder foundation
+* [x] Add reminder preferences
 
 ### Deliverable
 

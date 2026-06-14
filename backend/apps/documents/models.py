@@ -232,6 +232,38 @@ class DocumentFile(models.Model):
     # SHA-256 hex digest of the uploaded bytes (integrity / dedupe aid).
     checksum = models.CharField(max_length=64, blank=True)
 
+    # ---- Application-level encryption at rest (see docs/ENCRYPTION.md) -----
+    # Immutable identity used to bind ciphertext to this record via AES-GCM AAD.
+    file_uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+
+    class EncryptionStatus(models.TextChoices):
+        PLAINTEXT_LEGACY = "plaintext_legacy", "Plaintext legacy"
+        ENCRYPTING = "encrypting", "Encrypting"
+        ENCRYPTED = "encrypted", "Encrypted"
+        ENCRYPTION_FAILED = "encryption_failed", "Encryption failed"
+
+    encryption_status = models.CharField(
+        max_length=32,
+        choices=EncryptionStatus.choices,
+        default=EncryptionStatus.PLAINTEXT_LEGACY,
+        db_index=True,
+    )
+    encryption_algorithm = models.CharField(max_length=64, default="AES-256-GCM")
+    encryption_version = models.PositiveSmallIntegerField(default=1)
+    # Which KEK version wrapped this file's DEK (needed to unwrap/rotate).
+    kek_version = models.CharField(max_length=32, blank=True, db_index=True)
+    wrapped_dek = models.BinaryField(null=True, blank=True)
+    nonce = models.BinaryField(null=True, blank=True)
+    # GCM tag is appended to ciphertext by AESGCM; kept nullable for clarity and
+    # potential future streaming formats. Not required for the current format.
+    gcm_tag = models.BinaryField(null=True, blank=True)
+    # SHA-256 of the ENCRYPTED bytes (storage integrity; not plaintext).
+    ciphertext_sha256 = models.CharField(max_length=64, blank=True)
+    plaintext_size_bytes = models.BigIntegerField(null=True, blank=True)
+    ciphertext_size_bytes = models.BigIntegerField(null=True, blank=True)
+    encrypted_at = models.DateTimeField(null=True, blank=True)
+    encryption_error = models.CharField(max_length=255, blank=True)
+
     # Soft delete (trash). Trashed files are hidden from active lists and can no
     # longer be reached through existing share links until restored.
     is_trashed = models.BooleanField(default=False)
@@ -1322,7 +1354,10 @@ class ProofRecord(models.Model):
     status = models.CharField(
         max_length=20, choices=Status.choices, default=Status.SAVED
     )
+    # Legacy plaintext notes — migrated into notes_ciphertext and then blanked.
+    # New writes go to notes_ciphertext (AES-256-GCM, AAD-bound to this record).
     notes = models.TextField(blank=True)
+    notes_ciphertext = models.BinaryField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -1335,6 +1370,26 @@ class ProofRecord(models.Model):
 
     def __str__(self):
         return f"{self.title} ({self.get_proof_type_display()})"
+
+    def decrypt_notes(self) -> str:
+        """Decrypted notes (AAD-bound to this record), falling back to any
+        legacy plaintext not yet migrated. Never raises."""
+        from apps.core.security.encryption import (
+            DecryptionError,
+            decrypt_field_value,
+        )
+
+        if self.notes_ciphertext:
+            try:
+                return decrypt_field_value(
+                    bytes(self.notes_ciphertext),
+                    model="proofrecord",
+                    field="notes",
+                    record_id=self.pk,
+                )
+            except DecryptionError:
+                return ""
+        return self.notes or ""
 
 
 class DocumentActivity(models.Model):

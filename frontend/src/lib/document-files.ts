@@ -38,7 +38,7 @@ function getApiErrorMessage(data: unknown, fallback: string): string {
   return fallback;
 }
 
-async function fetchBlob(
+export async function fetchBlob(
   path: string,
   {
     auth = false,
@@ -81,7 +81,7 @@ async function fetchBlob(
   return response.blob();
 }
 
-function saveBlob(blob: Blob, filename: string) {
+export function saveBlob(blob: Blob, filename: string) {
   const objectUrl = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = objectUrl;

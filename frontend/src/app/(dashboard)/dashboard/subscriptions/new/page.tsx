@@ -18,6 +18,7 @@ import {
 } from "@/lib/subscriptions";
 import {
   SUBSCRIPTION_TEMPLATES,
+  groupTemplates,
   type SubscriptionTemplate,
 } from "@/lib/subscription-templates";
 import type { SubscriptionCategory } from "@/types/subscriptions";
@@ -119,22 +120,31 @@ export default function NewSubscriptionPage() {
                 </button>
               </div>
             ) : (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {filteredTemplates.map((template) => (
-                  <button
-                    key={template.name}
-                    type="button"
-                    onClick={() => setSelected(template)}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-sm transition-colors hover:border-primary/40 hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-                  >
-                    <span
-                      aria-hidden
-                      className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground"
-                    >
-                      {template.shortLabel}
-                    </span>
-                    {template.name}
-                  </button>
+              <div className="mt-4 space-y-4">
+                {groupTemplates(filteredTemplates).map(({ group, items }) => (
+                  <div key={group}>
+                    <p className="mb-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                      {group}
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {items.map((template) => (
+                        <button
+                          key={template.name}
+                          type="button"
+                          onClick={() => setSelected(template)}
+                          className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-sm transition-colors hover:border-primary/40 hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                        >
+                          <span
+                            aria-hidden
+                            className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground"
+                          >
+                            {template.shortLabel}
+                          </span>
+                          {template.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 ))}
                 {filteredTemplates.length === 0 && (
                   <p className="text-sm text-muted-foreground">

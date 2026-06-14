@@ -30,8 +30,10 @@ export interface EmergencyPack {
   access_mode: EmergencyPackAccessMode;
   expires_at: string | null;
   access_code_required: boolean;
-  /** Relative public path, only present while the pack is shareable now. */
+  /** Relative public API path, only present while the pack is shareable now. */
   share_url_path: string | null;
+  /** Relative frontend viewer path (/emergency/{token}/), when shareable. */
+  public_url_path: string | null;
   last_accessed_at: string | null;
   disabled_at: string | null;
   is_expired: boolean;
@@ -58,4 +60,24 @@ export interface CreateEmergencyPackItemRequest {
   linked_document: number;
   linked_file?: number | null;
   notes?: string;
+}
+
+// ---- Public viewer (mirrors PublicEmergencyPackSerializer) -----------------
+
+export interface PublicEmergencyItem {
+  id: number;
+  title: string;
+  document_type: string;
+  file_name: string | null;
+  is_previewable: boolean;
+  has_file: boolean;
+  notes: string;
+}
+
+export interface PublicEmergencyPack {
+  title: string;
+  description: string;
+  access_code_required: boolean;
+  expires_at: string | null;
+  items: PublicEmergencyItem[];
 }

@@ -65,8 +65,12 @@ not a public production launch checklist.
 - Metadata exports do not include raw uploaded file archives.
 - Camera scan entry uploads image files only; automated cropping, multi-page scanning, and production OCR are not implemented.
 - Account deletion requests are tracked, but automated deletion execution is not implemented.
-- Notification sending for reminder rules is not implemented.
-- Waitlist confirmation and invite email hooks exist, but no transactional email provider is configured yet.
+- Reminder notification generation is implemented through a management command,
+  but production scheduler monitoring still needs deployment setup.
+- Reminder emails can use Django's email backend, but no production
+  transactional email provider/domain authentication is configured yet.
+- Waitlist confirmation and invite email hooks exist, but no transactional
+  email provider is configured yet.
 - Public legal pages are beta drafts and need review.
 - Local development token storage remains a known production-hardening item.
 - Founder Console V1 does not implement billing analytics, advanced segmentation, consent-based sensitive support access, AI analytics, churn prediction, or a full incident response center.

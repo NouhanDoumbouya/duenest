@@ -1,0 +1,13 @@
+{{ subject }}
+
+{{ safe_message }}
+
+{% if due_date %}Date: {{ due_date }}
+
+{% endif %}Open DueNest:
+{{ action_url }}
+
+DueNest reminder emails never include document contents, access codes, share tokens, emergency tokens, raw OCR text, private notes, or files.
+
+Notification preferences:
+{{ preferences_url }}

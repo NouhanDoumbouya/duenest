@@ -198,9 +198,10 @@ This is the recommended sequence. It can be adjusted, but the first paid MVP sho
 21. Document onboarding, trust center, demo data, and account data controls *(done in `feature/document-onboarding-trust`)*
 22. Founder Console V1 *(done in `feature/founder-console-v1`: founder dashboard, activation, adoption, feedback board, checklist template management, error monitoring, security overview, and privacy-safe support metadata)*
 
-> Steps 1–22 are implemented at foundation level. Notification sending, full
-> raw-file archive exports, retention automation, trusted contacts, legal copy
-> review, and production token-storage hardening remain future work.
+> Steps 1–22 are implemented at foundation level. Notification delivery now has
+> an in-app/email management-command foundation; full raw-file archive exports,
+> retention automation, trusted contacts, legal copy review, production email
+> provider setup, and production token-storage hardening remain future work.
 
 ---
 

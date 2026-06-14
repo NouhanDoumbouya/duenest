@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  Bell,
   BellRing,
   Building2,
   CalendarClock,
   CalendarDays,
+  CheckCheck,
   CreditCard,
   DoorClosed,
   FileText,
@@ -33,7 +35,15 @@ import { Logo } from "@/components/layout/logo";
 import { Button } from "@/components/ui/button";
 import { getFounderMe } from "@/lib/founder";
 import { logout } from "@/lib/auth";
+import {
+  formatNotificationTime,
+  getNotificationSummary,
+  markAllNotificationsRead,
+  markNotificationRead,
+  NOTIFICATION_SEVERITY_LABELS,
+} from "@/lib/notifications";
 import { cn } from "@/lib/utils";
+import type { NotificationRecord, NotificationSummary } from "@/types/notifications";
 
 interface NavItem {
   label: string;
@@ -58,6 +68,7 @@ const navGroups: NavGroup[] = [
       { label: "File Inbox", href: "/dashboard/files", icon: Inbox },
       { label: "Attention", href: "/dashboard/attention", icon: ShieldAlert },
       { label: "Reminders", href: "/dashboard/reminders", icon: BellRing },
+      { label: "Notifications", href: "/dashboard/notifications", icon: Bell },
       { label: "Subscriptions", href: "/dashboard/subscriptions", icon: RefreshCw },
       { label: "Calendar", href: "/dashboard/calendar", icon: CalendarDays },
       { label: "Timeline", href: "/dashboard/timeline", icon: CalendarClock },
@@ -220,6 +231,193 @@ function UserFooter({
   );
 }
 
+function severityTone(notification: NotificationRecord): string {
+  if (notification.severity === "urgent") {
+    return "border-destructive/25 bg-destructive/10 text-destructive";
+  }
+  if (notification.severity === "security") {
+    return "border-brand-navy/25 bg-brand-navy/10 text-brand-navy";
+  }
+  if (notification.severity === "warning") {
+    return "border-brand-amber/30 bg-brand-amber/10 text-brand-amber";
+  }
+  if (notification.severity === "success") {
+    return "border-brand-success/25 bg-brand-success/10 text-brand-success";
+  }
+  return "border-border bg-muted text-muted-foreground";
+}
+
+function NotificationBell() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [summary, setSummary] = useState<NotificationSummary | null>(null);
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const refresh = useCallback(() => {
+    let active = true;
+    getNotificationSummary()
+      .then((result) => {
+        if (active) setSummary(result);
+      })
+      .catch(() => {
+        if (active) setSummary({ unread_count: 0, urgent_count: 0, latest: [] });
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => refresh(), [refresh, pathname]);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [open]);
+
+  const unreadCount = summary?.unread_count ?? 0;
+  const latest = summary?.latest ?? [];
+
+  async function handleMarkAllRead() {
+    setBusy(true);
+    try {
+      await markAllNotificationsRead();
+      getNotificationSummary().then(setSummary).catch(() => undefined);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleOpenNotification(notification: NotificationRecord) {
+    setBusy(true);
+    try {
+      if (notification.is_unread) {
+        await markNotificationRead(notification.id);
+      }
+      getNotificationSummary().then(setSummary).catch(() => undefined);
+      setOpen(false);
+      router.push(
+        notification.action_url?.startsWith("/")
+          ? notification.action_url
+          : "/dashboard/notifications",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="relative">
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label={
+          unreadCount > 0
+            ? `Notifications, ${unreadCount} unread`
+            : "Notifications"
+        }
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <Bell className="size-4" />
+        {unreadCount > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 flex min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[0.62rem] font-semibold leading-4 text-destructive-foreground">
+            {unreadCount > 9 ? "9+" : unreadCount}
+          </span>
+        )}
+      </Button>
+
+      {open && (
+        <div className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-[min(23rem,calc(100vw-1.5rem))] overflow-hidden rounded-xl border border-border bg-card shadow-xl">
+          <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+            <div>
+              <p className="text-sm font-semibold">Notifications</p>
+              <p className="text-xs text-muted-foreground">
+                {unreadCount === 0
+                  ? "No unread notifications"
+                  : `${unreadCount} unread`}
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleMarkAllRead}
+              disabled={busy || unreadCount === 0}
+            >
+              <CheckCheck className="size-3.5" />
+              Mark read
+            </Button>
+          </div>
+
+          <div className="max-h-[22rem] overflow-y-auto">
+            {latest.length === 0 ? (
+              <div className="px-4 py-8 text-center">
+                <p className="text-sm font-medium">You’re all caught up</p>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  DueNest will notify you when tracked deadlines need attention.
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
+                {latest.map((notification) => (
+                  <button
+                    key={notification.id}
+                    type="button"
+                    className="block w-full px-4 py-3 text-left transition-colors hover:bg-muted/60"
+                    onClick={() => handleOpenNotification(notification)}
+                    disabled={busy}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="line-clamp-2 text-sm font-medium">
+                        {notification.title}
+                      </p>
+                      <span
+                        className={cn(
+                          "shrink-0 rounded-full border px-2 py-0.5 text-[0.68rem] font-medium",
+                          severityTone(notification),
+                        )}
+                      >
+                        {NOTIFICATION_SEVERITY_LABELS[notification.severity]}
+                      </span>
+                    </div>
+                    <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                      {notification.message}
+                    </p>
+                    <p className="mt-2 text-[0.68rem] font-medium text-muted-foreground">
+                      {formatNotificationTime(notification.created_at)}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between gap-3 border-t border-border bg-muted/30 px-4 py-3">
+            <Link
+              href="/dashboard/notifications"
+              className="text-sm font-medium text-primary hover:underline"
+              onClick={() => setOpen(false)}
+            >
+              Notification center
+            </Link>
+            <Link
+              href="/dashboard/notifications/settings"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground"
+              onClick={() => setOpen(false)}
+            >
+              Settings
+            </Link>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
  * App chrome for authenticated pages: a fixed white command sidebar on desktop,
  * a top bar on mobile, with the page content rendered as children on a soft canvas.
@@ -279,6 +477,10 @@ export function DashboardShell({
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-20 hidden h-14 items-center justify-end border-b border-border bg-card/80 px-6 backdrop-blur md:flex">
+          <NotificationBell />
+        </header>
+
         {/* Mobile top bar */}
         <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-card/80 px-4 backdrop-blur md:hidden">
           <Button
@@ -291,14 +493,17 @@ export function DashboardShell({
             <Menu className="size-5" />
           </Button>
           <Logo href="/dashboard" />
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleLogout}
-            aria-label="Sign out"
-          >
-            <LogOut className="size-4" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <NotificationBell />
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleLogout}
+              aria-label="Sign out"
+            >
+              <LogOut className="size-4" />
+            </Button>
+          </div>
         </header>
 
         {mobileNavOpen && (
