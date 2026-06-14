@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { FileText, Loader2, Plus, Save, Trash2 } from "lucide-react";
 
+import { FounderPageHeader } from "@/components/founder/founder-ui";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -138,15 +139,11 @@ export default function FounderTemplatesPage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h2 className="font-heading text-2xl font-semibold">
-          Checklist templates
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Manage system checklist blueprints. Editing a template changes future
-          checklist creation only; existing user checklists are not rewritten.
-        </p>
-      </div>
+      <FounderPageHeader
+        eyebrow="Playbooks"
+        title="Checklist templates"
+        description="Reusable life-admin playbooks for renewals, applications, and travel. Editing a template changes future checklist creation only — existing user checklists are never rewritten."
+      />
 
       {error && (
         <p className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -177,9 +174,14 @@ export default function FounderTemplatesPage() {
             {templates === null ? (
               <div className="h-[360px] animate-pulse rounded-lg bg-muted" />
             ) : templates.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No checklist templates yet.
-              </p>
+              <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center">
+                <p className="text-sm font-medium">No templates yet</p>
+                <p className="mx-auto mt-1 max-w-xs text-xs text-muted-foreground">
+                  Create a reusable playbook — like &quot;Passport renewal&quot;
+                  or &quot;Student visa&quot; — so users start with the right
+                  checklist.
+                </p>
+              </div>
             ) : (
               <ul className="space-y-2">
                 {templates.map((template) => (
@@ -202,7 +204,19 @@ export default function FounderTemplatesPage() {
                           {template.is_active ? "active" : "inactive"}
                         </Badge>
                       </div>
-                      <p className="mt-1 text-xs text-muted-foreground">
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {[template.checklist_type, template.use_case, template.country]
+                          .filter(Boolean)
+                          .map((chip) => (
+                            <span
+                              key={chip}
+                              className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
+                            >
+                              {chip.replaceAll("_", " ")}
+                            </span>
+                          ))}
+                      </div>
+                      <p className="mt-1.5 text-xs text-muted-foreground">
                         {template.items.length} item templates
                       </p>
                     </button>
