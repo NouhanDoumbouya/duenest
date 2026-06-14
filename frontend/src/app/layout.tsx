@@ -13,14 +13,42 @@ const sora = Sora({
   subsets: ["latin"],
 });
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://duenest.app";
+const SITE_TITLE =
+  "DueNest — Stay ready for important documents, renewals, and secure sharing";
+const SITE_DESCRIPTION =
+  "DueNest helps you organize important files, track renewals, build bundles, manage subscriptions, and share selected documents securely — all from one calm, secure place.";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: {
-    default:
-      "DueNest — Documents, deadlines, and renewals in one secure workspace",
+    default: SITE_TITLE,
     template: "%s · DueNest",
   },
-  description:
-    "DueNest keeps your important documents, renewals, subscriptions, and deadlines organized in one calm, secure workspace.",
+  description: SITE_DESCRIPTION,
+  applicationName: "DueNest",
+  keywords: [
+    "document organizer",
+    "renewal reminders",
+    "secure document sharing",
+    "subscription tracker",
+    "application packs",
+    "emergency document access",
+  ],
+  openGraph: {
+    type: "website",
+    siteName: "DueNest",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    url: SITE_URL,
+    images: [{ url: "/og.png", width: 1200, height: 630, alt: "DueNest" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    images: ["/og.png"],
+  },
 };
 
 export default function RootLayout({

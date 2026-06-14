@@ -4,13 +4,15 @@ import { Logo } from "@/components/layout/logo";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
+// Anchors are absolute ("/#…") so they also work from sub-pages (e.g. /security),
+// navigating home and scrolling rather than doing nothing.
 const navLinks = [
-  { label: "Features", href: "#features" },
-  { label: "How it works", href: "#how" },
-  { label: "Demo", href: "/demo" },
+  { label: "Features", href: "/#features" },
+  { label: "Quick Share", href: "/#quick-share" },
+  { label: "Use cases", href: "/#use-cases" },
   { label: "Security", href: "/security" },
-  { label: "Waitlist", href: "/waitlist" },
-  { label: "FAQ", href: "#faq" },
+  { label: "Pricing", href: "/pricing" },
+  { label: "FAQ", href: "/#faq" },
 ];
 
 /** Top navigation for marketing pages. */
