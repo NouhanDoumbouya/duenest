@@ -534,7 +534,15 @@ function SubscriptionRow({
               {STATUS_LABELS[sub.status] ?? sub.status}
             </Badge>
             {review?.show && (
-              <Badge variant="outline" className={review.chip}>
+              <Badge
+                variant="outline"
+                className={review.chip}
+                title={
+                  sub.state.review_reasons.length > 0
+                    ? sub.state.review_reasons.join(" · ")
+                    : undefined
+                }
+              >
                 {review.label}
               </Badge>
             )}
@@ -544,6 +552,12 @@ function SubscriptionRow({
               .filter(Boolean)
               .join(" | ") || "Subscription"}
           </p>
+          {review?.show && sub.state.review_reasons.length > 0 && (
+            <p className="mt-1 truncate text-xs text-muted-foreground">
+              {/* Never show an unexplained badge: surface the first reason. */}
+              Review recommended — {sub.state.review_reasons[0].toLowerCase()}
+            </p>
+          )}
           {showCancelWarning && (
             <p className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-destructive">
               <AlertTriangle className="size-3" />
