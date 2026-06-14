@@ -491,3 +491,64 @@ class PublicModeTests(QuickShareBaseTest):
             )
         )
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class ReceiveCodeTests(QuickShareBaseTest):
+    """The 'Receive code' flow: a recipient types the DueNest code to find a share."""
+
+    URL = "/api/v1/quick-share/receive/"
+
+    def test_session_gets_unique_human_code(self):
+        s1 = self.make_session()
+        s2 = self.make_session()
+        self.assertTrue(s1.dn_code.startswith("DN-"))
+        self.assertNotEqual(s1.dn_code, s2.dn_code)
+        # The code must not be derived from the secret token.
+        self.assertNotIn(s1.dn_code.replace("DN-", "").replace("-", ""), s1.token)
+
+    def test_code_resolves_to_session_token(self):
+        session = self.make_session()
+        resp = self.client.post(self.URL, {"code": session.dn_code}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        self.assertEqual(resp.data["token"], session.token)
+        self.assertEqual(resp.data["claim_path"], f"/quick-share/{session.token}")
+
+    def test_code_is_normalized(self):
+        session = self.make_session()
+        messy = session.dn_code.lower().replace("-", " ")
+        resp = self.client.post(self.URL, {"code": messy}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        self.assertEqual(resp.data["token"], session.token)
+
+    def test_unknown_code_returns_404(self):
+        resp = self.client.post(self.URL, {"code": "DN-AAAA-AAAA"}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(resp.data["state"], "not_found")
+
+    def test_malformed_code_rejected(self):
+        resp = self.client.post(self.URL, {"code": "hello"}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data["state"], "invalid")
+
+    def test_revoked_session_code_blocked(self):
+        session = self.make_session()
+        session.revoked_at = timezone.now()
+        session.status = QuickShareSession.Status.REVOKED
+        session.save(update_fields=["revoked_at", "status"])
+        resp = self.client.post(self.URL, {"code": session.dn_code}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_410_GONE)
+        self.assertEqual(resp.data["state"], "revoked")
+
+    def test_expired_session_code_blocked(self):
+        session = self.make_session(expires_at=timezone.now() - timedelta(seconds=1))
+        resp = self.client.post(self.URL, {"code": session.dn_code}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_410_GONE)
+        self.assertEqual(resp.data["state"], "expired")
+
+    def test_receive_response_leaks_no_secrets(self):
+        session = self.make_session(access_code_required=True,
+                                    access_code_hash=make_password("123456"))
+        resp = self.client.post(self.URL, {"code": session.dn_code}, format="json")
+        body = str(resp.data)
+        self.assertNotIn("access_code_hash", body)
+        self.assertNotIn("123456", body)

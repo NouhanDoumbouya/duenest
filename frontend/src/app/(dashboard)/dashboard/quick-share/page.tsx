@@ -85,13 +85,22 @@ export default function QuickShareListPage() {
         title="Quick Share"
         description="Share important documents in seconds with a secure QR code — you stay in control of access, expiry, and downloads."
         actions={
-          <Link
-            href="/dashboard/quick-share/new"
-            className={cn(buttonVariants({ size: "lg" }))}
-          >
-            <Plus className="size-4" />
-            New Quick Share
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/dashboard/quick-share/receive"
+              className={cn(buttonVariants({ variant: "outline", size: "lg" }))}
+            >
+              <KeyRound className="size-4" />
+              Receive a code
+            </Link>
+            <Link
+              href="/dashboard/quick-share/new"
+              className={cn(buttonVariants({ size: "lg" }))}
+            >
+              <Plus className="size-4" />
+              New Quick Share
+            </Link>
+          </div>
         }
       />
 

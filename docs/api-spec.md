@@ -227,9 +227,10 @@ Important security note:
 
 Scoped rate limits apply to abuse-prone public endpoints. Current limits include
 login/Google login (`10/min`), registration (`10/hour`), file-share/emergency
-pack/secure-room/Quick Share access-code verification (`10/min`), feedback
-(`20/hour`), waitlist (`5/hour`), and invite validation (`20/hour`). Exceeding a
-scope returns `429 Too Many Requests`.
+pack/secure-room/Quick Share access-code verification (`10/min`), Quick Share
+"Receive code" lookups (`quick_share_receive`, `10/min`), feedback (`20/hour`),
+waitlist (`5/hour`), and invite validation (`20/hour`). Exceeding a scope returns
+`429 Too Many Requests`.
 
 ---
 
@@ -3405,9 +3406,29 @@ Create body: `mode`, `title?`, `purpose?`, `permission`, `expires_at`,
 but blank), `one_time`, `max_claims?`, `require_sender_approval`,
 `watermark_enabled`, `file_ids[]` (each must be owned by the requester; others
 are skipped, and a session with no valid files is rejected). The create response
-includes the one-time plain `access_code` (when generated) and the session
-`token` for the owner to build the QR. The `access_code_hash` is never returned.
-Creating a session counts toward the existing `active_share_links` plan limit.
+includes the one-time plain `access_code` (when generated), the session `token`
+for the owner to build the QR, and the `dn_code` — a short, human-typable DueNest
+code (e.g. `DN-4KQ7-PXMR`) the owner can read out for the "Receive code" flow.
+`dn_code` is independent of the secret token (never derived from it); the legacy
+`fallback_code` field is kept as an alias of `dn_code`. The `access_code_hash` is
+never returned. Creating a session counts toward the existing `active_share_links`
+plan limit.
+
+## 31.2b Receive by DueNest code — public
+
+```txt
+POST /api/v1/quick-share/receive/   { code }
+```
+
+Resolves a typed DueNest code (case-insensitive; dashes/spaces and an optional
+`DN` prefix are tolerated) to its share. On success returns `{ ok, token,
+claim_path, mode }` so the caller hands off to the normal, fully guarded claim
+flow (login, access code, accept, permission checks all still apply). Unknown
+codes return `404 { state: "not_found" }`; malformed input returns `400 { state:
+"invalid" }`; expired/revoked/consumed/limit-reached shares return `410` with the
+matching state. The endpoint is throttled (`quick_share_receive`, 10/min) to make
+code enumeration infeasible, and never returns the access-code hash or storage
+paths.
 
 ## 31.3 Claim endpoints — token-gated
 

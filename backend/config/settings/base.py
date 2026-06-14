@@ -226,6 +226,8 @@ REST_FRAMEWORK = {
         "invite_validate": _throttle_rate("20/hour"),
         # Quick Share public access-code attempts (anti brute-force).
         "quick_share_code": _throttle_rate("10/min"),
+        # Quick Share "Receive code" lookups (anti code-enumeration).
+        "quick_share_receive": _throttle_rate("10/min"),
         # Auth + public access-code brute-force protection.
         "login": _throttle_rate("10/min"),
         "register": _throttle_rate("10/hour"),
