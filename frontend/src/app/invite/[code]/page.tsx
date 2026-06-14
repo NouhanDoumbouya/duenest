@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ArrowRight, CheckCircle2, Loader2, ShieldCheck, TicketCheck } from "lucide-react";
 
 import { SiteHeader } from "@/components/layout/site-header";
-import { Logo } from "@/components/layout/logo";
+import { SiteFooter } from "@/components/layout/site-footer";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ApiError } from "@/lib/api";
@@ -138,14 +138,7 @@ export default function InvitePage({
           </div>
         </section>
       </main>
-      <footer className="border-t border-border bg-card/60">
-        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-8 sm:px-6">
-          <Logo />
-          <p className="text-sm text-muted-foreground">
-            Invite codes are required only while private beta mode is enabled.
-          </p>
-        </div>
-      </footer>
+      <SiteFooter />
     </>
   );
 }
