@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 
 import { SiteHeader } from "@/components/layout/site-header";
-import { Logo } from "@/components/layout/logo";
+import { SiteFooter } from "@/components/layout/site-footer";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -239,12 +239,7 @@ export default function WaitlistPage() {
           </div>
         </section>
       </main>
-      <footer className="border-t border-border bg-card/60">
-        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-8 sm:px-6">
-          <Logo />
-          <p className="text-sm text-muted-foreground">Private beta access is reviewed by the founder.</p>
-        </div>
-      </footer>
+      <SiteFooter />
     </>
   );
 }
