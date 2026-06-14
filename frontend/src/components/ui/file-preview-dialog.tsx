@@ -15,6 +15,8 @@ export interface FilePreviewState {
   /** Optional download handler (omitted for view-only contexts). */
   onDownload?: () => void;
   downloading?: boolean;
+  /** Optional watermark text tiled over the preview to deter screenshots. */
+  watermark?: string;
 }
 
 function kindOf(contentType: string): "image" | "pdf" | "other" {
@@ -91,9 +93,12 @@ export function FilePreviewDialog({
         </div>
 
         <div
-          className="min-h-[60vh] flex-1 overflow-auto bg-muted/30 p-3"
+          className="relative min-h-[60vh] flex-1 overflow-auto bg-muted/30 p-3"
           onContextMenu={(event) => event.preventDefault()}
         >
+          {preview.watermark && !preview.loading && !preview.error && (
+            <WatermarkOverlay text={preview.watermark} />
+          )}
           {preview.loading ? (
             <div className="flex min-h-[60vh] items-center justify-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="size-5 animate-spin" />
@@ -121,6 +126,26 @@ export function FilePreviewDialog({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function WatermarkOverlay({ text }: { text: string }) {
+  // A diagonal, tiled, low-opacity watermark layered above the preview content.
+  // pointer-events-none keeps the underlying preview fully interactive.
+  return (
+    <div
+      aria-hidden
+      className="pointer-events-none absolute inset-0 z-10 flex flex-wrap items-center justify-center gap-x-10 gap-y-12 overflow-hidden opacity-[0.12]"
+    >
+      {Array.from({ length: 60 }).map((_, i) => (
+        <span
+          key={i}
+          className="-rotate-[30deg] text-xs font-semibold whitespace-nowrap text-foreground select-none"
+        >
+          {text}
+        </span>
+      ))}
     </div>
   );
 }

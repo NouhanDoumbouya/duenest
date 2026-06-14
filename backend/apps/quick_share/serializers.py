@@ -37,9 +37,13 @@ def _initials(name: str) -> str:
 
 
 def _file_payload(file, item=None) -> dict:
+    # ``display_name`` is an optional per-file label and only applies to a direct
+    # single-file item. Bundle/document items expand to many files, so each keeps
+    # its own filename (their ``display_name`` labels the group, not the files).
+    use_label = bool(item and item.file_id and item.display_name)
     return {
         "file_id": file.id,
-        "name": (item.display_name if item and item.display_name else file.original_filename),
+        "name": item.display_name if use_label else file.original_filename,
         "source": file.document.title if file.document_id else "File Inbox",
         "file_size": file.file_size,
         "content_type": file.content_type,
@@ -56,6 +60,10 @@ class QuickShareCreateSerializer(serializers.Serializer):
     mode = serializers.ChoiceField(
         choices=QuickShareSession.Mode.choices,
         default=QuickShareSession.Mode.ACCOUNT_TO_ACCOUNT,
+    )
+    share_method = serializers.ChoiceField(
+        choices=QuickShareSession.ShareMethod.choices,
+        default=QuickShareSession.ShareMethod.QR,
     )
     title = serializers.CharField(max_length=255, required=False, allow_blank=True)
     purpose = serializers.CharField(max_length=255, required=False, allow_blank=True)
@@ -76,6 +84,10 @@ class QuickShareCreateSerializer(serializers.Serializer):
     watermark_enabled = serializers.BooleanField(default=True)
     # File ids to attach on creation (owner-owned; validated in the view).
     file_ids = serializers.ListField(
+        child=serializers.IntegerField(), required=False, default=list
+    )
+    # Bundle ids to attach whole (owner-owned; each shares its current files).
+    bundle_ids = serializers.ListField(
         child=serializers.IntegerField(), required=False, default=list
     )
 
@@ -151,6 +163,7 @@ class QuickShareSessionSerializer(serializers.ModelSerializer):
             "dn_code",
             "fallback_code",
             "mode",
+            "share_method",
             "title",
             "purpose",
             "permission",
@@ -216,6 +229,7 @@ class QuickShareListItemSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "mode",
+            "share_method",
             "title",
             "purpose",
             "permission",
@@ -234,7 +248,9 @@ class QuickShareListItemSerializer(serializers.ModelSerializer):
         ]
 
     def get_file_count(self, obj):
-        return obj.items.count()
+        # Count the files actually exposed (bundle/document items expand to
+        # multiple files), so the list never under- or over-states a share.
+        return len(session_files(obj))
 
 
 class QuickShareActivitySerializer(serializers.ModelSerializer):

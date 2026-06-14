@@ -6,6 +6,10 @@ export type QuickShareMode =
   | "emergency_qr"
   | "organization_collection";
 
+// How the sender chose to hand off the share. All methods resolve to the same
+// session server-side; this only drives which delivery the UI leads with.
+export type QuickShareMethod = "qr" | "link" | "code";
+
 export type QuickSharePermission =
   | "view_only"
   | "download_allowed"
@@ -58,6 +62,7 @@ export interface QuickShareSession {
   claim_path: string;
   fallback_code: string;
   mode: QuickShareMode;
+  share_method: QuickShareMethod;
   title: string;
   purpose: string;
   permission: QuickSharePermission;
@@ -92,6 +97,7 @@ export interface QuickShareSession {
 export interface QuickShareListItem {
   id: number;
   mode: QuickShareMode;
+  share_method: QuickShareMethod;
   title: string;
   purpose: string;
   permission: QuickSharePermission;
@@ -109,8 +115,18 @@ export interface QuickShareListItem {
   last_accessed_at: string | null;
 }
 
+export interface QuickShareActivity {
+  id: number;
+  action: string;
+  actor_type: "owner" | "receiver" | "system";
+  safe_summary: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
 export interface CreateQuickSharePayload {
   mode: QuickShareMode;
+  share_method?: QuickShareMethod;
   title?: string;
   purpose?: string;
   permission: QuickSharePermission;
@@ -122,6 +138,8 @@ export interface CreateQuickSharePayload {
   require_sender_approval: boolean;
   watermark_enabled: boolean;
   file_ids: number[];
+  // Whole bundles to share; each exposes its currently available files.
+  bundle_ids?: number[];
 }
 
 export interface QuickSharePublic {

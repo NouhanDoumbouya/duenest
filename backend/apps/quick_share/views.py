@@ -25,8 +25,9 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
-from apps.documents.models import Document, DocumentFile
+from apps.documents.models import Document, DocumentBundle, DocumentFile
 from apps.documents.plan_usage import enforce_plan_limit
+from apps.documents.services import collect_bundle_files
 from apps.users import plans as user_plans
 
 from .models import (
@@ -89,6 +90,7 @@ class QuickShareSessionListCreateView(APIView):
         data = serializer.validated_data
 
         file_ids = data.pop("file_ids", []) or []
+        bundle_ids = data.pop("bundle_ids", []) or []
         plain_code = data.pop("access_code", "") or ""
         access_code_required = data.get("access_code_required", False)
 
@@ -126,10 +128,32 @@ class QuickShareSessionListCreateView(APIView):
             )
             created_any = True
 
+        # Attach whole bundles — each must be owned by the requester and must
+        # currently expose at least one available file.
+        base_order = len(file_ids)
+        for offset, bundle_id in enumerate(bundle_ids):
+            bundle = DocumentBundle.objects.filter(
+                id=bundle_id, owner=request.user
+            ).first()
+            if bundle is None:
+                continue
+            if not collect_bundle_files(bundle).files:
+                continue
+            QuickShareItem.objects.create(
+                session=session,
+                bundle=bundle,
+                display_name=bundle.title,
+                order=base_order + offset,
+            )
+            created_any = True
+
         if not created_any:
             session.delete()
             return Response(
-                {"detail": "Select at least one of your own files to share."},
+                {
+                    "detail": "Select at least one of your own files or a bundle "
+                    "with files to share.",
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 

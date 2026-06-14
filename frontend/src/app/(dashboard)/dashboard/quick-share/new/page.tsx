@@ -12,7 +12,10 @@ import {
   Eye,
   FileText,
   KeyRound,
+  Layers,
+  Link2,
   Loader2,
+  QrCode,
   Save,
   ShieldCheck,
   Sparkles,
@@ -31,12 +34,14 @@ import { formatFileSize } from "@/lib/document-files";
 import { createQuickShare } from "@/lib/quick-share";
 import {
   FilePicker,
+  type SelectedBundle,
   type SelectedFile,
 } from "@/components/quick-share/file-picker";
 import { looksSensitive } from "@/components/quick-share/shared";
 import { cn } from "@/lib/utils";
 import type {
   CreateQuickSharePayload,
+  QuickShareMethod,
   QuickShareMode,
   QuickSharePermission,
 } from "@/types/quick-share";
@@ -57,15 +62,19 @@ const EXPIRY_LABEL: Record<ExpiryPreset, string> = {
   "7d": "7 days",
 };
 
-const STEPS = ["Select files", "Choose access", "Review"] as const;
+const STEPS = ["Select", "Method", "Protection", "Review"] as const;
 
 export default function NewQuickSharePage() {
   const router = useRouter();
   const [step, setStep] = useState(0);
 
   const [selected, setSelected] = useState<Map<number, SelectedFile>>(new Map());
+  const [selectedBundles, setSelectedBundles] = useState<
+    Map<number, SelectedBundle>
+  >(new Map());
   const [title, setTitle] = useState("");
   const [mode, setMode] = useState<QuickShareMode>("account_to_account");
+  const [method, setMethod] = useState<QuickShareMethod>("qr");
   const [permission, setPermission] = useState<QuickSharePermission>("view_only");
   const [expiry, setExpiry] = useState<ExpiryPreset>("10m");
   const [accessCodeRequired, setAccessCodeRequired] = useState(false);
@@ -77,6 +86,10 @@ export default function NewQuickSharePage() {
   const [error, setError] = useState<string | null>(null);
 
   const selectedList = useMemo(() => Array.from(selected.values()), [selected]);
+  const selectedBundleList = useMemo(
+    () => Array.from(selectedBundles.values()),
+    [selectedBundles],
+  );
   const hasSensitive = selectedList.some((f) => looksSensitive(f.name));
 
   function toggleFile(file: SelectedFile) {
@@ -84,6 +97,15 @@ export default function NewQuickSharePage() {
       const next = new Map(prev);
       if (next.has(file.id)) next.delete(file.id);
       else next.set(file.id, file);
+      return next;
+    });
+  }
+
+  function toggleBundle(bundle: SelectedBundle) {
+    setSelectedBundles((prev) => {
+      const next = new Map(prev);
+      if (next.has(bundle.id)) next.delete(bundle.id);
+      else next.set(bundle.id, bundle);
       return next;
     });
   }
@@ -102,6 +124,7 @@ export default function NewQuickSharePage() {
     setError(null);
     const payload: CreateQuickSharePayload = {
       mode,
+      share_method: method,
       title: title.trim(),
       permission,
       expires_at: new Date(Date.now() + EXPIRY_MS[expiry]).toISOString(),
@@ -110,6 +133,7 @@ export default function NewQuickSharePage() {
       require_sender_approval: mode === "account_to_account" ? requireApproval : false,
       watermark_enabled: watermark,
       file_ids: selectedList.map((f) => f.id),
+      bundle_ids: selectedBundleList.map((b) => b.id),
     };
     try {
       const session = await createQuickShare(payload);
@@ -130,7 +154,8 @@ export default function NewQuickSharePage() {
     }
   }
 
-  const canNext = step === 0 ? selected.size > 0 : true;
+  const canNext =
+    step === 0 ? selected.size > 0 || selectedBundles.size > 0 : true;
 
   return (
     <PageContainer width="narrow">
@@ -145,8 +170,8 @@ export default function NewQuickSharePage() {
         <div>
           <h1 className="text-page-title">New Quick Share</h1>
           <p className="text-sm text-muted-foreground">
-            Select files, choose how they can be accessed, then generate a
-            secure QR.
+            Pick what to share and how, set protection, then create a secure
+            share.
           </p>
         </div>
       </div>
@@ -164,16 +189,26 @@ export default function NewQuickSharePage() {
               private.
             </p>
             <div className="mt-4">
-              <FilePicker selected={selected} onToggle={toggleFile} />
+              <FilePicker
+                selected={selected}
+                onToggle={toggleFile}
+                selectedBundles={selectedBundles}
+                onToggleBundle={toggleBundle}
+              />
             </div>
           </div>
 
-          {selected.size > 0 && (
+          {(selected.size > 0 || selectedBundles.size > 0) && (
             <SelectedSummary
               files={selectedList}
+              bundles={selectedBundleList}
               onRemove={(id) => {
                 const f = selected.get(id);
                 if (f) toggleFile(f);
+              }}
+              onRemoveBundle={(id) => {
+                const b = selectedBundles.get(id);
+                if (b) toggleBundle(b);
               }}
             />
           )}
@@ -181,6 +216,40 @@ export default function NewQuickSharePage() {
       )}
 
       {step === 1 && (
+        <div className="space-y-5">
+          <Field label="How do you want to share?">
+            <div className="space-y-2">
+              <ChoiceCard
+                active={method === "qr"}
+                onClick={() => setMethod("qr")}
+                icon={<QrCode className="size-4" />}
+                title="QR code"
+                description="Best in person — they scan it at a counter or across the table."
+              />
+              <ChoiceCard
+                active={method === "link"}
+                onClick={() => setMethod("link")}
+                icon={<Link2 className="size-4" />}
+                title="Secure link"
+                description="Best remotely — copy a link to send by message or email."
+              />
+              <ChoiceCard
+                active={method === "code"}
+                onClick={() => setMethod("code")}
+                icon={<KeyRound className="size-4" />}
+                title="DueNest code"
+                description="They open Quick Share, choose Receive a code, and type a short code."
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              You can use the other methods later too — every share has a QR, a
+              link, and a code. This just sets what we show you first.
+            </p>
+          </Field>
+        </div>
+      )}
+
+      {step === 2 && (
         <div className="space-y-5">
           <RecommendedBanner onApply={applyRecommended} />
 
@@ -301,11 +370,13 @@ export default function NewQuickSharePage() {
         </div>
       )}
 
-      {step === 2 && (
+      {step === 3 && (
         <ReviewStep
           files={selectedList}
+          bundles={selectedBundleList}
           title={title}
           mode={mode}
+          method={method}
           permission={permission}
           expiryLabel={EXPIRY_LABEL[expiry]}
           accessCodeRequired={accessCodeRequired}
@@ -341,7 +412,7 @@ export default function NewQuickSharePage() {
             ) : (
               <Sparkles className="size-4" />
             )}
-            Generate secure QR
+            Create secure share
           </Button>
         )}
       </div>
@@ -522,17 +593,47 @@ function RecommendedBanner({ onApply }: { onApply: () => void }) {
 
 function SelectedSummary({
   files,
+  bundles,
   onRemove,
+  onRemoveBundle,
 }: {
   files: SelectedFile[];
+  bundles: SelectedBundle[];
   onRemove: (id: number) => void;
+  onRemoveBundle: (id: number) => void;
 }) {
+  const totalCount = files.length + bundles.length;
   return (
     <div className="rounded-2xl border border-border bg-card p-4 shadow-card">
       <p className="text-sm font-semibold">
-        {files.length} file{files.length === 1 ? "" : "s"} selected
+        {totalCount} item{totalCount === 1 ? "" : "s"} selected
       </p>
       <ul className="mt-3 space-y-2">
+        {bundles.map((bundle) => (
+          <li
+            key={`bundle-${bundle.id}`}
+            className="flex items-center gap-3 rounded-lg bg-muted/40 p-2"
+          >
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+              <Layers className="size-4" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm">{bundle.title}</span>
+              <span className="block text-xs text-muted-foreground">
+                Bundle · {bundle.requirementCount} item
+                {bundle.requirementCount === 1 ? "" : "s"}
+              </span>
+            </span>
+            <button
+              type="button"
+              onClick={() => onRemoveBundle(bundle.id)}
+              className="flex size-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-card hover:text-foreground"
+              aria-label={`Remove ${bundle.title}`}
+            >
+              <X className="size-4" />
+            </button>
+          </li>
+        ))}
         {files.map((file) => (
           <li
             key={file.id}
@@ -571,10 +672,18 @@ function SelectedSummary({
   );
 }
 
+const METHOD_LABEL: Record<QuickShareMethod, string> = {
+  qr: "QR code",
+  link: "Secure link",
+  code: "DueNest code",
+};
+
 function ReviewStep({
   files,
+  bundles,
   title,
   mode,
+  method,
   permission,
   expiryLabel,
   accessCodeRequired,
@@ -584,8 +693,10 @@ function ReviewStep({
   hasSensitive,
 }: {
   files: SelectedFile[];
+  bundles: SelectedBundle[];
   title: string;
   mode: QuickShareMode;
+  method: QuickShareMethod;
   permission: QuickSharePermission;
   expiryLabel: string;
   accessCodeRequired: boolean;
@@ -600,9 +711,17 @@ function ReviewStep({
       : permission === "download_allowed"
         ? "Allow download"
         : "Allow save copy";
+  const itemsLabel = [
+    files.length > 0 && `${files.length} file${files.length === 1 ? "" : "s"}`,
+    bundles.length > 0 &&
+      `${bundles.length} bundle${bundles.length === 1 ? "" : "s"}`,
+  ]
+    .filter(Boolean)
+    .join(" + ");
   const rows: [string, string][] = [
-    ["Files", `${files.length} selected`],
-    ["Recipient", mode === "account_to_account" ? "A DueNest user" : "Anyone with the QR"],
+    ["Sharing", itemsLabel || "Nothing selected"],
+    ["Method", METHOD_LABEL[method]],
+    ["Recipient", mode === "account_to_account" ? "A DueNest user" : "Anyone with the link"],
     ["Access", permLabel],
     ["Expires in", expiryLabel],
     ["Access code", accessCodeRequired ? "Required" : "Not required"],
@@ -647,8 +766,21 @@ function ReviewStep({
         </dl>
       </div>
       <div className="rounded-2xl border border-border bg-card p-4 shadow-card">
-        <p className="text-sm font-semibold">Files</p>
+        <p className="text-sm font-semibold">Selected</p>
         <ul className="mt-3 space-y-2">
+          {bundles.map((bundle) => (
+            <li key={`bundle-${bundle.id}`} className="flex items-center gap-3">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+                <Layers className="size-4" />
+              </span>
+              <span className="min-w-0 flex-1 truncate text-sm">
+                {bundle.title}
+              </span>
+              <span className="shrink-0 text-xs text-muted-foreground">
+                Bundle
+              </span>
+            </li>
+          ))}
           {files.map((file) => (
             <li key={file.id} className="flex items-center gap-3">
               <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">

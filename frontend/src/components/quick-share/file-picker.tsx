@@ -6,7 +6,14 @@
 // Selection is tracked by file id and surfaced back to the parent wizard.
 
 import { useEffect, useState } from "react";
-import { ChevronDown, FileText, Inbox, Loader2, Search } from "lucide-react";
+import {
+  ChevronDown,
+  FileText,
+  Inbox,
+  Layers,
+  Loader2,
+  Search,
+} from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,9 +24,11 @@ import {
   getFileInbox,
   formatFileSize,
 } from "@/lib/document-files";
+import { getBundles } from "@/lib/renewal-workspace";
 import { cn } from "@/lib/utils";
 import type { DocumentRecord } from "@/types/documents";
 import type { DocumentFile } from "@/types/document-files";
+import type { Bundle } from "@/types/renewal-workspace";
 
 export interface SelectedFile {
   id: number;
@@ -28,15 +37,26 @@ export interface SelectedFile {
   documentTitle: string;
 }
 
+export interface SelectedBundle {
+  id: number;
+  title: string;
+  requirementCount: number;
+}
+
 export function FilePicker({
   selected,
   onToggle,
+  selectedBundles,
+  onToggleBundle,
 }: {
   selected: Map<number, SelectedFile>;
   onToggle: (file: SelectedFile) => void;
+  selectedBundles?: Map<number, SelectedBundle>;
+  onToggleBundle?: (bundle: SelectedBundle) => void;
 }) {
   const [documents, setDocuments] = useState<DocumentRecord[] | null>(null);
   const [inboxFiles, setInboxFiles] = useState<DocumentFile[] | null>(null);
+  const [bundles, setBundles] = useState<Bundle[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<number | null>(null);
@@ -45,13 +65,22 @@ export function FilePicker({
   );
   const [loadingDoc, setLoadingDoc] = useState<number | null>(null);
 
+  const bundlesEnabled = Boolean(onToggleBundle);
+
   useEffect(() => {
     let active = true;
-    Promise.all([getDocuments({ has_file: true }), getFileInbox()])
-      .then(([documentResult, inboxResult]) => {
+    Promise.all([
+      getDocuments({ has_file: true }),
+      getFileInbox(),
+      bundlesEnabled
+        ? getBundles().then((r) => r.results)
+        : Promise.resolve([] as Bundle[]),
+    ])
+      .then(([documentResult, inboxResult, bundleResult]) => {
         if (!active) return;
         setDocuments(documentResult.results);
         setInboxFiles(inboxResult.results);
+        setBundles(bundleResult);
       })
       .catch((err) => {
         if (active)
@@ -62,7 +91,7 @@ export function FilePicker({
     return () => {
       active = false;
     };
-  }, []);
+  }, [bundlesEnabled]);
 
   async function toggleExpand(doc: DocumentRecord) {
     if (expanded === doc.id) {
@@ -107,8 +136,18 @@ export function FilePicker({
         file.original_filename.toLowerCase().includes(query.toLowerCase()),
       )
     : inboxFiles;
+  const allBundles = bundles ?? [];
+  const filteredBundles = query
+    ? allBundles.filter((b) =>
+        b.title.toLowerCase().includes(query.toLowerCase()),
+      )
+    : allBundles;
 
-  if (documents.length === 0 && inboxFiles.length === 0) {
+  if (
+    documents.length === 0 &&
+    inboxFiles.length === 0 &&
+    allBundles.length === 0
+  ) {
     return (
       <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
         You have no files yet. Upload to File Inbox or add a document file,
@@ -130,6 +169,62 @@ export function FilePicker({
       </div>
 
       <ul className="space-y-2">
+        {bundlesEnabled && filteredBundles.length > 0 && (
+          <li className="overflow-hidden rounded-xl border border-border bg-card">
+            <div className="flex items-center gap-3 border-b border-border p-3">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+                <Layers className="size-4" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm font-medium">Bundles</p>
+                <p className="text-xs text-muted-foreground">
+                  Share a whole pack — its attached files go together
+                </p>
+              </div>
+            </div>
+            <div className="bg-muted/20 p-2">
+              <ul className="space-y-1">
+                {filteredBundles.map((bundle) => {
+                  const checked = selectedBundles?.has(bundle.id) ?? false;
+                  return (
+                    <li key={bundle.id}>
+                      <label
+                        className={cn(
+                          "flex cursor-pointer items-center gap-3 rounded-lg p-2 transition-colors",
+                          checked ? "bg-primary/10" : "hover:bg-card",
+                        )}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() =>
+                            onToggleBundle?.({
+                              id: bundle.id,
+                              title: bundle.title,
+                              requirementCount: bundle.requirement_count,
+                            })
+                          }
+                          className="size-4 accent-primary"
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm">
+                            {bundle.title}
+                          </span>
+                          <span className="block text-xs text-muted-foreground">
+                            {bundle.requirement_count} item
+                            {bundle.requirement_count === 1 ? "" : "s"} ·{" "}
+                            {bundle.readiness_score}% ready
+                          </span>
+                        </span>
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          </li>
+        )}
+
         {filteredInboxFiles.length > 0 && (
           <li className="overflow-hidden rounded-xl border border-border bg-card">
             <div className="flex items-center gap-3 border-b border-border p-3">
