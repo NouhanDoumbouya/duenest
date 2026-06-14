@@ -82,6 +82,7 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             "category_detail",
             "name",
             "provider",
+            "provider_key",
             "plan_name",
             "account_email",
             "website_url",

@@ -74,6 +74,7 @@ export interface Subscription {
   category_detail: SubscriptionCategory | null;
   name: string;
   provider: string;
+  provider_key: string;
   plan_name: string;
   account_email: string;
   website_url: string;
@@ -112,6 +113,7 @@ export interface SubscriptionInput {
   next_billing_date: string | null;
   category?: number | null;
   provider?: string;
+  provider_key?: string;
   plan_name?: string;
   account_email?: string;
   website_url?: string;

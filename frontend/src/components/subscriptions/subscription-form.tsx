@@ -34,6 +34,7 @@ const CARD_NUMBER_RE = /(?:\d[ -]?){13,19}/;
 interface FormState {
   name: string;
   provider: string;
+  provider_key: string;
   category: string;
   plan_name: string;
   account_email: string;
@@ -58,6 +59,7 @@ interface FormState {
 export interface SubscriptionPrefill {
   name?: string;
   provider?: string;
+  provider_key?: string;
   category?: string;
   website_url?: string;
   billing_cycle?: BillingCycle;
@@ -72,6 +74,7 @@ function initialState(
   return {
     name: subscription?.name ?? prefill?.name ?? "",
     provider: subscription?.provider ?? prefill?.provider ?? "",
+    provider_key: subscription?.provider_key ?? prefill?.provider_key ?? "",
     category:
       (subscription?.category ? String(subscription.category) : "") ||
       prefill?.category ||
@@ -559,6 +562,7 @@ function toInput(form: FormState): SubscriptionInput {
   return {
     name: form.name.trim(),
     provider: form.provider.trim(),
+    provider_key: form.provider_key,
     category: form.category ? Number(form.category) : null,
     plan_name: form.plan_name.trim(),
     account_email: form.account_email.trim(),

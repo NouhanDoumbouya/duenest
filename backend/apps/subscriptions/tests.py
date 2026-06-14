@@ -574,3 +574,42 @@ class RadarFieldsAndActionsTest(SubscriptionBaseTest):
         self.make_sub(owner=self.bob, name="BobOnly")
         resp = self.client.get(f"{LIST}export/")
         self.assertNotIn("BobOnly", resp.content.decode())
+
+
+class ProviderKeyTest(SubscriptionBaseTest):
+    """The optional provider_key (curated template reference) round-trips."""
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_authenticate(self.alice)
+
+    def test_provider_key_persists_and_defaults_blank(self):
+        resp = self.client.post(
+            LIST,
+            {
+                "name": "Netflix",
+                "provider_key": "netflix",
+                "amount": "15.99",
+                "currency": "USD",
+                "billing_cycle": "monthly",
+                "next_billing_date": (self.today + timedelta(days=10)).isoformat(),
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.assertEqual(resp.data["provider_key"], "netflix")
+
+        # Custom subscription without a template key stays blank (not null-breaking).
+        resp2 = self.client.post(
+            LIST,
+            {
+                "name": "My local gym",
+                "amount": "30.00",
+                "currency": "USD",
+                "billing_cycle": "monthly",
+                "next_billing_date": (self.today + timedelta(days=10)).isoformat(),
+            },
+            format="json",
+        )
+        self.assertEqual(resp2.status_code, 201, resp2.data)
+        self.assertEqual(resp2.data["provider_key"], "")
