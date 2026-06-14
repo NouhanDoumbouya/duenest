@@ -49,3 +49,32 @@ for the broader plan.
 > Encryption being implemented does **not** make DueNest production-ready.
 > Deployment hardening, backups, monitoring, email, and an external security
 > review are still required.
+
+## Hardening pass (see docs/SECURITY_HARDENING_REPORT.md)
+- ✅ Production Django security settings (SSL/HSTS/secure cookies/nosniff/
+  referrer/X-Frame; explicit CORS + CSRF_TRUSTED_ORIGINS). `check --deploy`
+  passes (only HSTS subdomains/preload intentionally off).
+- ✅ Security headers middleware (CSP/Permissions-Policy/COOP in production;
+  public-route noindex/no-referrer/no-store always).
+- ✅ Rate limiting: login, register, file-share/emergency/room/quick-share
+  codes, feedback, waitlist, invite validation.
+- ✅ Object-level permission (IDOR) regression tests.
+- ✅ Founder-permission + serializer-leak + public-route-header tests.
+- ✅ Log redaction filter wired into LOGGING.
+- ✅ Founder console + Global Map privacy verified (no raw IP/GPS/tokens/codes).
+
+## P2 foundations (documented, NOT implemented — future work)
+- ⛔ MFA/TOTP for founder/admin accounts.
+- ⛔ Device/session management + revocation UI.
+- ⛔ Account lockout policy (cache-based, building on failed-login events).
+- ⛔ CAPTCHA/human challenge for public abuse-prone forms.
+- ⛔ Object-storage signed-URL hardening (after S3 migration).
+- ⛔ External secret manager + KEK backup/rotation runbook.
+- ⛔ CSP nonces/Report-Only rollout for the Next.js frontend.
+
+## Launch blockers (must clear before public launch)
+- ⛔ Production secret manager + KEK backups.
+- ⛔ Private object storage with signed URLs.
+- ⛔ Upload magic-byte sniffing + AV scan.
+- ⛔ Monitoring/alerting, backups, email delivery, privacy/legal pages.
+- ⛔ External security review + penetration test.

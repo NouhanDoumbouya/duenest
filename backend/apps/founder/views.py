@@ -169,6 +169,8 @@ class FeedbackCreateView(generics.CreateAPIView):
 
     permission_classes = [AllowAny]
     serializer_class = FeedbackCreateSerializer
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "feedback"
 
     def perform_create(self, serializer):
         user = self.request.user if self.request.user.is_authenticated else None

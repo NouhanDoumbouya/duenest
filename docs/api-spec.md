@@ -225,6 +225,12 @@ Important security note:
 
 > For user-owned resources, if a resource exists but belongs to another user, the API should usually return `404 Not Found`, not `403 Forbidden`, to avoid leaking resource existence.
 
+Scoped rate limits apply to abuse-prone public endpoints. Current limits include
+login/Google login (`10/min`), registration (`10/hour`), file-share/emergency
+pack/secure-room/Quick Share access-code verification (`10/min`), feedback
+(`20/hour`), waitlist (`5/hour`), and invite validation (`20/hour`). Exceeding a
+scope returns `429 Too Many Requests`.
+
 ---
 
 ## 9. Pagination Strategy

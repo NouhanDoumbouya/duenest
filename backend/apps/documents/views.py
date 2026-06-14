@@ -14,6 +14,7 @@ from django.utils.dateparse import parse_date
 from django.utils.http import content_disposition_header
 from rest_framework.decorators import action
 from rest_framework import generics, status, viewsets
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -1509,6 +1510,8 @@ class PublicSharedFileMetadataView(APIView):
 
 class PublicSharedFileVerifyCodeView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "share_file_code"
 
     def post(self, request, token):
         link, err = _resolve_share_link(token, request=request)
@@ -3082,6 +3085,8 @@ class PublicEmergencyPackMetadataView(APIView):
 
 class PublicEmergencyPackVerifyCodeView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "emergency_code"
 
     def post(self, request, token):
         pack, err = _resolve_emergency_pack(token)
@@ -3794,6 +3799,8 @@ class PublicShareRoomMetadataView(APIView):
 
 class PublicShareRoomVerifyCodeView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "room_code"
 
     def post(self, request, token):
         room, err = _resolve_room(token, request=request)

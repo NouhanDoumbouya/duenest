@@ -3,7 +3,9 @@ from pathlib import Path
 
 import dj_database_url
 from corsheaders.defaults import default_headers as cors_default_headers
-from decouple import config
+import sys
+
+from decouple import Csv, config
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -62,7 +64,23 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # Adds CSP/Permissions-Policy/COOP (production) and always protects public
+    # token routes with noindex / no-referrer / no-store.
+    "apps.core.middleware.SecurityHeadersMiddleware",
 ]
+
+# Baseline security-header switches. Off in dev (production.py turns them on)
+# so local development is never blocked by CSP. Public-token-route headers in
+# the middleware apply regardless of this flag.
+SECURITY_HEADERS_ENABLED = config(
+    "DJANGO_SECURITY_HEADERS_ENABLED", default=False, cast=bool
+)
+CSP_CONNECT_EXTRA = config("DJANGO_CSP_CONNECT_SRC", default="", cast=Csv())
+
+# Baseline cookie hardening (production tightens Secure flags).
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"
 
 # Allow the custom headers used by the public share/room flow in addition to
 # the django-cors-headers defaults. The grant is normally passed as a query
@@ -137,6 +155,13 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+_IS_RUNNING_TESTS = "test" in sys.argv
+
+
+def _throttle_rate(rate):
+    """Avoid cross-test pollution from DRF's shared anonymous throttle cache."""
+    return "1000/min" if _IS_RUNNING_TESTS else rate
+
 # ---------------------------------------------------------------------------
 # Application-level file/field encryption (see docs/ENCRYPTION.md).
 #
@@ -176,10 +201,44 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "apps.core.pagination.StandardResultsSetPagination",
     "PAGE_SIZE": 20,
     "DEFAULT_THROTTLE_RATES": {
-        "waitlist": "5/hour",
-        "invite_validate": "20/hour",
+        "waitlist": _throttle_rate("5/hour"),
+        "invite_validate": _throttle_rate("20/hour"),
         # Quick Share public access-code attempts (anti brute-force).
-        "quick_share_code": "10/min",
+        "quick_share_code": _throttle_rate("10/min"),
+        # Auth + public access-code brute-force protection.
+        "login": _throttle_rate("10/min"),
+        "register": _throttle_rate("10/hour"),
+        "share_file_code": _throttle_rate("10/min"),
+        "emergency_code": _throttle_rate("10/min"),
+        "room_code": _throttle_rate("10/min"),
+        "feedback": _throttle_rate("20/hour"),
+    },
+}
+
+# Logging with a redaction filter so an accidental log of a token/code/key/
+# header is scrubbed before it is written. Code should still avoid logging
+# sensitive data; this is a defensive safety net.
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "filters": {
+        "redact_sensitive": {
+            "()": "apps.core.logging.SensitiveDataFilter",
+        },
+    },
+    "formatters": {
+        "standard": {"format": "%(asctime)s %(levelname)s %(name)s %(message)s"},
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "standard",
+            "filters": ["redact_sensitive"],
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": config("DJANGO_LOG_LEVEL", default="INFO"),
     },
 }
 
