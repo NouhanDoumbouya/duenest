@@ -100,6 +100,10 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             "importance",
             "last_used_date",
             "notes",
+            "price_change_note",
+            "pinned",
+            "cancel_candidate",
+            "last_reviewed_at",
             "is_archived",
             "archived_at",
             "state",
@@ -108,6 +112,7 @@ class SubscriptionSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             "id",
+            "last_reviewed_at",
             "is_archived",
             "archived_at",
             "created_at",
@@ -134,6 +139,11 @@ class SubscriptionSerializer(serializers.ModelSerializer):
 
     def validate_payment_method_label(self, value):
         # Reuse the model validator so the no-card-number rule lives in one place.
+        validate_no_card_number(value)
+        return value
+
+    def validate_price_change_note(self, value):
+        # Free-text note, but never let a raw card number be stored here either.
         validate_no_card_number(value)
         return value
 

@@ -203,6 +203,83 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         subscription.save(update_fields=["next_billing_date", "updated_at"])
         return Response(self.get_serializer(subscription).data)
 
+    @action(detail=True, methods=["post"], url_path="toggle-pin")
+    def toggle_pin(self, request, pk=None):
+        """Pin/unpin an important subscription so it floats to the top."""
+        subscription = self.get_object()
+        subscription.pinned = not subscription.pinned
+        subscription.save(update_fields=["pinned", "updated_at"])
+        return Response(self.get_serializer(subscription).data)
+
+    @action(detail=True, methods=["post"])
+    def review(self, request, pk=None):
+        """
+        Mark a subscription as reviewed now. Optionally set its cancel-candidate
+        flag from the request body so "Keep" / "Consider cancelling" both flow
+        through one endpoint.
+        """
+        subscription = self.get_object()
+        subscription.last_reviewed_at = timezone.now()
+        update_fields = ["last_reviewed_at", "updated_at"]
+        if "cancel_candidate" in request.data:
+            subscription.cancel_candidate = (
+                str(request.data.get("cancel_candidate")).lower() in _TRUE
+            )
+            update_fields.append("cancel_candidate")
+        subscription.save(update_fields=update_fields)
+        return Response(self.get_serializer(subscription).data)
+
+    @action(detail=False, methods=["get"], url_path="export")
+    def export_csv(self, request):
+        """
+        Export the user's subscriptions as CSV. Safe fields only — never a raw
+        card number, token, or secret (payment_method_label is a user-entered
+        label that is already card-number-validated on write).
+        """
+        import csv
+        import io
+
+        from django.http import HttpResponse
+
+        rows = (
+            Subscription.objects.filter(owner=request.user)
+            .select_related("category")
+            .order_by("name")
+        )
+        columns = [
+            "name", "provider", "plan_name", "category", "status", "amount",
+            "currency", "billing_cycle", "next_billing_date",
+            "cancellation_deadline", "auto_renew", "payment_method_label",
+            "pinned", "cancel_candidate", "is_archived", "notes",
+        ]
+        buffer = io.StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow(columns)
+        for sub in rows:
+            writer.writerow([
+                sub.name,
+                sub.provider,
+                sub.plan_name,
+                sub.category.name if sub.category else "",
+                sub.status,
+                sub.amount,
+                sub.currency,
+                sub.billing_cycle,
+                sub.next_billing_date or "",
+                sub.cancellation_deadline or "",
+                "yes" if sub.auto_renew else "no",
+                sub.payment_method_label,
+                "yes" if sub.pinned else "no",
+                "yes" if sub.cancel_candidate else "no",
+                "yes" if sub.is_archived else "no",
+                sub.notes.replace("\n", " ").strip(),
+            ])
+        response = HttpResponse(buffer.getvalue(), content_type="text/csv")
+        response["Content-Disposition"] = (
+            'attachment; filename="duenest-subscriptions.csv"'
+        )
+        return response
+
     @action(detail=False, methods=["get"])
     def summary(self, request):
         return Response(build_summary(request.user))

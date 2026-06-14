@@ -92,6 +92,10 @@ export interface Subscription {
   importance: Importance;
   last_used_date: string | null;
   notes: string;
+  price_change_note: string;
+  pinned: boolean;
+  cancel_candidate: boolean;
+  last_reviewed_at: string | null;
   is_archived: boolean;
   archived_at: string | null;
   state: SubscriptionState;
@@ -122,6 +126,9 @@ export interface SubscriptionInput {
   importance?: Importance;
   last_used_date?: string | null;
   notes?: string;
+  price_change_note?: string;
+  pinned?: boolean;
+  cancel_candidate?: boolean;
 }
 
 export interface SubscriptionPaymentRecord {

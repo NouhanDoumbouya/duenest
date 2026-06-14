@@ -506,3 +506,71 @@ class FounderSubscriptionMetricTest(SubscriptionBaseTest):
         self.assertEqual(feature["users_count"], 2)
         # Privacy: no subscription names leak into the aggregate payload.
         self.assertNotIn("Secret Name", str(adoption))
+
+
+class RadarFieldsAndActionsTest(SubscriptionBaseTest):
+    """Pin / review / cancel-candidate fields + endpoints, and CSV export."""
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_authenticate(self.alice)
+        self.sub = self.make_sub()
+
+    def test_new_fields_default_safely(self):
+        resp = self.client.get(f"{LIST}{self.sub.id}/")
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(resp.data["pinned"], False)
+        self.assertEqual(resp.data["cancel_candidate"], False)
+        self.assertIsNone(resp.data["last_reviewed_at"])
+        self.assertEqual(resp.data["price_change_note"], "")
+
+    def test_toggle_pin(self):
+        resp = self.client.post(f"{LIST}{self.sub.id}/toggle-pin/")
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertTrue(resp.data["pinned"])
+        resp = self.client.post(f"{LIST}{self.sub.id}/toggle-pin/")
+        self.assertFalse(resp.data["pinned"])
+
+    def test_review_sets_timestamp_and_cancel_candidate(self):
+        resp = self.client.post(
+            f"{LIST}{self.sub.id}/review/",
+            {"cancel_candidate": True},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertIsNotNone(resp.data["last_reviewed_at"])
+        self.assertTrue(resp.data["cancel_candidate"])
+
+    def test_price_change_note_rejects_card_number(self):
+        resp = self.client.patch(
+            f"{LIST}{self.sub.id}/",
+            {"price_change_note": "card 4111 1111 1111 1111"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_last_reviewed_at_is_read_only(self):
+        # Writing it directly is ignored; only the review action sets it.
+        resp = self.client.patch(
+            f"{LIST}{self.sub.id}/",
+            {"last_reviewed_at": "2020-01-01T00:00:00Z"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertIsNone(resp.data["last_reviewed_at"])
+
+    def test_export_csv(self):
+        self.make_sub(name="Spotify", amount=Decimal("9.99"))
+        resp = self.client.get(f"{LIST}export/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp["Content-Type"], "text/csv")
+        body = resp.content.decode()
+        self.assertIn("Netflix", body)
+        self.assertIn("Spotify", body)
+        # Header row present; no secret columns leak.
+        self.assertIn("name,provider", body)
+
+    def test_export_csv_is_owner_scoped(self):
+        self.make_sub(owner=self.bob, name="BobOnly")
+        resp = self.client.get(f"{LIST}export/")
+        self.assertNotIn("BobOnly", resp.content.decode())
