@@ -229,7 +229,13 @@ Important security note:
 
 ## 9. Pagination Strategy
 
-List endpoints should use pagination.
+List endpoints use page-number pagination (`apps.core.pagination.StandardResultsSetPagination`).
+The default page size is `20`. Clients may request a smaller or larger page
+with `?page_size=` (capped at `max_page_size = 100`); the paginated `count` is
+always the full total regardless of page size, so count-only callers can pass
+`page_size=1` to avoid serializing a full page. A few endpoints opt out of
+pagination (`pagination_class = None`) because they return small, finite,
+curated sets (e.g. feature-completion and launch-checklist items).
 
 Example request:
 

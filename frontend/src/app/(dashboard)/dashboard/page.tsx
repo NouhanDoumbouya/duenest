@@ -85,10 +85,13 @@ export default function DashboardPage() {
   useEffect(() => {
     let active = true;
     Promise.all([
-      getDocuments(),
-      getDocuments({ computed_status: "expiring_soon" }),
-      getDocuments({ missing_file: true }),
-      getDocuments({ ordering: "-updated_at" }),
+      // These three only need the paginated `count`, so request a single row
+      // instead of serializing a full page of heavy document objects.
+      getDocuments({ page_size: 1 }),
+      getDocuments({ computed_status: "expiring_soon", page_size: 1 }),
+      getDocuments({ missing_file: true, page_size: 1 }),
+      // The "recent" widget shows at most 5 items.
+      getDocuments({ ordering: "-updated_at", page_size: 5 }),
       getAttentionNeeded(),
       getUpcomingDocumentReminders(),
       getDocumentSetupChecklist(),
