@@ -1,39 +1,41 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Bell,
-  BellRing,
   Building2,
   CalendarClock,
-  CalendarDays,
   CheckCheck,
   CreditCard,
-  DoorClosed,
-  FileText,
   LayoutDashboard,
   LifeBuoy,
-  Inbox,
   LogOut,
   Menu,
   MessageSquare,
   Package,
-  QrCode,
   RefreshCw,
   Settings,
-  ShieldAlert,
+  Share2,
   ShieldCheck,
-  Trash2,
+  Vault,
   Wrench,
   X,
   type LucideIcon,
 } from "lucide-react";
 
 import { Logo } from "@/components/layout/logo";
+import { SectionTabs } from "@/components/layout/section-tabs";
 import { useFeatures } from "@/components/features/feature-flags-provider";
 import { FEATURE_BY_NAV_HREF } from "@/lib/features";
+import { isSectionActive, type NavSection } from "@/lib/navigation";
 import { Button } from "@/components/ui/button";
 import { getFounderMe } from "@/lib/founder";
 import { logout } from "@/lib/auth";
@@ -53,6 +55,11 @@ interface NavItem {
   icon: LucideIcon;
   /** When set, the item is active only on an exact path match. */
   exact?: boolean;
+  /**
+   * When set, the item is a grouped section and stays active across all of that
+   * section's child routes (e.g. "Vault" highlights on /dashboard/documents).
+   */
+  sectionKey?: NavSection["key"];
 }
 
 interface NavGroup {
@@ -61,31 +68,35 @@ interface NavGroup {
 }
 
 // Grouped, logically-ordered navigation. Only real, working routes appear here.
+// Section items (Vault, Planning, Sharing) are conceptual homes; their child
+// routes still work and are reached via the contextual sub-nav (SectionTabs).
 const navGroups: NavGroup[] = [
   {
     heading: "Workspace",
     items: [
       { label: "Overview", href: "/dashboard", icon: LayoutDashboard, exact: true },
-      { label: "Documents", href: "/dashboard/documents", icon: FileText },
-      { label: "File Inbox", href: "/dashboard/files", icon: Inbox },
-      { label: "Attention", href: "/dashboard/attention", icon: ShieldAlert },
-      { label: "Reminders", href: "/dashboard/reminders", icon: BellRing },
-      { label: "Notifications", href: "/dashboard/notifications", icon: Bell },
+      { label: "Vault", href: "/dashboard/vault", icon: Vault, sectionKey: "vault" },
+      {
+        label: "Planning",
+        href: "/dashboard/planning",
+        icon: CalendarClock,
+        sectionKey: "planning",
+      },
       { label: "Subscriptions", href: "/dashboard/subscriptions", icon: RefreshCw },
-      { label: "Calendar", href: "/dashboard/calendar", icon: CalendarDays },
-      { label: "Timeline", href: "/dashboard/timeline", icon: CalendarClock },
       { label: "Organizations", href: "/dashboard/organizations", icon: Building2 },
     ],
   },
   {
-    heading: "Packs & sharing",
+    heading: "Prepare & share",
     items: [
       { label: "Bundles", href: "/dashboard/bundles", icon: Package },
-      { label: "Quick Share", href: "/dashboard/quick-share", icon: QrCode },
-      { label: "Shared with me", href: "/dashboard/shared-with-me", icon: Inbox },
-      { label: "Secure rooms", href: "/dashboard/share-rooms", icon: DoorClosed },
+      {
+        label: "Sharing",
+        href: "/dashboard/sharing",
+        icon: Share2,
+        sectionKey: "sharing",
+      },
       { label: "Emergency access", href: "/dashboard/emergency", icon: LifeBuoy },
-      { label: "Trash", href: "/dashboard/trash", icon: Trash2 },
     ],
   },
   {
@@ -111,6 +122,7 @@ function initials(name: string) {
 }
 
 function isItemActive(pathname: string, item: NavItem) {
+  if (item.sectionKey) return isSectionActive(pathname, item.sectionKey);
   return item.exact ? pathname === item.href : pathname.startsWith(item.href);
 }
 
@@ -552,7 +564,12 @@ export function DashboardShell({
           </div>
         )}
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-10">{children}</main>
+        <main className="flex-1 p-4 sm:p-6 lg:p-10">
+          <Suspense fallback={null}>
+            <SectionTabs />
+          </Suspense>
+          {children}
+        </main>
       </div>
     </div>
   );
