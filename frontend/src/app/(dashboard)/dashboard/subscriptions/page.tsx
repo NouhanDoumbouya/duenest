@@ -9,9 +9,14 @@ import {
   CalendarDays,
   CheckCircle2,
   CircleDollarSign,
+  ClipboardCheck,
+  Download,
+  Gauge,
+  HelpCircle,
   Lightbulb,
   Loader2,
   Pencil,
+  Pin,
   Plus,
   Radar,
   SearchCheck,
@@ -31,11 +36,21 @@ import {
   REVIEW_STATUS_META,
   STATUS_LABELS,
   archiveSubscription,
+  exportSubscriptionsCsv,
   getSubscriptionSummary,
   listSubscriptions,
   markSubscriptionCancelled,
   markSubscriptionPaid,
+  reviewSubscription,
+  toggleSubscriptionPin,
 } from "@/lib/subscriptions";
+import {
+  controlScore,
+  controlScoreLabel,
+  missingMetadataChecks,
+  pinnedFirst,
+  savingsEstimate,
+} from "@/lib/subscription-insights";
 import { cn } from "@/lib/utils";
 import type {
   Subscription,
@@ -254,6 +269,8 @@ export default function SubscriptionsPage() {
   const [sort, setSort] = useState("next_billing_date");
   const [search, setSearch] = useState("");
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [compact, setCompact] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const loadSummary = useCallback(() => {
     getSubscriptionSummary()
@@ -339,11 +356,38 @@ export default function SubscriptionsPage() {
     if (activeSort?.clientSort) {
       rows = [...rows].sort(activeSort.clientSort);
     }
-    return rows;
+    // Pinned subscriptions always float to the top of whatever's shown.
+    return pinnedFirst(rows);
   }, [subscriptions, filter, sort]);
 
   const insights = summary ? buildInsights(summary) : [];
   const hasNoSubs = summary?.total_count === 0;
+  const score = summary ? controlScore(summary) : 0;
+
+  // "What am I forgetting?" + savings reflect the full active set, so only show
+  // them on the unfiltered default view.
+  const onDefaultView = filter === "all" && !search;
+  const forgottenChecks =
+    onDefaultView && subscriptions ? missingMetadataChecks(subscriptions) : [];
+  const savings = subscriptions ? savingsEstimate(subscriptions) : {};
+  const savingsText = Object.entries(savings)
+    .filter(([, v]) => v > 0)
+    .map(([cur, v]) => money(String(v), cur))
+    .join(" · ");
+
+  async function handleExport() {
+    setExporting(true);
+    setError(null);
+    try {
+      await exportSubscriptionsCsv();
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : "Could not export your subscriptions.",
+      );
+    } finally {
+      setExporting(false);
+    }
+  }
 
   return (
     <PageContainer width="full" className="space-y-6">
@@ -364,6 +408,7 @@ export default function SubscriptionsPage() {
                 <>
                   <span className="h-1 w-1 rounded-full bg-muted-foreground/40" />
                   <StatusPill needsAttention={needsAttention} count={attentionCount} />
+                  <ControlScorePill score={score} />
                 </>
               )}
             </div>
@@ -381,6 +426,21 @@ export default function SubscriptionsPage() {
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
+            {!hasNoSubs && (
+              <Button
+                variant="outline"
+                onClick={handleExport}
+                disabled={exporting}
+                title="Export your subscriptions as a CSV (safe fields only)"
+              >
+                {exporting ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Download className="size-4" />
+                )}
+                Export CSV
+              </Button>
+            )}
             <Link
               href="/dashboard/calendar"
               className={cn(buttonVariants({ variant: "outline" }))}
@@ -491,6 +551,41 @@ export default function SubscriptionsPage() {
         </section>
       )}
 
+      {/* What am I forgetting? + savings opportunity */}
+      {!hasNoSubs && (forgottenChecks.length > 0 || savingsText) && (
+        <div className="grid gap-3 lg:grid-cols-2">
+          {forgottenChecks.length > 0 && (
+            <section className="rounded-2xl border border-brand-amber/30 bg-brand-amber/[0.04] p-4 shadow-card">
+              <div className="mb-2 flex items-center gap-2">
+                <HelpCircle className="size-4 text-brand-amber" />
+                <h2 className="text-sm font-semibold">What am I forgetting?</h2>
+              </div>
+              <ul className="space-y-1.5 text-sm text-muted-foreground">
+                {forgottenChecks.map((check) => (
+                  <li key={check.id} className="flex items-start gap-2">
+                    <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-brand-amber" />
+                    {check.text} — add it so reminders stay reliable.
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {savingsText && (
+            <section className="rounded-2xl border border-brand-success/25 bg-brand-success/[0.04] p-4 shadow-card">
+              <div className="mb-2 flex items-center gap-2">
+                <Sparkles className="size-4 text-brand-success" />
+                <h2 className="text-sm font-semibold">Savings opportunity</h2>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                You could save about{" "}
+                <span className="font-semibold text-foreground">{savingsText}/month</span>{" "}
+                by reviewing the subscriptions flagged as cancel candidates.
+              </p>
+            </section>
+          )}
+        </div>
+      )}
+
       {/* Controls — only when the user actually has subscriptions */}
       {!hasNoSubs && (
         <div className="rounded-2xl border border-border bg-card p-3 shadow-card">
@@ -531,6 +626,16 @@ export default function SubscriptionsPage() {
                   </option>
                 ))}
               </select>
+              <button
+                type="button"
+                onClick={() => setCompact((v) => !v)}
+                aria-pressed={compact}
+                title={compact ? "Comfortable view" : "Compact view"}
+                className="flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-border bg-card px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <ClipboardCheck className="size-3.5" />
+                {compact ? "Comfortable" : "Compact"}
+              </button>
             </div>
           </div>
         </div>
@@ -572,7 +677,10 @@ export default function SubscriptionsPage() {
               <SubscriptionCard
                 subscription={sub}
                 busy={busyId === sub.id}
+                compact={compact}
                 onMarkPaid={() => runAction(sub.id, () => markSubscriptionPaid(sub.id))}
+                onReview={() => runAction(sub.id, () => reviewSubscription(sub.id))}
+                onTogglePin={() => runAction(sub.id, () => toggleSubscriptionPin(sub.id))}
                 onMarkCancelled={() =>
                   runAction(sub.id, () => markSubscriptionCancelled(sub.id))
                 }
@@ -608,6 +716,27 @@ function StatusPill({
         <CheckCircle2 className="size-3" />
       )}
       {needsAttention ? `${count} need${count === 1 ? "s" : ""} a look` : "On track"}
+    </span>
+  );
+}
+
+function ControlScorePill({ score }: { score: number }) {
+  const tone =
+    score >= 85
+      ? "border-brand-success/25 bg-brand-success/10 text-brand-success"
+      : score >= 60
+        ? "border-primary/20 bg-primary/10 text-primary"
+        : "border-brand-amber/30 bg-brand-amber/10 text-brand-amber";
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium",
+        tone,
+      )}
+      title={`Control score: ${controlScoreLabel(score)}`}
+    >
+      <Gauge className="size-3" />
+      Control {score}%
     </span>
   );
 }
@@ -669,13 +798,19 @@ function RadarCard({
 function SubscriptionCard({
   subscription: sub,
   busy,
+  compact,
   onMarkPaid,
+  onReview,
+  onTogglePin,
   onMarkCancelled,
   onArchive,
 }: {
   subscription: Subscription;
   busy: boolean;
+  compact: boolean;
   onMarkPaid: () => void;
+  onReview: () => void;
+  onTogglePin: () => void;
   onMarkCancelled: () => void;
   onArchive: () => void;
 }) {
@@ -688,12 +823,19 @@ function SubscriptionCard({
     .join(" · ");
   const action = sub.state.next_best_action?.trim();
   const showAction =
+    !compact &&
     !!action &&
     (review?.show || showCancelWarning || sub.state.trial_ending_soon);
   const overdue = sub.state.urgency === "overdue";
 
   return (
-    <div className="group rounded-2xl border border-border bg-card p-4 shadow-card transition-all duration-200 ease-out hover:border-primary/30 hover:shadow-elevated motion-reduce:transition-none">
+    <div
+      className={cn(
+        "group relative rounded-2xl border bg-card shadow-card transition-all duration-200 ease-out hover:border-primary/30 hover:shadow-elevated motion-reduce:transition-none",
+        sub.pinned ? "border-primary/30" : "border-border",
+        compact ? "p-3" : "p-4",
+      )}
+    >
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         {/* Identity + status */}
         <Link
@@ -701,13 +843,22 @@ function SubscriptionCard({
           className="flex min-w-0 flex-1 items-start gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
         >
           <span
-            className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-accent text-sm font-semibold text-accent-foreground"
+            className={cn(
+              "flex shrink-0 items-center justify-center rounded-xl bg-accent font-semibold text-accent-foreground",
+              compact ? "size-9 text-xs" : "size-11 text-sm",
+            )}
             aria-hidden
           >
             {initials(sub.name)}
           </span>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              {sub.pinned && (
+                <Pin
+                  className="size-3.5 shrink-0 fill-primary text-primary"
+                  aria-label="Pinned"
+                />
+              )}
               <p className="truncate text-sm font-semibold">{sub.name}</p>
               <Badge variant="outline" className={urgency.chip}>
                 {urgency.label}
@@ -726,6 +877,14 @@ function SubscriptionCard({
               >
                 {STATUS_LABELS[sub.status] ?? sub.status}
               </Badge>
+              {sub.cancel_candidate && (
+                <Badge
+                  variant="outline"
+                  className="border-brand-amber/30 bg-brand-amber/10 text-brand-amber"
+                >
+                  Cancel candidate
+                </Badge>
+              )}
               {review?.show && (
                 <Badge
                   variant="outline"
@@ -749,7 +908,7 @@ function SubscriptionCard({
                 {action}
               </p>
             )}
-            {showCancelWarning && sub.cancellation_deadline && (
+            {!compact && showCancelWarning && sub.cancellation_deadline && (
               <p className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-destructive">
                 <AlertTriangle className="size-3" />
                 Cancel by {formatDate(sub.cancellation_deadline)}
@@ -786,6 +945,18 @@ function SubscriptionCard({
 
           <div className="flex flex-wrap items-center gap-1.5 lg:justify-end">
             <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={onTogglePin}
+              disabled={busy}
+              aria-pressed={sub.pinned}
+              aria-label={sub.pinned ? `Unpin ${sub.name}` : `Pin ${sub.name}`}
+              title={sub.pinned ? "Unpin" : "Pin to top"}
+              className={sub.pinned ? "text-primary" : "text-muted-foreground"}
+            >
+              <Pin className={cn("size-4", sub.pinned && "fill-current")} />
+            </Button>
+            <Button
               variant="outline"
               size="sm"
               onClick={onMarkPaid}
@@ -793,6 +964,16 @@ function SubscriptionCard({
               title="Log a payment and roll the renewal date forward"
             >
               {busy ? <Loader2 className="size-4 animate-spin" /> : "Mark paid"}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onReview}
+              disabled={busy}
+              className="text-muted-foreground"
+              title="Mark as reviewed"
+            >
+              Review
             </Button>
             <Link
               href={`/dashboard/subscriptions/${sub.id}/edit`}

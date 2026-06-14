@@ -181,6 +181,15 @@ class Subscription(models.Model):
     )
     last_used_date = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True)
+    # Optional, user-entered note about a price change, e.g. "Up from $9.99 to
+    # $15.99". Free text only — the no-card-number rule still applies.
+    price_change_note = models.CharField(max_length=255, blank=True)
+
+    # Lightweight review/triage state the user controls directly (separate from
+    # the rule-based review_status computed in services).
+    pinned = models.BooleanField(default=False)
+    cancel_candidate = models.BooleanField(default=False)
+    last_reviewed_at = models.DateTimeField(null=True, blank=True)
 
     # Soft archive (mirrors the documents trash pattern). Archived subscriptions
     # are hidden from active lists, summaries, calendar, timeline, and attention

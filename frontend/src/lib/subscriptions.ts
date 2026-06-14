@@ -3,7 +3,8 @@
 // Every call is authenticated; the backend scopes all data to the requesting
 // user. Mirrors the endpoints in apps/subscriptions/urls.py.
 
-import { apiFetch } from "./api";
+import { API_BASE_URL, ApiError, apiFetch } from "./api";
+import { getAccessToken } from "./auth";
 import type { Paginated } from "@/types/documents";
 import type {
   Subscription,
@@ -160,6 +161,60 @@ export function skipNextRenewal(id: number): Promise<Subscription> {
     method: "POST",
     auth: true,
   });
+}
+
+export function toggleSubscriptionPin(id: number): Promise<Subscription> {
+  return apiFetch<Subscription>(`/subscriptions/${id}/toggle-pin/`, {
+    method: "POST",
+    auth: true,
+  });
+}
+
+export function reviewSubscription(
+  id: number,
+  body?: { cancel_candidate?: boolean },
+): Promise<Subscription> {
+  return apiFetch<Subscription>(`/subscriptions/${id}/review/`, {
+    method: "POST",
+    body: body ?? {},
+    auth: true,
+  });
+}
+
+export function pauseSubscription(id: number): Promise<Subscription> {
+  // Pausing is a status change; the backend already supports the "paused"
+  // status via the standard update endpoint.
+  return updateSubscription(id, { status: "paused" });
+}
+
+/**
+ * Download the user's subscriptions as a CSV file. Fetches the authenticated
+ * blob and triggers a browser download. Safe fields only (the backend never
+ * includes card numbers, tokens, or secrets).
+ */
+export async function exportSubscriptionsCsv(): Promise<void> {
+  const headers = new Headers({ Accept: "text/csv" });
+  const token = getAccessToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/subscriptions/export/`, { headers });
+  } catch {
+    throw new ApiError("Unable to reach the server. Please try again.", 0, null);
+  }
+  if (!response.ok) {
+    throw new ApiError("Could not export your subscriptions.", response.status, null);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = "duenest-subscriptions.csv";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
 }
 
 export function getSubscriptionSummary(): Promise<SubscriptionSummary> {
