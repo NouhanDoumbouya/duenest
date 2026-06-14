@@ -1264,3 +1264,38 @@ Emergency Access Packs already cover emergency sharing; the `emergency_qr` mode
 exists at the model level), organization-collection QR integration, in-browser
 camera scanner (native camera + copy-link/fallback-code provided), advanced
 founder metrics, and QR print/download for long-lived cards.
+
+## Future: Quick Share 2.0 (planned, not shipped)
+
+A future evolution of Quick Share would present multiple **distinct** sharing
+methods rather than QR alone:
+
+1. Share by secure link
+2. Share by DueNest code
+3. Share by QR
+4. Shared by Me / Shared with Me management
+5. Bundle sharing
+6. Premium secure viewer
+7. Watermark / view-only / download control
+8. Expiry / revocation / activity logs
+
+### Guardrail: no fake "Nearby Share"
+
+**Nearby Share must NOT be shipped as a user-facing mode while it is only
+QR/code-powered.** QR already solves in-person sharing, the DueNest code already
+solves account-to-account claiming, and secure links already solve remote
+sharing. A "Nearby Share" tab/card/route that merely re-wraps QR or code sharing
+would be misleading UX and fake product complexity, and would make the product
+look less trustworthy.
+
+Do not introduce any of the following copy unless a real nearby
+discovery/pairing mechanism exists: "Nearby Share", "Find nearby DueNest users",
+"Share with nearby devices", "Nearby devices around you", "Bluetooth-style
+sharing", or "Tap to share".
+
+A genuine Nearby Share could be revisited only with a real mechanism that is
+properly implemented, secured, tested, and clearly differentiated from QR/code —
+for example WebRTC-based nearby session pairing, Bluetooth/NFC pairing where
+platform support allows, OS-level share-sheet integration, or verified
+same-room/session-based pairing. Until then it stays here as a roadmap note
+only.
