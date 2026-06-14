@@ -23,6 +23,7 @@ import { ApiError } from "@/lib/api";
 import {
   BILLING_CYCLE_LABELS,
   IMPORTANCE_LABELS,
+  REVIEW_STATUS_META,
   STATUS_LABELS,
   createSubscriptionPayment,
   deleteSubscription,
@@ -41,7 +42,7 @@ import type {
 type Tab = "overview" | "payments" | "reminders" | "activity";
 
 function money(amount: string | null, currency: string): string {
-  if (amount === null) return "—";
+  if (amount === null) return "-";
   const value = Number(amount);
   if (Number.isNaN(value)) return `${amount} ${currency}`;
   try {
@@ -149,6 +150,7 @@ export default function SubscriptionDetailPage() {
   }
 
   const canCancel = sub.status === "active" || sub.status === "trial";
+  const review = REVIEW_STATUS_META[sub.state.review_status];
 
   return (
     <PageContainer width="full" className="space-y-6">
@@ -172,10 +174,15 @@ export default function SubscriptionDetailPage() {
                   {sub.category_detail.name}
                 </Badge>
               )}
+              {review?.show && (
+                <Badge variant="outline" className={review.chip}>
+                  {review.label}
+                </Badge>
+              )}
             </div>
             <h1 className="mt-3 text-page-title">{sub.name}</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              {[sub.provider, sub.plan_name].filter(Boolean).join(" · ") || "Subscription"}
+              {[sub.provider, sub.plan_name].filter(Boolean).join(" | ") || "Subscription"}
             </p>
             <p className="mt-3 text-lg font-semibold">
               {money(sub.amount, sub.currency)}{" "}
@@ -297,14 +304,14 @@ function OverviewTab({ sub }: { sub: Subscription }) {
             value={`Every ${sub.custom_interval_count ?? "?"} ${sub.custom_interval_unit || ""}`}
           />
         )}
-        <DataRow label="Start date" value={sub.start_date ?? "—"} />
-        <DataRow label="Next billing date" value={sub.next_billing_date ?? "—"} />
-        <DataRow label="Payment method" value={sub.payment_method_label || "—"} />
+        <DataRow label="Start date" value={sub.start_date ?? "-"} />
+        <DataRow label="Next billing date" value={sub.next_billing_date ?? "-"} />
+        <DataRow label="Payment method" value={sub.payment_method_label || "-"} />
       </Panel>
       <Panel title="Provider & account">
-        <DataRow label="Provider" value={sub.provider || "—"} />
-        <DataRow label="Plan" value={sub.plan_name || "—"} />
-        <DataRow label="Account email" value={sub.account_email || "—"} />
+        <DataRow label="Provider" value={sub.provider || "-"} />
+        <DataRow label="Plan" value={sub.plan_name || "-"} />
+        <DataRow label="Account email" value={sub.account_email || "-"} />
         <DataRow
           label="Website"
           value={
@@ -313,13 +320,13 @@ function OverviewTab({ sub }: { sub: Subscription }) {
                 {sub.website_url}
               </a>
             ) : (
-              "—"
+              "-"
             )
           }
         />
       </Panel>
       <Panel title="Cancellation">
-        <DataRow label="Cancellation deadline" value={sub.cancellation_deadline ?? "—"} />
+        <DataRow label="Cancellation deadline" value={sub.cancellation_deadline ?? "-"} />
         <DataRow label="Auto-renew" value={sub.auto_renew ? "On" : "Off"} />
       </Panel>
       {sub.notes && (
@@ -382,7 +389,7 @@ function PaymentsTab({ sub, onChanged }: { sub: Subscription; onChanged: () => v
         </form>
         {err && <p className="mt-2 text-xs text-destructive">{err}</p>}
         <p className="mt-2 text-xs text-muted-foreground">
-          Receipt file uploads are not available in this version — payment records
+          Receipt file uploads are not available in this version - payment records
           are metadata only.
         </p>
       </Panel>
@@ -414,7 +421,7 @@ function RemindersTab({ sub }: { sub: Subscription }) {
         <DataRow label="Reminder lead time" value={`${sub.reminder_days_before} days before renewal`} />
         <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
           DueNest surfaces this renewal in your Calendar and Timeline ahead of the
-          billing date. Reminders are in-app only in this version — there is no
+          billing date. Reminders are in-app only in this version - there is no
           email or push delivery yet.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
@@ -467,38 +474,33 @@ function DetailRail({
   busy: boolean;
   onSkip: () => void;
 }) {
-  const valueWarnings: string[] = [];
-  if (sub.importance === "rarely_used") valueWarnings.push("Marked rarely used");
-  if (sub.auto_renew && sub.state.urgency === "renews_soon")
-    valueWarnings.push("Auto-renewing soon");
-  if (sub.state.yearly_equivalent && Number(sub.state.yearly_equivalent) >= 500)
-    valueWarnings.push("High yearly cost");
+  const reviewReasons = sub.state.review_reasons;
 
   return (
     <aside className="space-y-4 xl:sticky xl:top-8 xl:self-start">
       <Panel title="At a glance">
-        <DataRow label="Next billing" value={sub.next_billing_date ?? "—"} />
-        <DataRow label="Cancellation deadline" value={sub.cancellation_deadline ?? "—"} />
+        <DataRow label="Next billing" value={sub.next_billing_date ?? "-"} />
+        <DataRow label="Cancellation deadline" value={sub.cancellation_deadline ?? "-"} />
         <DataRow label="Auto-renew" value={sub.auto_renew ? "On" : "Off"} />
         <DataRow
           label="Monthly equivalent"
-          value={money(sub.state.monthly_equivalent, sub.currency)}
+          value={money(sub.state.monthly_equivalent_amount, sub.currency)}
         />
         <DataRow
           label="Yearly equivalent"
-          value={money(sub.state.yearly_equivalent, sub.currency)}
+          value={money(sub.state.yearly_equivalent_amount, sub.currency)}
         />
-        <DataRow label="Last used" value={sub.last_used_date ?? "—"} />
+        <DataRow label="Last used" value={sub.last_used_date ?? "-"} />
         <DataRow label="Importance" value={IMPORTANCE_LABELS[sub.importance] ?? sub.importance} />
       </Panel>
 
-      {valueWarnings.length > 0 && (
+      {reviewReasons.length > 0 && (
         <Panel title="Worth a look">
           <ul className="space-y-1.5">
-            {valueWarnings.map((w) => (
-              <li key={w} className="flex items-center gap-2 text-sm text-brand-amber">
+            {reviewReasons.map((reason) => (
+              <li key={reason} className="flex items-center gap-2 text-sm text-brand-amber">
                 <AlertTriangle className="size-3.5" />
-                {w}
+                {reason}
               </li>
             ))}
           </ul>
@@ -506,7 +508,7 @@ function DetailRail({
       )}
 
       <Panel title="Next best action">
-        <p className="text-sm text-muted-foreground">{nextBestAction(sub)}</p>
+        <p className="text-sm text-muted-foreground">{sub.state.next_best_action}</p>
         {sub.next_billing_date && (
           <Button variant="outline" size="sm" className="mt-3" onClick={onSkip} disabled={busy}>
             Skip next renewal
@@ -519,18 +521,6 @@ function DetailRail({
       </Panel>
     </aside>
   );
-}
-
-function nextBestAction(sub: Subscription): string {
-  if (sub.state.urgency === "overdue")
-    return "This renewal date has passed. Mark it paid or update the next billing date.";
-  if (sub.state.cancellation_deadline_soon)
-    return "The cancellation deadline is close. Decide whether to keep or cancel before it renews.";
-  if (sub.state.trial_ending_soon)
-    return "Your trial is ending soon. Confirm whether you want it to convert to a paid plan.";
-  if (sub.status === "cancelled")
-    return "This subscription is cancelled. Archive it to tidy your list, or restore it if it's still active.";
-  return "Review the renewal date and confirm the cost still looks right.";
 }
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {

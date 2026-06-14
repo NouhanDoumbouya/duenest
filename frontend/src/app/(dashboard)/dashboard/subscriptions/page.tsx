@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -9,9 +9,11 @@ import {
   CalendarDays,
   CircleDollarSign,
   Clock3,
+  Lightbulb,
   Loader2,
   Plus,
   RefreshCw,
+  SearchCheck,
   ShieldCheck,
   Wallet,
 } from "lucide-react";
@@ -26,6 +28,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/lib/api";
 import {
   BILLING_CYCLE_LABELS,
+  REVIEW_STATUS_META,
   STATUS_LABELS,
   archiveSubscription,
   getSubscriptionSummary,
@@ -48,23 +51,72 @@ type FilterKey =
   | "renewing_soon"
   | "auto_renew"
   | "cancellation_deadline"
+  | "review_recommended"
+  | "cancel_candidates"
   | "cancelled";
 
-const FILTERS: { key: FilterKey; label: string; params: SubscriptionListParams }[] = [
+// `params` apply server-side; `reviewStatuses` / `clientPredicate` apply to the
+// fetched page client-side (review status is computed, not a DB column).
+const FILTERS: {
+  key: FilterKey;
+  label: string;
+  params: SubscriptionListParams;
+  reviewStatuses?: string[];
+  clientPredicate?: (s: Subscription) => boolean;
+}[] = [
   { key: "all", label: "All", params: {} },
   { key: "active", label: "Active", params: { status: "active" } },
   { key: "trial", label: "Trial", params: { status: "trial" } },
   { key: "renewing_soon", label: "Renewing soon", params: { renews_within_days: 7 } },
   { key: "auto_renew", label: "Auto-renew", params: { auto_renew: true } },
+  {
+    key: "cancellation_deadline",
+    label: "Cancellation deadline",
+    params: {},
+    clientPredicate: (s) => s.state.cancellation_deadline_soon,
+  },
+  {
+    key: "review_recommended",
+    label: "Review recommended",
+    params: {},
+    reviewStatuses: ["review", "urgent", "trial_attention", "cancel_candidate"],
+  },
+  {
+    key: "cancel_candidates",
+    label: "Cancel candidates",
+    params: {},
+    reviewStatuses: ["cancel_candidate"],
+  },
   { key: "cancelled", label: "Cancelled", params: { status: "cancelled" } },
 ];
 
-const SORTS: { value: string; label: string }[] = [
-  { value: "next_billing_date", label: "Next billing date" },
-  { value: "-amount", label: "Highest cost" },
-  { value: "name", label: "Name" },
-  { value: "-created_at", label: "Recently added" },
+// Server-side sorts pass `ordering`; client-side sorts (computed equivalents)
+// reorder the loaded page by a key function.
+const SORTS: {
+  value: string;
+  label: string;
+  ordering?: string;
+  clientSort?: (a: Subscription, b: Subscription) => number;
+}[] = [
+  { value: "next_billing_date", label: "Next billing date", ordering: "next_billing_date" },
+  {
+    value: "yearly_desc",
+    label: "Highest yearly cost",
+    clientSort: (a, b) => num(b.state.yearly_equivalent_amount) - num(a.state.yearly_equivalent_amount),
+  },
+  {
+    value: "monthly_desc",
+    label: "Highest monthly cost",
+    clientSort: (a, b) => num(b.state.monthly_equivalent_amount) - num(a.state.monthly_equivalent_amount),
+  },
+  { value: "name", label: "Name", ordering: "name" },
+  { value: "-created_at", label: "Recently added", ordering: "-created_at" },
 ];
+
+function num(value: string | null): number {
+  const n = Number(value);
+  return Number.isNaN(n) ? 0 : n;
+}
 
 const URGENCY_BADGE: Record<SubscriptionUrgency, { label: string; chip: string }> = {
   overdue: { label: "Overdue", chip: "border-destructive/25 bg-destructive/10 text-destructive" },
@@ -72,6 +124,9 @@ const URGENCY_BADGE: Record<SubscriptionUrgency, { label: string; chip: string }
   renews_soon: { label: "Soon", chip: "border-brand-amber/30 bg-brand-amber/10 text-brand-amber" },
   upcoming: { label: "Upcoming", chip: "border-primary/20 bg-primary/10 text-primary" },
   normal: { label: "Planned", chip: "border-border bg-muted text-muted-foreground" },
+  cancelled: { label: "Cancelled", chip: "border-border bg-muted text-muted-foreground" },
+  expired: { label: "Expired", chip: "border-border bg-muted text-muted-foreground" },
+  paused: { label: "Paused", chip: "border-border bg-muted text-muted-foreground" },
 };
 
 function money(amount: string, currency: string): string {
@@ -89,8 +144,8 @@ function money(amount: string, currency: string): string {
 
 function costByCurrency(totals: Record<string, string>): string {
   const entries = Object.entries(totals);
-  if (entries.length === 0) return "—";
-  return entries.map(([cur, amt]) => money(amt, cur)).join(" · ");
+  if (entries.length === 0) return "-";
+  return entries.map(([cur, amt]) => money(amt, cur)).join(" | ");
 }
 
 function countdown(days: number | null): string {
@@ -99,6 +154,38 @@ function countdown(days: number | null): string {
   if (days === 0) return "Today";
   if (days === 1) return "Tomorrow";
   return `In ${days} days`;
+}
+
+// Plain-language insight lines from the summary (most useful first).
+function buildInsights(summary: SubscriptionSummary): string[] {
+  const lines: string[] = [];
+  const monthly = costByCurrency(summary.monthly_cost_by_currency);
+  if (summary.active_count > 0 && monthly !== "-") {
+    lines.push(
+      `You're spending ${monthly}/month across ${summary.active_count} active subscription${summary.active_count === 1 ? "" : "s"}.`,
+    );
+  }
+  if (summary.renewals_this_month > 0) {
+    lines.push(
+      `${summary.renewals_this_month} subscription${summary.renewals_this_month === 1 ? "" : "s"} renew in the next 30 days.`,
+    );
+  }
+  if (summary.cancellation_deadlines_soon > 0) {
+    lines.push(
+      `${summary.cancellation_deadlines_soon} cancellation deadline${summary.cancellation_deadlines_soon === 1 ? " is" : "s are"} coming this week.`,
+    );
+  }
+  if (summary.trials_ending_soon > 0) {
+    lines.push(
+      `${summary.trials_ending_soon} trial${summary.trials_ending_soon === 1 ? "" : "s"} ending soon.`,
+    );
+  }
+  if (summary.review_recommended_count > 0) {
+    lines.push(
+      `${summary.review_recommended_count} subscription${summary.review_recommended_count === 1 ? "" : "s"} may need review.`,
+    );
+  }
+  return lines;
 }
 
 export default function SubscriptionsPage() {
@@ -118,8 +205,13 @@ export default function SubscriptionsPage() {
 
   const loadList = useCallback(() => {
     const active = FILTERS.find((f) => f.key === filter);
+    const activeSort = SORTS.find((s) => s.value === sort);
     setSubscriptions(null);
-    listSubscriptions({ ...active?.params, ordering: sort, search: search || undefined })
+    listSubscriptions({
+      ...active?.params,
+      ordering: activeSort?.ordering ?? "next_billing_date",
+      search: search || undefined,
+    })
       .then((res) => {
         setSubscriptions(res.results);
         setError(null);
@@ -166,6 +258,27 @@ export default function SubscriptionsPage() {
   const multiCurrency =
     Object.keys(monthly).length > 1 || Object.keys(yearly).length > 1;
 
+  // Apply client-side review filters + computed-cost sorts to the loaded page.
+  const displayed = useMemo(() => {
+    if (!subscriptions) return null;
+    const activeFilter = FILTERS.find((f) => f.key === filter);
+    const reviewStatuses = activeFilter?.reviewStatuses;
+    let rows = subscriptions;
+    if (reviewStatuses) {
+      rows = rows.filter((s) => reviewStatuses.includes(s.state.review_status));
+    }
+    if (activeFilter?.clientPredicate) {
+      rows = rows.filter(activeFilter.clientPredicate);
+    }
+    const activeSort = SORTS.find((s) => s.value === sort);
+    if (activeSort?.clientSort) {
+      rows = [...rows].sort(activeSort.clientSort);
+    }
+    return rows;
+  }, [subscriptions, filter, sort]);
+
+  const insights = summary ? buildInsights(summary) : [];
+
   return (
     <PageContainer width="full" className="space-y-6">
       <header className="rounded-2xl border border-border bg-card px-5 py-5 shadow-card sm:px-6">
@@ -185,7 +298,7 @@ export default function SubscriptionsPage() {
             <p className="mt-2 text-page-subtitle">
               Track recurring payments, auto-renewals, cancellation deadlines,
               and upcoming charges. DueNest stores renewal dates and reminders
-              only — never full card or banking details.
+              only - never full card or banking details.
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
@@ -217,6 +330,7 @@ export default function SubscriptionsPage() {
           <Metric icon={Clock3} label="Renewing soon" value={String(summary.renewals_this_week)} hint="Next 7 days" tone={summary.renewals_this_week > 0 ? "warn" : "good"} />
           <Metric icon={AlertTriangle} label="Cancellation deadlines" value={String(summary.cancellation_deadlines_soon)} hint="Within 7 days" tone={summary.cancellation_deadlines_soon > 0 ? "danger" : "good"} prominent={summary.cancellation_deadlines_soon > 0} />
           <Metric icon={CalendarClock} label="Trials ending" value={String(summary.trials_ending_soon)} hint="Within 7 days" tone={summary.trials_ending_soon > 0 ? "warn" : "good"} />
+          <Metric icon={SearchCheck} label="Review recommended" value={String(summary.review_recommended_count)} hint="Rule-based checks" tone={summary.review_recommended_count > 0 ? "warn" : "good"} />
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -226,12 +340,28 @@ export default function SubscriptionsPage() {
         </div>
       )}
 
+      {insights.length > 0 && (
+        <section className="rounded-2xl border border-border bg-card p-4 shadow-card">
+          <div className="mb-3 flex items-center gap-2">
+            <Lightbulb className="size-4 text-primary" />
+            <h2 className="text-sm font-semibold">Renewal insights</h2>
+          </div>
+          <ul className="grid gap-2 text-sm text-muted-foreground md:grid-cols-2">
+            {insights.map((insight) => (
+              <li key={insight} className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+                {insight}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <div className="rounded-2xl border border-border bg-card p-3 shadow-card">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name, provider, or notes…"
+            placeholder="Search by name, provider, or notes..."
             className="lg:max-w-xs"
           />
           <div className="flex flex-wrap items-center gap-1.5">
@@ -267,13 +397,13 @@ export default function SubscriptionsPage() {
         </div>
       </div>
 
-      {subscriptions === null ? (
+      {displayed === null ? (
         <div className="space-y-2">
           {Array.from({ length: 4 }).map((_, i) => (
             <Skeleton key={i} className="h-20 rounded-2xl" />
           ))}
         </div>
-      ) : subscriptions.length === 0 ? (
+      ) : displayed.length === 0 ? (
         filter === "all" && !search ? (
           <div className="rounded-2xl border border-border bg-card shadow-card">
             <EmptyState
@@ -295,7 +425,7 @@ export default function SubscriptionsPage() {
         )
       ) : (
         <ul className="space-y-2">
-          {subscriptions.map((sub) => (
+          {displayed.map((sub) => (
             <li key={sub.id}>
               <SubscriptionRow
                 subscription={sub}
@@ -379,6 +509,7 @@ function SubscriptionRow({
   onArchive: () => void;
 }) {
   const urgency = URGENCY_BADGE[sub.state.urgency];
+  const review = REVIEW_STATUS_META[sub.state.review_status];
   const showCancelWarning = sub.state.cancellation_deadline_soon;
   const canCancel = sub.status === "active" || sub.status === "trial";
 
@@ -402,11 +533,16 @@ function SubscriptionRow({
             <Badge variant="outline" className="border-border bg-muted text-muted-foreground">
               {STATUS_LABELS[sub.status] ?? sub.status}
             </Badge>
+            {review?.show && (
+              <Badge variant="outline" className={review.chip}>
+                {review.label}
+              </Badge>
+            )}
           </div>
           <p className="mt-1 truncate text-xs text-muted-foreground">
             {[sub.provider, sub.category_detail?.name, sub.plan_name]
               .filter(Boolean)
-              .join(" · ") || "Subscription"}
+              .join(" | ") || "Subscription"}
           </p>
           {showCancelWarning && (
             <p className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-destructive">

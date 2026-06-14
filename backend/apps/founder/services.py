@@ -1101,6 +1101,14 @@ def build_feature_adoption() -> dict:
             ),
             user_field="owner",
         ),
+        _feature_metric(
+            feature_key="subscriptions",
+            label="Subscription tracker",
+            # Lazy import keeps the founder app independent of subscriptions at
+            # load time. Aggregate only - no names/providers/emails/labels.
+            queryset=_subscription_queryset(),
+            user_field="owner",
+        ),
     ]
     by_key = {feature["feature_key"]: feature for feature in features}
     return {
@@ -1117,8 +1125,16 @@ def build_feature_adoption() -> dict:
         "emergency_pack_used_count": by_key["emergency_pack"]["users_count"],
         "proof_records_used_count": by_key["proof_records"]["users_count"],
         "trash_restore_used_count": by_key["trash_restore"]["users_count"],
+        "subscriptions_used_count": by_key["subscriptions"]["users_count"],
         "features": features,
     }
+
+
+def _subscription_queryset():
+    """Owner-scoped subscription rows for aggregate founder metrics (no PII)."""
+    from apps.subscriptions.models import Subscription
+
+    return Subscription.objects.all()
 
 
 def build_security_overview() -> dict:

@@ -55,18 +55,35 @@ interface FormState {
   notes: string;
 }
 
-function initialState(subscription?: Subscription): FormState {
+export interface SubscriptionPrefill {
+  name?: string;
+  provider?: string;
+  category?: string;
+  website_url?: string;
+  billing_cycle?: BillingCycle;
+  reminder_days_before?: number;
+  auto_renew?: boolean;
+}
+
+function initialState(
+  subscription?: Subscription,
+  prefill?: SubscriptionPrefill,
+): FormState {
   return {
-    name: subscription?.name ?? "",
-    provider: subscription?.provider ?? "",
-    category: subscription?.category ? String(subscription.category) : "",
+    name: subscription?.name ?? prefill?.name ?? "",
+    provider: subscription?.provider ?? prefill?.provider ?? "",
+    category:
+      (subscription?.category ? String(subscription.category) : "") ||
+      prefill?.category ||
+      "",
     plan_name: subscription?.plan_name ?? "",
     account_email: subscription?.account_email ?? "",
-    website_url: subscription?.website_url ?? "",
+    website_url: subscription?.website_url ?? prefill?.website_url ?? "",
     status: subscription?.status ?? "active",
     amount: subscription?.amount ?? "",
     currency: subscription?.currency ?? "USD",
-    billing_cycle: subscription?.billing_cycle ?? "monthly",
+    billing_cycle:
+      subscription?.billing_cycle ?? prefill?.billing_cycle ?? "monthly",
     custom_interval_count: subscription?.custom_interval_count
       ? String(subscription.custom_interval_count)
       : "",
@@ -74,8 +91,10 @@ function initialState(subscription?: Subscription): FormState {
     start_date: subscription?.start_date ?? "",
     next_billing_date: subscription?.next_billing_date ?? "",
     cancellation_deadline: subscription?.cancellation_deadline ?? "",
-    auto_renew: subscription?.auto_renew ?? true,
-    reminder_days_before: String(subscription?.reminder_days_before ?? 7),
+    auto_renew: subscription?.auto_renew ?? prefill?.auto_renew ?? true,
+    reminder_days_before: String(
+      subscription?.reminder_days_before ?? prefill?.reminder_days_before ?? 7,
+    ),
     payment_method_label: subscription?.payment_method_label ?? "",
     importance: subscription?.importance ?? "useful",
     last_used_date: subscription?.last_used_date ?? "",
@@ -85,18 +104,22 @@ function initialState(subscription?: Subscription): FormState {
 
 export function SubscriptionForm({
   subscription,
+  prefill,
   categories,
   onSubmit,
   submitLabel,
   cancelHref,
 }: {
   subscription?: Subscription;
+  prefill?: SubscriptionPrefill;
   categories: SubscriptionCategory[];
   onSubmit: (input: SubscriptionInput) => Promise<void>;
   submitLabel: string;
   cancelHref: string;
 }) {
-  const [form, setForm] = useState<FormState>(() => initialState(subscription));
+  const [form, setForm] = useState<FormState>(() =>
+    initialState(subscription, prefill),
+  );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -274,7 +297,7 @@ export function SubscriptionForm({
                 }
                 className={SELECT_CLASS}
               >
-                <option value="">Select…</option>
+                <option value="">Select...</option>
                 <option value="days">Days</option>
                 <option value="weeks">Weeks</option>
                 <option value="months">Months</option>
@@ -395,7 +418,7 @@ export function SubscriptionForm({
               type="url"
               value={form.website_url}
               onChange={(e) => update("website_url", e.target.value)}
-              placeholder="https://…"
+              placeholder="https://..."
               aria-invalid={Boolean(errors.website_url)}
             />
           </Field>
@@ -403,7 +426,7 @@ export function SubscriptionForm({
         <Field
           label="Payment method label"
           error={errors.payment_method_label}
-          hint="Do not store full card numbers. Use labels like “Visa ending 1234”."
+          hint='Do not store full card numbers. Use labels like "Visa ending 1234".'
         >
           <Input
             value={form.payment_method_label}
@@ -481,7 +504,7 @@ function validate(form: FormState): Record<string, string> {
     CARD_NUMBER_RE.test(form.payment_method_label)
   ) {
     errors.payment_method_label =
-      "Do not store full card numbers. Use “Visa ending 1234”.";
+      'Do not store full card numbers. Use "Visa ending 1234".';
   }
   return errors;
 }

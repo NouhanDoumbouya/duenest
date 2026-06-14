@@ -49,6 +49,39 @@ export const IMPORTANCE_LABELS: Record<string, string> = {
   rarely_used: "Rarely used",
 };
 
+// Presentation for the rule-based review status. Chip classes match the
+// product's existing tone vocabulary (destructive / amber / primary / muted).
+export const REVIEW_STATUS_META: Record<
+  string,
+  { label: string; chip: string; show: boolean }
+> = {
+  healthy: {
+    label: "Healthy",
+    chip: "border-brand-success/25 bg-brand-success/10 text-brand-success",
+    show: false,
+  },
+  review: {
+    label: "Review",
+    chip: "border-brand-amber/30 bg-brand-amber/10 text-brand-amber",
+    show: true,
+  },
+  trial_attention: {
+    label: "Trial attention",
+    chip: "border-brand-amber/30 bg-brand-amber/10 text-brand-amber",
+    show: true,
+  },
+  cancel_candidate: {
+    label: "Cancel candidate",
+    chip: "border-brand-amber/30 bg-brand-amber/10 text-brand-amber",
+    show: true,
+  },
+  urgent: {
+    label: "Urgent",
+    chip: "border-destructive/25 bg-destructive/10 text-destructive",
+    show: true,
+  },
+};
+
 export function listSubscriptions(
   params?: SubscriptionListParams,
 ): Promise<Paginated<Subscription>> {
