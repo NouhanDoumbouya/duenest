@@ -816,3 +816,36 @@ class DocumentReminderRuleTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["count"], 1)
         self.assertEqual(response.data["items"][0]["id"], alice_rule.id)
+
+
+class DocumentCategoryListTests(APITestCase):
+    """The read-only shared-category list endpoint that powers the filter."""
+
+    URL = "/api/v1/document-categories/"
+
+    def setUp(self):
+        self.alice = User.objects.create_user(
+            username="cat_alice",
+            email="cat_alice@example.com",
+            password="StrongPassword123!DueNest",
+        )
+
+    def test_requires_authentication(self):
+        resp = self.client.get(self.URL)
+        self.assertIn(resp.status_code, (401, 403))
+
+    def test_lists_categories_with_safe_fields(self):
+        from apps.documents.models import DocumentCategory
+
+        DocumentCategory.objects.create(name="Identity")
+        DocumentCategory.objects.create(name="Insurance")
+        self.client.force_authenticate(self.alice)
+        resp = self.client.get(self.URL)
+        self.assertEqual(resp.status_code, 200, resp.data)
+        names = {row["name"] for row in resp.data}
+        self.assertTrue({"Identity", "Insurance"}.issubset(names))
+        # Only the safe, controlled-vocabulary fields are exposed.
+        self.assertEqual(
+            set(resp.data[0].keys()),
+            {"id", "name", "slug", "description", "created_at", "updated_at"},
+        )

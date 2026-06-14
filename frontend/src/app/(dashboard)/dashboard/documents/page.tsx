@@ -22,10 +22,15 @@ import { PageContainer } from "@/components/ui/page-container";
 import { PageHeader } from "@/components/ui/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/lib/api";
-import { deleteDocument, getDocuments } from "@/lib/documents";
+import {
+  deleteDocument,
+  getDocuments,
+  listDocumentCategories,
+} from "@/lib/documents";
 import { getTags } from "@/lib/tags";
 import { cn } from "@/lib/utils";
 import type {
+  DocumentCategory,
   DocumentListParams,
   DocumentOrdering,
   DocumentRecord,
@@ -82,6 +87,7 @@ function buildListParams({
   expiryFrom,
   expiryTo,
   tag,
+  category,
   ordering,
 }: {
   search: string;
@@ -92,6 +98,7 @@ function buildListParams({
   expiryFrom: string;
   expiryTo: string;
   tag: number | "";
+  category: number | "";
   ordering: DocumentOrdering;
 }): DocumentListParams {
   const params: DocumentListParams = { ordering };
@@ -103,6 +110,7 @@ function buildListParams({
   if (expiryFrom) params.expiry_from = expiryFrom;
   if (expiryTo) params.expiry_to = expiryTo;
   if (tag !== "") params.tag = tag;
+  if (category !== "") params.category = category;
 
   if (quickFilter === "needs_attention") params.needs_attention = true;
   if (quickFilter === "expiring_soon") params.computed_status = "expiring_soon";
@@ -125,6 +133,8 @@ export default function DocumentsPage() {
   const [expiryTo, setExpiryTo] = useState("");
   const [tag, setTag] = useState<number | "">("");
   const [tags, setTags] = useState<DocumentTag[]>([]);
+  const [category, setCategory] = useState<number | "">("");
+  const [categories, setCategories] = useState<DocumentCategory[]>([]);
   const [ordering, setOrdering] = useState<DocumentOrdering>("-created_at");
 
   const [documents, setDocuments] = useState<DocumentRecord[] | null>(null);
@@ -146,6 +156,7 @@ export default function DocumentsPage() {
         expiryFrom,
         expiryTo,
         tag,
+        category,
         ordering,
       }),
     [
@@ -157,6 +168,7 @@ export default function DocumentsPage() {
       expiryFrom,
       expiryTo,
       tag,
+      category,
       ordering,
     ],
   );
@@ -190,6 +202,9 @@ export default function DocumentsPage() {
     getTags()
       .then((page) => active && setTags(page.results))
       .catch(() => active && setTags([]));
+    listDocumentCategories()
+      .then((result) => active && setCategories(result))
+      .catch(() => active && setCategories([]));
     return () => {
       active = false;
     };
@@ -227,6 +242,7 @@ export default function DocumentsPage() {
     setExpiryFrom("");
     setExpiryTo("");
     setTag("");
+    setCategory("");
     setOrdering("-created_at");
     if (typeof window !== "undefined" && window.location.search) {
       window.history.replaceState(null, "", "/dashboard/documents");
@@ -242,6 +258,7 @@ export default function DocumentsPage() {
     expiryFrom !== "" ||
     expiryTo !== "" ||
     tag !== "" ||
+    category !== "" ||
     ordering !== "-created_at";
   const initialLoading = documents === null;
   const refreshing = documents !== null && loadedQueryKey !== queryKey;
@@ -343,6 +360,26 @@ export default function DocumentsPage() {
                 onChange={(event) => setCountry(event.target.value)}
                 placeholder="Country"
               />
+            </label>
+            <label className="block">
+              <span className="sr-only">Filter by category</span>
+              <select
+                className="h-10 w-full rounded-lg border border-input bg-card px-3 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                value={category}
+                onChange={(event) =>
+                  setCategory(
+                    event.target.value === "" ? "" : Number(event.target.value),
+                  )
+                }
+                disabled={categories.length === 0}
+              >
+                <option value="">All categories</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="block">
               <span className="sr-only">Filter by tag</span>
