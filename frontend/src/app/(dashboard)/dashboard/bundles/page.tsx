@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Loader2, Package, Plus } from "lucide-react";
+import { Package, Plus } from "lucide-react";
 
 import { ReadinessRing } from "@/components/bundles/readiness-ring";
 import { buttonVariants } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/lib/api";
 import { formatDate } from "@/lib/documents";
 import {
@@ -70,9 +71,24 @@ export default function BundlesPage() {
       )}
 
       {bundles === null ? (
-        <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">
-          <Loader2 className="size-5 animate-spin" />
-          <span>Loading bundles…</span>
+        <div
+          className="grid gap-3 sm:grid-cols-2"
+          aria-busy="true"
+          aria-label="Loading bundles"
+        >
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="flex items-center gap-4 rounded-xl border border-border bg-card p-4"
+            >
+              <Skeleton className="size-12 shrink-0 rounded-full" />
+              <div className="min-w-0 flex-1 space-y-2">
+                <Skeleton className="h-4 w-2/3" />
+                <Skeleton className="h-3 w-1/2" />
+                <Skeleton className="h-4 w-20 rounded-full" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : bundles.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border px-4 py-12 text-center">

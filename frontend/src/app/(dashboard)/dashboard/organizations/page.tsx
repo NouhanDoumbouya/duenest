@@ -7,7 +7,6 @@ import {
   Building2,
   CalendarClock,
   FileText,
-  Loader2,
   Plus,
   ShieldAlert,
   UsersRound,
@@ -19,6 +18,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer } from "@/components/ui/page-container";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/lib/api";
 import {
   ORGANIZATION_TYPE_LABELS,
@@ -115,9 +115,26 @@ export default function OrganizationsPage() {
       )}
 
       {state === null ? (
-        <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">
-          <Loader2 className="size-5 animate-spin" />
-          <span>Loading organizations...</span>
+        <div
+          className="grid gap-4 lg:grid-cols-2"
+          aria-busy="true"
+          aria-label="Loading organizations"
+        >
+          {Array.from({ length: 2 }).map((_, i) => (
+            <div
+              key={i}
+              className="rounded-xl border border-border bg-card p-5 shadow-card"
+            >
+              <Skeleton className="h-6 w-1/2" />
+              <Skeleton className="mt-2 h-4 w-1/3" />
+              <div className="mt-5 grid gap-3 sm:grid-cols-4">
+                {Array.from({ length: 4 }).map((_, j) => (
+                  <Skeleton key={j} className="h-12 w-full rounded-lg" />
+                ))}
+              </div>
+              <Skeleton className="mt-4 h-4 w-3/4" />
+            </div>
+          ))}
         </div>
       ) : organizations.length === 0 ? (
         <Card>

@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageContainer } from "@/components/ui/page-container";
 import { PageHeader } from "@/components/ui/page-header";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { ApiError } from "@/lib/api";
 import {
@@ -225,10 +226,27 @@ export default function FileInboxPage() {
       )}
 
       {loading ? (
-        <div className="flex min-h-[18rem] items-center justify-center gap-2 text-muted-foreground">
-          <Loader2 className="size-5 animate-spin" />
-          <span>Loading File Inbox...</span>
-        </div>
+        <section className="grid gap-3" aria-busy="true" aria-label="Loading File Inbox">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="rounded-lg border border-border bg-card p-4"
+            >
+              <div className="flex items-start gap-3">
+                <Skeleton className="size-10 shrink-0 rounded-lg" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <Skeleton className="h-4 w-1/2" />
+                  <Skeleton className="h-3 w-1/3" />
+                </div>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Skeleton className="h-8 w-24" />
+                <Skeleton className="h-8 w-28" />
+                <Skeleton className="h-8 w-32" />
+              </div>
+            </div>
+          ))}
+        </section>
       ) : files && files.length > 0 ? (
         <section className="grid gap-3">
           {files.map((file) => (
