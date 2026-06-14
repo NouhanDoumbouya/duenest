@@ -17,6 +17,7 @@ import {
   fileExtension,
   formatFileSize,
   getDocumentFilePreviewBlob,
+  getInboxFilePreviewBlob,
   isPreviewableDocumentFile,
 } from "@/lib/document-files";
 import { cn } from "@/lib/utils";
@@ -72,7 +73,12 @@ export function DocumentFileViewer({
       return () => undefined;
     }
 
-    getDocumentFilePreviewBlob(file.document, file.id)
+    const previewPromise =
+      file.document === null
+        ? getInboxFilePreviewBlob(file.id)
+        : getDocumentFilePreviewBlob(file.document, file.id);
+
+    previewPromise
       .then((blob) => {
         if (!active) return;
         previewUrl = URL.createObjectURL(blob);
@@ -125,6 +131,7 @@ export function DocumentFileViewer({
               <p className="text-xs text-muted-foreground">
                 <span className="uppercase">{ext}</span> ·{" "}
                 {formatFileSize(file.file_size)}
+                {file.document_title ? ` · ${file.document_title}` : " · File Inbox"}
               </p>
             </div>
           </div>
@@ -134,15 +141,17 @@ export function DocumentFileViewer({
               <LockKeyhole className="size-3" />
               Account-only preview
             </span>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => onShare(file)}
-            >
-              <Share2 className="size-3.5" />
-              Share
-            </Button>
+            {file.document !== null && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onShare(file)}
+              >
+                <Share2 className="size-3.5" />
+                Share
+              </Button>
+            )}
             <Button
               type="button"
               size="sm"

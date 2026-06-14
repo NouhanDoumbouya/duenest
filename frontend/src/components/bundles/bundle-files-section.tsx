@@ -30,6 +30,7 @@ import {
   downloadDocumentFile,
   formatFileSize,
   getDocumentFilePreviewBlob,
+  getInboxFilePreviewBlob,
 } from "@/lib/document-files";
 import { formatDate } from "@/lib/documents";
 import {
@@ -155,7 +156,10 @@ export function BundleFilesSection({ bundleId }: { bundleId: number }) {
     setPreviewFile(file);
     setPreviewFetch({ url: null, loading: true, error: null });
     try {
-      const blob = await getDocumentFilePreviewBlob(file.document, file.id);
+      const blob =
+        file.document === null
+          ? await getInboxFilePreviewBlob(file.id)
+          : await getDocumentFilePreviewBlob(file.document, file.id);
       const url = URL.createObjectURL(blob);
       previewUrlRef.current = url;
       setPreviewFetch({ url, loading: false, error: null });
@@ -181,6 +185,8 @@ export function BundleFilesSection({ bundleId }: { bundleId: number }) {
     try {
       await downloadDocumentFile({
         document: file.document,
+        document_title: file.document_title,
+        assignment_status: file.document === null ? "inbox" : "attached",
         id: file.id,
         original_filename: file.original_filename,
       } as Parameters<typeof downloadDocumentFile>[0]);

@@ -28,6 +28,7 @@ from .models import (
     ProductEvent,
     WaitlistEntry,
 )
+from .services import track_product_event
 
 
 User = get_user_model()
@@ -373,6 +374,19 @@ class FounderConsoleAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertGreaterEqual(response.data["summary"]["total"], 1)
 
+        created = self.client.post(
+            "/api/v1/founder/feature-completion/",
+            {
+                "feature_name": "File Inbox",
+                "module": "Documents",
+                "status": "in_progress",
+                "priority": "high",
+            },
+            format="json",
+        )
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED, created.data)
+        self.assertEqual(created.data["key"], "file-inbox")
+
         item_id = response.data["items"][0]["id"]
         updated = self.client.patch(
             f"/api/v1/founder/feature-completion/{item_id}/",
@@ -393,6 +407,8 @@ class FounderConsoleAPITests(APITestCase):
         response = self.client.get("/api/v1/founder/launch-readiness/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertGreaterEqual(response.data["summary"]["total"], 1)
+        self.assertIn("generated_blockers", response.data["summary"])
+        self.assertIn("private_beta_ready_percent", response.data["summary"])
 
         item_id = response.data["items"][0]["id"]
         updated = self.client.patch(
@@ -455,6 +471,21 @@ class FounderConsoleAPITests(APITestCase):
             country="Malaysia",
             ip_address="203.0.113.10",
         )
+        WaitlistEntry.objects.create(
+            full_name="Amina Student",
+            email="amina-map@example.com",
+            persona=WaitlistEntry.Persona.INTERNATIONAL_STUDENT,
+            country="Malaysia",
+        )
+        WaitlistEntry.objects.create(
+            full_name="Accepted Beta",
+            email="accepted-map@example.com",
+            persona=WaitlistEntry.Persona.VISA_HOLDER,
+            country="Malaysia",
+            status=WaitlistEntry.Status.ACCEPTED,
+            accepted_user=self.user,
+            accepted_at=timezone.now(),
+        )
 
         self.authenticate(self.founder)
         response = self.client.get("/api/v1/founder/country-activity/")
@@ -462,6 +493,8 @@ class FounderConsoleAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["countries"][0]["country"], "Malaysia")
         self.assertEqual(response.data["countries"][0]["documents_created"], 1)
+        self.assertEqual(response.data["countries"][0]["waitlist_entries"], 2)
+        self.assertEqual(response.data["countries"][0]["beta_users"], 1)
         self.assertNotIn("203.0.113.10", str(response.data))
 
     def test_feedback_submission_and_founder_update(self):
@@ -472,11 +505,14 @@ class FounderConsoleAPITests(APITestCase):
                 "category": "bug",
                 "title": "Upload confusion",
                 "message": "I was not sure what happened after upload.",
+                "urgency": "high",
+                "contact_preference": "email",
                 "related_feature": "documents",
             },
             format="json",
         )
         self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(create_response.data["urgency"], "high")
 
         item = FeedbackItem.objects.get()
         self.authenticate(self.founder)
@@ -486,6 +522,7 @@ class FounderConsoleAPITests(APITestCase):
                 "status": "planned",
                 "priority": "high",
                 "founder_notes": "Improve upload completion copy.",
+                "founder_response": "Thanks, this is now on the beta fix list.",
             },
             format="json",
         )
@@ -494,6 +531,32 @@ class FounderConsoleAPITests(APITestCase):
         item.refresh_from_db()
         self.assertEqual(item.status, FeedbackItem.Status.PLANNED)
         self.assertEqual(item.priority, FeedbackItem.Priority.HIGH)
+        self.assertTrue(item.founder_response)
+        self.assertIsNotNone(item.responded_at)
+
+    def test_product_event_tracking_deduplicates_repeated_client_event(self):
+        track_product_event(
+            event_type=ProductEvent.EventType.DOCUMENT_CREATED,
+            user=self.user,
+            object_type="document",
+            object_id="123",
+            metadata={"client_event_id": "client-evt-1"},
+        )
+        track_product_event(
+            event_type=ProductEvent.EventType.DOCUMENT_CREATED,
+            user=self.user,
+            object_type="document",
+            object_id="123",
+            metadata={"client_event_id": "client-evt-1"},
+        )
+
+        self.assertEqual(
+            ProductEvent.objects.filter(
+                event_type=ProductEvent.EventType.DOCUMENT_CREATED,
+                object_id="123",
+            ).count(),
+            1,
+        )
 
     def test_template_mutation_is_founder_only(self):
         payload = {

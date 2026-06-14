@@ -210,6 +210,27 @@ export function updateFeatureCompletion(
   });
 }
 
+export function createFeatureCompletion(payload: {
+  key?: string;
+  feature_name: string;
+  module: string;
+  backend_done?: boolean;
+  frontend_done?: boolean;
+  tests_done?: boolean;
+  docs_done?: boolean;
+  polished?: boolean;
+  status?: string;
+  priority?: FounderPriority;
+  notes?: string;
+  sort_order?: number;
+}): Promise<FeatureCompletionItem> {
+  return apiFetch<FeatureCompletionItem>("/founder/feature-completion/", {
+    method: "POST",
+    body: payload,
+    auth: true,
+  });
+}
+
 export function submitFeedback(
   payload: SubmitFeedbackRequest,
 ): Promise<Pick<FeedbackItem, "id" | "title" | "created_at">> {
@@ -237,7 +258,7 @@ export function getFounderFeedback(params?: {
 export function updateFounderFeedback(
   id: number,
   payload: Partial<
-    Pick<FeedbackItem, "status" | "priority" | "founder_notes">
+    Pick<FeedbackItem, "status" | "priority" | "founder_notes" | "founder_response">
   >,
 ): Promise<FeedbackItem> {
   return apiFetch<FeedbackItem>(`/founder/feedback/${id}/`, {

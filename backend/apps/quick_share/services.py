@@ -185,7 +185,10 @@ def session_files(session: QuickShareSession):
             continue
         if file.is_trashed:
             continue
-        if file.document.owner_id != session.owner_id:
+        if file.document_id:
+            if file.document.is_trashed or file.document.owner_id != session.owner_id:
+                continue
+        elif file.uploaded_by_id != session.owner_id:
             continue
         if file.id not in seen:
             seen.add(file.id)

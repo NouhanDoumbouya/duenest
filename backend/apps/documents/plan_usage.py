@@ -58,7 +58,8 @@ def count_resource(user, resource: str) -> int:
         return Document.objects.filter(owner=user, is_trashed=False).count()
     if resource == plans.RESOURCE_FILES:
         return DocumentFile.objects.filter(
-            document__owner=user, is_trashed=False
+            Q(document__owner=user) | Q(document__isnull=True, uploaded_by=user),
+            is_trashed=False,
         ).count()
     if resource == plans.RESOURCE_BUNDLES:
         return DocumentBundle.objects.filter(owner=user).count()
@@ -134,7 +135,8 @@ def count_resource(user, resource: str) -> int:
 
 def _storage_bytes(user) -> int:
     total = DocumentFile.objects.filter(
-        document__owner=user, is_trashed=False
+        Q(document__owner=user) | Q(document__isnull=True, uploaded_by=user),
+        is_trashed=False,
     ).aggregate(total=Sum("file_size"))["total"]
     return int(total or 0)
 

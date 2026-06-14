@@ -1,16 +1,21 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { CheckCircle2, Loader2, MessageSquare } from "lucide-react";
+import { CheckCircle2, Loader2, Mail, MessageSquare } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ApiError } from "@/lib/api";
 import { submitFeedback } from "@/lib/founder";
-import type { FeedbackCategory } from "@/types/founder";
+import { cn } from "@/lib/utils";
+import type {
+  FeedbackCategory,
+  FeedbackContactPreference,
+  FeedbackPriority,
+} from "@/types/founder";
 
 const categories: { value: FeedbackCategory; label: string }[] = [
   { value: "bug", label: "Bug" },
@@ -25,6 +30,9 @@ const categories: { value: FeedbackCategory; label: string }[] = [
 
 export default function FeedbackPage() {
   const [category, setCategory] = useState<FeedbackCategory>("bug");
+  const [urgency, setUrgency] = useState<FeedbackPriority>("medium");
+  const [contactPreference, setContactPreference] =
+    useState<FeedbackContactPreference>("email");
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
   const [relatedFeature, setRelatedFeature] = useState("");
@@ -41,6 +49,8 @@ export default function FeedbackPage() {
         category,
         title,
         message,
+        urgency,
+        contact_preference: contactPreference,
         related_feature: relatedFeature,
         related_path: typeof window === "undefined" ? "" : window.location.pathname,
       });
@@ -123,6 +133,40 @@ export default function FeedbackPage() {
               </select>
             </label>
 
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="space-y-1">
+                <Label>Urgency</Label>
+                <select
+                  value={urgency}
+                  onChange={(event) =>
+                    setUrgency(event.target.value as FeedbackPriority)
+                  }
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="urgent">Urgent</option>
+                </select>
+              </label>
+              <label className="space-y-1">
+                <Label>Reply preference</Label>
+                <select
+                  value={contactPreference}
+                  onChange={(event) =>
+                    setContactPreference(
+                      event.target.value as FeedbackContactPreference,
+                    )
+                  }
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="email">Email reply</option>
+                  <option value="in_app">In-app reply</option>
+                  <option value="no_reply">No reply needed</option>
+                </select>
+              </label>
+            </div>
+
             <label className="space-y-1">
               <Label>Related feature</Label>
               <Input
@@ -153,14 +197,23 @@ export default function FeedbackPage() {
               />
             </label>
 
-            <Button type="submit" disabled={saving}>
-              {saving ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <MessageSquare className="size-4" />
-              )}
-              Submit feedback
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" disabled={saving}>
+                {saving ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <MessageSquare className="size-4" />
+                )}
+                Submit feedback
+              </Button>
+              <a
+                href="mailto:support@duenest.app"
+                className={cn(buttonVariants({ variant: "outline" }))}
+              >
+                <Mail className="size-4" />
+                Email support
+              </a>
+            </div>
           </form>
         </CardContent>
       </Card>

@@ -6,13 +6,17 @@
 // Selection is tracked by file id and surfaced back to the parent wizard.
 
 import { useEffect, useState } from "react";
-import { ChevronDown, FileText, Loader2, Search } from "lucide-react";
+import { ChevronDown, FileText, Inbox, Loader2, Search } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/lib/api";
 import { getDocuments } from "@/lib/documents";
-import { getDocumentFiles, formatFileSize } from "@/lib/document-files";
+import {
+  getDocumentFiles,
+  getFileInbox,
+  formatFileSize,
+} from "@/lib/document-files";
 import { cn } from "@/lib/utils";
 import type { DocumentRecord } from "@/types/documents";
 import type { DocumentFile } from "@/types/document-files";
@@ -32,6 +36,7 @@ export function FilePicker({
   onToggle: (file: SelectedFile) => void;
 }) {
   const [documents, setDocuments] = useState<DocumentRecord[] | null>(null);
+  const [inboxFiles, setInboxFiles] = useState<DocumentFile[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<number | null>(null);
@@ -42,9 +47,11 @@ export function FilePicker({
 
   useEffect(() => {
     let active = true;
-    getDocuments({ has_file: true })
-      .then((res) => {
-        if (active) setDocuments(res.results);
+    Promise.all([getDocuments({ has_file: true }), getFileInbox()])
+      .then(([documentResult, inboxResult]) => {
+        if (!active) return;
+        setDocuments(documentResult.results);
+        setInboxFiles(inboxResult.results);
       })
       .catch((err) => {
         if (active)
@@ -80,7 +87,7 @@ export function FilePicker({
     return <p className="text-sm text-destructive">{error}</p>;
   }
 
-  if (documents === null) {
+  if (documents === null || inboxFiles === null) {
     return (
       <div className="space-y-2">
         {[0, 1, 2].map((i) => (
@@ -95,12 +102,17 @@ export function FilePicker({
         d.title.toLowerCase().includes(query.toLowerCase()),
       )
     : documents;
+  const filteredInboxFiles = query
+    ? inboxFiles.filter((file) =>
+        file.original_filename.toLowerCase().includes(query.toLowerCase()),
+      )
+    : inboxFiles;
 
-  if (documents.length === 0) {
+  if (documents.length === 0 && inboxFiles.length === 0) {
     return (
       <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-        You have no documents with files yet. Add a document and upload a file
-        first, then come back to share it.
+        You have no files yet. Upload to File Inbox or add a document file,
+        then come back to share it.
       </p>
     );
   }
@@ -118,6 +130,61 @@ export function FilePicker({
       </div>
 
       <ul className="space-y-2">
+        {filteredInboxFiles.length > 0 && (
+          <li className="overflow-hidden rounded-xl border border-border bg-card">
+            <div className="flex items-center gap-3 border-b border-border p-3">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+                <Inbox className="size-4" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm font-medium">File Inbox</p>
+                <p className="text-xs text-muted-foreground">
+                  Files uploaded before choosing a document
+                </p>
+              </div>
+            </div>
+            <div className="bg-muted/20 p-2">
+              <ul className="space-y-1">
+                {filteredInboxFiles.map((file) => {
+                  const checked = selected.has(file.id);
+                  return (
+                    <li key={file.id}>
+                      <label
+                        className={cn(
+                          "flex cursor-pointer items-center gap-3 rounded-lg p-2 transition-colors",
+                          checked ? "bg-primary/10" : "hover:bg-card",
+                        )}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() =>
+                            onToggle({
+                              id: file.id,
+                              name: file.original_filename,
+                              size: file.file_size,
+                              documentTitle: "File Inbox",
+                            })
+                          }
+                          className="size-4 accent-primary"
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm">
+                            {file.original_filename}
+                          </span>
+                          <span className="block text-xs text-muted-foreground">
+                            {formatFileSize(file.file_size)}
+                          </span>
+                        </span>
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          </li>
+        )}
+
         {filtered.map((doc) => {
           const isOpen = expanded === doc.id;
           const files = filesByDoc[doc.id] ?? [];

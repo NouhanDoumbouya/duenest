@@ -23,6 +23,10 @@ import type {
 
 const priorities: FounderPriority[] = ["low", "medium", "high", "critical"];
 
+function label(value: string) {
+  return value.replaceAll("_", " ");
+}
+
 export default function FounderLaunchPage() {
   const [data, setData] = useState<LaunchReadinessResponse | null>(null);
   const [drafts, setDrafts] = useState<Record<number, LaunchChecklistItem>>({});
@@ -174,14 +178,64 @@ export default function FounderLaunchPage() {
         />
         <FounderStatCard
           icon={CheckCircle2}
-          label="Completed"
-          value={blockers.complete}
-          hint={`of ${data.summary.total} tracked items`}
-          tone="good"
+          label="Private beta ready"
+          value={`${data.summary.private_beta_ready_percent ?? data.summary.percent}%`}
+          hint={`Feature completion ${data.summary.feature_completion_percent ?? 0}%`}
+          tone={
+            (data.summary.private_beta_ready_percent ?? data.summary.percent) >= 80
+              ? "good"
+              : "warn"
+          }
         />
       </div>
 
       <FounderInsightPanel title="What blocks launch" insights={insights} />
+
+      {(data.summary.generated_blockers ?? []).length > 0 && (
+        <Card>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="font-heading text-lg font-semibold">
+                  Generated feature blockers
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  High-priority feature rows that are not ready yet.
+                </p>
+              </div>
+              <Badge variant="outline">
+                {data.summary.generated_blockers_count ?? 0} open
+              </Badge>
+            </div>
+            <div className="grid gap-2">
+              {(data.summary.generated_blockers ?? []).map((blocker) => (
+                <div
+                  key={blocker.id}
+                  className="rounded-lg border border-border bg-muted/30 p-3"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-medium">{blocker.feature_name}</p>
+                    <Badge variant="outline">{blocker.module}</Badge>
+                    <Badge
+                      variant={
+                        blocker.priority === "critical" ? "destructive" : "secondary"
+                      }
+                    >
+                      {blocker.priority}
+                    </Badge>
+                    <Badge variant="outline">{label(blocker.status)}</Badge>
+                  </div>
+                  {blocker.missing.length > 0 && (
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Missing: {blocker.missing.map(label).join(", ")}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-2">
         {data.items.map((item) => {

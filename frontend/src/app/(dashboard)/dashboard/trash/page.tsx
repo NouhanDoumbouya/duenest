@@ -13,22 +13,37 @@ import {
   permanentlyDeleteDocument,
   restoreDocument,
 } from "@/lib/documents";
+import {
+  formatFileSize,
+  getTrashedInboxFiles,
+  permanentlyDeleteInboxFile,
+  restoreInboxFile,
+} from "@/lib/document-files";
+import type { DocumentFile } from "@/types/document-files";
 import type { DocumentRecord } from "@/types/documents";
 
 export default function TrashPage() {
   const [docs, setDocs] = useState<DocumentRecord[] | null>(null);
+  const [files, setFiles] = useState<DocumentFile[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [restoringId, setRestoringId] = useState<number | null>(null);
   const [pendingDelete, setPendingDelete] = useState<DocumentRecord | null>(null);
+  const [pendingFileDelete, setPendingFileDelete] = useState<DocumentFile | null>(
+    null,
+  );
   const [deleting, setDeleting] = useState(false);
 
   function load() {
     setError(null);
-    getTrashedDocuments()
-      .then((page) => setDocs(page.results))
+    Promise.all([getTrashedDocuments(), getTrashedInboxFiles()])
+      .then(([documentPage, filePage]) => {
+        setDocs(documentPage.results);
+        setFiles(filePage.results);
+      })
       .catch((err) => {
         setDocs([]);
+        setFiles([]);
         setError(
           err instanceof ApiError ? err.message : "Unable to load trash.",
         );
@@ -37,11 +52,16 @@ export default function TrashPage() {
 
   useEffect(() => {
     let active = true;
-    getTrashedDocuments()
-      .then((page) => active && setDocs(page.results))
+    Promise.all([getTrashedDocuments(), getTrashedInboxFiles()])
+      .then(([documentPage, filePage]) => {
+        if (!active) return;
+        setDocs(documentPage.results);
+        setFiles(filePage.results);
+      })
       .catch((err) => {
         if (!active) return;
         setDocs([]);
+        setFiles([]);
         setError(
           err instanceof ApiError ? err.message : "Unable to load trash.",
         );
@@ -66,6 +86,21 @@ export default function TrashPage() {
     }
   }
 
+  async function handleRestoreFile(file: DocumentFile) {
+    setActionError(null);
+    setRestoringId(file.id);
+    try {
+      await restoreInboxFile(file.id);
+      setFiles((prev) => (prev ?? []).filter((item) => item.id !== file.id));
+    } catch (err) {
+      setActionError(
+        err instanceof ApiError ? err.message : "Could not restore the file.",
+      );
+    } finally {
+      setRestoringId(null);
+    }
+  }
+
   async function handleConfirmDelete() {
     if (!pendingDelete) return;
     setDeleting(true);
@@ -81,6 +116,28 @@ export default function TrashPage() {
           : "Could not delete the document. Please try again.",
       );
       setPendingDelete(null);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  async function handleConfirmFileDelete() {
+    if (!pendingFileDelete) return;
+    setDeleting(true);
+    setActionError(null);
+    try {
+      await permanentlyDeleteInboxFile(pendingFileDelete.id);
+      setFiles((prev) =>
+        (prev ?? []).filter((file) => file.id !== pendingFileDelete.id),
+      );
+      setPendingFileDelete(null);
+    } catch (err) {
+      setActionError(
+        err instanceof ApiError
+          ? err.message
+          : "Could not delete the file. Please try again.",
+      );
+      setPendingFileDelete(null);
     } finally {
       setDeleting(false);
     }
@@ -132,7 +189,7 @@ export default function TrashPage() {
           <Loader2 className="size-5 animate-spin" />
           <span>Loading trash…</span>
         </div>
-      ) : docs.length === 0 ? (
+      ) : docs.length === 0 && (files ?? []).length === 0 ? (
         <div className="rounded-xl border border-dashed border-border">
           <EmptyState
             icon={Trash2}
@@ -141,42 +198,63 @@ export default function TrashPage() {
           />
         </div>
       ) : (
-        <ul className="space-y-3">
-          {docs.map((doc) => (
-            <li
-              key={doc.id}
-              className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-4"
-            >
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">{doc.title}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {doc.document_type || "Document"}
-                  {doc.trashed_at && ` · Deleted ${formatDate(doc.trashed_at)}`}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleRestore(doc)}
-                  disabled={restoringId === doc.id}
-                >
-                  <RotateCcw className="size-4" />
-                  {restoringId === doc.id ? "Restoring…" : "Restore"}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                  onClick={() => setPendingDelete(doc)}
-                >
-                  <Trash2 className="size-4" />
-                  Delete forever
-                </Button>
-              </div>
-            </li>
-          ))}
-        </ul>
+        <div className="space-y-6">
+          {docs.length > 0 && (
+            <section className="space-y-3">
+              <h2 className="text-sm font-semibold">Documents</h2>
+              <ul className="space-y-3">
+                {docs.map((doc) => (
+                  <li
+                    key={doc.id}
+                    className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-4"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium">{doc.title}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {doc.document_type || "Document"}
+                        {doc.trashed_at && ` · Deleted ${formatDate(doc.trashed_at)}`}
+                      </p>
+                    </div>
+                    <TrashActions
+                      restoring={restoringId === doc.id}
+                      onRestore={() => handleRestore(doc)}
+                      onDelete={() => setPendingDelete(doc)}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {(files ?? []).length > 0 && (
+            <section className="space-y-3">
+              <h2 className="text-sm font-semibold">File Inbox</h2>
+              <ul className="space-y-3">
+                {(files ?? []).map((file) => (
+                  <li
+                    key={file.id}
+                    className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-4"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium">
+                        {file.original_filename}
+                      </p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {formatFileSize(file.file_size)}
+                        {file.trashed_at && ` · Deleted ${formatDate(file.trashed_at)}`}
+                      </p>
+                    </div>
+                    <TrashActions
+                      restoring={restoringId === file.id}
+                      onRestore={() => handleRestoreFile(file)}
+                      onDelete={() => setPendingFileDelete(file)}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </div>
       )}
 
       <ConfirmDialog
@@ -192,6 +270,47 @@ export default function TrashPage() {
         onConfirm={handleConfirmDelete}
         onCancel={() => setPendingDelete(null)}
       />
+      <ConfirmDialog
+        open={pendingFileDelete !== null}
+        title="Permanently delete file?"
+        description={
+          pendingFileDelete
+            ? `“${pendingFileDelete.original_filename}” will be permanently removed. This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete forever"
+        loading={deleting}
+        onConfirm={handleConfirmFileDelete}
+        onCancel={() => setPendingFileDelete(null)}
+      />
+    </div>
+  );
+}
+
+function TrashActions({
+  restoring,
+  onRestore,
+  onDelete,
+}: {
+  restoring: boolean;
+  onRestore: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <Button variant="outline" size="sm" onClick={onRestore} disabled={restoring}>
+        <RotateCcw className="size-4" />
+        {restoring ? "Restoring…" : "Restore"}
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+        onClick={onDelete}
+      >
+        <Trash2 className="size-4" />
+        Delete forever
+      </Button>
     </div>
   );
 }

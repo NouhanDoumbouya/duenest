@@ -5,6 +5,7 @@ import {
   Check,
   CheckCircle2,
   Circle,
+  Paperclip,
   ListChecks,
   Loader2,
   Plus,
@@ -16,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ApiError } from "@/lib/api";
 import { formatDate } from "@/lib/documents";
+import { getDocumentFiles } from "@/lib/document-files";
 import {
   createChecklistFromTemplate,
   createChecklistItem,
@@ -33,6 +35,7 @@ import type {
   ChecklistItemStatus,
   ChecklistTemplate,
 } from "@/types/renewal-workspace";
+import type { DocumentFile } from "@/types/document-files";
 
 function ProgressBar({ percent }: { percent: number }) {
   return (
@@ -54,12 +57,14 @@ function ChecklistItemRow({
   item,
   onChanged,
   onDeleted,
+  files,
 }: {
   documentId: number;
   checklistId: number;
   item: ChecklistItem;
   onChanged: (item: ChecklistItem) => void;
   onDeleted: (itemId: number) => void;
+  files: DocumentFile[];
 }) {
   const [pending, setPending] = useState(false);
 
@@ -83,6 +88,24 @@ function ChecklistItemRow({
     try {
       await deleteChecklistItem(documentId, checklistId, item.id);
       onDeleted(item.id);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function attachFile(fileId: string) {
+    setPending(true);
+    try {
+      const updated = await updateChecklistItem(
+        documentId,
+        checklistId,
+        item.id,
+        {
+          linked_file: fileId ? Number(fileId) : null,
+          status: fileId ? "completed" : item.status,
+        },
+      );
+      onChanged(updated);
     } finally {
       setPending(false);
     }
@@ -144,6 +167,24 @@ function ChecklistItemRow({
             Due {formatDate(item.due_date)}
           </p>
         )}
+        {files.length > 0 && (
+          <label className="mt-2 flex max-w-md items-center gap-2 text-xs text-muted-foreground">
+            <Paperclip className="size-3.5" />
+            <select
+              value={item.linked_file ?? ""}
+              onChange={(event) => attachFile(event.target.value)}
+              disabled={pending}
+              className="h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-xs"
+            >
+              <option value="">Attach file</option>
+              {files.map((file) => (
+                <option key={file.id} value={file.id}>
+                  {file.original_filename}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
 
       <div className="flex shrink-0 items-center gap-1">
@@ -180,11 +221,13 @@ function ChecklistCard({
   checklist,
   onItemsChanged,
   onDeleted,
+  files,
 }: {
   documentId: number;
   checklist: Checklist;
   onItemsChanged: (checklist: Checklist) => void;
   onDeleted: (checklistId: number) => void;
+  files: DocumentFile[];
 }) {
   const [items, setItems] = useState<ChecklistItem[]>(checklist.items);
   const [progress, setProgress] = useState(checklist.progress);
@@ -305,6 +348,7 @@ function ChecklistCard({
             item={item}
             onChanged={handleItemChanged}
             onDeleted={handleItemDeleted}
+            files={files}
           />
         ))}
         {items.length === 0 && (
@@ -359,6 +403,7 @@ export function DocumentChecklists({ documentId }: { documentId: number }) {
   const [creating, setCreating] = useState(false);
   const [templateId, setTemplateId] = useState<string>("");
   const [applyingTemplate, setApplyingTemplate] = useState(false);
+  const [documentFiles, setDocumentFiles] = useState<DocumentFile[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -374,6 +419,9 @@ export function DocumentChecklists({ documentId }: { documentId: number }) {
     getChecklistTemplates()
       .then((page) => active && setTemplates(page.results))
       .catch(() => active && setTemplates([]));
+    getDocumentFiles(documentId)
+      .then((page) => active && setDocumentFiles(page.results))
+      .catch(() => active && setDocumentFiles([]));
     return () => {
       active = false;
     };
@@ -519,6 +567,7 @@ export function DocumentChecklists({ documentId }: { documentId: number }) {
               key={checklist.id}
               documentId={documentId}
               checklist={checklist}
+              files={documentFiles}
               onItemsChanged={(updated) =>
                 setChecklists((prev) =>
                   (prev ?? []).map((c) =>

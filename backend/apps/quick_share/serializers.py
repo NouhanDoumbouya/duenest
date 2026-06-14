@@ -40,7 +40,7 @@ def _file_payload(file, item=None) -> dict:
     return {
         "file_id": file.id,
         "name": (item.display_name if item and item.display_name else file.original_filename),
-        "source": file.document.title,
+        "source": file.document.title if file.document_id else "File Inbox",
         "file_size": file.file_size,
         "content_type": file.content_type,
         "is_previewable": file.is_previewable,

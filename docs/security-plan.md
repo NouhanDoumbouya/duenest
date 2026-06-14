@@ -387,10 +387,11 @@ For v0.1, reject executable or script-like files, including:
 
 The shipped file upload foundation enforces:
 
-- **Auth + ownership:** every file endpoint is `IsAuthenticated` and scoped to
-  the parent document's owner. Listing, retrieving, downloading, or deleting
-  another user's file returns `404`. Uploading to a document you don't own
-  returns `404`.
+- **Auth + ownership:** every file endpoint is `IsAuthenticated`. Attached
+  files are scoped to the parent document's owner; standalone File Inbox files
+  are scoped to `uploaded_by=request.user`. Listing, retrieving, downloading,
+  restoring, or deleting another user's file returns `404`. Uploading to a
+  document you don't own returns `404`.
 - **Validation (allow-list):** max **10 MB**; extension must be one of
   `.pdf .jpg .jpeg .png .doc .docx`; client content type must be one of the
   matching MIME types. Frontend validation is never trusted.
@@ -400,6 +401,10 @@ The shipped file upload foundation enforces:
 - **No path leakage:** API responses expose only controlled `download_url` and
   `preview_url` values (themselves authorized), never the internal storage path.
 - **`uploaded_by`** is set from the request user, read-only to clients.
+- **File Inbox:** direct uploads may exist with no parent document. They still
+  use the same type/size validation, private storage, authenticated
+  preview/download, plan counting, trash-first permanent deletion, and owner
+  checks as document-attached files.
 - **Preview access:** PDF/JPEG/PNG preview is served inline only through the
   backend. Preview authorization is the same as download authorization.
 - **File-level share links:** a share link grants controlled access to one
@@ -1096,12 +1101,14 @@ Privacy boundaries:
 - User support summaries intentionally exclude document titles, filenames, raw
   OCR text, private notes, physical locations, access codes, share tokens, and
   internal file paths.
-- Product events and error metadata are sanitized before storage.
+- Product events and error metadata are sanitized before storage. Product
+  events also carry a server-generated dedupe key so repeated client events do
+  not inflate founder analytics.
 - Feature completion, launch readiness, beta profiles, and founder audit logs
   store operational metadata only.
-- Country activity is aggregate-only, uses approximate country metadata, and
-  does not expose GPS, street-level location, city-level drilldowns, or raw IP
-  addresses in ordinary founder UI.
+- Country activity is aggregate-only, uses approximate product-event country
+  metadata plus waitlist country fields, and does not expose GPS, street-level
+  location, city-level drilldowns, or raw IP addresses in ordinary founder UI.
 - Future sensitive support access must require explicit user consent and
   audit logging before it is implemented.
 

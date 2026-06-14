@@ -16,6 +16,7 @@ from __future__ import annotations
 import secrets
 
 from django.contrib.auth.hashers import check_password, make_password
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
@@ -106,9 +107,14 @@ class QuickShareSessionListCreateView(APIView):
         # Attach selected files — each must be owned by the requester.
         created_any = False
         for order, file_id in enumerate(file_ids):
-            file = DocumentFile.objects.filter(
-                id=file_id, document__owner=request.user, is_trashed=False
-            ).first()
+            file = (
+                DocumentFile.objects.filter(id=file_id, is_trashed=False)
+                .filter(
+                    Q(document__owner=request.user, document__is_trashed=False)
+                    | Q(document__isnull=True, uploaded_by=request.user)
+                )
+                .first()
+            )
             if file is None:
                 continue
             QuickShareItem.objects.create(

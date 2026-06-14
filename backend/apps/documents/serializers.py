@@ -45,6 +45,23 @@ from .services import (
 )
 
 
+def _document_file_owner_id(file):
+    if file is None:
+        return None
+    if file.document_id:
+        return file.document.owner_id
+    return file.uploaded_by_id
+
+
+def _document_file_is_unavailable(file) -> bool:
+    if file is None:
+        return False
+    return bool(
+        file.is_trashed
+        or (file.document_id and file.document.is_trashed)
+    )
+
+
 class DocumentTagSerializer(serializers.ModelSerializer):
     owner = serializers.PrimaryKeyRelatedField(read_only=True)
     document_count = serializers.SerializerMethodField()
@@ -354,12 +371,16 @@ class DocumentFileSerializer(serializers.ModelSerializer):
     download_url = serializers.SerializerMethodField()
     preview_url = serializers.SerializerMethodField()
     is_previewable = serializers.BooleanField(read_only=True)
+    document_title = serializers.SerializerMethodField()
+    assignment_status = serializers.SerializerMethodField()
 
     class Meta:
         model = DocumentFile
         fields = [
             "id",
             "document",
+            "document_title",
+            "assignment_status",
             "uploaded_by",
             "original_filename",
             "content_type",
@@ -377,6 +398,12 @@ class DocumentFileSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_download_url(self, obj):
+        if obj.document_id is None:
+            return reverse(
+                "file-inbox-download",
+                kwargs={"pk": obj.pk},
+                request=self.context.get("request"),
+            )
         return reverse(
             "document-file-download",
             kwargs={"document_id": obj.document_id, "pk": obj.pk},
@@ -386,11 +413,23 @@ class DocumentFileSerializer(serializers.ModelSerializer):
     def get_preview_url(self, obj):
         if not obj.is_previewable:
             return None
+        if obj.document_id is None:
+            return reverse(
+                "file-inbox-preview",
+                kwargs={"pk": obj.pk},
+                request=self.context.get("request"),
+            )
         return reverse(
             "document-file-preview",
             kwargs={"document_id": obj.document_id, "pk": obj.pk},
             request=self.context.get("request"),
         )
+
+    def get_document_title(self, obj):
+        return obj.document.title if obj.document_id else ""
+
+    def get_assignment_status(self, obj):
+        return "attached" if obj.document_id else "inbox"
 
 
 class ShareLinkCreateSerializer(serializers.Serializer):
@@ -710,15 +749,13 @@ class _OwnerScopedRelatedMixin:
                 {"linked_document": "You cannot link a trashed document."}
             )
         linked_file = attrs.get("linked_file")
-        if linked_file is not None and linked_file.document.owner_id != getattr(
+        if linked_file is not None and _document_file_owner_id(linked_file) != getattr(
             user, "id", None
         ):
             raise serializers.ValidationError(
                 {"linked_file": "You can only link your own files."}
             )
-        if linked_file is not None and (
-            linked_file.is_trashed or linked_file.document.is_trashed
-        ):
+        if _document_file_is_unavailable(linked_file):
             raise serializers.ValidationError(
                 {"linked_file": "You cannot link a trashed file."}
             )
@@ -1310,15 +1347,20 @@ class EmergencyAccessPackItemSerializer(serializers.ModelSerializer):
                 {"linked_document": "You cannot add a trashed document."}
             )
         file = attrs.get("file")
-        if file is not None and file.document.owner_id != getattr(user, "id", None):
+        if file is not None and _document_file_owner_id(file) != getattr(user, "id", None):
             raise serializers.ValidationError(
                 {"linked_file": "You can only add your own files."}
             )
-        if file is not None and (file.is_trashed or file.document.is_trashed):
+        if _document_file_is_unavailable(file):
             raise serializers.ValidationError(
                 {"linked_file": "You cannot add a trashed file."}
             )
-        if file is not None and document is not None and file.document_id != document.id:
+        if (
+            file is not None
+            and document is not None
+            and file.document_id is not None
+            and file.document_id != document.id
+        ):
             raise serializers.ValidationError(
                 {"linked_file": "The file must belong to the selected document."}
             )
@@ -1496,8 +1538,8 @@ class ProofRecordSerializer(serializers.ModelSerializer):
         if checklist is not None:
             owned(checklist, checklist.owner_id, "checklist")
         if linked_file is not None:
-            owned(linked_file, linked_file.document.owner_id, "linked_file")
-            if linked_file.is_trashed or linked_file.document.is_trashed:
+            owned(linked_file, _document_file_owner_id(linked_file), "linked_file")
+            if _document_file_is_unavailable(linked_file):
                 raise serializers.ValidationError(
                     {"linked_file": "You cannot link a trashed file."}
                 )

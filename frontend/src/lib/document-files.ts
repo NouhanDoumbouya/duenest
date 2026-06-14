@@ -13,7 +13,7 @@ import type {
   DocumentFileShareLink,
   PublicSharedFileMetadata,
 } from "@/types/document-files";
-import type { Paginated } from "@/types/documents";
+import type { DocumentRecord, Paginated } from "@/types/documents";
 
 // Frontend validation mirrors the backend rules (backend remains the source
 // of truth). See backend apps/documents/constants.py.
@@ -123,6 +123,74 @@ export function uploadDocumentFile(
   });
 }
 
+export function getFileInbox(): Promise<Paginated<DocumentFile>> {
+  return apiFetch<Paginated<DocumentFile>>("/files/", { auth: true });
+}
+
+export function uploadInboxFile(file: File): Promise<DocumentFile> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiFetch<DocumentFile>("/files/", {
+    method: "POST",
+    body: formData,
+    auth: true,
+  });
+}
+
+export function getTrashedInboxFiles(): Promise<Paginated<DocumentFile>> {
+  return apiFetch<Paginated<DocumentFile>>("/files/trash/", { auth: true });
+}
+
+export function deleteInboxFile(fileId: number): Promise<void> {
+  return apiFetch<void>(`/files/${fileId}/`, {
+    method: "DELETE",
+    auth: true,
+  });
+}
+
+export function restoreInboxFile(fileId: number): Promise<DocumentFile> {
+  return apiFetch<DocumentFile>(`/files/${fileId}/restore/`, {
+    method: "POST",
+    auth: true,
+  });
+}
+
+export function permanentlyDeleteInboxFile(fileId: number): Promise<void> {
+  return apiFetch<void>(`/files/${fileId}/permanent-delete/`, {
+    method: "DELETE",
+    auth: true,
+  });
+}
+
+export function attachInboxFileToDocument(
+  fileId: number,
+  documentId: number,
+): Promise<DocumentFile> {
+  return apiFetch<DocumentFile>(`/files/${fileId}/attach-document/`, {
+    method: "POST",
+    body: { document: documentId },
+    auth: true,
+  });
+}
+
+export function createDocumentFromInboxFile(
+  fileId: number,
+  payload: {
+    title?: string;
+    document_type?: string;
+    notes?: string;
+  },
+): Promise<{ document: DocumentRecord; file: DocumentFile }> {
+  return apiFetch<{ document: DocumentRecord; file: DocumentFile }>(
+    `/files/${fileId}/create-document/`,
+    {
+      method: "POST",
+      body: payload,
+      auth: true,
+    },
+  );
+}
+
 /**
  * Move a file to trash (soft delete). DELETE soft-trashes on the backend — the
  * file is hidden, any existing share links stop working, and it can be restored
@@ -195,6 +263,13 @@ export function getDocumentFilePreviewBlob(
   });
 }
 
+export function getInboxFilePreviewBlob(fileId: number): Promise<Blob> {
+  return fetchBlob(`/files/${fileId}/preview/`, {
+    auth: true,
+    fallbackError: "Could not preview this file.",
+  });
+}
+
 export function getDocumentFileDownloadBlob(
   documentId: number,
   fileId: number,
@@ -205,12 +280,22 @@ export function getDocumentFileDownloadBlob(
   });
 }
 
+export function getInboxFileDownloadBlob(fileId: number): Promise<Blob> {
+  return fetchBlob(`/files/${fileId}/download/`, {
+    auth: true,
+    fallbackError: "Could not download this file.",
+  });
+}
+
 /**
  * Download a file through the authenticated endpoint and trigger a browser
  * "save" using its original filename.
  */
 export async function downloadDocumentFile(file: DocumentFile): Promise<void> {
-  const blob = await getDocumentFileDownloadBlob(file.document, file.id);
+  const blob =
+    file.document === null
+      ? await getInboxFileDownloadBlob(file.id)
+      : await getDocumentFileDownloadBlob(file.document, file.id);
   saveBlob(blob, file.original_filename);
 }
 

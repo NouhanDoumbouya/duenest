@@ -22,13 +22,12 @@ def document_file_upload_to(instance, filename):
     user-supplied filename for the path itself.
 
     media/documents/user_<user_id>/document_<document_id>/<uuid><ext>
+    media/documents/user_<user_id>/inbox/<uuid><ext>
     """
     ext = os.path.splitext(filename)[1].lower()
     safe_name = f"{uuid.uuid4().hex}{ext}"
-    return (
-        f"documents/user_{instance.uploaded_by_id}"
-        f"/document_{instance.document_id}/{safe_name}"
-    )
+    folder = f"document_{instance.document_id}" if instance.document_id else "inbox"
+    return f"documents/user_{instance.uploaded_by_id}/{folder}/{safe_name}"
 
 
 class DocumentCategory(models.Model):
@@ -205,18 +204,19 @@ class Document(models.Model):
 
 class DocumentFile(models.Model):
     """
-    A file attached to a user-owned Document.
+    A file uploaded by a user, optionally attached to a user-owned Document.
 
-    Ownership is enforced through the parent document: a file is accessible
-    only if `file.document.owner == request.user`. The stored path is internal
-    and is never exposed in API responses — clients use a controlled download
-    endpoint instead.
+    Attached-file ownership is enforced through the parent document. Inbox-file
+    ownership is enforced through ``uploaded_by``. The stored path is internal
+    and is never exposed in API responses — clients use controlled endpoints.
     """
 
     document = models.ForeignKey(
         Document,
         on_delete=models.CASCADE,
         related_name="files",
+        null=True,
+        blank=True,
     )
     uploaded_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -245,6 +245,7 @@ class DocumentFile(models.Model):
         indexes = [
             models.Index(fields=["document", "created_at"]),
             models.Index(fields=["document", "is_trashed"]),
+            models.Index(fields=["uploaded_by", "is_trashed"]),
         ]
 
     def __str__(self):
@@ -452,7 +453,9 @@ class DocumentFileActivity(models.Model):
     )
     document = models.ForeignKey(
         Document,
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name="file_activities",
     )
     file = models.ForeignKey(
