@@ -14,7 +14,10 @@ import {
   WORLD_MAP_AVAILABLE,
   type ChoroplethDatum,
 } from "@/components/founder/world-choropleth";
-import { canonicalCountryName } from "@/components/founder/country-iso";
+import {
+  canonicalCountryName,
+  displayCountryLabel,
+} from "@/components/founder/country-iso";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ApiError } from "@/lib/api";
 import { getCountryActivity } from "@/lib/founder";
@@ -68,7 +71,7 @@ export default function FounderMapPage() {
       lookup.set(canonical, c);
       choro.set(canonical, {
         value: c.total_events + c.active_users,
-        label: c.country,
+        label: displayCountryLabel(c.country),
         detail: [
           { label: "Active users", value: nf.format(c.active_users) },
           { label: "New signups", value: nf.format(c.new_signups) },
@@ -107,7 +110,7 @@ export default function FounderMapPage() {
     if (totals.top) {
       items.push({
         tone: "good",
-        text: `${totals.top.country} has the strongest activity in this range (${nf.format(totals.top.total_events)} events).`,
+        text: `${displayCountryLabel(totals.top.country)} has the strongest activity in this range (${nf.format(totals.top.total_events)} events).`,
       });
     }
     const withSignups = list.filter((c) => c.new_signups > 0).length;
@@ -182,7 +185,7 @@ export default function FounderMapPage() {
         <FounderStatCard
           icon={MapPin}
           label="Top country"
-          value={totals.top ? totals.top.country : "—"}
+          value={totals.top ? displayCountryLabel(totals.top.country) : "—"}
           hint={
             totals.top ? `${nf.format(totals.top.total_events)} events` : "No data yet"
           }
@@ -248,7 +251,9 @@ export default function FounderMapPage() {
           {selectedItem && (
             <div className="mt-4 rounded-xl border border-border bg-card p-4">
               <div className="flex items-center justify-between gap-3">
-                <p className="font-semibold">{selectedItem.country}</p>
+                <p className="font-semibold">
+                  {displayCountryLabel(selectedItem.country)}
+                </p>
                 <button
                   type="button"
                   onClick={() => setSelected(null)}
@@ -345,7 +350,9 @@ export default function FounderMapPage() {
                           isSel && "bg-primary/5",
                         )}
                       >
-                        <td className="py-3 pr-4 font-medium">{country.country}</td>
+                        <td className="py-3 pr-4 font-medium">
+                          {displayCountryLabel(country.country)}
+                        </td>
                         <td className="py-3 pr-4 tabular-nums">
                           {nf.format(country.active_users)}
                         </td>

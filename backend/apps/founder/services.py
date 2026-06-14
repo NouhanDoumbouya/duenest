@@ -10,6 +10,7 @@ import string
 from datetime import timedelta
 from typing import Any
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import Count, Exists, F, Max, Min, OuterRef, Q
@@ -154,6 +155,36 @@ def sanitize_metadata(value: Any, *, _depth: int = 0) -> Any:
     return str(value)[:200]
 
 
+# Edge/CDN headers that carry a privacy-safe ISO-3166 alpha-2 country code.
+# These are set by the platform in front of the app (Cloudflare, Vercel, etc.)
+# and let us aggregate country-level activity without doing any IP geolocation
+# ourselves and without storing the raw IP as location data.
+_COUNTRY_HEADERS = (
+    "HTTP_CF_IPCOUNTRY",
+    "HTTP_X_VERCEL_IP_COUNTRY",
+    "HTTP_X_COUNTRY_CODE",
+)
+# Placeholder codes some edges emit when the country is unknown.
+_COUNTRY_PLACEHOLDERS = {"XX", "T1", "ZZ", "", "AP", "EU"}
+
+
+def country_from_request(request) -> str:
+    """
+    Return a 2-letter ISO country code for the request, or "".
+
+    Reads only a CDN-provided country header — never the raw IP. A local dev
+    override (``settings.DEV_DEFAULT_EVENT_COUNTRY``) can be set so the founder
+    map can be exercised without a CDN in front of the app.
+    """
+    if request is None:
+        return getattr(settings, "DEV_DEFAULT_EVENT_COUNTRY", "") or ""
+    for header in _COUNTRY_HEADERS:
+        value = (request.META.get(header) or "").strip().upper()
+        if len(value) == 2 and value.isalpha() and value not in _COUNTRY_PLACEHOLDERS:
+            return value
+    return getattr(settings, "DEV_DEFAULT_EVENT_COUNTRY", "") or ""
+
+
 def track_product_event(
     *,
     event_type: str,
@@ -185,6 +216,7 @@ def track_product_event(
             method=(request.method[:12] if request is not None else ""),
             status_code=status_code,
             ip_address=client_ip(request) if request is not None else None,
+            country=country_from_request(request),
             user_agent=(
                 request.META.get("HTTP_USER_AGENT", "")[:1000]
                 if request is not None
