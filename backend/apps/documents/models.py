@@ -1354,7 +1354,10 @@ class ProofRecord(models.Model):
     status = models.CharField(
         max_length=20, choices=Status.choices, default=Status.SAVED
     )
+    # Legacy plaintext notes — migrated into notes_ciphertext and then blanked.
+    # New writes go to notes_ciphertext (AES-256-GCM, AAD-bound to this record).
     notes = models.TextField(blank=True)
+    notes_ciphertext = models.BinaryField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -1367,6 +1370,26 @@ class ProofRecord(models.Model):
 
     def __str__(self):
         return f"{self.title} ({self.get_proof_type_display()})"
+
+    def decrypt_notes(self) -> str:
+        """Decrypted notes (AAD-bound to this record), falling back to any
+        legacy plaintext not yet migrated. Never raises."""
+        from apps.core.security.encryption import (
+            DecryptionError,
+            decrypt_field_value,
+        )
+
+        if self.notes_ciphertext:
+            try:
+                return decrypt_field_value(
+                    bytes(self.notes_ciphertext),
+                    model="proofrecord",
+                    field="notes",
+                    record_id=self.pk,
+                )
+            except DecryptionError:
+                return ""
+        return self.notes or ""
 
 
 class DocumentActivity(models.Model):

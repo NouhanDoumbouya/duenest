@@ -4,6 +4,7 @@ from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.reverse import reverse
 
+from apps.core.security.encryption import encrypt_field_value
 from .constants import ALLOWED_CONTENT_TYPES, ALLOWED_EXTENSIONS, MAX_FILE_SIZE
 from .models import (
     Document,
@@ -1496,6 +1497,11 @@ class ProofRecordSerializer(serializers.ModelSerializer):
     document_title = serializers.CharField(
         source="document.title", read_only=True, default=None
     )
+    # notes is stored encrypted at rest (notes_ciphertext); handled explicitly
+    # in create/update/to_representation rather than mapped to a column.
+    notes = serializers.CharField(
+        required=False, allow_blank=True, default="", trim_whitespace=False
+    )
 
     class Meta:
         model = ProofRecord
@@ -1559,6 +1565,38 @@ class ProofRecordSerializer(serializers.ModelSerializer):
                     {"linked_file": "You cannot link a trashed file."}
                 )
         return attrs
+
+    # ---- Encrypted notes (AES-256-GCM, AAD-bound to this record) -----------
+
+    _NOTES_UNSET = object()
+
+    def create(self, validated_data):
+        notes = validated_data.pop("notes", "")
+        instance = super().create(validated_data)
+        self._store_notes(instance, notes)
+        return instance
+
+    def update(self, instance, validated_data):
+        notes = validated_data.pop("notes", self._NOTES_UNSET)
+        instance = super().update(instance, validated_data)
+        if notes is not self._NOTES_UNSET:
+            self._store_notes(instance, notes)
+        return instance
+
+    def _store_notes(self, instance, notes):
+        if notes:
+            instance.notes_ciphertext = encrypt_field_value(
+                notes, model="proofrecord", field="notes", record_id=instance.pk
+            )
+        else:
+            instance.notes_ciphertext = None
+        instance.notes = ""  # never persist plaintext
+        instance.save(update_fields=["notes_ciphertext", "notes"])
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["notes"] = instance.decrypt_notes()
+        return data
 
 
 class DocumentActivityEventSerializer(serializers.Serializer):

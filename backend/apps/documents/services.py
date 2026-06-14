@@ -2489,7 +2489,7 @@ def build_bundle_export_payload(user, bundle, export_type: str) -> dict:
             "reference_number": proof.reference_number,
             "submitted_to": proof.submitted_to,
             "submitted_at": proof.submitted_at.isoformat() if proof.submitted_at else "",
-            "notes": proof.notes,
+            "notes": proof.decrypt_notes(),
             "created_at": proof.created_at.isoformat(),
             "updated_at": proof.updated_at.isoformat(),
         }

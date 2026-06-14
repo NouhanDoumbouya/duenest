@@ -162,3 +162,67 @@ class KeyRotationCommandTests(APITestCase):
         body = b"".join(resp.streaming_content)
         resp.close()
         self.assertEqual(body, _PLAINTEXT)
+
+
+class ProofNotesFieldEncryptionTests(APITestCase):
+    """ProofRecord.notes is encrypted at rest (P1 field encryption)."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="p", email="p@example.com", password="StrongPassword123!DN"
+        )
+        self.doc = Document.objects.create(owner=self.user, title="Doc")
+        self.client.force_authenticate(self.user)
+
+    def test_notes_stored_encrypted_and_returned_plaintext(self):
+        secret = "Submitted via gov portal; ref ABC-999 (private)."
+        resp = self.client.post(
+            "/api/v1/proof-records/",
+            {"title": "Receipt", "document": self.doc.pk, "notes": secret},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.data)
+        # API returns the decrypted notes...
+        self.assertEqual(resp.data["notes"], secret)
+        from apps.documents.models import ProofRecord
+
+        proof = ProofRecord.objects.get(pk=resp.data["id"])
+        # ...but the DB stores ciphertext only, never the plaintext column.
+        self.assertEqual(proof.notes, "")
+        self.assertTrue(proof.notes_ciphertext)
+        self.assertNotIn(b"private", bytes(proof.notes_ciphertext))
+        self.assertEqual(proof.decrypt_notes(), secret)
+
+    def test_notes_update_reencrypts(self):
+        proof_id = self.client.post(
+            "/api/v1/proof-records/",
+            {"title": "R", "document": self.doc.pk, "notes": "first"},
+            format="json",
+        ).data["id"]
+        resp = self.client.patch(
+            f"/api/v1/proof-records/{proof_id}/",
+            {"notes": "second"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["notes"], "second")
+
+    def test_notes_aad_bound_to_record(self):
+        from apps.documents.models import ProofRecord
+
+        a = self.client.post(
+            "/api/v1/proof-records/",
+            {"title": "A", "document": self.doc.pk, "notes": "note A"},
+            format="json",
+        ).data["id"]
+        b = self.client.post(
+            "/api/v1/proof-records/",
+            {"title": "B", "document": self.doc.pk, "notes": "note B"},
+            format="json",
+        ).data["id"]
+        proof_a = ProofRecord.objects.get(pk=a)
+        proof_b = ProofRecord.objects.get(pk=b)
+        # Moving A's ciphertext onto B's row must not decrypt (AAD mismatch).
+        proof_b.notes_ciphertext = proof_a.notes_ciphertext
+        proof_b.save(update_fields=["notes_ciphertext"])
+        self.assertEqual(proof_b.decrypt_notes(), "")

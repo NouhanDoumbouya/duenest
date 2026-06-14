@@ -115,6 +115,18 @@ export default function TrustCenterPage() {
             </Card>
             <Card>
               <CardHeader>
+                <Lock className="size-5 text-primary" />
+                <CardTitle>Encrypted at rest</CardTitle>
+                <CardDescription>
+                  Uploaded files are encrypted at rest with per-file keys, and
+                  those keys are protected with a separate master key. DueNest
+                  decrypts files only after permission checks pass. This is not
+                  zero-knowledge encryption.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+            <Card>
+              <CardHeader>
                 <FileText className="size-5 text-brand-amber" />
                 <CardTitle>Beta transparency</CardTitle>
                 <CardDescription>
