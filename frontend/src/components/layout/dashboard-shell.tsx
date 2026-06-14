@@ -32,6 +32,8 @@ import {
 } from "lucide-react";
 
 import { Logo } from "@/components/layout/logo";
+import { useFeatures } from "@/components/features/feature-flags-provider";
+import { FEATURE_BY_NAV_HREF } from "@/lib/features";
 import { Button } from "@/components/ui/button";
 import { getFounderMe } from "@/lib/founder";
 import { logout } from "@/lib/auth";
@@ -158,6 +160,7 @@ function NavLinks({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
+  const features = useFeatures();
 
   return (
     <nav className="flex flex-1 flex-col gap-5 overflow-y-auto p-3">
@@ -166,14 +169,21 @@ function NavLinks({
           <p className="px-3 pb-1.5 text-[0.68rem] font-semibold tracking-wider text-muted-foreground/60 uppercase">
             {group.heading}
           </p>
-          {group.items.map((item) => (
-            <NavLink
-              key={item.href}
-              item={item}
-              active={isItemActive(pathname, item)}
-              onNavigate={onNavigate}
-            />
-          ))}
+          {group.items
+            .filter((item) => {
+              const key = FEATURE_BY_NAV_HREF[item.href];
+              if (!key) return true;
+              const state = features[key];
+              return state ? state.enabled : true;
+            })
+            .map((item) => (
+              <NavLink
+                key={item.href}
+                item={item}
+                active={isItemActive(pathname, item)}
+                onNavigate={onNavigate}
+              />
+            ))}
         </div>
       ))}
 

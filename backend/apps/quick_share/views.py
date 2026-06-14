@@ -25,6 +25,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
+from apps.features.flags import require_feature_enabled
 from apps.documents.models import Document, DocumentBundle, DocumentFile
 from apps.documents.plan_usage import enforce_plan_limit
 from apps.documents.services import collect_bundle_files
@@ -84,6 +85,7 @@ class QuickShareSessionListCreateView(APIView):
         )
 
     def post(self, request):
+        require_feature_enabled("quick_share", request.user)
         enforce_plan_limit(request.user, user_plans.RESOURCE_SHARE_LINKS)
         serializer = QuickShareCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -291,6 +293,7 @@ class QuickShareReceiveCodeView(APIView):
     throttle_scope = "quick_share_receive"
 
     def post(self, request):
+        require_feature_enabled("quick_share_code")
         code = normalize_dn_code(request.data.get("code") or "")
         if not code:
             return Response(
@@ -327,6 +330,7 @@ class QuickShareClaimMetadataView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, token):
+        require_feature_enabled("quick_share_public_viewer")
         session, state = resolve_session(token)
         if not state.ok:
             return _state_response(state)

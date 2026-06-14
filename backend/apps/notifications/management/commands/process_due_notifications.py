@@ -49,9 +49,23 @@ class Command(BaseCommand):
             if timezone.is_naive(now):
                 now = timezone.make_aware(now, timezone.get_current_timezone())
 
+        # Kill switch: when email reminders are disabled, evaluate without
+        # creating or sending anything (forced dry-run), so a paused feature
+        # never delivers email.
+        from apps.features.flags import is_feature_enabled
+
+        dry_run = options["dry_run"]
+        if not is_feature_enabled("email_reminders"):
+            dry_run = True
+            self.stdout.write(
+                self.style.WARNING(
+                    "email_reminders feature is disabled — running in no-send mode."
+                )
+            )
+
         summary = process_due_notifications(
             now=now,
-            dry_run=options["dry_run"],
+            dry_run=dry_run,
             limit=options["limit"],
             user_id=options.get("user_id"),
             type_filter=options.get("type_filter") or "",

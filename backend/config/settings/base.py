@@ -52,6 +52,7 @@ LOCAL_APPS = [
     "apps.founder.apps.FounderConfig",
     "apps.quick_share.apps.QuickShareConfig",
     "apps.notifications.apps.NotificationsConfig",
+    "apps.features.apps.FeaturesConfig",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
