@@ -24,6 +24,7 @@ from apps.subscriptions.services import (
     add_months,
     advance_billing_date,
     build_summary,
+    compute_review,
     monthly_equivalent,
     subscription_attention,
     yearly_equivalent,
@@ -236,8 +237,8 @@ class AttentionTest(SubscriptionBaseTest):
         )
         items = subscription_attention(self.alice)
         by_name = {i["name"]: i["reasons"] for i in items}
-        self.assertIn("Cancellation deadline soon", by_name["Domain"])
-        self.assertIn("Renewal overdue", by_name["Overdue One"])
+        self.assertIn("Cancellation deadline is in 3 days", by_name["Domain"])
+        self.assertIn("Payment overdue", by_name["Overdue One"])
 
     def test_attention_endpoint_owner_scoped(self):
         self.make_sub(owner=self.bob, next_billing_date=self.today - timedelta(days=1))
@@ -370,3 +371,138 @@ class PlanLimitTest(SubscriptionBaseTest):
         )
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(res.data.get("code"), "plan_limit_exceeded")
+
+
+class ReviewIntelligenceTest(SubscriptionBaseTest):
+    def test_healthy_when_far_off(self):
+        sub = self.make_sub(next_billing_date=self.today + timedelta(days=200))
+        review = compute_review(sub)
+        self.assertEqual(review["review_status"], "healthy")
+
+    def test_cancellation_deadline_is_urgent(self):
+        sub = self.make_sub(
+            next_billing_date=self.today + timedelta(days=5),
+            cancellation_deadline=self.today + timedelta(days=1),
+        )
+        review = compute_review(sub)
+        self.assertEqual(review["review_status"], "urgent")
+        self.assertEqual(review["next_best_action"], "Cancel before deadline")
+        self.assertIn("Cancellation deadline is tomorrow", review["review_reasons"])
+
+    def test_overdue_is_urgent_mark_paid(self):
+        sub = self.make_sub(next_billing_date=self.today - timedelta(days=3))
+        review = compute_review(sub)
+        self.assertEqual(review["review_status"], "urgent")
+        self.assertEqual(review["next_best_action"], "Mark as paid")
+        self.assertIn("Payment overdue", review["review_reasons"])
+
+    def test_trial_attention(self):
+        sub = self.make_sub(
+            status=Subscription.Status.TRIAL,
+            next_billing_date=self.today + timedelta(days=3),
+        )
+        review = compute_review(sub)
+        self.assertEqual(review["review_status"], "trial_attention")
+
+    def test_auto_renew_soon_is_review(self):
+        sub = self.make_sub(
+            auto_renew=True, next_billing_date=self.today + timedelta(days=5)
+        )
+        review = compute_review(sub)
+        self.assertEqual(review["review_status"], "review")
+        self.assertIn("Auto-renews in 5 days", review["review_reasons"])
+
+    def test_rarely_used_high_cost_is_cancel_candidate(self):
+        sub = self.make_sub(
+            importance=Subscription.Importance.RARELY_USED,
+            billing_cycle=Subscription.BillingCycle.YEARLY,
+            amount="600.00",
+            next_billing_date=self.today + timedelta(days=200),
+        )
+        review = compute_review(sub)
+        self.assertEqual(review["review_status"], "cancel_candidate")
+        self.assertIn("High yearly cost", review["review_reasons"])
+        self.assertIn("Marked rarely used", review["review_reasons"])
+
+    def test_missing_next_billing_date_is_review(self):
+        sub = self.make_sub(next_billing_date=None)
+        review = compute_review(sub)
+        self.assertEqual(review["review_status"], "review")
+        self.assertEqual(review["next_best_action"], "Update next billing date")
+
+    def test_stale_last_used_with_auto_renew_is_review(self):
+        sub = self.make_sub(
+            auto_renew=True,
+            last_used_date=self.today - timedelta(days=120),
+            next_billing_date=self.today + timedelta(days=200),
+        )
+        review = compute_review(sub)
+        self.assertEqual(review["review_status"], "review")
+        self.assertIn("Not used in 90+ days", review["review_reasons"])
+
+    def test_cancelled_is_healthy(self):
+        sub = self.make_sub(status=Subscription.Status.CANCELLED)
+        self.assertEqual(compute_review(sub)["review_status"], "healthy")
+
+    def test_state_exposes_review_fields_via_api(self):
+        sub = self.make_sub(
+            auto_renew=True, next_billing_date=self.today + timedelta(days=3)
+        )
+        self.client.force_authenticate(self.alice)
+        res = self.client.get(detail(sub.pk))
+        state = res.data["state"]
+        self.assertIn("review_status", state)
+        self.assertIn("review_reasons", state)
+        self.assertIn("next_best_action", state)
+        self.assertIn("monthly_equivalent_amount", state)
+        self.assertEqual(state["urgency_status"], state["urgency"])
+
+
+class ExpandedSummaryTest(SubscriptionBaseTest):
+    def test_summary_includes_intelligence_counts(self):
+        self.make_sub(name="A", auto_renew=True, next_billing_date=self.today + timedelta(days=3))
+        self.make_sub(
+            name="B",
+            status=Subscription.Status.TRIAL,
+            next_billing_date=self.today + timedelta(days=2),
+        )
+        self.make_sub(
+            name="C",
+            importance=Subscription.Importance.RARELY_USED,
+            billing_cycle=Subscription.BillingCycle.YEARLY,
+            amount="900.00",
+            next_billing_date=self.today + timedelta(days=300),
+        )
+        summary = build_summary(self.alice)
+        self.assertEqual(summary["trial_count"], 1)
+        self.assertGreaterEqual(summary["auto_renewing_soon"], 1)
+        self.assertEqual(summary["high_yearly_cost_count"], 1)
+        self.assertEqual(summary["rarely_used_count"], 1)
+        self.assertGreaterEqual(summary["review_recommended_count"], 2)
+        self.assertIn("by_importance", summary)
+        self.assertIn("spend_by_category", summary)
+
+    def test_spend_by_category_grouped_by_currency(self):
+        self.make_sub(name="USD one", amount="10.00", currency="USD")
+        self.make_sub(name="GBP one", amount="8.00", currency="GBP")
+        summary = build_summary(self.alice)
+        # Both land in "Uncategorized" (no category set).
+        cat = summary["spend_by_category"]["Uncategorized"]
+        self.assertEqual(cat["USD"], "10.00")
+        self.assertEqual(cat["GBP"], "8.00")
+
+
+class FounderSubscriptionMetricTest(SubscriptionBaseTest):
+    def test_subscription_adoption_metric_is_aggregate(self):
+        from apps.founder.services import build_feature_adoption
+
+        self.make_sub(owner=self.alice, name="Secret Name")
+        self.make_sub(owner=self.bob, name="Another Secret")
+        adoption = build_feature_adoption()
+        self.assertEqual(adoption["subscriptions_used_count"], 2)
+        feature = next(
+            f for f in adoption["features"] if f["feature_key"] == "subscriptions"
+        )
+        self.assertEqual(feature["users_count"], 2)
+        # Privacy: no subscription names leak into the aggregate payload.
+        self.assertNotIn("Secret Name", str(adoption))

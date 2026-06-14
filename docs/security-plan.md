@@ -1154,7 +1154,7 @@ exposed publicly.
 Calendar access is authenticated and owner-scoped: a user only ever sees their
 own events. Aggregation excludes other users' data, share tokens, access codes,
 internal file paths, and founder/operational data. The one-way `.ics` export
-uses safe `DueNest: …` titles only and omits tokens, codes, paths, and sensitive
+uses safe `DueNest: ...` titles only and omits tokens, codes, paths, and sensitive
 numbers. There is no Google/Outlook or two-way external calendar sync.
 
 ## Subscription Tracker V1
@@ -1171,8 +1171,11 @@ serializer reject values that look like a full card number. There is no Stripe,
 bank API, or payment automation in this feature.
 
 Subscription events reaching Calendar/Timeline carry only safe summaries
-(name, amount, currency, dates) — never account emails or payment labels.
-Founder analytics must remain aggregate and must not expose subscription names,
-account emails, provider names, payment labels, exact per-user amounts, or
-private notes; founder-console subscription metrics are deferred until they can
-meet that bar.
+(name, amount, currency, dates) - never account emails or payment labels.
+Rule-based review intelligence uses only owner-entered subscription metadata
+(dates, auto-renew, amount/currency, importance, and last-used date). It does
+not inspect bank data, real service usage, browser activity, email, or files.
+
+Founder analytics expose subscription usage only as aggregate adoption counts.
+They must not expose subscription names, account emails, provider names,
+payment labels, exact per-user amounts, or private notes.

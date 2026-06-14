@@ -1,6 +1,6 @@
 // Types for the Subscription / Recurring Renewal Tracker API. These mirror the
 // backend serializers in apps/subscriptions/serializers.py. This is NOT DueNest
-// billing — it tracks the user's own recurring payments and renewals.
+// billing - it tracks the user's own recurring payments and renewals.
 
 export type SubscriptionStatus =
   | "active"
@@ -25,7 +25,17 @@ export type SubscriptionUrgency =
   | "renews_today"
   | "renews_soon"
   | "upcoming"
-  | "normal";
+  | "normal"
+  | "cancelled"
+  | "expired"
+  | "paused";
+
+export type ReviewStatus =
+  | "healthy"
+  | "review"
+  | "cancel_candidate"
+  | "urgent"
+  | "trial_attention";
 
 export interface SubscriptionCategory {
   id: number;
@@ -46,6 +56,16 @@ export interface SubscriptionState {
   cost_is_estimable: boolean;
   cancellation_deadline_soon: boolean;
   trial_ending_soon: boolean;
+  // Renewal intelligence (V1.1)
+  urgency_status: SubscriptionUrgency;
+  days_until_next_billing: number | null;
+  monthly_equivalent_amount: string | null;
+  yearly_equivalent_amount: string | null;
+  is_high_yearly_cost: boolean;
+  is_rarely_used: boolean;
+  review_status: ReviewStatus;
+  review_reasons: string[];
+  next_best_action: string;
 }
 
 export interface Subscription {
@@ -126,20 +146,30 @@ export interface TopUpcomingRenewal {
   next_billing_date: string;
   days_until_renewal: number;
   auto_renew: boolean;
+  review_status: ReviewStatus;
 }
 
 export interface SubscriptionSummary {
   active_count: number;
+  trial_count: number;
+  cancelled_count: number;
+  paused_count: number;
   total_count: number;
   monthly_cost_by_currency: Record<string, string>;
   yearly_cost_by_currency: Record<string, string>;
   cost_unestimable_count: number;
   renewals_this_week: number;
   renewals_this_month: number;
+  auto_renewing_soon: number;
   trials_ending_soon: number;
   cancellation_deadlines_soon: number;
+  high_yearly_cost_count: number;
+  rarely_used_count: number;
+  review_recommended_count: number;
   by_category: Record<string, number>;
   by_status: Record<string, number>;
+  by_importance: Record<string, number>;
+  spend_by_category: Record<string, Record<string, string>>;
   top_upcoming_renewals: TopUpcomingRenewal[];
 }
 
@@ -156,6 +186,8 @@ export interface SubscriptionAttentionItem {
   next_billing_date: string | null;
   cancellation_deadline: string | null;
   urgency: SubscriptionUrgency;
+  review_status: ReviewStatus;
+  next_best_action: string;
   days_until_renewal: number | null;
   reasons: string[];
 }

@@ -1212,15 +1212,17 @@ AI agents, native mobile.
 ### Subscription / Recurring Renewal Tracker V1 (shipped)
 
 Users can track their own recurring payments and renewals (streaming, software,
-domains, hosting, insurance, telecom, gym, memberships, …): owner-scoped CRUD
+domains, hosting, insurance, telecom, gym, memberships, etc.): owner-scoped CRUD
 with search/filter/sort, monthly/yearly cost summaries grouped by currency,
-mark-paid/mark-cancelled/archive/skip actions, metadata-only payment records, a
-detail workspace, and a "Add subscription" form. Renewals, cancellation
-deadlines, and trial endings flow into Calendar, Timeline, Attention Needed, and
-a dashboard "Upcoming renewals" widget. Free plan caps subscriptions at 10.
+rule-based renewal review signals, quick-add templates, mark-paid/
+mark-cancelled/archive/skip actions, metadata-only payment records, a detail
+workspace, and an "Add subscription" form. Renewals, cancellation deadlines, and
+trial endings flow into Calendar, Timeline, Attention Needed, and a dashboard
+"Upcoming renewals" widget. Free plan caps subscriptions at 10. Founder
+subscription adoption metrics are aggregate only.
 
 Explicitly out of scope (this is **not** DueNest billing): Stripe / paid-plan
 checkout, bank/card integrations, storing card or banking details, live currency
 conversion, automatic cancellation, AI, and email/push reminder delivery
 (reminders are in-app via Calendar/Timeline). Deferred: receipt file uploads and
-founder-console subscription metrics.
+provider-side cancellation automation.

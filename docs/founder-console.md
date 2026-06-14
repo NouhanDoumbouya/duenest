@@ -77,7 +77,7 @@ The `/founder` shell is visually separate from the normal dashboard. Existing
 - Private beta waitlist review and invite-code management.
 - Activation funnel from signup to first document, file, expiry date, reminder,
   checklist/bundle, and secure sharing.
-- Feature adoption dashboard.
+- Feature adoption dashboard, including aggregate subscription tracker adoption.
 - Editable feature completion tracker.
 - Feedback submission and founder triage board.
 - Error/failure dashboard.

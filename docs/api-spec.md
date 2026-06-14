@@ -2963,11 +2963,11 @@ GET /api/v1/calendar/summary/                                   # counts + next 
 GET /api/v1/calendar/export.ics                                 # one-way .ics
 ```
 
-`type` groups: `documents,reminders,bundles,appointments,proofs,shares,rooms,emergency`.
+`type` groups: `documents,reminders,bundles,appointments,proofs,shares,rooms,emergency,subscriptions`.
 `urgency`: `overdue,critical,soon,upcoming,normal`. Events are aggregated from
 existing models (no duplicate table), owner-scoped, and carry a
 `linked_resource_url` back to the right workspace page. The `.ics` export is
-one-way and uses safe `DueNest: …` titles only — no tokens, access codes,
+one-way and uses safe `DueNest: ...` titles only - no tokens, access codes,
 internal paths, or sensitive numbers. **No Google/Outlook/two-way sync exists.**
 
 # 29. Subscription / Recurring Renewal Tracker V1
@@ -3020,16 +3020,50 @@ created_at | -created_at`. Lists are paginated.
 
 Monthly equivalent = `amount / cycle_months`, where one cycle spans:
 weekly `12/52`, monthly `1`, quarterly `3`, yearly `12` months; custom uses
-`count × unit_months` (days `1/30`, weeks `1/4.345`, months `1`, years `12`).
-Yearly equivalent = monthly × 12. **No live currency conversion** — summary
+`count * unit_months` (days `1/30`, weeks `1/4.345`, months `1`, years `12`).
+Yearly equivalent = monthly * 12. **No live currency conversion** - summary
 totals are grouped by currency. A custom cycle without a count/unit is excluded
 from cost totals and reported under `cost_unestimable_count`.
 
-Urgency: `overdue` (past, active/trial), `renews_today`, `renews_soon` (≤7d),
-`upcoming` (≤30d), else `normal`. Plus `cancellation_deadline_soon` (≤7d) and
-`trial_ending_soon` (trial + ≤7d).
+Urgency: `overdue` (past, active/trial), `renews_today`, `renews_soon` (<=7d),
+`upcoming` (<=30d), else `normal`. Plus `cancellation_deadline_soon` (<=7d)
+and `trial_ending_soon` (trial + <=7d).
 
-## 29.4 Calendar & Timeline integration
+## 29.4 Rule-based review intelligence
+
+Each subscription response includes a read-only `state` object. V1 keys remain
+available (`urgency`, `days_until_renewal`, `monthly_equivalent`,
+`yearly_equivalent`, etc.). Renewal-intelligence keys added in V1.1:
+
+```
+urgency_status
+days_until_next_billing
+monthly_equivalent_amount
+yearly_equivalent_amount
+is_high_yearly_cost
+is_rarely_used
+review_status
+review_reasons
+next_best_action
+```
+
+`review_status` is one of `healthy`, `review`, `urgent`,
+`trial_attention`, or `cancel_candidate`. These are transparent rule-based
+signals only. They use owner-entered fields such as billing dates,
+cancellation deadlines, auto-renew, amount/currency, importance, and last-used
+date. There is no AI classification, bank inspection, real usage telemetry, or
+external cancellation automation.
+
+`GET /api/v1/subscriptions/summary/` also returns review and value roll-ups:
+`trial_count`, `cancelled_count`, `paused_count`, `auto_renewing_soon`,
+`high_yearly_cost_count`, `rarely_used_count`, `review_recommended_count`,
+`by_importance`, and `spend_by_category`.
+
+`GET /api/v1/subscriptions/attention/` includes `review_status` and
+`next_best_action` on each item. Attention reasons are the same transparent
+rules, plus near-term manual renewals.
+
+## 29.5 Calendar & Timeline integration
 
 Subscriptions appear in the existing Calendar and Timeline aggregators
 (owner-scoped, no sensitive payment data). New event types:
@@ -3038,17 +3072,20 @@ Subscriptions appear in the existing Calendar and Timeline aggregators
 `subscriptions` category; timeline events carry `related_subscription` and link
 to `/dashboard/subscriptions/{id}`.
 
-## 29.5 Plan/usage
+## 29.6 Plan/usage
 
 Subscriptions are a tracked resource: Free plan caps at **10** subscriptions
 (Pro placeholder: unlimited), enforced on create via the shared plan-limit
 helper and reported through the existing plan usage endpoint.
 
-## 29.6 Privacy & limitations
+## 29.7 Privacy & limitations
 
 * No full card numbers, CVV, or banking credentials are stored.
   `payment_method_label` is a human label only (e.g. "Visa ending 1234") and a
   validator rejects values that look like a full card number.
+* Founder-console subscription adoption is aggregate only (`users_count` style
+  metrics); names, providers, account emails, payment labels, exact per-user
+  amounts, and notes are not exposed.
 * **Deferred in V1:** receipt *file* uploads (payment records are metadata-only),
-  founder-console subscription metrics, automatic cancellation, live FX, and
-  email/push reminder delivery (reminders are in-app via Calendar/Timeline only).
+  automatic cancellation, live FX, and email/push reminder delivery (reminders
+  are in-app via Calendar/Timeline only).

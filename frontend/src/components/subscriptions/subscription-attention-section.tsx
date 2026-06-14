@@ -60,7 +60,7 @@ export function SubscriptionAttentionSection() {
 
   return (
     <SectionCard
-      title={`Subscriptions · ${items.length}`}
+      title={`Subscriptions: ${items.length}`}
       description="Renewals, cancellation deadlines, and trials that need a decision."
       action={
         <Link
@@ -110,7 +110,7 @@ export function SubscriptionAttentionSection() {
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {money(item.amount, item.currency)}
-                  {item.next_billing_date ? ` · renews ${item.next_billing_date}` : ""}
+                  {item.next_billing_date ? ` - renews ${item.next_billing_date}` : ""}
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
