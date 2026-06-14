@@ -1237,3 +1237,30 @@ checkout, bank/card integrations, storing card or banking details, live currency
 conversion, automatic cancellation, AI, and email/push reminder delivery
 (reminders are in-app via Calendar/Timeline). Deferred: receipt file uploads and
 provider-side cancellation automation.
+
+## Shipped: Quick Share QR Masterpiece V1
+
+A premium, secure QR-based document exchange layered on the existing secure
+document system (new `apps.quick_share` Django app + Next.js routes).
+
+Delivered:
+
+* Account-to-account Quick Share: select files → generate QR → receiver scans,
+  signs in, accepts/declines → files appear in **Shared with me**; owner can
+  revoke anytime. Claim is preserved across login via `?next=`.
+* Public secure QR mode (anonymous, code/expiry protected).
+* Permission modes: view only, allow download, allow save copy (with explicit
+  warnings), plus access code, one-time, limited claims, sender approval,
+  watermark, and a "Recommended protection" preset.
+* Save-copy-to-vault producing a receiver-owned copy.
+* Sender QR hero screen with live status polling, expiry countdown, permission
+  chips, copy-link, fallback code, pending-approval management, and revoke.
+* Backend security tests (27) covering selected-files-only, expiry/revoke,
+  one-time/limited claims, access-code gating, view-only/save-copy enforcement,
+  cross-account isolation, and sender approval. Frontend lint + build clean.
+
+Deferred (documented honestly): dedicated Emergency QR card UI (existing
+Emergency Access Packs already cover emergency sharing; the `emergency_qr` mode
+exists at the model level), organization-collection QR integration, in-browser
+camera scanner (native camera + copy-link/fallback-code provided), advanced
+founder metrics, and QR print/download for long-lived cards.

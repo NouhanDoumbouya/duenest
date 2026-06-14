@@ -3224,3 +3224,100 @@ Deferred V1 items: personal-to-organization copy/attach, organization file
 preview/download, secure room downloads, room access codes, email delivery,
 CSV/PDF exports, full template/playbook generation, and unified organization
 search.
+
+# 31. Quick Share QR V1
+
+Quick Share is a fast, secure, QR-based document exchange built on the same
+token-gated model as Secure Rooms. A session exposes only the files the owner
+explicitly selects — never the whole vault. The QR/claim URL carries **only the
+random session token**: no file ids, storage paths, access codes, or permission
+payloads. All access is validated server-side on every request.
+
+## 31.1 Modes and permissions
+
+Modes: `account_to_account`, `public_secure_qr`, `emergency_qr` (model support;
+dedicated emergency-card UI deferred — see Emergency Access Packs), and
+`organization_collection` (deferred — see Organization Workspace).
+
+Permissions: `view_only`, `download_allowed`, `save_copy_allowed`. View-only
+download is blocked server-side. Save-copy is only honoured when explicitly set;
+the saved copy becomes fully receiver-owned and cannot be revoked afterwards.
+
+Default ("Recommended protection"): view only, 10-minute expiry, watermark on,
+no download, no save copy. Access code, one-time, limited claims, and sender
+approval are optional.
+
+## 31.2 Owner (sender) endpoints — auth required
+
+```txt
+POST   /api/v1/quick-share/sessions/
+GET    /api/v1/quick-share/sessions/
+GET    /api/v1/quick-share/sessions/:id/
+DELETE /api/v1/quick-share/sessions/:id/
+POST   /api/v1/quick-share/sessions/:id/revoke/
+POST   /api/v1/quick-share/sessions/:id/approve-claim/   { claim_id }
+POST   /api/v1/quick-share/sessions/:id/deny-claim/      { claim_id }
+GET    /api/v1/quick-share/sessions/:id/activity/
+```
+
+Create body: `mode`, `title?`, `purpose?`, `permission`, `expires_at`,
+`access_code_required`, `access_code?` (write-only; auto-generated when required
+but blank), `one_time`, `max_claims?`, `require_sender_approval`,
+`watermark_enabled`, `file_ids[]` (each must be owned by the requester; others
+are skipped, and a session with no valid files is rejected). The create response
+includes the one-time plain `access_code` (when generated) and the session
+`token` for the owner to build the QR. The `access_code_hash` is never returned.
+Creating a session counts toward the existing `active_share_links` plan limit.
+
+## 31.3 Claim endpoints — token-gated
+
+```txt
+GET  /api/v1/quick-share/claim/:token/
+POST /api/v1/quick-share/claim/:token/verify-code/   { access_code }
+POST /api/v1/quick-share/claim/:token/accept/        (auth)
+POST /api/v1/quick-share/claim/:token/decline/       (auth)
+GET  /api/v1/quick-share/claim/:token/files/:file_id/preview/
+GET  /api/v1/quick-share/claim/:token/files/:file_id/download/
+POST /api/v1/quick-share/claim/:token/files/:file_id/save-copy/   (auth)
+```
+
+The claim metadata response exposes only safe data: mode, title, purpose,
+permission flags, watermark, sender display name/initials, expiry, and the
+selected files (id, name, source document title, size, type, previewable). It
+never returns the token, hash, storage paths, or unrelated vault data.
+
+Access codes are supplied via the `X-Access-Code` request header and
+re-validated on every request. Failed attempts are logged safely and throttled
+(`quick_share_code`, 10/min). Errors are generic (`wrong_code`,
+`requires_code`).
+
+For `account_to_account`, file access requires the authenticated receiver to
+hold an accepted (and, if required, approved) claim; the owner may preview their
+own share ("view as recipient"). For `public_secure_qr`, access is anonymous,
+subject to expiry/revoke/access-code/limits.
+
+## 31.4 Shared with me — auth required (receiver)
+
+```txt
+GET  /api/v1/shared-with-me/
+GET  /api/v1/shared-with-me/:claim_id/
+POST /api/v1/shared-with-me/:claim_id/remove/
+```
+
+Accepted account-to-account shares appear here. `remove` hides a share from the
+receiver's list without revoking it (only the owner can revoke). Detail includes
+the selected files for inline preview/download/save-copy per the permission.
+
+## 31.5 Security, activity, and limitations
+
+State guards block expired, revoked, consumed, and claim-limit-reached sessions.
+One-time sessions are consumed on the first accepted claim. Activity logs record
+safe events only (created, opened, claim started/accepted/declined, approved/
+denied, previewed, downloaded, copy saved, revoked, expired, code verified/
+failed) and never store raw IPs, tokens, access codes, or file paths — only a
+coarse user-agent summary.
+
+Known limitations: QR does not prevent screenshots (watermark is deterrence
+only); saved copies cannot be revoked after the receiver saves them; in-browser
+camera scanning is not implemented (native camera + copy-link/fallback-code are
+provided); emergency-card and organization-collection QR UIs are deferred.

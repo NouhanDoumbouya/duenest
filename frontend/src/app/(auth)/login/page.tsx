@@ -25,6 +25,13 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const justRegistered = searchParams.get("registered") === "1";
+  // Preserve a post-login destination (e.g. a Quick Share claim page). Only
+  // same-origin relative paths are honoured.
+  const nextParam = searchParams.get("next");
+  const nextPath =
+    nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//")
+      ? nextParam
+      : "/dashboard";
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -38,8 +45,8 @@ function LoginForm() {
 
     try {
       await login({ username, password });
-      // Login success → go to the dashboard.
-      router.push("/dashboard");
+      // Login success → return to the preserved destination, else the dashboard.
+      router.push(nextPath);
     } catch (err) {
       setError(
         err instanceof ApiError
