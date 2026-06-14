@@ -688,7 +688,8 @@ synchronously; a pending request can be cancelled while its status is
 
 Manages user-owned document metadata and returns computed document intelligence
 fields. File upload/preview/sharing is handled by nested file endpoints below.
-Notification sending is not implemented. Every endpoint requires
+Notification generation/delivery is handled by the separate notifications app
+and management command. Every endpoint requires
 authentication, and all access is scoped to the authenticated user: a document
 that belongs to another user returns `404 Not Found`.
 
@@ -1111,9 +1112,10 @@ viewers cannot access this log.
 # 13.8 Document Reminder Rules API (implemented)
 
 Reminder rules let users define when DueNest should remind them before a
-document expires or reaches its renewal date. This foundation stores rules and
-calculates upcoming reminder dates only; it does **not** send emails, push
-notifications, WhatsApp, Telegram, SMS, or background notification jobs yet.
+document expires or reaches its renewal date. The document reminder API still
+returns calculated upcoming rule dates synchronously. Actual in-app/email
+delivery is handled separately by the notification worker command documented in
+`docs/NOTIFICATIONS.md` and `docs/EMAIL_REMINDERS.md`.
 
 All endpoints require authentication. Rules are resolved through an
 owner-owned parent document, so another user's document or rule returns
@@ -2230,66 +2232,140 @@ DELETE /api/v1/reminders/{reminder_id}/
 
 # 18. Notification API
 
+Notifications are owner-scoped in-app records created by the
+`process_due_notifications` management command or future account/security event
+hooks. Email delivery is tracked on the same record but email bodies use
+privacy-safe summaries only.
+
+All endpoints require authentication and only return notifications for the
+requesting user.
+
 ## 18.1 List Notifications
 
 ```http
 GET /api/v1/notifications/
 ```
 
-### Authentication
-
-Required.
-
 ### Query Parameters
 
 | Parameter | Description |
 | --- | --- |
-| `is_read` | Filter read/unread notifications |
-| `notification_type` | Filter by notification type |
-
----
-
-## 18.2 Mark Notification as Read
-
-```http
-PATCH /api/v1/notifications/{notification_id}/read/
-```
-
-### Authentication
-
-Required.
+| `unread` | `1`/`true` to return unread, non-dismissed notifications |
+| `status` | Filter by `pending`, `delivered`, `read`, `dismissed`, `failed`, or `cancelled` |
+| `type` | Filter by notification type, e.g. `document_expiry` |
+| `severity` | Filter by `info`, `warning`, `urgent`, `security`, or `success` |
+| `search` | Case-insensitive search across safe title/message text |
+| `include_dismissed` | `1`/`true` to include dismissed notifications when no status filter is provided |
 
 ### Response: `200 OK`
 
+Paginated DRF response:
+
 ```json
 {
-  "data": {
-    "id": "notification_uuid",
-    "is_read": true,
-    "read_at": "2026-06-05T11:00:00Z"
-  }
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 12,
+      "type": "document_expiry",
+      "title": "Passport expiry is coming up",
+      "message": "Open the document and plan the next step.",
+      "severity": "warning",
+      "status": "delivered",
+      "source_type": "document",
+      "source_id": "42",
+      "action_url": "/dashboard/documents/42?tab=renewal",
+      "scheduled_for": "2026-06-14T09:00:00Z",
+      "delivered_in_app_at": "2026-06-14T09:01:00Z",
+      "delivered_email_at": "2026-06-14T09:01:01Z",
+      "read_at": null,
+      "dismissed_at": null,
+      "metadata": {
+        "target_date": "2026-06-21",
+        "reminder_date": "2026-06-14",
+        "lead_days": 7
+      },
+      "created_at": "2026-06-14T09:01:00Z",
+      "updated_at": "2026-06-14T09:01:01Z",
+      "is_unread": true
+    }
+  ]
 }
 ```
 
----
+## 18.2 Summary
 
-## 18.3 Mark All Notifications as Read
+```http
+GET /api/v1/notifications/summary/
+```
+
+Returns unread counts and the five latest unread notifications:
+
+```json
+{
+  "unread_count": 3,
+  "urgent_count": 1,
+  "latest": []
+}
+```
+
+## 18.3 Mark One Notification as Read
+
+```http
+POST /api/v1/notifications/{notification_id}/mark-read/
+```
+
+Returns the updated notification record.
+
+## 18.4 Mark All Notifications as Read
 
 ```http
 POST /api/v1/notifications/mark-all-read/
 ```
 
-### Authentication
+```json
+{
+  "updated": 5
+}
+```
 
-Required.
+## 18.5 Dismiss Notification
 
-### Response: `200 OK`
+```http
+POST /api/v1/notifications/{notification_id}/dismiss/
+```
+
+Marks the notification read and dismissed. Dismissed notifications are hidden
+from the default list unless `include_dismissed=1` or `status=dismissed` is
+provided.
+
+## 18.6 Preferences
+
+```http
+GET /api/v1/notifications/preferences/
+PATCH /api/v1/notifications/preferences/
+```
+
+Preference fields:
 
 ```json
 {
-  "data": {
-    "updated_count": 5
-  }
+  "in_app_enabled": true,
+  "email_enabled": true,
+  "document_reminders_enabled": true,
+  "subscription_reminders_enabled": true,
+  "checklist_bundle_reminders_enabled": true,
+  "organization_reminders_enabled": true,
+  "emergency_reminders_enabled": true,
+  "security_alerts_enabled": true,
+  "activity_notifications_enabled": false,
+  "reminder_digest_enabled": false,
+  "default_reminder_lead_days": [90, 30, 7, 1],
+  "timezone": "UTC",
+  "created_at": "2026-06-14T09:00:00Z",
+  "updated_at": "2026-06-14T09:00:00Z"
 }
 ```
 
@@ -2644,8 +2720,8 @@ DELETE /api/v1/documents/:id/reminder-rules/:rule_id/
 GET    /api/v1/documents/reminders/upcoming/
 ```
 
-Reminder rules are stored and upcoming dates are calculated, but real
-notification sending is not implemented yet.
+Reminder rules are stored and upcoming dates are calculated. Due delivery is
+performed by `python manage.py process_due_notifications`.
 
 ### Checklists — Planned MVP
 ```txt
@@ -3230,8 +3306,9 @@ POST   /api/v1/public/document-requests/:token/upload/
 
 Internal members submit with authentication. Public upload links submit only to
 one request and expose no workspace data. Upload tokens are unguessable and
-expire. Reminder email delivery is deferred; the V1 remind endpoint records a
-safe activity entry and timestamp.
+expire. The manual V1 remind endpoint records a safe activity entry and
+timestamp; scheduled organization request/campaign notifications are generated
+by `process_due_notifications`.
 
 ### 30.5 Campaigns, bundles, rooms, templates, and reports
 

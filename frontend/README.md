@@ -160,8 +160,10 @@ src/
 - Users can create, pause/enable, and delete rules such as 90, 60, 30, or 7
   days before expiry, on expiry day, or before renewal date when that source
   date exists.
-- The backend calculates `upcoming_reminder_date`; this frontend does not send
-  email, push, SMS, WhatsApp, Telegram, or in-app notifications yet.
+- The backend calculates `upcoming_reminder_date`; due delivery now appears in
+  `/dashboard/notifications` after `python manage.py process_due_notifications`
+  runs. Email reminders use the backend Django email configuration and remain
+  provider-dependent in production.
 
 ## Design system
 

@@ -356,8 +356,9 @@ The actual file is stored outside the database. The database stores file referen
 The implemented `apps.documents` module stores document metadata, attached file
 metadata, secure share-link metadata, owner-only file activity, document
 reminder rules, version snapshots, proof records, emergency access packs,
-recoverable trash, and structured metadata exports. Stored reminder occurrences
-and real notification sending are not implemented yet. The implementation
+recoverable trash, and structured metadata exports. Due reminder delivery now
+creates rows in `notifications_notification` through the notifications app
+management command. The implementation
 differs from the longer-term plan below in a few ways:
 
 - Primary keys are auto-increment integers (consistent with the existing
@@ -753,7 +754,7 @@ In Django, this can be enforced through model validation and optionally database
 
 ### Purpose
 
-Stores in-app notifications for the user.
+Stores in-app and email-delivery notification records for a user.
 
 Notifications are different from reminders. A reminder is a scheduled event. A notification is what the user sees after something is triggered or generated.
 
@@ -761,34 +762,83 @@ Notifications are different from reminders. A reminder is a scheduled event. A n
 
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
-| `id` | UUID | Yes | Primary key |
+| `id` | BigAutoField | Yes | Primary key |
 | `user` | ForeignKey(User) | Yes | Notification recipient |
+| `type` | CharField | Yes | `document_expiry`, `subscription_renewal`, `emergency_review`, etc. |
 | `title` | CharField | Yes | Short notification title |
 | `message` | TextField | Yes | Notification body |
-| `notification_type` | CharField | Yes | Expiry, renewal, system, etc. |
-| `is_read` | Boolean | Yes | Default `False` |
+| `severity` | CharField | Yes | `info`, `warning`, `urgent`, `security`, `success` |
+| `status` | CharField | Yes | `pending`, `delivered`, `read`, `dismissed`, `failed`, `cancelled` |
+| `source_type` | CharField | No | Safe source label such as `document` or `subscription` |
+| `source_id` | CharField | No | Source primary key as text |
+| `action_url` | CharField | No | Internal authenticated frontend path only |
+| `scheduled_for` | DateTime | Yes | Timezone-aware scheduled reminder datetime |
+| `delivered_in_app_at` | DateTime | No | When in-app delivery was recorded |
+| `delivered_email_at` | DateTime | No | When email delivery succeeded |
+| `email_attempts` | PositiveSmallInteger | Yes | Caps repeat attempts |
+| `email_last_error` | CharField | No | Safe error category only |
 | `read_at` | DateTime | No | When user read it |
+| `dismissed_at` | DateTime | No | When user dismissed it |
+| `dedupe_key` | CharField | Yes | Unique stable reminder/event key |
+| `metadata` | JSONField | No | Sanitized safe metadata only |
 | `created_at` | DateTime | Yes | Notification creation time |
+| `updated_at` | DateTime | Yes | Last update time |
 
-### Suggested Notification Types
+### Model: `NotificationPreference`
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `user` | OneToOne(User) | Yes | Preference owner |
+| `in_app_enabled` | Boolean | Yes | Global in-app delivery switch |
+| `email_enabled` | Boolean | Yes | Global email delivery switch |
+| `document_reminders_enabled` | Boolean | Yes | Document expiry/renewal/missing/review reminders |
+| `subscription_reminders_enabled` | Boolean | Yes | Renewal, trial, and cancellation reminders |
+| `checklist_bundle_reminders_enabled` | Boolean | Yes | Checklist/bundle deadline reminders |
+| `organization_reminders_enabled` | Boolean | Yes | Organization request/campaign/review reminders |
+| `emergency_reminders_enabled` | Boolean | Yes | Emergency review/expiry reminders |
+| `security_alerts_enabled` | Boolean | Yes | Security-related notifications |
+| `activity_notifications_enabled` | Boolean | Yes | Optional share/view activity notifications |
+| `reminder_digest_enabled` | Boolean | Yes | Reserved for later digest delivery |
+| `default_reminder_lead_days` | JSONField | Yes | Default lead days, e.g. `[90, 30, 7, 1]` |
+| `timezone` | CharField | Yes | IANA timezone name, fallback to UTC in service |
+
+### Implemented Notification Types
 
 ```txt
-document_expiring
-document_expired
-renewal_due
-reminder
-system
-ai_extraction_ready
-application_pack_ready
+document_expiry
+document_renewal
+document_missing_file
+document_review_needed
+subscription_renewal
+subscription_cancellation_deadline
+subscription_trial_ending
+bundle_deadline
+bundle_incomplete
+checklist_item_due
+checklist_missing_file
+organization_request_due
+organization_submission_review
+organization_campaign_deadline
+organization_member_missing_document
+share_expiring
+room_expiring
+emergency_review
+emergency_expiring
+security_alert
+failed_login_warning
+storage_plan_warning
+generic_reminder
 ```
 
 ### Indexes
 
 | Index | Purpose |
 | --- | --- |
-| `(user, is_read)` | Fast unread notification query |
-| `(user, created_at)` | Recent notifications |
-| `notification_type` | Filtering by type |
+| `(user, status, created_at)` | Inbox and status filtering |
+| `(user, read_at)` | Fast unread notification query |
+| `(type, scheduled_for)` | Delivery and type filtering |
+| `(source_type, source_id)` | Source lookup |
+| unique `dedupe_key` | Prevent duplicate reminder records/email delivery |
 
 ---
 

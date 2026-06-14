@@ -10,4 +10,5 @@ urlpatterns = [
     path("api/v1/", include("apps.organizations.urls")),
     path("api/v1/", include("apps.founder.urls")),
     path("api/v1/", include("apps.quick_share.urls")),
+    path("api/v1/", include("apps.notifications.urls")),
 ]

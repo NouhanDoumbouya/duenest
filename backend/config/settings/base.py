@@ -51,6 +51,7 @@ LOCAL_APPS = [
     "apps.organizations.apps.OrganizationsConfig",
     "apps.founder.apps.FounderConfig",
     "apps.quick_share.apps.QuickShareConfig",
+    "apps.notifications.apps.NotificationsConfig",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -154,6 +155,26 @@ MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Email/reminder delivery. Local development defaults to console output; production
+# can supply SMTP/Postmark/SendGrid/Mailgun SMTP settings without provider-specific
+# code. Do not put secrets in source control.
+EMAIL_BACKEND = config(
+    "EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend"
+)
+DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="DueNest <noreply@localhost>")
+SERVER_EMAIL = config("SERVER_EMAIL", default=DEFAULT_FROM_EMAIL)
+EMAIL_HOST = config("EMAIL_HOST", default="")
+EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
+EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
+EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
+EMAIL_USE_SSL = config("EMAIL_USE_SSL", default=False, cast=bool)
+EMAIL_TIMEOUT = config("EMAIL_TIMEOUT", default=10, cast=int)
+DUENEST_APP_BASE_URL = config("DUENEST_APP_BASE_URL", default="http://localhost:3000")
+NOTIFICATION_REMINDER_CATCHUP_DAYS = config(
+    "NOTIFICATION_REMINDER_CATCHUP_DAYS", default=3, cast=int
+)
 
 _IS_RUNNING_TESTS = "test" in sys.argv
 

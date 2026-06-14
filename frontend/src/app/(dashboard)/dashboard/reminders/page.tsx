@@ -151,8 +151,8 @@ export default function RemindersPage() {
       </SectionCard>
 
       <p className="text-center text-xs text-muted-foreground">
-        DueNest calculates these dates for you. Email and push delivery aren’t
-        sent yet.
+        DueNest now turns due reminders into in-app notifications and
+        privacy-safe email reminders when the backend command runs.
       </p>
     </PageContainer>
   );
