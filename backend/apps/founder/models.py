@@ -57,6 +57,7 @@ class ProductEvent(models.Model):
             "private_beta_signup_completed",
             "Private beta signup completed",
         )
+        ORGANIZATION_CREATED = "organization_created", "Organization created"
 
     class Source(models.TextChoices):
         BACKEND = "backend", "Backend"

@@ -92,6 +92,7 @@ FEATURE_COMPLETION_DEFAULTS = [
     ("export-backup", "Export/Backup", "Trust", "partial", "medium", True, True, True, True, False),
     ("trust-center", "Trust Center", "Trust", "ready", "medium", True, True, True, True, True),
     ("plan-limits", "Plan Limits", "Account", "ready", "medium", True, True, True, True, True),
+    ("organization-workspace", "Organization Workspace", "Teams", "ready", "high", True, True, True, True, True),
     ("founder-console", "Founder Console", "Operations", "in_progress", "critical", True, True, False, False, False),
     ("private-beta", "Private Beta", "Operations", "in_progress", "high", True, True, False, False, False),
 ]
@@ -725,6 +726,51 @@ def _attention_needed_count() -> int:
     )
 
 
+def _organization_queryset():
+    """Aggregate-only organization rows for founder metrics."""
+    from apps.organizations.models import Organization
+
+    return Organization.objects.all()
+
+
+def _active_organization_queryset():
+    from apps.organizations.models import Organization
+
+    return Organization.objects.filter(archived_at__isnull=True)
+
+
+def _organization_membership_queryset():
+    from apps.organizations.models import OrganizationMembership
+
+    return OrganizationMembership.objects.filter(
+        status=OrganizationMembership.Status.ACTIVE
+    )
+
+
+def _organization_document_queryset():
+    from apps.organizations.models import OrganizationDocument
+
+    return OrganizationDocument.objects.filter(is_archived=False)
+
+
+def _organization_request_queryset():
+    from apps.organizations.models import DocumentRequest
+
+    return DocumentRequest.objects.all()
+
+
+def _organization_campaign_queryset():
+    from apps.organizations.models import DocumentCollectionCampaign
+
+    return DocumentCollectionCampaign.objects.all()
+
+
+def _organization_secure_room_queryset():
+    from apps.organizations.models import OrganizationSecureRoom
+
+    return OrganizationSecureRoom.objects.all()
+
+
 def build_founder_dashboard(range_key: str | None = None) -> dict:
     selected_range, range_days = _range_config(range_key)
     today = _today_start()
@@ -742,6 +788,10 @@ def build_founder_dashboard(range_key: str | None = None) -> dict:
     launch = launch_readiness_summary()
     completion = feature_completion_summary()
     private_beta = build_private_beta_metrics()
+    organizations = _organization_queryset()
+    active_organizations = _active_organization_queryset()
+    organization_memberships = _organization_membership_queryset()
+    active_org_count = active_organizations.count()
 
     return {
         "range_key": selected_range,
@@ -784,6 +834,17 @@ def build_founder_dashboard(range_key: str | None = None) -> dict:
         "total_bundles": DocumentBundle.objects.count(),
         "total_exports": DocumentExportRequest.objects.count(),
         "total_emergency_packs": EmergencyAccessPack.objects.count(),
+        "total_organizations": organizations.count(),
+        "active_organizations": active_org_count,
+        "average_members_per_organization": (
+            0
+            if active_org_count == 0
+            else round(organization_memberships.count() / active_org_count, 1)
+        ),
+        "total_organization_documents": _organization_document_queryset().count(),
+        "total_organization_document_requests": _organization_request_queryset().count(),
+        "total_organization_campaigns": _organization_campaign_queryset().count(),
+        "total_organization_secure_rooms": _organization_secure_room_queryset().count(),
         "total_feedback_items": FeedbackItem.objects.count(),
         "open_feedback_items": open_feedback.count(),
         "open_error_items": AppErrorLog.objects.filter(resolved=False).count(),
@@ -1109,6 +1170,12 @@ def build_feature_adoption() -> dict:
             queryset=_subscription_queryset(),
             user_field="owner",
         ),
+        _feature_metric(
+            feature_key="organization_workspace",
+            label="Organization workspace",
+            queryset=_active_organization_queryset(),
+            user_field="created_by",
+        ),
     ]
     by_key = {feature["feature_key"]: feature for feature in features}
     return {
@@ -1126,6 +1193,9 @@ def build_feature_adoption() -> dict:
         "proof_records_used_count": by_key["proof_records"]["users_count"],
         "trash_restore_used_count": by_key["trash_restore"]["users_count"],
         "subscriptions_used_count": by_key["subscriptions"]["users_count"],
+        "organization_workspace_used_count": by_key["organization_workspace"][
+            "users_count"
+        ],
         "features": features,
     }
 

@@ -1818,3 +1818,57 @@ Three owner-scoped tables in the `subscriptions` app:
 
 Calendar/Timeline add **no new table** — subscription events are aggregated on
 demand from `Subscription` date columns.
+
+## Organization Workspace V1
+
+The `organizations` Django app adds separate organization-scoped tables instead
+of adding organization FKs to every personal vault table in this branch. This
+keeps personal documents private and avoids partially shared personal records.
+
+### Core tables
+
+- **Organization** - shared workspace metadata: name, slug, description,
+  website, country, organization type, creator, archive timestamp, and
+  timestamps.
+- **OrganizationMembership** - user membership with role (`owner`, `admin`,
+  `member`, `viewer`) and status (`active`, `invited`, `suspended`, `left`).
+  Unique per `(organization, user)`.
+- **OrganizationInvite** - email invite with role, unguessable token, status,
+  expiry, inviter, accepted user, and accepted timestamp.
+- **OrganizationActivity** - safe activity summaries scoped to one
+  organization.
+
+### Document operations tables
+
+- **OrganizationDocument** - organization-owned document metadata, optional
+  assignee, dates, status, notes, and archive fields.
+- **OrganizationDocumentFile** - organization document file metadata and storage
+  reference. Files are stored outside the database.
+- **DocumentRequest** - request for a member or external recipient to submit a
+  document, with optional campaign, linked organization document, public upload
+  token, expiry, notes, rejection reason, and reminder timestamp.
+- **DocumentRequestSubmission** - submitted file metadata, optional submitting
+  user/email, review state, reviewer, review timestamp, and rejection reason.
+- **DocumentCollectionCampaign** - multi-member document collection campaign.
+- **CampaignRequirement** - required/optional campaign document requirement.
+- **CampaignTargetMember** - campaign member progress row with status.
+
+### Packs, rooms, and reporting tables
+
+- **OrganizationRequestTemplate** - system or organization-specific quick
+  request template.
+- **OrganizationBundle** - organization application/renewal pack foundation with
+  target date, status, and readiness score.
+- **OrganizationSecureRoom** - organization public sharing room foundation with
+  token, permission, expiry, and revocation timestamp.
+- **OrganizationSecureRoomItem** - selected organization document/file metadata
+  included in a room.
+- **OrganizationReadinessReport** - persisted report snapshot foundation for
+  future exports.
+
+### Boundaries and deferred schema work
+
+Organization tables reference organization-owned models only. They do not point
+at personal `Document` rows in V1. Future personal-to-organization sharing
+should be implemented as an explicit copy/attach workflow with its own audit
+trail rather than by silently mixing personal and organization ownership.

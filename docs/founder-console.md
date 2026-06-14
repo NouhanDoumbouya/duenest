@@ -78,6 +78,7 @@ The `/founder` shell is visually separate from the normal dashboard. Existing
 - Activation funnel from signup to first document, file, expiry date, reminder,
   checklist/bundle, and secure sharing.
 - Feature adoption dashboard, including aggregate subscription tracker adoption.
+- Aggregate Organization Workspace adoption and usage metrics.
 - Editable feature completion tracker.
 - Feedback submission and founder triage board.
 - Error/failure dashboard.
@@ -156,6 +157,13 @@ Founder Console uses:
 - `LaunchChecklistItem` for launch readiness tracking.
 - `BetaUserProfile` for founder-only beta metadata.
 - `FounderAuditLog` for founder/admin action audit entries.
+
+Organization Workspace metrics are aggregate-only and include total
+organizations, active organizations, average members per organization,
+organization document count, document request count, campaign count, secure
+room count, and feature adoption counts. Founder Console must not expose
+organization names, member emails, document titles, filenames, invite/upload
+tokens, room tokens, private notes, or internal file paths.
 
 ## Country Activity
 
