@@ -1372,6 +1372,7 @@ class EmergencyAccessPackSerializer(serializers.ModelSerializer):
     items = EmergencyAccessPackItemSerializer(many=True, read_only=True)
     item_count = serializers.SerializerMethodField()
     share_url_path = serializers.SerializerMethodField()
+    public_url_path = serializers.SerializerMethodField()
     is_expired = serializers.BooleanField(read_only=True)
     access_code = serializers.CharField(
         write_only=True,
@@ -1393,6 +1394,7 @@ class EmergencyAccessPackSerializer(serializers.ModelSerializer):
             "access_code_required",
             "access_code",
             "share_url_path",
+            "public_url_path",
             "last_accessed_at",
             "disabled_at",
             "is_expired",
@@ -1409,6 +1411,7 @@ class EmergencyAccessPackSerializer(serializers.ModelSerializer):
             "owner",
             "status",
             "share_url_path",
+            "public_url_path",
             "last_accessed_at",
             "disabled_at",
             "is_expired",
@@ -1422,10 +1425,18 @@ class EmergencyAccessPackSerializer(serializers.ModelSerializer):
         return obj.items.count()
 
     def get_share_url_path(self, obj):
-        # Relative public path; only present while the pack is shareable now.
+        # Relative public API path; only present while the pack is shareable now.
         if not obj.is_shareable_now:
             return None
         return f"/api/v1/share/emergency-packs/{obj.token}/"
+
+    def get_public_url_path(self, obj):
+        # Relative frontend viewer path the owner shares with trusted people.
+        # The token is already exposed to the (authenticated) owner via
+        # share_url_path, so this adds no new disclosure.
+        if not obj.is_shareable_now:
+            return None
+        return f"/emergency/{obj.token}/"
 
     def validate(self, attrs):
         access_required = attrs.get(

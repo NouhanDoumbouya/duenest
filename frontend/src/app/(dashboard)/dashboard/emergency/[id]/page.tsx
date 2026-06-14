@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   Check,
   Copy,
+  ExternalLink,
   Loader2,
   Lock,
   Plus,
@@ -33,7 +34,7 @@ import { getDocumentFiles } from "@/lib/document-files";
 import {
   EMERGENCY_STATUS_LABELS,
   addEmergencyPackItem,
-  buildShareUrl,
+  buildPublicViewerUrl,
   deleteEmergencyPack,
   disableEmergencyPack,
   enableEmergencyPack,
@@ -194,7 +195,7 @@ export default function EmergencyPackDetailPage() {
     }
   }
 
-  const shareUrl = pack ? buildShareUrl(pack.share_url_path) : null;
+  const shareUrl = pack ? buildPublicViewerUrl(pack.public_url_path) : null;
 
   async function copyShareUrl() {
     if (!shareUrl) return;
@@ -338,6 +339,15 @@ export default function EmergencyPackDetailPage() {
                         {copied ? "Copied" : "Copy"}
                       </Button>
                     </div>
+                    <a
+                      href={shareUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+                    >
+                      <ExternalLink className="size-4" />
+                      View as recipient
+                    </a>
                     <p className="text-xs text-muted-foreground">
                       Anyone with this link can view the items in this pack. Share
                       the access code, if set, through a separate channel.

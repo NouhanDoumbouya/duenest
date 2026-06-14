@@ -1492,6 +1492,11 @@ metadata plus preview/download routes for selected files.
 If `access_code_required` is true, `access_code` must be supplied. The code is
 write-only and stored hashed; it is never returned by the API.
 
+While a pack is shareable, the owner serializer returns two relative paths:
+`share_url_path` (the public JSON API path) and `public_url_path`
+(`/emergency/:token/`, the frontend viewer page the owner shares with trusted
+people). Both are `null` when the pack is not currently shareable.
+
 Public emergency-pack endpoints:
 
 | Method | Path | Description |
