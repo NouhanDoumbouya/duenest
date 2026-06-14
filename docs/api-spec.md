@@ -2862,6 +2862,13 @@ Founder analytics and country activity are aggregate-first. Country activity
 uses approximate country metadata only and does not return raw IP addresses,
 GPS data, street-level location, or city-level drilldowns.
 
+Country source: product events store a 2-letter ISO country code read from a
+CDN/edge country header (`CF-IPCountry`, `X-Vercel-IP-Country`, or
+`X-Country-Code`) — never derived from raw IP geolocation by the app. When the
+app runs without such an edge (e.g. local development), no country is recorded
+and the Global Map shows its empty state; set `DEV_DEFAULT_EVENT_COUNTRY` to a
+2-letter code to exercise the map locally.
+
 See `docs/founder-console.md` for response intent and operational boundaries.
 
 ---
