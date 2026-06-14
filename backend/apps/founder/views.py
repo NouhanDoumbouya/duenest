@@ -394,7 +394,7 @@ class FounderFeatureAdoptionView(APIView):
         return Response(build_feature_adoption())
 
 
-class FounderFeatureCompletionListView(generics.ListAPIView):
+class FounderFeatureCompletionListView(generics.ListCreateAPIView):
     permission_classes = [IsFounderUser]
     serializer_class = FeatureCompletionItemSerializer
     pagination_class = None
@@ -417,6 +417,16 @@ class FounderFeatureCompletionListView(generics.ListAPIView):
                 "summary": feature_completion_summary(),
                 "items": response.data,
             }
+        )
+
+    def perform_create(self, serializer):
+        item = serializer.save()
+        log_founder_action(
+            request=self.request,
+            action="founder_created_feature_completion",
+            object_type="feature_completion",
+            object_id=item.id,
+            metadata={"key": item.key, "status": item.status},
         )
 
 

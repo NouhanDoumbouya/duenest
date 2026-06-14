@@ -1,17 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Inbox, Loader2, MessageSquare, Save, ShieldCheck } from "lucide-react";
+import { Inbox, Loader2, Mail, MessageSquare, Save, ShieldCheck } from "lucide-react";
 
 import { FounderPageHeader } from "@/components/founder/founder-ui";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ApiError } from "@/lib/api";
 import { getFounderFeedback, updateFounderFeedback } from "@/lib/founder";
+import { cn } from "@/lib/utils";
 import type {
   FeedbackCategory,
   FeedbackItem,
@@ -55,6 +56,7 @@ export default function FounderFeedbackPage() {
     status: "new" as FeedbackStatus,
     priority: "medium" as FeedbackPriority,
     founder_notes: "",
+    founder_response: "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -79,6 +81,7 @@ export default function FounderFeedbackPage() {
             status: nextSelected.status,
             priority: nextSelected.priority,
             founder_notes: nextSelected.founder_notes,
+            founder_response: nextSelected.founder_response,
           });
         }
         setError(null);
@@ -118,6 +121,7 @@ export default function FounderFeedbackPage() {
         status: updated.status,
         priority: updated.priority,
         founder_notes: updated.founder_notes,
+        founder_response: updated.founder_response,
       });
     } catch (err) {
       setError(
@@ -235,6 +239,7 @@ export default function FounderFeedbackPage() {
                           status: item.status,
                           priority: item.priority,
                           founder_notes: item.founder_notes,
+                          founder_response: item.founder_response,
                         });
                       }}
                       className={`w-full rounded-lg border px-3 py-3 text-left transition-colors ${
@@ -250,7 +255,7 @@ export default function FounderFeedbackPage() {
                             item.priority === "urgent" ? "destructive" : "outline"
                           }
                         >
-                          {item.priority}
+                          {item.urgency}
                         </Badge>
                       </div>
                       <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
@@ -259,6 +264,9 @@ export default function FounderFeedbackPage() {
                       <div className="mt-2 flex flex-wrap gap-2">
                         <Badge variant="secondary">{label(item.status)}</Badge>
                         <Badge variant="outline">{label(item.category)}</Badge>
+                        {item.responded_at && (
+                          <Badge variant="outline">responded</Badge>
+                        )}
                       </div>
                     </button>
                   </li>
@@ -287,6 +295,21 @@ export default function FounderFeedbackPage() {
                   <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">
                     {selected.message}
                   </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Badge variant="outline">Urgency: {label(selected.urgency)}</Badge>
+                    <Badge variant="outline">
+                      Contact: {label(selected.contact_preference)}
+                    </Badge>
+                    {(selected.email || selected.user_email) && (
+                      <a
+                        href={`mailto:${selected.email || selected.user_email}`}
+                        className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+                      >
+                        <Mail className="size-3.5" />
+                        Email
+                      </a>
+                    )}
+                  </div>
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -343,6 +366,27 @@ export default function FounderFeedbackPage() {
                     rows={6}
                     placeholder="Internal product notes, next action, or beta follow-up."
                   />
+                </label>
+
+                <label className="space-y-1">
+                  <Label>Founder response</Label>
+                  <Textarea
+                    value={draft.founder_response}
+                    onChange={(event) =>
+                      setDraft((current) => ({
+                        ...current,
+                        founder_response: event.target.value,
+                      }))
+                    }
+                    rows={5}
+                    placeholder="User-visible response or follow-up summary."
+                  />
+                  {selected.responded_at && (
+                    <span className="block text-xs text-muted-foreground">
+                      Last response saved{" "}
+                      {new Date(selected.responded_at).toLocaleDateString()}
+                    </span>
+                  )}
                 </label>
 
                 <Button onClick={saveSelected} disabled={saving}>

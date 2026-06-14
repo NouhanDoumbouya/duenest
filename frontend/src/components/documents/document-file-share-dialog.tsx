@@ -244,11 +244,12 @@ export function DocumentFileShareDialog({
   }, [file, onClose]);
 
   useEffect(() => {
-    if (!file) return;
+    if (!file || file.document === null) return;
     let active = true;
+    const documentId = file.document;
     Promise.all([
-      listDocumentFileShareLinks(file.document, file.id),
-      getDocumentFileActivity(file.document, file.id),
+      listDocumentFileShareLinks(documentId, file.id),
+      getDocumentFileActivity(documentId, file.id),
     ])
       .then(([shareLinks, activityEntries]) => {
         if (!active) return;
@@ -277,6 +278,7 @@ export function DocumentFileShareDialog({
   }, [file]);
 
   async function refreshActivity(target: DocumentFile) {
+    if (target.document === null) return;
     try {
       setActivity(await getDocumentFileActivity(target.document, target.id));
     } catch {
@@ -286,7 +288,7 @@ export function DocumentFileShareDialog({
 
   async function handleCreate(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!file) return;
+    if (!file || file.document === null) return;
 
     const expiresAt = buildExpiry(expiryPreset, customExpiry);
     if (!expiresAt) {
@@ -350,7 +352,7 @@ export function DocumentFileShareDialog({
   }
 
   async function handleRevoke(link: DocumentFileShareLink) {
-    if (!file) return;
+    if (!file || file.document === null) return;
     setRevokingId(link.id);
     try {
       const revoked = await revokeDocumentFileShareLink(
@@ -375,6 +377,31 @@ export function DocumentFileShareDialog({
   }
 
   if (!file) return null;
+
+  if (file.document === null) {
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm"
+        role="dialog"
+        aria-modal="true"
+      >
+        <div className="max-w-md rounded-xl border border-border bg-card p-5 shadow-floating">
+          <h2 className="font-heading text-lg font-semibold">
+            Attach file before sharing
+          </h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Single-file share links are available after an inbox file is attached
+            to a document. Quick Share can still share inbox files directly.
+          </p>
+          <div className="mt-4 flex justify-end">
+            <Button type="button" onClick={onClose}>
+              Close
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const currentError = error?.fileId === file.id ? error.message : null;
   const loading = loadedFileId !== file.id;

@@ -4,7 +4,9 @@
 
 export interface DocumentFile {
   id: number;
-  document: number;
+  document: number | null;
+  document_title: string;
+  assignment_status: "attached" | "inbox";
   uploaded_by: number;
   original_filename: string;
   content_type: string;

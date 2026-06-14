@@ -70,11 +70,13 @@ export default function FounderMapPage() {
       if (!canonical) continue;
       lookup.set(canonical, c);
       choro.set(canonical, {
-        value: c.total_events + c.active_users,
+        value: c.total_events + c.active_users + c.waitlist_entries + c.beta_users,
         label: displayCountryLabel(c.country),
         detail: [
           { label: "Active users", value: nf.format(c.active_users) },
           { label: "New signups", value: nf.format(c.new_signups) },
+          { label: "Waitlist", value: nf.format(c.waitlist_entries) },
+          { label: "Beta users", value: nf.format(c.beta_users) },
           { label: "Documents", value: nf.format(c.documents_created) },
           { label: "Share access", value: nf.format(c.share_access) },
           { label: "Security events", value: nf.format(c.security_events) },
@@ -88,8 +90,14 @@ export default function FounderMapPage() {
     const list = data?.countries ?? [];
     const events = list.reduce((sum, c) => sum + c.total_events, 0);
     const activeUsers = list.reduce((sum, c) => sum + c.active_users, 0);
-    const top = [...list].sort((a, b) => b.total_events - a.total_events)[0];
-    return { count: list.length, events, activeUsers, top };
+    const waitlistEntries = list.reduce((sum, c) => sum + c.waitlist_entries, 0);
+    const betaUsers = list.reduce((sum, c) => sum + c.beta_users, 0);
+    const top = [...list].sort(
+      (a, b) =>
+        b.total_events + b.waitlist_entries + b.beta_users -
+        (a.total_events + a.waitlist_entries + a.beta_users),
+    )[0];
+    return { count: list.length, events, activeUsers, waitlistEntries, betaUsers, top };
   }, [data]);
 
   const insights = useMemo(() => {
@@ -178,16 +186,18 @@ export default function FounderMapPage() {
         />
         <FounderStatCard
           icon={Users}
-          label="Active users"
-          value={totals.activeUsers}
-          hint="Across all countries in range"
+          label="Waitlist interest"
+          value={totals.waitlistEntries}
+          hint={`${nf.format(totals.betaUsers)} accepted beta users`}
         />
         <FounderStatCard
           icon={MapPin}
           label="Top country"
           value={totals.top ? displayCountryLabel(totals.top.country) : "—"}
           hint={
-            totals.top ? `${nf.format(totals.top.total_events)} events` : "No data yet"
+            totals.top
+              ? `${nf.format(totals.top.total_events)} events, ${nf.format(totals.top.waitlist_entries)} waitlist`
+              : "No data yet"
           }
         />
       </div>
@@ -265,6 +275,8 @@ export default function FounderMapPage() {
               <div className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
                 <Stat label="Active users" value={nf.format(selectedItem.active_users)} />
                 <Stat label="New signups" value={nf.format(selectedItem.new_signups)} />
+                <Stat label="Waitlist" value={nf.format(selectedItem.waitlist_entries)} />
+                <Stat label="Beta users" value={nf.format(selectedItem.beta_users)} />
                 <Stat label="Documents" value={nf.format(selectedItem.documents_created)} />
                 <Stat label="Share access" value={nf.format(selectedItem.share_access)} />
                 <Stat label="Security events" value={nf.format(selectedItem.security_events)} />
@@ -329,6 +341,8 @@ export default function FounderMapPage() {
                     <th className="py-2 pr-4 font-medium">Country</th>
                     <th className="py-2 pr-4 font-medium">Active users</th>
                     <th className="py-2 pr-4 font-medium">New signups</th>
+                    <th className="py-2 pr-4 font-medium">Waitlist</th>
+                    <th className="py-2 pr-4 font-medium">Beta</th>
                     <th className="py-2 pr-4 font-medium">Documents</th>
                     <th className="py-2 pr-4 font-medium">Share access</th>
                     <th className="py-2 pr-4 font-medium">Security</th>
@@ -358,6 +372,12 @@ export default function FounderMapPage() {
                         </td>
                         <td className="py-3 pr-4 tabular-nums">
                           {nf.format(country.new_signups)}
+                        </td>
+                        <td className="py-3 pr-4 tabular-nums">
+                          {nf.format(country.waitlist_entries)}
+                        </td>
+                        <td className="py-3 pr-4 tabular-nums">
+                          {nf.format(country.beta_users)}
                         </td>
                         <td className="py-3 pr-4 tabular-nums">
                           {nf.format(country.documents_created)}

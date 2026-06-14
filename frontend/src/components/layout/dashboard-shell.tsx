@@ -55,6 +55,7 @@ const navGroups: NavGroup[] = [
     items: [
       { label: "Overview", href: "/dashboard", icon: LayoutDashboard, exact: true },
       { label: "Documents", href: "/dashboard/documents", icon: FileText },
+      { label: "File Inbox", href: "/dashboard/files", icon: Inbox },
       { label: "Attention", href: "/dashboard/attention", icon: ShieldAlert },
       { label: "Reminders", href: "/dashboard/reminders", icon: BellRing },
       { label: "Subscriptions", href: "/dashboard/subscriptions", icon: RefreshCw },

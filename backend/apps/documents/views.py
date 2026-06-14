@@ -656,14 +656,15 @@ def _trash_file(instance, request):
         actor_type=DocumentFileActivity.ActorType.OWNER,
         request=request,
     )
-    log_document_activity(
-        owner=request.user,
-        document=instance.document,
-        action=DocumentActivity.Action.FILE_TRASHED,
-        title="File moved to trash",
-        description=instance.original_filename,
-        related_file=instance,
-    )
+    if instance.document_id:
+        log_document_activity(
+            owner=request.user,
+            document=instance.document,
+            action=DocumentActivity.Action.FILE_TRASHED,
+            title="File moved to trash",
+            description=instance.original_filename,
+            related_file=instance,
+        )
 
 
 class DocumentFileDownloadView(_DocumentScopedMixin, APIView):
@@ -716,6 +717,290 @@ class DocumentFilePreviewView(_DocumentScopedMixin, APIView):
             metadata={"content_type": instance.content_type},
         )
         return _inline_file_response(instance)
+
+
+def _owned_file_queryset(user, *, include_trashed=False, only_inbox=False):
+    """Owner-scoped file queryset for both attached files and inbox files."""
+    qs = DocumentFile.objects.select_related("document", "uploaded_by").filter(
+        Q(document__owner=user) | Q(document__isnull=True, uploaded_by=user)
+    )
+    if only_inbox:
+        qs = qs.filter(document__isnull=True)
+    if not include_trashed:
+        qs = qs.filter(is_trashed=False).filter(
+            Q(document__isnull=True) | Q(document__is_trashed=False)
+        )
+    return qs
+
+
+def _create_document_file(*, uploaded, user, document=None):
+    checksum = _compute_checksum(uploaded)
+    return DocumentFile.objects.create(
+        document=document,
+        uploaded_by=user,
+        file=uploaded,
+        original_filename=uploaded.name[:255],
+        content_type=uploaded.content_type or "",
+        file_size=uploaded.size,
+        checksum=checksum,
+    )
+
+
+class FileInboxListCreateView(generics.ListCreateAPIView):
+    """GET lists standalone files; POST uploads a file without creating a document."""
+
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return DocumentFileUploadSerializer
+        return DocumentFileSerializer
+
+    def get_queryset(self):
+        return _owned_file_queryset(self.request.user, only_inbox=True)
+
+    def create(self, request, *args, **kwargs):
+        enforce_plan_limit(request.user, user_plans.RESOURCE_FILES)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        instance = _create_document_file(
+            uploaded=serializer.validated_data["file"],
+            user=request.user,
+        )
+        log_activity(
+            file=instance,
+            action=DocumentFileActivity.Action.FILE_UPLOADED,
+            actor_type=DocumentFileActivity.ActorType.OWNER,
+            request=request,
+        )
+        _mark_onboarding(request, "first_file_uploaded")
+        _track_product_event(
+            request,
+            "file_uploaded",
+            object_type="document_file",
+            object_id=instance.id,
+            metadata={
+                "content_type": instance.content_type,
+                "file_size": instance.file_size,
+                "assignment_status": "inbox",
+            },
+        )
+        return Response(
+            DocumentFileSerializer(instance, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class FileInboxDetailView(generics.RetrieveDestroyAPIView):
+    """GET one inbox file; DELETE soft-trashes it."""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = DocumentFileSerializer
+
+    def get_queryset(self):
+        return _owned_file_queryset(self.request.user, only_inbox=True)
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        _trash_file(instance, request)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class FileInboxDownloadView(APIView):
+    """Controlled download for standalone inbox files."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        instance = get_object_or_404(
+            _owned_file_queryset(request.user, only_inbox=True),
+            pk=pk,
+        )
+        log_activity(
+            file=instance,
+            action=DocumentFileActivity.Action.FILE_DOWNLOADED,
+            actor_type=DocumentFileActivity.ActorType.OWNER,
+            request=request,
+        )
+        return _file_response(instance, as_attachment=True)
+
+
+class FileInboxPreviewView(APIView):
+    """Owner-only inline preview for PDF/JPEG/PNG inbox files."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        instance = get_object_or_404(
+            _owned_file_queryset(request.user, only_inbox=True),
+            pk=pk,
+        )
+        if not instance.is_previewable:
+            return Response(
+                {"detail": "Preview is not available for this file type."},
+                status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            )
+        log_activity(
+            file=instance,
+            action=DocumentFileActivity.Action.FILE_PREVIEWED,
+            actor_type=DocumentFileActivity.ActorType.OWNER,
+            request=request,
+        )
+        _track_product_event(
+            request,
+            "file_previewed",
+            object_type="document_file",
+            object_id=instance.id,
+            metadata={
+                "content_type": instance.content_type,
+                "assignment_status": "inbox",
+            },
+        )
+        return _inline_file_response(instance)
+
+
+class FileInboxTrashListView(generics.ListAPIView):
+    """List trashed standalone inbox files."""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = DocumentFileSerializer
+
+    def get_queryset(self):
+        return _owned_file_queryset(
+            self.request.user,
+            include_trashed=True,
+            only_inbox=True,
+        ).filter(is_trashed=True)
+
+
+class FileInboxRestoreView(APIView):
+    """POST restores a trashed standalone inbox file."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        file = get_object_or_404(
+            _owned_file_queryset(
+                request.user,
+                include_trashed=True,
+                only_inbox=True,
+            ),
+            pk=pk,
+        )
+        if file.is_trashed:
+            file.is_trashed = False
+            file.trashed_at = None
+            file.save(update_fields=["is_trashed", "trashed_at"])
+            _track_product_event(
+                request,
+                "trash_restore_used",
+                object_type="document_file",
+                object_id=file.id,
+                metadata={"target": "file_inbox"},
+            )
+        return Response(DocumentFileSerializer(file, context={"request": request}).data)
+
+
+class FileInboxPermanentDeleteView(APIView):
+    """DELETE permanently removes a trashed standalone inbox file."""
+
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk):
+        file = get_object_or_404(
+            _owned_file_queryset(
+                request.user,
+                include_trashed=True,
+                only_inbox=True,
+            ),
+            pk=pk,
+        )
+        if not file.is_trashed:
+            return Response(
+                {"detail": "Move the file to trash before deleting it permanently."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            file.file.delete(save=False)
+        except Exception:  # noqa: BLE001 — best-effort blob cleanup
+            pass
+        file.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class FileInboxAttachDocumentView(APIView):
+    """POST attaches an inbox file to an existing owner-owned document."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        file = get_object_or_404(
+            _owned_file_queryset(request.user, only_inbox=True),
+            pk=pk,
+        )
+        document = get_object_or_404(
+            Document,
+            pk=request.data.get("document"),
+            owner=request.user,
+            is_trashed=False,
+        )
+        file.document = document
+        file.save(update_fields=["document", "updated_at"])
+        log_document_activity(
+            owner=request.user,
+            document=document,
+            action=DocumentActivity.Action.DOCUMENT_UPDATED,
+            title="File attached from inbox",
+            description=file.original_filename,
+            related_file=file,
+        )
+        return Response(DocumentFileSerializer(file, context={"request": request}).data)
+
+
+class FileInboxCreateDocumentView(APIView):
+    """POST creates a document from an inbox file and attaches the file to it."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        file = get_object_or_404(
+            _owned_file_queryset(request.user, only_inbox=True),
+            pk=pk,
+        )
+        enforce_plan_limit(request.user, user_plans.RESOURCE_DOCUMENTS)
+        title = (request.data.get("title") or "").strip()
+        if not title:
+            title = file.original_filename.rsplit(".", 1)[0] or file.original_filename
+        document = Document.objects.create(
+            owner=request.user,
+            title=title[:255],
+            document_type=(request.data.get("document_type") or "").strip()[:100],
+            notes=(request.data.get("notes") or "").strip(),
+        )
+        file.document = document
+        file.save(update_fields=["document", "updated_at"])
+        record_document_version(
+            document,
+            version_type=DocumentVersion.VersionType.FILE_UPLOAD,
+            created_by=request.user,
+            file=file,
+            change_summary=f"Created document from file “{file.original_filename}”",
+        )
+        _track_product_event(
+            request,
+            "document_created",
+            object_type="document",
+            object_id=document.id,
+            metadata={"source": "file_inbox"},
+        )
+        return Response(
+            {
+                "document": DocumentSerializer(document, context={"request": request}).data,
+                "file": DocumentFileSerializer(file, context={"request": request}).data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 
 # ---- Owner share-link management ------------------------------------------
@@ -1655,7 +1940,9 @@ class DocumentBundleFilesView(APIView):
             for m in result.missing
         ]
 
-        document_ids = {entry.document_id for entry in result.files}
+        document_ids = {
+            entry.document_id for entry in result.files if entry.document_id is not None
+        }
         return Response(
             {
                 "files": files,
@@ -1897,11 +2184,11 @@ class BundleRequirementLinkFileView(_RequirementActionMixin, APIView):
     def post(self, request, bundle_id, requirement_id):
         requirement = self.get_requirement()
         file = get_object_or_404(
-            DocumentFile,
+            DocumentFile.objects.filter(is_trashed=False).filter(
+                Q(document__owner=request.user, document__is_trashed=False)
+                | Q(document__isnull=True, uploaded_by=request.user)
+            ),
             pk=request.data.get("file"),
-            document__owner=request.user,
-            document__is_trashed=False,
-            is_trashed=False,
         )
         requirement.linked_file = file
         if requirement.linked_document_id is None:
@@ -2205,14 +2492,15 @@ class DocumentFileRestoreView(_OwnedFileMixin, APIView):
             file.is_trashed = False
             file.trashed_at = None
             file.save(update_fields=["is_trashed", "trashed_at"])
-            log_document_activity(
-                owner=request.user,
-                document=file.document,
-                action=DocumentActivity.Action.FILE_RESTORED,
-                title="File restored",
-                description=file.original_filename,
-                related_file=file,
-            )
+            if file.document_id:
+                log_document_activity(
+                    owner=request.user,
+                    document=file.document,
+                    action=DocumentActivity.Action.FILE_RESTORED,
+                    title="File restored",
+                    description=file.original_filename,
+                    related_file=file,
+                )
             _track_product_event(
                 request,
                 "trash_restore_used",
@@ -3276,7 +3564,8 @@ class ShareRoomItemsView(_OwnedRoomMixin, APIView):
             )
         elif data.get("file"):
             file = get_object_or_404(
-                DocumentFile, pk=data["file"], document__owner=request.user
+                _owned_file_queryset(request.user),
+                pk=data["file"],
             )
         elif data.get("proof"):
             proof = get_object_or_404(

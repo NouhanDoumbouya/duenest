@@ -270,7 +270,7 @@ export interface CreateBundleExportRequest {
 
 export interface BundleFile {
   id: number;
-  document: number;
+  document: number | null;
   document_title: string;
   requirement_id: number;
   requirement_title: string;

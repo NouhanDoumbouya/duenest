@@ -29,6 +29,14 @@ def file_detail_url(document_id, file_id):
     return f"/api/v1/documents/{document_id}/files/{file_id}/"
 
 
+def inbox_files_url():
+    return "/api/v1/files/"
+
+
+def inbox_file_detail_url(file_id):
+    return f"/api/v1/files/{file_id}/"
+
+
 def attention_url():
     return "/api/v1/documents/attention-needed/"
 
@@ -328,7 +336,118 @@ class DocumentFileAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         file = DocumentFile.objects.get(id=file_id)
         self.assertTrue(file.is_trashed)
-        self.assertIsNotNone(file.trashed_at)
+
+    def test_user_can_upload_and_list_inbox_file(self):
+        self.client.force_authenticate(self.alice)
+        response = self.client.post(
+            inbox_files_url(),
+            {"file": make_pdf(name="loose.pdf")},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        file = DocumentFile.objects.get(id=response.data["id"])
+        self.assertIsNone(file.document_id)
+        self.assertEqual(file.uploaded_by, self.alice)
+        self.assertEqual(response.data["assignment_status"], "inbox")
+        self.assertIn("/api/v1/files/", response.data["download_url"])
+
+        list_response = self.client.get(inbox_files_url())
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(list_response.data["results"][0]["id"], file.id)
+
+    def test_inbox_file_is_owner_scoped(self):
+        inbox_file = DocumentFile.objects.create(
+            uploaded_by=self.bob,
+            file=make_pdf("bob-inbox.pdf"),
+            original_filename="bob-inbox.pdf",
+            content_type="application/pdf",
+            file_size=10,
+        )
+
+        self.client.force_authenticate(self.alice)
+        detail = self.client.get(inbox_file_detail_url(inbox_file.id))
+        self.assertEqual(detail.status_code, status.HTTP_404_NOT_FOUND)
+
+        listing = self.client.get(inbox_files_url())
+        self.assertEqual(listing.status_code, status.HTTP_200_OK)
+        self.assertEqual(listing.data["count"], 0)
+
+    def test_user_can_attach_inbox_file_to_existing_document(self):
+        inbox_file = DocumentFile.objects.create(
+            uploaded_by=self.alice,
+            file=make_pdf("attach.pdf"),
+            original_filename="attach.pdf",
+            content_type="application/pdf",
+            file_size=10,
+        )
+
+        self.client.force_authenticate(self.alice)
+        response = self.client.post(
+            f"{inbox_file_detail_url(inbox_file.id)}attach-document/",
+            {"document": self.alice_doc.id},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        inbox_file.refresh_from_db()
+        self.assertEqual(inbox_file.document, self.alice_doc)
+        self.assertEqual(response.data["assignment_status"], "attached")
+
+    def test_user_can_create_document_from_inbox_file(self):
+        inbox_file = DocumentFile.objects.create(
+            uploaded_by=self.alice,
+            file=make_pdf("application-pack.pdf"),
+            original_filename="application-pack.pdf",
+            content_type="application/pdf",
+            file_size=10,
+        )
+
+        self.client.force_authenticate(self.alice)
+        response = self.client.post(
+            f"{inbox_file_detail_url(inbox_file.id)}create-document/",
+            {"title": "Application Pack", "document_type": "application"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        inbox_file.refresh_from_db()
+        self.assertEqual(inbox_file.document.title, "Application Pack")
+        self.assertEqual(response.data["document"]["title"], "Application Pack")
+
+    def test_user_can_trash_restore_and_permanently_delete_inbox_file(self):
+        inbox_file = DocumentFile.objects.create(
+            uploaded_by=self.alice,
+            file=make_pdf("old.pdf"),
+            original_filename="old.pdf",
+            content_type="application/pdf",
+            file_size=10,
+        )
+
+        self.client.force_authenticate(self.alice)
+        delete_response = self.client.delete(inbox_file_detail_url(inbox_file.id))
+        self.assertEqual(delete_response.status_code, status.HTTP_204_NO_CONTENT)
+        inbox_file.refresh_from_db()
+        self.assertTrue(inbox_file.is_trashed)
+        self.assertIsNotNone(inbox_file.trashed_at)
+
+        trash_response = self.client.get("/api/v1/files/trash/")
+        self.assertEqual(trash_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(trash_response.data["results"][0]["id"], inbox_file.id)
+
+        restore_response = self.client.post(
+            f"{inbox_file_detail_url(inbox_file.id)}restore/"
+        )
+        self.assertEqual(restore_response.status_code, status.HTTP_200_OK)
+        inbox_file.refresh_from_db()
+        self.assertFalse(inbox_file.is_trashed)
+
+        self.client.delete(inbox_file_detail_url(inbox_file.id))
+        permanent_response = self.client.delete(
+            f"{inbox_file_detail_url(inbox_file.id)}permanent-delete/"
+        )
+        self.assertEqual(permanent_response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(DocumentFile.objects.filter(id=inbox_file.id).exists())
 
     def test_owner_can_download_own_file(self):
         self.client.force_authenticate(self.alice)

@@ -129,6 +129,31 @@ class CreateSessionTests(QuickShareBaseTest):
         self.assertNotEqual(session.access_code_hash, "")
         self.assertNotEqual(session.access_code_hash, "778899")
 
+    def test_create_accepts_owner_inbox_file(self):
+        inbox_file = DocumentFile.objects.create(
+            uploaded_by=self.alice,
+            file=make_pdf("inbox.pdf"),
+            original_filename="inbox.pdf",
+            content_type="application/pdf",
+            file_size=18,
+        )
+
+        self.client.force_authenticate(self.alice)
+        resp = self.client.post(
+            "/api/v1/quick-share/sessions/",
+            {
+                "mode": "account_to_account",
+                "permission": "view_only",
+                "expires_at": (timezone.now() + timedelta(minutes=10)).isoformat(),
+                "file_ids": [inbox_file.id],
+            },
+            format="json",
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.data)
+        session = QuickShareSession.objects.get(id=resp.data["id"])
+        self.assertEqual(session.items.get().file, inbox_file)
+
     def test_cannot_attach_another_users_file(self):
         self.client.force_authenticate(self.alice)
         resp = self.client.post(

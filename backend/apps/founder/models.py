@@ -80,6 +80,8 @@ class ProductEvent(models.Model):
     object_type = models.CharField(max_length=80, blank=True)
     object_id = models.CharField(max_length=80, blank=True)
     session_id = models.CharField(max_length=120, blank=True)
+    client_event_id = models.CharField(max_length=120, blank=True, db_index=True)
+    dedupe_key = models.CharField(max_length=128, blank=True, db_index=True)
     path = models.CharField(max_length=255, blank=True)
     method = models.CharField(max_length=12, blank=True)
     status_code = models.PositiveSmallIntegerField(null=True, blank=True)
@@ -138,6 +140,11 @@ class FeedbackItem(models.Model):
         FOUNDER_NOTE = "founder_note", "Founder note"
         OTHER = "other", "Other"
 
+    class ContactPreference(models.TextChoices):
+        EMAIL = "email", "Email"
+        IN_APP = "in_app", "In app"
+        NO_REPLY = "no_reply", "No reply needed"
+
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -153,6 +160,16 @@ class FeedbackItem(models.Model):
     )
     title = models.CharField(max_length=160)
     message = models.TextField()
+    urgency = models.CharField(
+        max_length=20,
+        choices=Priority.choices,
+        default=Priority.MEDIUM,
+    )
+    contact_preference = models.CharField(
+        max_length=20,
+        choices=ContactPreference.choices,
+        default=ContactPreference.EMAIL,
+    )
     status = models.CharField(
         max_length=20,
         choices=Status.choices,
@@ -171,9 +188,11 @@ class FeedbackItem(models.Model):
     related_path = models.CharField(max_length=255, blank=True)
     related_feature = models.CharField(max_length=120, blank=True)
     founder_notes = models.TextField(blank=True)
+    founder_response = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     reviewed_at = models.DateTimeField(null=True, blank=True)
+    responded_at = models.DateTimeField(null=True, blank=True)
     closed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:

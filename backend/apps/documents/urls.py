@@ -66,6 +66,15 @@ from .views import (
     DocumentFileTrashListView,
     DocumentFileTrashView,
     DocumentProofRecordListView,
+    FileInboxAttachDocumentView,
+    FileInboxCreateDocumentView,
+    FileInboxDetailView,
+    FileInboxDownloadView,
+    FileInboxListCreateView,
+    FileInboxPermanentDeleteView,
+    FileInboxPreviewView,
+    FileInboxRestoreView,
+    FileInboxTrashListView,
     DocumentReminderRuleDetailView,
     DocumentReminderRuleListCreateView,
     DocumentTimelineView,
@@ -100,6 +109,39 @@ router.register("payments", DocumentPaymentViewSet, basename="payment")
 file_base = "documents/<int:document_id>/files"
 
 urlpatterns = [
+    path("files/", FileInboxListCreateView.as_view(), name="file-inbox"),
+    path("files/trash/", FileInboxTrashListView.as_view(), name="file-inbox-trash"),
+    path("files/<int:pk>/", FileInboxDetailView.as_view(), name="file-inbox-detail"),
+    path(
+        "files/<int:pk>/download/",
+        FileInboxDownloadView.as_view(),
+        name="file-inbox-download",
+    ),
+    path(
+        "files/<int:pk>/preview/",
+        FileInboxPreviewView.as_view(),
+        name="file-inbox-preview",
+    ),
+    path(
+        "files/<int:pk>/restore/",
+        FileInboxRestoreView.as_view(),
+        name="file-inbox-restore",
+    ),
+    path(
+        "files/<int:pk>/permanent-delete/",
+        FileInboxPermanentDeleteView.as_view(),
+        name="file-inbox-permanent-delete",
+    ),
+    path(
+        "files/<int:pk>/attach-document/",
+        FileInboxAttachDocumentView.as_view(),
+        name="file-inbox-attach-document",
+    ),
+    path(
+        "files/<int:pk>/create-document/",
+        FileInboxCreateDocumentView.as_view(),
+        name="file-inbox-create-document",
+    ),
     path(
         f"{file_base}/",
         DocumentFileListCreateView.as_view(),

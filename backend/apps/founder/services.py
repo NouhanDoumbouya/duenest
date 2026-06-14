@@ -7,6 +7,7 @@ vault content. This module keeps those aggregate/query rules in one place.
 import logging
 import secrets
 import string
+import hashlib
 from datetime import timedelta
 from typing import Any
 
@@ -75,6 +76,8 @@ SENSITIVE_KEY_FRAGMENTS = {
     "private_note",
     "notes",
 }
+
+EVENT_DEDUPE_WINDOW_SECONDS = 30
 
 
 FEATURE_COMPLETION_DEFAULTS = [
@@ -198,6 +201,7 @@ def track_product_event(
 ) -> None:
     """Best-effort ProductEvent write; never break the calling workflow."""
     try:
+        now = timezone.now()
         event_user = user
         if event_user is None and request is not None:
             candidate = getattr(request, "user", None)
@@ -206,23 +210,91 @@ def track_product_event(
         if event_user is not None and not getattr(event_user, "is_authenticated", True):
             event_user = None
 
+        cleaned_metadata = sanitize_metadata(metadata or {})
+        metadata_event_id = (
+            cleaned_metadata.get("client_event_id")
+            or cleaned_metadata.get("event_id")
+            if isinstance(cleaned_metadata, dict)
+            else ""
+        )
+        metadata_session_id = (
+            cleaned_metadata.get("session_id")
+            if isinstance(cleaned_metadata, dict)
+            else ""
+        )
+        client_event_id = (
+            (
+                request.META.get("HTTP_X_DUENEST_EVENT_ID")
+                or request.META.get("HTTP_X_CLIENT_EVENT_ID")
+                or ""
+            ).strip()[:120]
+            if request is not None
+            else ""
+        ) or str(metadata_event_id or "")[:120]
+        session_id = (
+            (
+                request.META.get("HTTP_X_DUENEST_SESSION_ID")
+                or request.META.get("HTTP_X_SESSION_ID")
+                or ""
+            ).strip()[:120]
+            if request is not None
+            else ""
+        ) or str(metadata_session_id or "")[:120]
+        if not session_id and request is not None:
+            session = getattr(request, "session", None)
+            session_id = str(getattr(session, "session_key", "") or "")[:120]
+
+        path = request.path[:255] if request is not None else ""
+        method = request.method[:12] if request is not None else ""
+        ip_address = client_ip(request) if request is not None else None
+        dedupe_window = EVENT_DEDUPE_WINDOW_SECONDS
+        identity_part = client_event_id or str(int(now.timestamp() // dedupe_window))
+        dedupe_raw = "|".join(
+            [
+                str(event_type),
+                str(source),
+                str(getattr(event_user, "id", "") or ""),
+                object_type[:80],
+                str(object_id)[:80] if object_id not in {None, ""} else "",
+                path,
+                method,
+                session_id,
+                str(ip_address or ""),
+                identity_part,
+            ]
+        )
+        dedupe_key = hashlib.sha256(dedupe_raw.encode("utf-8")).hexdigest()
+        since = now - (
+            timedelta(days=1)
+            if client_event_id
+            else timedelta(seconds=dedupe_window)
+        )
+        if ProductEvent.objects.filter(
+            dedupe_key=dedupe_key,
+            created_at__gte=since,
+        ).exists():
+            return
+
         ProductEvent.objects.create(
             user=event_user,
             event_type=event_type,
             event_source=source,
             object_type=object_type[:80],
             object_id=str(object_id)[:80] if object_id not in {None, ""} else "",
-            path=(request.path[:255] if request is not None else ""),
-            method=(request.method[:12] if request is not None else ""),
+            session_id=session_id,
+            client_event_id=client_event_id,
+            dedupe_key=dedupe_key,
+            path=path,
+            method=method,
             status_code=status_code,
-            ip_address=client_ip(request) if request is not None else None,
+            ip_address=ip_address,
             country=country_from_request(request),
             user_agent=(
                 request.META.get("HTTP_USER_AGENT", "")[:1000]
                 if request is not None
                 else ""
             ),
-            metadata=sanitize_metadata(metadata or {}),
+            metadata=cleaned_metadata,
         )
     except Exception:  # noqa: BLE001 - analytics must never break product flows
         logger.warning("Failed to record product event", exc_info=True)
@@ -656,13 +728,67 @@ def ensure_beta_profiles_for_users() -> None:
 
 def launch_readiness_summary() -> dict:
     ensure_launch_checklist_defaults()
+    ensure_feature_completion_defaults()
     total = LaunchChecklistItem.objects.count()
     complete = LaunchChecklistItem.objects.filter(is_complete=True).count()
     percent = 0 if total == 0 else round((complete / total) * 100)
+    feature_total = FeatureCompletionItem.objects.count()
+    feature_ready = FeatureCompletionItem.objects.filter(
+        backend_done=True,
+        frontend_done=True,
+        tests_done=True,
+        docs_done=True,
+        polished=True,
+    ).count()
+    feature_percent = (
+        0 if feature_total == 0 else round((feature_ready / feature_total) * 100)
+    )
+    blocker_rows = (
+        FeatureCompletionItem.objects.filter(
+            priority__in=[
+                FeatureCompletionItem.Priority.CRITICAL,
+                FeatureCompletionItem.Priority.HIGH,
+            ]
+        )
+        .exclude(status__in=[
+            FeatureCompletionItem.Status.READY,
+            FeatureCompletionItem.Status.DEFERRED,
+        ])
+        .order_by("priority", "module", "sort_order", "feature_name")[:25]
+    )
+    generated_blockers = []
+    for item in blocker_rows:
+        missing = []
+        if not item.backend_done:
+            missing.append("backend")
+        if not item.frontend_done:
+            missing.append("frontend")
+        if not item.tests_done:
+            missing.append("tests")
+        if not item.docs_done:
+            missing.append("docs")
+        if not item.polished:
+            missing.append("polish")
+        generated_blockers.append(
+            {
+                "id": item.id,
+                "key": item.key,
+                "feature_name": item.feature_name,
+                "module": item.module,
+                "priority": item.priority,
+                "status": item.status,
+                "missing": missing,
+            }
+        )
     return {
         "total": total,
         "complete": complete,
         "percent": percent,
+        "feature_completion_percent": feature_percent,
+        "generated_blockers_count": len(generated_blockers),
+        "generated_blockers": generated_blockers,
+        "private_beta_ready_percent": min(percent, feature_percent),
+        "public_launch_ready_percent": min(percent, feature_percent),
     }
 
 
@@ -1439,7 +1565,7 @@ def build_country_activity(range_key: str | None = None) -> dict:
     queryset = _apply_since(ProductEvent.objects.all(), "created_at", since).exclude(
         country=""
     )
-    rows = (
+    event_rows = (
         queryset.values("country")
         .annotate(
             active_users=Count("user", distinct=True),
@@ -1464,14 +1590,74 @@ def build_country_activity(range_key: str | None = None) -> dict:
         )
         .order_by("-total_events", "country")[:100]
     )
+    countries = {}
+    for row in event_rows:
+        country = (row["country"] or "").strip()
+        if not country:
+            continue
+        countries[country] = {
+            **row,
+            "country": country,
+            "waitlist_entries": 0,
+            "beta_users": 0,
+        }
+
+    waitlist_rows = (
+        _apply_since(
+            WaitlistEntry.objects.exclude(country=""),
+            "created_at",
+            since,
+        )
+        .values("country")
+        .annotate(
+            waitlist_entries=Count("id"),
+            beta_users=Count(
+                "id",
+                filter=Q(status=WaitlistEntry.Status.ACCEPTED),
+            ),
+        )
+    )
+    for row in waitlist_rows:
+        country = (row["country"] or "").strip()
+        if not country:
+            continue
+        entry = countries.setdefault(
+            country,
+            {
+                "country": country,
+                "active_users": 0,
+                "new_signups": 0,
+                "documents_created": 0,
+                "share_access": 0,
+                "security_events": 0,
+                "total_events": 0,
+                "last_seen_at": None,
+                "waitlist_entries": 0,
+                "beta_users": 0,
+            },
+        )
+        entry["waitlist_entries"] += row["waitlist_entries"]
+        entry["beta_users"] += row["beta_users"]
+
+    country_rows = sorted(
+        countries.values(),
+        key=lambda item: (
+            -(
+                item["total_events"]
+                + item["waitlist_entries"]
+                + item["beta_users"]
+            ),
+            item["country"],
+        ),
+    )[:100]
     return {
         "range_key": selected_range,
         "range_days": range_days,
-        "countries": list(rows),
+        "countries": country_rows,
         "privacy_note": (
             "Country activity is aggregated from approximate product-event "
-            "metadata. DueNest does not use GPS, street-level location, or raw "
-            "IP addresses in this founder view."
+            "metadata and waitlist country fields. DueNest does not use GPS, "
+            "street-level location, or raw IP addresses in this founder view."
         ),
     }
 

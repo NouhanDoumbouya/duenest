@@ -653,13 +653,14 @@ def log_activity(
     metadata: dict | None = None,
 ) -> None:
     """
-    Record one activity entry, owned by the file's document owner.
+    Record one activity entry, owned by the file's document owner or uploader.
 
     Never raises: a logging failure must not break the user-facing action.
     """
     try:
+        owner_id = file.document.owner_id if file.document_id else file.uploaded_by_id
         DocumentFileActivity.objects.create(
-            owner_id=file.document.owner_id,
+            owner_id=owner_id,
             document_id=file.document_id,
             file=file,
             share_link=share_link,
@@ -881,14 +882,18 @@ def collect_bundle_files(bundle) -> BundleFilesResult:
         if req.linked_file_id:
             f = req.linked_file
             doc = f.document
-            if f.is_trashed or doc.is_trashed:
+            if f.is_trashed or (doc is not None and doc.is_trashed):
                 missing.append(
                     BundleMissingItem(
                         requirement_id=req.id,
                         requirement_title=req.title,
-                        document_id=doc.id,
-                        document_title=doc.title,
-                        reason="document_trashed" if doc.is_trashed else "file_trashed",
+                        document_id=doc.id if doc else None,
+                        document_title=doc.title if doc else "File Inbox",
+                        reason=(
+                            "document_trashed"
+                            if doc is not None and doc.is_trashed
+                            else "file_trashed"
+                        ),
                     )
                 )
             elif f.id not in seen_file_ids:
@@ -898,8 +903,8 @@ def collect_bundle_files(bundle) -> BundleFilesResult:
                         file=f,
                         requirement_id=req.id,
                         requirement_title=req.title,
-                        document_id=doc.id,
-                        document_title=doc.title,
+                        document_id=doc.id if doc else None,
+                        document_title=doc.title if doc else "File Inbox",
                     )
                 )
         elif req.linked_document_id:
@@ -996,10 +1001,11 @@ def collect_room_files(room) -> RoomFilesResult:
     for item in items:
         if item.file_id:
             f = item.file
-            if f.is_trashed or f.document.is_trashed:
+            doc = f.document
+            if f.is_trashed or (doc is not None and doc.is_trashed):
                 missing.append({"item_id": item.id, "reason": "file_trashed"})
             else:
-                _add(f, f.document.title, item.id)
+                _add(f, doc.title if doc else "File Inbox", item.id)
         elif item.document_id:
             doc = item.document
             if doc.is_trashed:
@@ -1013,7 +1019,8 @@ def collect_room_files(room) -> RoomFilesResult:
         elif item.proof_id:
             proof = item.proof
             f = proof.linked_file
-            if f and not f.is_trashed and not f.document.is_trashed:
+            doc = f.document if f else None
+            if f and not f.is_trashed and (doc is None or not doc.is_trashed):
                 _add(f, f"Proof: {proof.title}", item.id)
             else:
                 missing.append({"item_id": item.id, "reason": "no_file"})
@@ -2361,7 +2368,10 @@ def _bundle_requirement_export_row(requirement) -> dict:
         if (
             linked_file is not None
             and not linked_file.is_trashed
-            and not linked_file.document.is_trashed
+            and (
+                linked_file.document is None
+                or not linked_file.document.is_trashed
+            )
         )
         else None
     )
@@ -2905,9 +2915,11 @@ def build_documents_zip(user, file_ids):
     files = list(
         DocumentFile.objects.filter(
             id__in=[int(f) for f in file_ids],
-            document__owner=user,
             is_trashed=False,
-            document__is_trashed=False,
+        )
+        .filter(
+            Q(document__owner=user, document__is_trashed=False)
+            | Q(document__isnull=True, uploaded_by=user)
         ).select_related("document")
     )
 
@@ -2920,7 +2932,10 @@ def build_documents_zip(user, file_ids):
     spooled = tempfile.SpooledTemporaryFile(max_size=8 * 1024 * 1024)
     with zipfile.ZipFile(spooled, "w", zipfile.ZIP_DEFLATED) as zf:
         for f in files:
-            folder = _safe_path_component(f.document.title, "Document")
+            folder = _safe_path_component(
+                f.document.title if f.document_id else "File Inbox",
+                "Document",
+            )
             filename = _safe_path_component(f.original_filename, f"file-{f.id}")
             arcname = _dedupe_arcname(f"{root}/{folder}/{filename}", used_arcnames)
             if not _write_file_to_zip(zf, arcname, f):

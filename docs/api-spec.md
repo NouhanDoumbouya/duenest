@@ -910,6 +910,26 @@ require authentication.
 | `DELETE` | `/api/v1/documents/:id/files/:file_id/permanent-delete/` | Permanently delete a trashed file |
 | `POST`   | `/api/v1/documents/:id/files/:file_id/versions/`    | Upload a replacement file and record a version |
 
+### File Inbox API
+
+Standalone files can be uploaded before the user chooses or creates the right
+document. Inbox files are scoped by `uploaded_by=request.user`; once attached,
+they behave like document files.
+
+| Method   | Path                                      | Description |
+| -------- | ----------------------------------------- | ----------- |
+| `GET`    | `/api/v1/files/`                          | List active standalone inbox files |
+| `POST`   | `/api/v1/files/`                          | Upload a standalone file (multipart) |
+| `GET`    | `/api/v1/files/:file_id/`                 | Retrieve inbox file metadata |
+| `DELETE` | `/api/v1/files/:file_id/`                 | Move inbox file to trash |
+| `GET`    | `/api/v1/files/:file_id/download/`        | Controlled owner-only download |
+| `GET`    | `/api/v1/files/:file_id/preview/`         | Owner-only inline preview for PDF/JPEG/PNG |
+| `GET`    | `/api/v1/files/trash/`                    | List trashed standalone files |
+| `POST`   | `/api/v1/files/:file_id/restore/`         | Restore a trashed standalone file |
+| `DELETE` | `/api/v1/files/:file_id/permanent-delete/` | Permanently delete a trashed standalone file |
+| `POST`   | `/api/v1/files/:file_id/attach-document/` | Attach inbox file to an existing owned document |
+| `POST`   | `/api/v1/files/:file_id/create-document/` | Create a new document from the inbox file |
+
 ### Upload Request
 
 `multipart/form-data` with a single `file` field:
@@ -927,6 +947,8 @@ file: <binary>
 {
   "id": 1,
   "document": 12,
+  "document_title": "Passport",
+  "assignment_status": "attached",
   "uploaded_by": 7,
   "original_filename": "passport.pdf",
   "content_type": "application/pdf",
@@ -949,6 +971,8 @@ file: <binary>
   client-reported content type).
 - Previewable types: PDF, JPEG, PNG only. DOC/DOCX remain download-only.
 - The parent document must belong to the authenticated user (otherwise `404`).
+- For File Inbox uploads, `document` is `null`, `assignment_status` is
+  `inbox`, and `download_url`/`preview_url` point to `/api/v1/files/...`.
 
 ### Security notes
 
@@ -962,6 +986,9 @@ file: <binary>
   exclude trashed files. Existing public share links to a trashed file or
   trashed parent document return `410 Gone`.
 - Permanent file deletion is guarded: the file must already be in trash.
+- Standalone inbox files use the same validation, plan-limit counting, storage
+  privacy, owner-only preview/download, trash, restore, and permanent-delete
+  rules as document-attached files.
 
 ---
 
@@ -2829,6 +2856,7 @@ POST  /api/v1/founder/invites/:invite_id/disable/
 GET   /api/v1/founder/activation-funnel/
 GET   /api/v1/founder/feature-adoption/
 GET   /api/v1/founder/feature-completion/
+POST  /api/v1/founder/feature-completion/
 PATCH /api/v1/founder/feature-completion/:item_id/
 GET   /api/v1/founder/feedback/
 GET   /api/v1/founder/feedback/:feedback_id/
@@ -2858,9 +2886,20 @@ Privacy rule: founder endpoints return aggregate metrics and safe account
 metadata only. They must not expose document contents, raw OCR text, access
 codes, share tokens, internal file paths, private notes, or physical locations.
 
-Founder analytics and country activity are aggregate-first. Country activity
-uses approximate country metadata only and does not return raw IP addresses,
-GPS data, street-level location, or city-level drilldowns.
+Founder analytics and country activity are aggregate-first. Product events use
+server-side dedupe keys (`client_event_id` when provided, otherwise a short
+time-bucketed identity key) to reduce double-counting repeated client events.
+Country activity uses approximate country metadata and waitlist country fields
+only and does not return raw IP addresses, GPS data, street-level location, or
+city-level drilldowns. Country rows include product-event counts plus
+`waitlist_entries` and accepted `beta_users`.
+
+Feedback submissions support `urgency` and `contact_preference`; founder
+updates support private `founder_notes` and a separate user-visible
+`founder_response` with `responded_at`.
+
+Launch readiness responses include manual checklist summary fields plus
+generated feature blockers derived from high/critical Feature Completion rows.
 
 Country source: product events store a 2-letter ISO country code read from a
 CDN/edge country header (`CF-IPCountry`, `X-Vercel-IP-Country`, or

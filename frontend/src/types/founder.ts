@@ -151,11 +151,26 @@ export type FeatureCompletionStatus =
 
 export type FounderPriority = "low" | "medium" | "high" | "critical";
 
+export interface LaunchGeneratedBlocker {
+  id: number;
+  key: string;
+  feature_name: string;
+  module: string;
+  priority: FounderPriority;
+  status: FeatureCompletionStatus;
+  missing: string[];
+}
+
 export interface FounderSummary {
   total: number;
   ready?: number;
   complete?: number;
   percent: number;
+  feature_completion_percent?: number;
+  generated_blockers_count?: number;
+  generated_blockers?: LaunchGeneratedBlocker[];
+  private_beta_ready_percent?: number;
+  public_launch_ready_percent?: number;
 }
 
 export interface FeatureCompletionItem {
@@ -202,6 +217,7 @@ export type FeedbackStatus =
   | "closed";
 
 export type FeedbackPriority = "low" | "medium" | "high" | "urgent";
+export type FeedbackContactPreference = "email" | "in_app" | "no_reply";
 
 export interface FeedbackItem {
   id: number;
@@ -211,15 +227,19 @@ export interface FeedbackItem {
   category: FeedbackCategory;
   title: string;
   message: string;
+  urgency: FeedbackPriority;
+  contact_preference: FeedbackContactPreference;
   status: FeedbackStatus;
   priority: FeedbackPriority;
   source: string;
   related_path: string;
   related_feature: string;
   founder_notes: string;
+  founder_response: string;
   created_at: string;
   updated_at: string;
   reviewed_at: string | null;
+  responded_at: string | null;
   closed_at: string | null;
 }
 
@@ -228,6 +248,8 @@ export interface SubmitFeedbackRequest {
   category: FeedbackCategory;
   title: string;
   message: string;
+  urgency?: FeedbackPriority;
+  contact_preference?: FeedbackContactPreference;
   related_path?: string;
   related_feature?: string;
 }
@@ -431,6 +453,8 @@ export interface CountryActivityItem {
   share_access: number;
   security_events: number;
   total_events: number;
+  waitlist_entries: number;
+  beta_users: number;
   last_seen_at: string | null;
 }
 

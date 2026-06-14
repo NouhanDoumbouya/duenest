@@ -276,6 +276,8 @@ class FeedbackCreateSerializer(serializers.ModelSerializer):
             "category",
             "title",
             "message",
+            "urgency",
+            "contact_preference",
             "related_path",
             "related_feature",
             "created_at",
@@ -308,15 +310,19 @@ class FounderFeedbackSerializer(serializers.ModelSerializer):
             "category",
             "title",
             "message",
+            "urgency",
+            "contact_preference",
             "status",
             "priority",
             "source",
             "related_path",
             "related_feature",
             "founder_notes",
+            "founder_response",
             "created_at",
             "updated_at",
             "reviewed_at",
+            "responded_at",
             "closed_at",
         ]
         read_only_fields = [
@@ -327,22 +333,32 @@ class FounderFeedbackSerializer(serializers.ModelSerializer):
             "category",
             "title",
             "message",
+            "urgency",
+            "contact_preference",
             "source",
             "related_path",
             "related_feature",
             "created_at",
             "updated_at",
             "reviewed_at",
+            "responded_at",
             "closed_at",
         ]
 
     def update(self, instance, validated_data):
         old_status = instance.status
+        old_response = instance.founder_response
         item = super().update(instance, validated_data)
         updates = []
         if old_status == FeedbackItem.Status.NEW and item.status != old_status:
             item.reviewed_at = timezone.now()
             updates.append("reviewed_at")
+        if item.founder_response.strip() and item.founder_response != old_response:
+            item.responded_at = timezone.now()
+            updates.append("responded_at")
+        elif not item.founder_response.strip() and item.responded_at is not None:
+            item.responded_at = None
+            updates.append("responded_at")
         if item.status in {FeedbackItem.Status.CLOSED, FeedbackItem.Status.REJECTED}:
             if item.closed_at is None:
                 item.closed_at = timezone.now()
@@ -504,7 +520,22 @@ class FeatureCompletionItemSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "key", "created_at", "updated_at"]
+        read_only_fields = ["id", "created_at", "updated_at"]
+        extra_kwargs = {"key": {"required": False}}
+
+    def validate_key(self, value):
+        value = slugify(value or "")[:80]
+        if not value:
+            raise serializers.ValidationError("Key is required.")
+        return value
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if self.instance is None and not attrs.get("key"):
+            attrs["key"] = slugify(attrs.get("feature_name", ""))[:80]
+        if self.instance is None and not attrs.get("key"):
+            raise serializers.ValidationError({"key": "Key is required."})
+        return attrs
 
     def get_completion_percent(self, obj):
         flags = [

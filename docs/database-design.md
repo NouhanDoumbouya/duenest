@@ -412,17 +412,19 @@ are a shared controlled vocabulary, not user-owned.
 Implemented indexes: `(owner, status)`, `(owner, expiry_date)`, and
 `(owner, is_trashed)`; default ordering is `-created_at`.
 
-#### Implemented `DocumentFile` (file attachments)
+#### Implemented `DocumentFile` (file attachments and File Inbox)
 
-Files attached to a `Document` (metadata + a stored blob). Ownership is
-enforced through the parent document (`file.document.owner`).
+Files uploaded by a user (metadata + a stored blob). A file may be attached to
+a `Document` or may live temporarily in File Inbox with `document = null`.
+Attached-file ownership is enforced through the parent document
+(`file.document.owner`). Inbox-file ownership is enforced through `uploaded_by`.
 
 | Field | Type | Notes |
 | --- | --- | --- |
 | `id` | BigAutoField | Primary key |
-| `document` | ForeignKey(Document) | `related_name="files"`, `CASCADE` |
+| `document` | nullable ForeignKey(Document) | `related_name="files"`, `CASCADE`; null means File Inbox |
 | `uploaded_by` | ForeignKey(User) | Set from `request.user`, read-only via API |
-| `file` | FileField | Stored at `media/documents/user_<id>/document_<id>/<uuid><ext>` |
+| `file` | FileField | Stored at `media/documents/user_<id>/document_<id>/<uuid><ext>` or `media/documents/user_<id>/inbox/<uuid><ext>` |
 | `original_filename` | CharField | Display only — never used to build the path |
 | `content_type` | CharField | Client-reported MIME type |
 | `file_size` | PositiveIntegerField | Bytes |
@@ -432,14 +434,16 @@ enforced through the parent document (`file.document.owner`).
 | `created_at` / `updated_at` | DateTime | Timestamps |
 
 - Storage path uses a UUID filename (user-supplied names are not trusted for
-  paths). Indexes on `(document, created_at)` and `(document, is_trashed)`;
-  ordering `-created_at`.
+  paths). Indexes on `(document, created_at)`, `(document, is_trashed)`, and
+  `(uploaded_by, is_trashed)`; ordering `-created_at`.
 - Local files live under `MEDIA_ROOT` (`backend/media/`, git-ignored). They are
   served only through the authenticated download endpoint, never as public
   static media.
 - Trashed files are hidden from active file lists and cannot be served through
   public share links until restored. Permanent deletion is guarded behind an
-  explicit trash-first flow.
+  explicit trash-first flow. File Inbox files have matching trash/restore/delete
+  behavior and can be attached to an existing document or used to create a new
+  document.
 - **TODO (production):** move blobs to private object storage (S3-compatible)
   with signed, time-limited access.
 
@@ -1725,18 +1729,23 @@ Founder Console V1 adds a focused `apps.founder` backend module.
 - **Purpose:** first-party, privacy-minimized product analytics events for
   activation, adoption, activity, and security summaries.
 - **Key fields:** nullable `user`, `event_type`, `event_source`,
-  optional `object_type`/`object_id`, optional request metadata, sanitized
+  optional `object_type`/`object_id`, optional `session_id`,
+  `client_event_id`, `dedupe_key`, optional request metadata, sanitized
   `metadata`, `created_at`.
 - **Security:** best-effort logging only. Metadata is sanitized and should not
   include private document contents, OCR text, access codes, share tokens,
   passwords, or file paths.
+- **Integrity:** repeated events are deduped with a server-generated
+  `dedupe_key`. Client-provided event ids are supported but not trusted for any
+  authorization decision.
 
 ### FeedbackItem
 
 - **Purpose:** user-submitted and founder-managed feedback.
 - **Key fields:** nullable `user`, optional `email`, `category`, `title`,
-  `message`, `status`, `priority`, `source`, `related_path`,
-  `related_feature`, `founder_notes`, review/close timestamps.
+  `message`, `urgency`, `contact_preference`, `status`, `priority`, `source`,
+  `related_path`, `related_feature`, private `founder_notes`, user-visible
+  `founder_response`, review/respond/close timestamps.
 - **Security:** feedback is not a document-support access channel. Users should
   not be asked to submit private vault contents.
 
