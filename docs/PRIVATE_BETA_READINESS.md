@@ -19,6 +19,13 @@ production launch. This is an internal readiness note, not a launch claim.
   revocation, hashed access codes, activity logs. **No Nearby Share.** See
   `QUICK_SHARE_2.md` and `SECURE_SHARING_SECURITY.md`.
 
+### Feature flags / kill switches
+- `apps/features` Feature Flags Lite: backend-enforced kill switches with env
+  fallback, Django admin + founder API control, audit logging, a seed command,
+  and frontend nav-hiding + disabled-state cards. Risky/public endpoints (Quick
+  Share, emergency public viewer, OCR, email reminders) respect the flags and
+  503 when paused. See `FEATURE_FLAGS.md` and `RELEASE_CHECKLIST.md`.
+
 ### Public entry
 - Landing, waitlist (graceful duplicate handling), invite validation (active /
   expiry / remaining-uses, atomic single-use consume), register→login→dashboard,

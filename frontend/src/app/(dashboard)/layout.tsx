@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation";
 
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { DashboardUserProvider } from "@/components/dashboard/user-context";
+import { FeatureFlagsProvider } from "@/components/features/feature-flags-provider";
 import { LogoMark } from "@/components/layout/logo";
 import { getAccessToken, getCurrentUser, logout } from "@/lib/auth";
 import type { User } from "@/types/auth";
@@ -69,9 +70,11 @@ export default function DashboardLayout({
 
   return (
     <DashboardUserProvider value={user}>
-      <DashboardShell user={{ name: fullName, email: user.email }}>
-        {children}
-      </DashboardShell>
+      <FeatureFlagsProvider>
+        <DashboardShell user={{ name: fullName, email: user.email }}>
+          {children}
+        </DashboardShell>
+      </FeatureFlagsProvider>
     </DashboardUserProvider>
   );
 }

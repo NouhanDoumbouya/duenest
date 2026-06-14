@@ -20,6 +20,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.features.flags import require_feature_enabled
+
 from .models import (
     Document,
     DocumentActivity,
@@ -2344,6 +2346,7 @@ class DocumentExtractionListCreateView(
     """
 
     def create(self, request, *args, **kwargs):
+        require_feature_enabled("ocr", request.user)
         file = self.get_file()
         result = extract_file_details(file)
         extraction = DocumentExtraction.objects.create(
@@ -2937,6 +2940,7 @@ class EmergencyPackViewSet(viewsets.ModelViewSet):
         return context
 
     def perform_create(self, serializer):
+        require_feature_enabled("emergency_access", self.request.user)
         enforce_plan_limit(self.request.user, user_plans.RESOURCE_EMERGENCY_PACKS)
         # An optional access code may be supplied at creation.
         plain_code = (serializer.validated_data.pop("access_code", "") or "").strip()
@@ -3082,6 +3086,7 @@ class PublicEmergencyPackMetadataView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, token):
+        require_feature_enabled("emergency_public_viewer")
         pack, err = _resolve_emergency_pack(token)
         if err:
             return err
