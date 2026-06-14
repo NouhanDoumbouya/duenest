@@ -21,12 +21,14 @@ import {
   Radar,
   SearchCheck,
   Sparkles,
+  Trash2,
   Wallet,
 } from "lucide-react";
 
 import { SubscriptionAvatar } from "@/components/subscriptions/subscription-avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { PageContainer } from "@/components/ui/page-container";
 import { InlineAlert } from "@/components/ui/product-ui";
@@ -37,11 +39,13 @@ import {
   REVIEW_STATUS_META,
   STATUS_LABELS,
   archiveSubscription,
+  deleteSubscription,
   exportSubscriptionsCsv,
   getSubscriptionSummary,
   listSubscriptions,
   markSubscriptionCancelled,
   markSubscriptionPaid,
+  restoreSubscription,
   reviewSubscription,
   toggleSubscriptionPin,
 } from "@/lib/subscriptions";
@@ -69,7 +73,8 @@ type FilterKey =
   | "cancellation_deadline"
   | "review_recommended"
   | "cancel_candidates"
-  | "cancelled";
+  | "cancelled"
+  | "archived";
 
 // A simplified, decision-oriented filter bar. `params` apply server-side;
 // `reviewStatuses` / `clientPredicate` apply to the fetched page client-side
@@ -93,6 +98,7 @@ const FILTERS: {
     reviewStatuses: ["review", "urgent", "trial_attention", "cancel_candidate"],
   },
   { key: "cancelled", label: "Cancelled", params: { status: "cancelled" } },
+  { key: "archived", label: "Archived", params: { archived: true } },
 ];
 
 // Server-side sorts pass `ordering`; client-side sorts (computed equivalents)
@@ -265,6 +271,8 @@ export default function SubscriptionsPage() {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [compact, setCompact] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<Subscription | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const loadSummary = useCallback(() => {
     getSubscriptionSummary()
@@ -363,7 +371,8 @@ export default function SubscriptionsPage() {
   const onDefaultView = filter === "all" && !search;
   const forgottenChecks =
     onDefaultView && subscriptions ? missingMetadataChecks(subscriptions) : [];
-  const savings = subscriptions ? savingsEstimate(subscriptions) : {};
+  const savings =
+    onDefaultView && subscriptions ? savingsEstimate(subscriptions) : {};
   const savingsText = Object.entries(savings)
     .filter(([, v]) => v > 0)
     .map(([cur, v]) => money(String(v), cur))
@@ -382,6 +391,25 @@ export default function SubscriptionsPage() {
       setExporting(false);
     }
   }
+
+  async function handleConfirmDelete() {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    try {
+      await deleteSubscription(pendingDelete.id);
+      setPendingDelete(null);
+      loadList();
+      loadSummary();
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : "That subscription could not be deleted.",
+      );
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  const archivedView = filter === "archived";
 
   return (
     <PageContainer width="full" className="space-y-6">
@@ -672,6 +700,7 @@ export default function SubscriptionsPage() {
                 subscription={sub}
                 busy={busyId === sub.id}
                 compact={compact}
+                archivedView={archivedView}
                 onMarkPaid={() => runAction(sub.id, () => markSubscriptionPaid(sub.id))}
                 onReview={() => runAction(sub.id, () => reviewSubscription(sub.id))}
                 onTogglePin={() => runAction(sub.id, () => toggleSubscriptionPin(sub.id))}
@@ -679,11 +708,27 @@ export default function SubscriptionsPage() {
                   runAction(sub.id, () => markSubscriptionCancelled(sub.id))
                 }
                 onArchive={() => runAction(sub.id, () => archiveSubscription(sub.id))}
+                onRestore={() => runAction(sub.id, () => restoreSubscription(sub.id))}
+                onRequestDelete={() => setPendingDelete(sub)}
               />
             </li>
           ))}
         </ul>
       )}
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Delete this subscription?"
+        description={
+          pendingDelete
+            ? `"${pendingDelete.name}" and its tracking history will be permanently removed. This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete permanently"
+        loading={deleting}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
     </PageContainer>
   );
 }
@@ -793,20 +838,26 @@ function SubscriptionCard({
   subscription: sub,
   busy,
   compact,
+  archivedView,
   onMarkPaid,
   onReview,
   onTogglePin,
   onMarkCancelled,
   onArchive,
+  onRestore,
+  onRequestDelete,
 }: {
   subscription: Subscription;
   busy: boolean;
   compact: boolean;
+  archivedView: boolean;
   onMarkPaid: () => void;
   onReview: () => void;
   onTogglePin: () => void;
   onMarkCancelled: () => void;
   onArchive: () => void;
+  onRestore: () => void;
+  onRequestDelete: () => void;
 }) {
   const urgency = URGENCY_BADGE[sub.state.urgency];
   const review = REVIEW_STATUS_META[sub.state.review_status];
@@ -935,65 +986,91 @@ function SubscriptionCard({
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5 lg:justify-end">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={onTogglePin}
-              disabled={busy}
-              aria-pressed={sub.pinned}
-              aria-label={sub.pinned ? `Unpin ${sub.name}` : `Pin ${sub.name}`}
-              title={sub.pinned ? "Unpin" : "Pin to top"}
-              className={sub.pinned ? "text-primary" : "text-muted-foreground"}
-            >
-              <Pin className={cn("size-4", sub.pinned && "fill-current")} />
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onMarkPaid}
-              disabled={busy}
-              title="Log a payment and roll the renewal date forward"
-            >
-              {busy ? <Loader2 className="size-4 animate-spin" /> : "Mark paid"}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onReview}
-              disabled={busy}
-              className="text-muted-foreground"
-              title="Mark as reviewed"
-            >
-              Review
-            </Button>
-            <Link
-              href={`/dashboard/subscriptions/${sub.id}/edit`}
-              className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "text-muted-foreground")}
-              aria-label={`Edit ${sub.name}`}
-            >
-              <Pencil className="size-3.5" />
-              Edit
-            </Link>
-            {canCancel && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onMarkCancelled}
-                disabled={busy}
-                className="text-muted-foreground"
-              >
-                Cancel
-              </Button>
+            {archivedView ? (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onRestore}
+                  disabled={busy}
+                  title="Move this subscription back to your active list"
+                >
+                  {busy ? <Loader2 className="size-4 animate-spin" /> : "Restore"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onRequestDelete}
+                  disabled={busy}
+                  className="text-destructive hover:text-destructive"
+                >
+                  <Trash2 className="size-3.5" />
+                  Delete
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={onTogglePin}
+                  disabled={busy}
+                  aria-pressed={sub.pinned}
+                  aria-label={sub.pinned ? `Unpin ${sub.name}` : `Pin ${sub.name}`}
+                  title={sub.pinned ? "Unpin" : "Pin to top"}
+                  className={sub.pinned ? "text-primary" : "text-muted-foreground"}
+                >
+                  <Pin className={cn("size-4", sub.pinned && "fill-current")} />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onMarkPaid}
+                  disabled={busy}
+                  title="Log a payment and roll the renewal date forward"
+                >
+                  {busy ? <Loader2 className="size-4 animate-spin" /> : "Mark paid"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onReview}
+                  disabled={busy}
+                  className="text-muted-foreground"
+                  title="Mark as reviewed"
+                >
+                  Review
+                </Button>
+                <Link
+                  href={`/dashboard/subscriptions/${sub.id}/edit`}
+                  className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "text-muted-foreground")}
+                  aria-label={`Edit ${sub.name}`}
+                >
+                  <Pencil className="size-3.5" />
+                  Edit
+                </Link>
+                {canCancel && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onMarkCancelled}
+                    disabled={busy}
+                    className="text-muted-foreground"
+                  >
+                    Cancel
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onArchive}
+                  disabled={busy}
+                  className="text-muted-foreground"
+                >
+                  Archive
+                </Button>
+              </>
             )}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onArchive}
-              disabled={busy}
-              className="text-muted-foreground"
-            >
-              Archive
-            </Button>
           </div>
         </div>
       </div>
