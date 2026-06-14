@@ -184,6 +184,27 @@ class CreateSessionTests(QuickShareBaseTest):
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_share_method_persists_and_defaults_to_qr(self):
+        self.client.force_authenticate(self.alice)
+        base = {
+            "permission": "view_only",
+            "expires_at": (timezone.now() + timedelta(minutes=10)).isoformat(),
+            "file_ids": [self.alice_file.id],
+        }
+        # Explicit method round-trips.
+        resp = self.client.post(
+            "/api/v1/quick-share/sessions/",
+            {**base, "share_method": "code"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.data)
+        self.assertEqual(resp.data["share_method"], "code")
+        # Omitting it defaults to qr (back-compat with existing clients).
+        resp2 = self.client.post(
+            "/api/v1/quick-share/sessions/", base, format="json"
+        )
+        self.assertEqual(resp2.data["share_method"], "qr")
+
 
 class ClaimMetadataTests(QuickShareBaseTest):
     def test_metadata_exposes_only_selected_files_no_secrets(self):

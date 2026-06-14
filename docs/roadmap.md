@@ -1273,6 +1273,7 @@ alone:
 1. Share by secure link — shipped (the session token is the secure link)
 2. Share by DueNest code — **shipped (Phase 1)**
 3. Share by QR — shipped (V1)
+   _(explicit method picker across all three — **shipped, Phase 3**)_
 4. Shared by Me / Shared with Me management — shipped (V1)
 5. Bundle sharing — **shipped (Phase 2)**
 6. Premium secure viewer — partial; polish planned
@@ -1302,6 +1303,16 @@ time. The create endpoint accepts `bundle_ids[]` alongside `file_ids[]`
 reflects the real expanded file count. The Quick Share wizard's picker gains a
 **Bundles** section, and the selected-summary/review steps show bundles
 distinctly from individual files.
+
+### Shipped: Phase 3 — explicit sharing-method picker
+
+`QuickShareSession.share_method` (`qr` | `link` | `code`, default `qr`) records
+how the sender chose to hand off the share. It is presentation-only: all three
+methods resolve to the same session token server-side and remain available, so
+nothing is overpromised. The create wizard becomes a four-step flow
+(Select → Method → Protection → Review) with an explicit method choice, and the
+sender's result screen leads with the chosen method (primary "Copy secure link"
+for `link`, an emphasized DueNest code for `code`, the QR hero for `qr`).
 
 ### Guardrail: no fake "Nearby Share"
 

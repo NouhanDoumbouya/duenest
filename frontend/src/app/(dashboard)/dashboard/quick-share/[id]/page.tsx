@@ -206,6 +206,16 @@ export default function QuickShareDetailPage() {
             {session.title || "Quick Share"}
           </h1>
 
+          {!inactive && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              {session.share_method === "link"
+                ? "Share by secure link — copy it below."
+                : session.share_method === "code"
+                  ? "Share by DueNest code — they enter it under Receive a code."
+                  : "Share by QR — let them scan the code below."}
+            </p>
+          )}
+
           <div className="mt-5">
             {inactive ? (
               <div className="relative flex size-60 items-center justify-center rounded-2xl bg-muted">
@@ -249,7 +259,7 @@ export default function QuickShareDetailPage() {
           {!inactive && (
             <div className="mt-6 grid w-full grid-cols-1 gap-2">
               <Button
-                variant="outline"
+                variant={session.share_method === "link" ? "default" : "outline"}
                 onClick={() => copy(claimUrl, "link")}
                 className="w-full"
               >
@@ -262,12 +272,21 @@ export default function QuickShareDetailPage() {
               </Button>
 
               <div className="flex flex-col items-center gap-1 text-xs text-muted-foreground">
-                <div className="flex items-center justify-center gap-2">
+                <div
+                  className={cn(
+                    "flex items-center justify-center gap-2",
+                    session.share_method === "code" &&
+                      "rounded-lg border border-primary/40 bg-primary/5 px-3 py-2",
+                  )}
+                >
                   <span>DueNest code:</span>
                   <button
                     type="button"
                     onClick={() => copy(session.dn_code, "code")}
-                    className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 font-mono font-medium text-foreground transition-colors hover:bg-muted/70"
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 font-mono font-medium text-foreground transition-colors hover:bg-muted/70",
+                      session.share_method === "code" && "text-sm",
+                    )}
                   >
                     {session.dn_code}
                     {copied === "code" ? (

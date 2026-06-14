@@ -73,6 +73,14 @@ class QuickShareSession(models.Model):
         EMERGENCY_QR = "emergency_qr", "Emergency QR"
         ORGANIZATION_COLLECTION = "organization_collection", "Organization collection"
 
+    class ShareMethod(models.TextChoices):
+        # How the sender chose to hand off the share. All methods resolve to the
+        # same session token server-side; this only drives which delivery the UI
+        # leads with (the others remain available).
+        QR = "qr", "QR code"
+        LINK = "link", "Secure link"
+        CODE = "code", "DueNest code"
+
     class Permission(models.TextChoices):
         VIEW_ONLY = "view_only", "View only"
         DOWNLOAD_ALLOWED = "download_allowed", "Allow download"
@@ -109,6 +117,10 @@ class QuickShareSession(models.Model):
     )
     mode = models.CharField(
         max_length=32, choices=Mode.choices, default=Mode.ACCOUNT_TO_ACCOUNT
+    )
+    # Sender's chosen delivery method (presentation only; all methods work).
+    share_method = models.CharField(
+        max_length=8, choices=ShareMethod.choices, default=ShareMethod.QR
     )
     title = models.CharField(max_length=255, blank=True)
     purpose = models.CharField(max_length=255, blank=True)

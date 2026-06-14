@@ -3401,7 +3401,9 @@ POST   /api/v1/quick-share/sessions/:id/deny-claim/      { claim_id }
 GET    /api/v1/quick-share/sessions/:id/activity/
 ```
 
-Create body: `mode`, `title?`, `purpose?`, `permission`, `expires_at`,
+Create body: `mode`, `share_method` (`qr` | `link` | `code`, default `qr` —
+presentation only; every share supports all three), `title?`, `purpose?`,
+`permission`, `expires_at`,
 `access_code_required`, `access_code?` (write-only; auto-generated when required
 but blank), `one_time`, `max_claims?`, `require_sender_approval`,
 `watermark_enabled`, `file_ids[]`, and `bundle_ids[]` (both must be owned by the

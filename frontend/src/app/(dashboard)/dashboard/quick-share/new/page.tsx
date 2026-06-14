@@ -13,7 +13,9 @@ import {
   FileText,
   KeyRound,
   Layers,
+  Link2,
   Loader2,
+  QrCode,
   Save,
   ShieldCheck,
   Sparkles,
@@ -39,6 +41,7 @@ import { looksSensitive } from "@/components/quick-share/shared";
 import { cn } from "@/lib/utils";
 import type {
   CreateQuickSharePayload,
+  QuickShareMethod,
   QuickShareMode,
   QuickSharePermission,
 } from "@/types/quick-share";
@@ -59,7 +62,7 @@ const EXPIRY_LABEL: Record<ExpiryPreset, string> = {
   "7d": "7 days",
 };
 
-const STEPS = ["Select files", "Choose access", "Review"] as const;
+const STEPS = ["Select", "Method", "Protection", "Review"] as const;
 
 export default function NewQuickSharePage() {
   const router = useRouter();
@@ -71,6 +74,7 @@ export default function NewQuickSharePage() {
   >(new Map());
   const [title, setTitle] = useState("");
   const [mode, setMode] = useState<QuickShareMode>("account_to_account");
+  const [method, setMethod] = useState<QuickShareMethod>("qr");
   const [permission, setPermission] = useState<QuickSharePermission>("view_only");
   const [expiry, setExpiry] = useState<ExpiryPreset>("10m");
   const [accessCodeRequired, setAccessCodeRequired] = useState(false);
@@ -120,6 +124,7 @@ export default function NewQuickSharePage() {
     setError(null);
     const payload: CreateQuickSharePayload = {
       mode,
+      share_method: method,
       title: title.trim(),
       permission,
       expires_at: new Date(Date.now() + EXPIRY_MS[expiry]).toISOString(),
@@ -165,8 +170,8 @@ export default function NewQuickSharePage() {
         <div>
           <h1 className="text-page-title">New Quick Share</h1>
           <p className="text-sm text-muted-foreground">
-            Select files, choose how they can be accessed, then generate a
-            secure QR.
+            Pick what to share and how, set protection, then create a secure
+            share.
           </p>
         </div>
       </div>
@@ -211,6 +216,40 @@ export default function NewQuickSharePage() {
       )}
 
       {step === 1 && (
+        <div className="space-y-5">
+          <Field label="How do you want to share?">
+            <div className="space-y-2">
+              <ChoiceCard
+                active={method === "qr"}
+                onClick={() => setMethod("qr")}
+                icon={<QrCode className="size-4" />}
+                title="QR code"
+                description="Best in person — they scan it at a counter or across the table."
+              />
+              <ChoiceCard
+                active={method === "link"}
+                onClick={() => setMethod("link")}
+                icon={<Link2 className="size-4" />}
+                title="Secure link"
+                description="Best remotely — copy a link to send by message or email."
+              />
+              <ChoiceCard
+                active={method === "code"}
+                onClick={() => setMethod("code")}
+                icon={<KeyRound className="size-4" />}
+                title="DueNest code"
+                description="They open Quick Share, choose Receive a code, and type a short code."
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              You can use the other methods later too — every share has a QR, a
+              link, and a code. This just sets what we show you first.
+            </p>
+          </Field>
+        </div>
+      )}
+
+      {step === 2 && (
         <div className="space-y-5">
           <RecommendedBanner onApply={applyRecommended} />
 
@@ -331,12 +370,13 @@ export default function NewQuickSharePage() {
         </div>
       )}
 
-      {step === 2 && (
+      {step === 3 && (
         <ReviewStep
           files={selectedList}
           bundles={selectedBundleList}
           title={title}
           mode={mode}
+          method={method}
           permission={permission}
           expiryLabel={EXPIRY_LABEL[expiry]}
           accessCodeRequired={accessCodeRequired}
@@ -372,7 +412,7 @@ export default function NewQuickSharePage() {
             ) : (
               <Sparkles className="size-4" />
             )}
-            Generate secure QR
+            Create secure share
           </Button>
         )}
       </div>
@@ -632,11 +672,18 @@ function SelectedSummary({
   );
 }
 
+const METHOD_LABEL: Record<QuickShareMethod, string> = {
+  qr: "QR code",
+  link: "Secure link",
+  code: "DueNest code",
+};
+
 function ReviewStep({
   files,
   bundles,
   title,
   mode,
+  method,
   permission,
   expiryLabel,
   accessCodeRequired,
@@ -649,6 +696,7 @@ function ReviewStep({
   bundles: SelectedBundle[];
   title: string;
   mode: QuickShareMode;
+  method: QuickShareMethod;
   permission: QuickSharePermission;
   expiryLabel: string;
   accessCodeRequired: boolean;
@@ -672,7 +720,8 @@ function ReviewStep({
     .join(" + ");
   const rows: [string, string][] = [
     ["Sharing", itemsLabel || "Nothing selected"],
-    ["Recipient", mode === "account_to_account" ? "A DueNest user" : "Anyone with the QR"],
+    ["Method", METHOD_LABEL[method]],
+    ["Recipient", mode === "account_to_account" ? "A DueNest user" : "Anyone with the link"],
     ["Access", permLabel],
     ["Expires in", expiryLabel],
     ["Access code", accessCodeRequired ? "Required" : "Not required"],

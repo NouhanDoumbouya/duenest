@@ -61,6 +61,10 @@ class QuickShareCreateSerializer(serializers.Serializer):
         choices=QuickShareSession.Mode.choices,
         default=QuickShareSession.Mode.ACCOUNT_TO_ACCOUNT,
     )
+    share_method = serializers.ChoiceField(
+        choices=QuickShareSession.ShareMethod.choices,
+        default=QuickShareSession.ShareMethod.QR,
+    )
     title = serializers.CharField(max_length=255, required=False, allow_blank=True)
     purpose = serializers.CharField(max_length=255, required=False, allow_blank=True)
     permission = serializers.ChoiceField(
@@ -159,6 +163,7 @@ class QuickShareSessionSerializer(serializers.ModelSerializer):
             "dn_code",
             "fallback_code",
             "mode",
+            "share_method",
             "title",
             "purpose",
             "permission",
@@ -224,6 +229,7 @@ class QuickShareListItemSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "mode",
+            "share_method",
             "title",
             "purpose",
             "permission",
