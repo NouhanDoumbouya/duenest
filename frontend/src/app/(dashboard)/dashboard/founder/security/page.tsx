@@ -1,27 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { LockKeyhole, ShieldAlert } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Download,
+  KeyRound,
+  Link2Off,
+  LockKeyhole,
+  LogIn,
+  ShieldAlert,
+  TimerOff,
+} from "lucide-react";
 
+import {
+  FounderPageHeader,
+  FounderStatCard,
+} from "@/components/founder/founder-ui";
+import { FounderInsightPanel } from "@/components/founder/insight-panel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ApiError } from "@/lib/api";
 import { getSecurityOverview } from "@/lib/founder";
 import type { SecurityOverview } from "@/types/founder";
-
-const nf = new Intl.NumberFormat();
-
-function Metric({ label, value }: { label: string; value: number }) {
-  return (
-    <Card>
-      <CardContent>
-        <p className="text-sm text-muted-foreground">{label}</p>
-        <p className="mt-2 text-3xl font-semibold tracking-tight">
-          {nf.format(value)}
-        </p>
-      </CardContent>
-    </Card>
-  );
-}
 
 export default function FounderSecurityPage() {
   const [data, setData] = useState<SecurityOverview | null>(null);
@@ -48,6 +46,37 @@ export default function FounderSecurityPage() {
     };
   }, []);
 
+  // Decision-oriented read of the safe security signals.
+  const insights = useMemo(() => {
+    if (!data) return [];
+    const items: { tone: "neutral" | "good" | "warn"; text: string }[] = [];
+    if (data.failed_login_attempts_24h >= 10) {
+      items.push({
+        tone: "warn",
+        text: `${data.failed_login_attempts_24h} failed login attempts in the last 24h — watch for credential stuffing.`,
+      });
+    }
+    if (data.wrong_share_code_attempts_24h >= 5) {
+      items.push({
+        tone: "warn",
+        text: `${data.wrong_share_code_attempts_24h} wrong share-code attempts in 24h — a share may be under guessing pressure.`,
+      });
+    }
+    if (data.high_download_accounts_count > 0) {
+      items.push({
+        tone: "warn",
+        text: `${data.high_download_accounts_count} account(s) show unusually high download volume — worth a glance.`,
+      });
+    }
+    if (items.length === 0) {
+      items.push({
+        tone: "good",
+        text: "No unusual behavior detected across logins, share codes, links, or downloads.",
+      });
+    }
+    return items;
+  }, [data]);
+
   if (error) {
     return (
       <p className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -68,42 +97,56 @@ export default function FounderSecurityPage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h2 className="font-heading text-2xl font-semibold">
-          Security overview
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Safe audit summary for private beta. Raw IP addresses, access codes,
-          tokens, and document contents are not shown here.
-        </p>
-      </div>
+      <FounderPageHeader
+        eyebrow="Operations"
+        title="Security overview"
+        description="A safe audit summary. Raw IP addresses, access codes, tokens, and document contents are never shown here."
+      />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Metric
-          label="Failed login attempts, 24h"
+        <FounderStatCard
+          icon={LogIn}
+          label="Failed logins, 24h"
           value={data.failed_login_attempts_24h}
+          hint="Repeated failures can signal stuffing"
+          tone={data.failed_login_attempts_24h >= 10 ? "warn" : "good"}
         />
-        <Metric
+        <FounderStatCard
+          icon={KeyRound}
           label="Wrong share codes, 24h"
           value={data.wrong_share_code_attempts_24h}
+          hint="Failed access-code attempts"
+          tone={data.wrong_share_code_attempts_24h >= 5 ? "warn" : "good"}
         />
-        <Metric
+        <FounderStatCard
+          icon={TimerOff}
           label="Expired link attempts, 24h"
           value={data.expired_link_access_attempts_24h}
+          hint="Access tried after expiry"
         />
-        <Metric
+        <FounderStatCard
+          icon={Link2Off}
           label="Revoked link attempts, 24h"
           value={data.revoked_link_access_attempts_24h}
+          hint="Access tried after revoke"
         />
-        <Metric
+        <FounderStatCard
+          icon={ShieldAlert}
           label="Suspicious events, 7d"
           value={data.suspicious_events_count_7d}
+          hint="Aggregated safe signals"
+          tone={data.suspicious_events_count_7d > 0 ? "warn" : "good"}
         />
-        <Metric
+        <FounderStatCard
+          icon={Download}
           label="High-download accounts"
           value={data.high_download_accounts_count}
+          hint="Unusually high volume"
+          tone={data.high_download_accounts_count > 0 ? "warn" : "good"}
         />
       </div>
+
+      <FounderInsightPanel title="Is there anything to review?" insights={insights} />
 
       <Card>
         <CardHeader>
