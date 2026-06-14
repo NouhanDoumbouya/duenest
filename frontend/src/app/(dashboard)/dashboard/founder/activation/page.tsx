@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowDown, CheckCircle2 } from "lucide-react";
 
+import { FounderInsightPanel } from "@/components/founder/insight-panel";
 import { Card, CardContent } from "@/components/ui/card";
 import { ApiError } from "@/lib/api";
 import { getActivationFunnel } from "@/lib/founder";
@@ -38,6 +39,46 @@ export default function FounderActivationPage() {
       active = false;
     };
   }, []);
+
+  // Plain-language interpretation of where users drop off before first value.
+  const insights = useMemo(() => {
+    const steps = data?.steps ?? [];
+    if (steps.length === 0) {
+      return [
+        {
+          tone: "neutral" as const,
+          text: "Not enough activation data yet — counts will populate as users sign up and set up their first documents.",
+        },
+      ];
+    }
+    const items: { tone: "neutral" | "good" | "warn"; text: string }[] = [];
+    let biggest = { from: "", to: "", drop: 0 };
+    for (let i = 1; i < steps.length; i++) {
+      const drop = Math.max(0, steps[i - 1].count - steps[i].count);
+      if (drop > biggest.drop) {
+        biggest = { from: steps[i - 1].label, to: steps[i].label, drop };
+      }
+    }
+    if (biggest.drop > 0) {
+      items.push({
+        tone: "warn",
+        text: `The biggest drop-off is between "${biggest.from}" and "${biggest.to}" (${nf.format(biggest.drop)} users). Smoothing that step should lift activation most.`,
+      });
+    } else {
+      items.push({
+        tone: "good",
+        text: "No significant drop-off between steps in the current data.",
+      });
+    }
+    const optional = steps.filter((s) => s.optional).length;
+    if (optional > 0) {
+      items.push({
+        tone: "neutral",
+        text: "Optional steps (like secure sharing) measure adoption, not required activation — don't treat their drop-off as a funnel leak.",
+      });
+    }
+    return items;
+  }, [data]);
 
   if (error) {
     return (
@@ -130,6 +171,8 @@ export default function FounderActivationPage() {
           );
         })}
       </div>
+
+      <FounderInsightPanel title="Where users drop off" insights={insights} />
     </div>
   );
 }

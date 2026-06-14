@@ -15,6 +15,7 @@ import {
   LockKeyhole,
   MailCheck,
   MapPinned,
+  SlidersHorizontal,
   MessageSquare,
   ShieldCheck,
   TicketCheck,
@@ -44,6 +45,7 @@ const nav = [
   { label: "Beta Users", href: "/founder/beta", icon: UserRoundCheck },
   { label: "Launch Readiness", href: "/founder/launch", icon: Globe2 },
   { label: "Global Map", href: "/founder/map", icon: MapPinned },
+  { label: "Feature Controls", href: "/founder/feature-controls", icon: SlidersHorizontal },
 ];
 
 function FounderAccessState({
