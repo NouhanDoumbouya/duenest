@@ -25,6 +25,7 @@ from .models import (
     DocumentActivity,
     DocumentAppointment,
     DocumentBundle,
+    DocumentCategory,
     DocumentBundleRequirement,
     DocumentChecklist,
     DocumentChecklistItem,
@@ -55,6 +56,7 @@ from .serializers import (
     DocumentAppointmentSerializer,
     DocumentBundleRequirementSerializer,
     DocumentBundleSerializer,
+    DocumentCategorySerializer,
     DocumentPaymentSerializer,
     DocumentRenewalEventSerializer,
     DocumentTagSerializer,
@@ -766,6 +768,21 @@ def _create_document_file(*, uploaded, user, document=None):
     encrypt_uploaded_file(instance, uploaded)
     instance.save()
     return instance
+
+
+class DocumentCategoryListView(generics.ListAPIView):
+    """
+    Read-only list of the shared document category vocabulary. Categories are a
+    controlled, app-wide vocabulary (not user-owned), so this is safe to expose
+    to any authenticated user — it powers the documents category filter.
+    """
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = DocumentCategorySerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        return DocumentCategory.objects.all()
 
 
 class FileInboxListCreateView(generics.ListCreateAPIView):

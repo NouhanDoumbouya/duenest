@@ -45,6 +45,16 @@ export interface ConfidenceReason {
   hint: string;
 }
 
+/** A shared document category (GET /api/v1/document-categories/). */
+export interface DocumentCategory {
+  id: number;
+  name: string;
+  slug: string;
+  description: string;
+  created_at: string;
+  updated_at: string;
+}
+
 /** A user-owned tag (GET/POST /api/v1/document-tags/). */
 export interface DocumentTag {
   id: number;

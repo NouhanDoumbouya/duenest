@@ -5,6 +5,7 @@ import { apiFetch } from "./api";
 import type {
   AttentionNeededResponse,
   CreateReminderRuleRequest,
+  DocumentCategory,
   DocumentComputedStatus,
   DocumentLifecycleStatus,
   DocumentListParams,
@@ -45,6 +46,11 @@ export function getDocuments(
 /** Retrieve a single document the current user owns. */
 export function getDocument(id: number): Promise<DocumentRecord> {
   return apiFetch<DocumentRecord>(`/documents/${id}/`, { auth: true });
+}
+
+/** The shared document category vocabulary, for filters and selectors. */
+export function listDocumentCategories(): Promise<DocumentCategory[]> {
+  return apiFetch<DocumentCategory[]>("/document-categories/", { auth: true });
 }
 
 export function createDocument(

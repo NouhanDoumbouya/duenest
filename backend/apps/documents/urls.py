@@ -67,6 +67,7 @@ from .views import (
     DocumentFileTrashView,
     DocumentProofRecordListView,
     FileInboxAttachDocumentView,
+    DocumentCategoryListView,
     FileInboxCreateDocumentView,
     FileInboxDetailView,
     FileInboxDownloadView,
@@ -109,6 +110,11 @@ router.register("payments", DocumentPaymentViewSet, basename="payment")
 file_base = "documents/<int:document_id>/files"
 
 urlpatterns = [
+    path(
+        "document-categories/",
+        DocumentCategoryListView.as_view(),
+        name="document-categories",
+    ),
     path("files/", FileInboxListCreateView.as_view(), name="file-inbox"),
     path("files/trash/", FileInboxTrashListView.as_view(), name="file-inbox-trash"),
     path("files/<int:pk>/", FileInboxDetailView.as_view(), name="file-inbox-detail"),
