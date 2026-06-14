@@ -133,6 +133,7 @@ export default function FounderInvitesPage() {
       });
       await navigator.clipboard?.writeText(inviteLink(invite.code));
       setCopyState(`Copied ${invite.code}`);
+      window.setTimeout(() => setCopyState(""), 2200);
       setLabel("");
       setCustomCode("");
       setMaxUses(1);
