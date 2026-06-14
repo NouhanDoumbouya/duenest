@@ -200,3 +200,38 @@ class EmergencyPublicViewerTests(APITestCase):
             )
         )
         self.assertEqual(allowed.status_code, status.HTTP_200_OK)
+
+    # ---- Query efficiency ---------------------------------------------------
+
+    def test_owner_list_query_count_is_stable_as_packs_grow(self):
+        """The owner pack list must not issue more queries as packs are added
+        (no N+1 from item_count or item serialization)."""
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        self.client.force_authenticate(self.owner)
+
+        def add_pack(suffix):
+            pack = EmergencyAccessPack.objects.create(
+                owner=self.owner,
+                title=f"Pack {suffix}",
+                status=EmergencyAccessPack.Status.ACTIVE,
+                access_mode=EmergencyAccessPack.AccessMode.SHARE_LINK,
+                token=f"tok-{suffix}",
+            )
+            EmergencyAccessPackItem.objects.create(
+                owner=self.owner, pack=pack, document=self.doc, file=self.file
+            )
+
+        def list_query_count():
+            with CaptureQueriesContext(connection) as ctx:
+                resp = self.client.get("/api/v1/emergency-packs/")
+            self.assertEqual(resp.status_code, status.HTTP_200_OK)
+            return len(ctx)
+
+        add_pack("a")
+        baseline = list_query_count()
+        add_pack("b")
+        add_pack("c")
+        # Same query count with more packs proves there is no per-row N+1.
+        self.assertEqual(list_query_count(), baseline)

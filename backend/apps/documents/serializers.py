@@ -716,7 +716,9 @@ class DocumentChecklistTemplateSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_item_count(self, obj):
-        return obj.item_templates.count()
+        # item_templates is prefetched and fully serialized; len() reuses the
+        # prefetch cache instead of issuing a separate COUNT per row.
+        return len(obj.item_templates.all())
 
 
 # ---- User checklists -------------------------------------------------------
@@ -1422,7 +1424,9 @@ class EmergencyAccessPackSerializer(serializers.ModelSerializer):
         ]
 
     def get_item_count(self, obj):
-        return obj.items.count()
+        # items is prefetched and fully serialized; len() reuses the prefetch
+        # cache instead of issuing a separate COUNT per row.
+        return len(obj.items.all())
 
     def get_share_url_path(self, obj):
         # Relative public API path; only present while the pack is shareable now.
@@ -1842,7 +1846,9 @@ class ShareRoomSerializer(serializers.ModelSerializer):
         return "active"
 
     def get_item_count(self, obj):
-        return obj.items.count()
+        # items is prefetched and fully serialized; len() reuses the prefetch
+        # cache instead of issuing a separate COUNT per row.
+        return len(obj.items.all())
 
     def get_file_count(self, obj):
         return len(collect_room_files(obj).files)
