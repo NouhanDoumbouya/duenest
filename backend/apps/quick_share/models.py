@@ -16,6 +16,8 @@ Security invariants (also covered by tests):
 
 from __future__ import annotations
 
+import secrets
+
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
@@ -23,6 +25,43 @@ from django.utils import timezone
 # Reuse the vetted token generator from the documents app so Quick Share tokens
 # have the same entropy and shape as secure-room / share-link tokens.
 from apps.documents.models import generate_share_token
+
+# Human-typable DueNest code alphabet: upper-case letters + digits with the
+# visually ambiguous characters removed (no 0/O, 1/I/L, 5/S, 2/Z, 8/B). The
+# code is for the "Receive code" flow and must be easy to read aloud and type.
+DN_CODE_ALPHABET = "ACDEFGHJKMNPQRTUVWXY3467"
+
+
+def generate_dn_code() -> str:
+    """
+    Short, human-typable DueNest code, e.g. ``DN-4KQ7-PXMR``.
+
+    Independent of the secret session token (never derived from it) so it can be
+    spoken or typed without weakening the token. Eight characters drawn from a
+    24-symbol unambiguous alphabet give ~24**8 ≈ 1.1e11 combinations, which —
+    combined with server-side rate limiting on the receive endpoint — makes
+    enumeration infeasible. Uniqueness is enforced by the caller on save.
+    """
+    raw = "".join(secrets.choice(DN_CODE_ALPHABET) for _ in range(8))
+    return f"DN-{raw[:4]}-{raw[4:]}"
+
+
+def normalize_dn_code(value: str) -> str:
+    """
+    Canonicalize user-typed input into the stored ``DN-XXXX-XXXX`` form.
+
+    Tolerates lower-case, spaces, missing/extra dashes, and an optional leading
+    ``DN`` prefix so a recipient can type the code however they read it. Returns
+    "" when the input cannot be a valid code (wrong length or symbols).
+    """
+    if not value:
+        return ""
+    cleaned = "".join(ch for ch in value.upper() if ch.isalnum())
+    if cleaned.startswith("DN"):
+        cleaned = cleaned[2:]
+    if len(cleaned) != 8 or any(ch not in DN_CODE_ALPHABET for ch in cleaned):
+        return ""
+    return f"DN-{cleaned[:4]}-{cleaned[4:]}"
 
 
 class QuickShareSession(models.Model):
@@ -50,6 +89,11 @@ class QuickShareSession(models.Model):
 
     token = models.CharField(
         max_length=128, unique=True, db_index=True, default=generate_share_token
+    )
+    # Short, human-typable code for the "Receive code" flow. Independent of the
+    # secret token; safe to read aloud or type. Resolved server-side only.
+    dn_code = models.CharField(
+        max_length=20, unique=True, db_index=True, default=generate_dn_code
     )
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -104,6 +148,15 @@ class QuickShareSession(models.Model):
 
     def __str__(self) -> str:
         return f"QuickShare({self.token[:8]}… {self.title or self.mode})"
+
+    def save(self, *args, **kwargs):
+        """Retry once on the (vanishingly rare) dn_code collision before insert."""
+        if not self.pk and self.dn_code:
+            for _ in range(5):
+                if not QuickShareSession.objects.filter(dn_code=self.dn_code).exists():
+                    break
+                self.dn_code = generate_dn_code()
+        super().save(*args, **kwargs)
 
     # ---- Derived state -----------------------------------------------------
 

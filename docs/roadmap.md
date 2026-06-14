@@ -1265,19 +1265,32 @@ exists at the model level), organization-collection QR integration, in-browser
 camera scanner (native camera + copy-link/fallback-code provided), advanced
 founder metrics, and QR print/download for long-lived cards.
 
-## Future: Quick Share 2.0 (planned, not shipped)
+## Quick Share 2.0 (in progress)
 
-A future evolution of Quick Share would present multiple **distinct** sharing
-methods rather than QR alone:
+Quick Share 2.0 presents multiple **distinct** sharing methods rather than QR
+alone:
 
-1. Share by secure link
-2. Share by DueNest code
-3. Share by QR
-4. Shared by Me / Shared with Me management
-5. Bundle sharing
-6. Premium secure viewer
-7. Watermark / view-only / download control
-8. Expiry / revocation / activity logs
+1. Share by secure link — shipped (the session token is the secure link)
+2. Share by DueNest code — **shipped (Phase 1)**
+3. Share by QR — shipped (V1)
+4. Shared by Me / Shared with Me management — shipped (V1)
+5. Bundle sharing — planned (Phase 2)
+6. Premium secure viewer — partial; polish planned
+7. Watermark / view-only / download control — shipped (V1)
+8. Expiry / revocation / activity logs — shipped (V1)
+
+### Shipped: Phase 1 — real DueNest code + Receive flow
+
+Each session now carries a dedicated, unique, human-typable `dn_code` (e.g.
+`DN-4KQ7-PXMR`) generated independently of the secret token (never derived from
+it, so reading the code aloud never weakens the token). A new public endpoint
+`POST /api/v1/quick-share/receive/` resolves a typed code to its share and hands
+off to the existing guarded claim flow; it is rate-limited (`quick_share_receive`,
+10/min) against enumeration. The frontend adds a **Receive a code** page
+(`/dashboard/quick-share/receive`) and surfaces the real code on the sender's
+share screen. This replaces the previous cosmetic "fallback code" (which was
+derived from the token and had no resolve path); `fallback_code` is retained as a
+serializer alias of `dn_code` for backward compatibility.
 
 ### Guardrail: no fake "Nearby Share"
 

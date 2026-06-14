@@ -132,6 +132,7 @@ class QuickShareSessionSerializer(serializers.ModelSerializer):
     files = serializers.SerializerMethodField()
     claims = serializers.SerializerMethodField()
     claim_path = serializers.SerializerMethodField()
+    dn_code = serializers.CharField(read_only=True)
     fallback_code = serializers.SerializerMethodField()
     download_allowed = serializers.BooleanField(read_only=True)
     save_copy_allowed = serializers.BooleanField(read_only=True)
@@ -147,6 +148,7 @@ class QuickShareSessionSerializer(serializers.ModelSerializer):
             "id",
             "token",
             "claim_path",
+            "dn_code",
             "fallback_code",
             "mode",
             "title",
@@ -193,10 +195,10 @@ class QuickShareSessionSerializer(serializers.ModelSerializer):
         return f"/quick-share/{obj.token}"
 
     def get_fallback_code(self, obj):
-        # A short, human-typable code derived from the token's leading chars.
-        # It is only useful together with the same backend, never a secret on
-        # its own (the full token is still required to resolve a session).
-        return f"DN-{obj.short_id[:6].upper()}"
+        # Back-compat alias for ``dn_code``: the real, resolvable DueNest code a
+        # recipient types on the "Receive code" page. Independent of the secret
+        # token (never derived from it).
+        return obj.dn_code
 
 
 class QuickShareListItemSerializer(serializers.ModelSerializer):

@@ -34,6 +34,7 @@ from .models import (
     QuickShareClaim,
     QuickShareItem,
     QuickShareSession,
+    normalize_dn_code,
 )
 from .serializers import (
     QuickShareActivitySerializer,
@@ -249,6 +250,53 @@ def _check_access_code(session, request, *, log=True):
             status=status.HTTP_403_FORBIDDEN,
         )
     return None
+
+
+class QuickShareReceiveCodeView(APIView):
+    """
+    Resolve a typed DueNest code to its share (the "Receive code" flow).
+
+    The recipient enters the short code the sender gave them; on success we hand
+    back the session token + claim path so the normal, fully-guarded claim flow
+    takes over (login, access code, accept, permissions are all re-checked there).
+    Rate-limited to make code enumeration infeasible.
+    """
+
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "quick_share_receive"
+
+    def post(self, request):
+        code = normalize_dn_code(request.data.get("code") or "")
+        if not code:
+            return Response(
+                {
+                    "detail": "Enter the DueNest code from the sender, e.g. DN-4KQ7-PXMR.",
+                    "state": "invalid",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        session = QuickShareSession.objects.filter(dn_code=code).first()
+        if session is None:
+            return Response(
+                {
+                    "detail": "We couldn't find a share for that code. "
+                    "Check the code and try again.",
+                    "state": "not_found",
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        _, state = resolve_session(session.token)
+        if not state.ok:
+            return _state_response(state)
+        return Response(
+            {
+                "ok": True,
+                "token": session.token,
+                "claim_path": f"/quick-share/{session.token}",
+                "mode": session.mode,
+            }
+        )
 
 
 class QuickShareClaimMetadataView(APIView):

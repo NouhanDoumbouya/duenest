@@ -261,20 +261,26 @@ export default function QuickShareDetailPage() {
                 {copied === "link" ? "Copied" : "Copy secure link"}
               </Button>
 
-              <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-                <span>Fallback code:</span>
-                <button
-                  type="button"
-                  onClick={() => copy(session.fallback_code, "code")}
-                  className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 font-mono font-medium text-foreground transition-colors hover:bg-muted/70"
-                >
-                  {session.fallback_code}
-                  {copied === "code" ? (
-                    <Check className="size-3 text-brand-success" />
-                  ) : (
-                    <Copy className="size-3" />
-                  )}
-                </button>
+              <div className="flex flex-col items-center gap-1 text-xs text-muted-foreground">
+                <div className="flex items-center justify-center gap-2">
+                  <span>DueNest code:</span>
+                  <button
+                    type="button"
+                    onClick={() => copy(session.dn_code, "code")}
+                    className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 font-mono font-medium text-foreground transition-colors hover:bg-muted/70"
+                  >
+                    {session.dn_code}
+                    {copied === "code" ? (
+                      <Check className="size-3 text-brand-success" />
+                    ) : (
+                      <Copy className="size-3" />
+                    )}
+                  </button>
+                </div>
+                <p className="text-center">
+                  No camera? The recipient can enter this code under{" "}
+                  <span className="font-medium">Receive a code</span>.
+                </p>
               </div>
             </div>
           )}

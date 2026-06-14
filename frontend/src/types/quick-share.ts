@@ -69,6 +69,9 @@ export interface QuickShareSession {
   is_revoked: boolean;
   expires_at: string;
   revoked_at: string | null;
+  // Human-typable DueNest code for the "Receive code" flow (also aliased as
+  // fallback_code for backward compatibility).
+  dn_code: string;
   access_code_required: boolean;
   one_time: boolean;
   max_claims: number | null;

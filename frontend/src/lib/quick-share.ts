@@ -71,6 +71,27 @@ export function denyQuickShareClaim(
   );
 }
 
+// ---- Receive by DueNest code -----------------------------------------------
+
+export interface ReceiveCodeResult {
+  ok: boolean;
+  token: string;
+  claim_path: string;
+  mode: string;
+}
+
+/**
+ * Resolve a typed DueNest code to its share. On success the backend returns the
+ * session token + claim path so the caller can hand off to the normal, fully
+ * guarded claim flow. Errors surface as ApiError with a friendly `detail`.
+ */
+export function receiveByCode(code: string): Promise<ReceiveCodeResult> {
+  return apiFetch<ReceiveCodeResult>("/quick-share/receive/", {
+    method: "POST",
+    body: { code },
+  });
+}
+
 // ---- Claim endpoints (token-gated) -----------------------------------------
 
 function codeHeaders(accessCode?: string): Record<string, string> {

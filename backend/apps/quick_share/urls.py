@@ -9,6 +9,7 @@ from .views import (
     QuickShareDenyClaimView,
     QuickShareFileDownloadView,
     QuickShareFilePreviewView,
+    QuickShareReceiveCodeView,
     QuickShareSaveCopyView,
     QuickShareSessionDetailView,
     QuickShareSessionListCreateView,
@@ -50,6 +51,12 @@ urlpatterns = [
         "quick-share/sessions/<int:session_id>/activity/",
         QuickShareActivityView.as_view(),
         name="quick-share-session-activity",
+    ),
+    # Receive by DueNest code (resolve a typed code to its share)
+    path(
+        "quick-share/receive/",
+        QuickShareReceiveCodeView.as_view(),
+        name="quick-share-receive",
     ),
     # Claim endpoints (token-gated)
     path(
