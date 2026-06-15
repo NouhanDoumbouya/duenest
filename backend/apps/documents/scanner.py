@@ -448,6 +448,12 @@ class UploadScannedDocumentView(APIView):
 
     def post(self, request, *args, **kwargs):
         enforce_plan_limit(request.user, _resource_files())
+        # Monthly metered limit (free plan: a few scans/month; Pro: unlimited).
+        from apps.billing import entitlements as billing_entitlements
+
+        billing_entitlements.enforce_feature_usage(
+            request.user, "scanner_scans_per_month"
+        )
 
         uploaded = request.FILES.get("file")
         try:
@@ -486,6 +492,7 @@ class UploadScannedDocumentView(APIView):
             return json_error(exc.message, exc.status_code)
 
         _log_scan_activity(instance, request)
+        billing_entitlements.increment_usage(request.user, "scanner_scans_per_month")
 
         return Response(
             {

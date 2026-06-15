@@ -78,13 +78,37 @@ class RegisterView(generics.CreateAPIView):
 
     def perform_create(self, serializer):
         user = serializer.save()
+        # Capture acquisition attribution from the signup payload (UTM params the
+        # SPA collected on landing). Best-effort — never breaks signup.
+        utm_keys = (
+            "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term",
+        )
+        data = self.request.data if hasattr(self.request, "data") else {}
+        attribution = {k: data.get(k) for k in utm_keys if data.get(k)}
+        if data.get("referrer"):
+            attribution["referrer"] = data.get("referrer")
+        if data.get("landing_page"):
+            attribution["landing_page"] = data.get("landing_page")
+        try:
+            from apps.founder.growth_modules import (
+                capture_attribution,
+                record_referral_signup,
+            )
+
+            capture_attribution(user, attribution)
+            if data.get("referral_code"):
+                record_referral_signup(user, data.get("referral_code"))
+        except Exception:  # noqa: BLE001 — attribution must not block signup
+            pass
+        event_metadata = {"method": "password"}
+        event_metadata.update({k: attribution[k] for k in utm_keys if k in attribution})
         _track_product_event(
             self.request,
             "user_signed_up",
             user=user,
             object_type="user",
             object_id=user.id,
-            metadata={"method": "password"},
+            metadata=event_metadata,
         )
 
 

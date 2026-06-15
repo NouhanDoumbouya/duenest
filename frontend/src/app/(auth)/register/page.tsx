@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { register } from "@/lib/auth";
 import { ApiError } from "@/lib/api";
+import { captureUtmToSession, readStoredAttribution } from "@/lib/attribution";
 import { getPrivateBetaStatus } from "@/lib/private-beta";
 
 function RegisterForm() {
@@ -35,6 +36,7 @@ function RegisterForm() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
+    captureUtmToSession();
     let active = true;
     getPrivateBetaStatus()
       .then((result) => {
@@ -59,6 +61,7 @@ function RegisterForm() {
         email,
         password,
         invite_code: inviteCode.trim() || undefined,
+        ...readStoredAttribution(),
       });
       // The current backend register endpoint does not return tokens, so we
       // send the user to /login with a friendly confirmation message.

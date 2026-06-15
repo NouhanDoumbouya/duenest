@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { DashboardUserProvider } from "@/components/dashboard/user-context";
 import { FeatureFlagsProvider } from "@/components/features/feature-flags-provider";
+import { PlanLimitListener } from "@/components/billing/plan-limit-listener";
 import { LogoMark } from "@/components/layout/logo";
 import { getCurrentUser, logout } from "@/lib/auth";
 import type { User } from "@/types/auth";
@@ -70,6 +71,7 @@ export default function DashboardLayout({
         <DashboardShell user={{ name: fullName, email: user.email }}>
           {children}
         </DashboardShell>
+        <PlanLimitListener />
       </FeatureFlagsProvider>
     </DashboardUserProvider>
   );

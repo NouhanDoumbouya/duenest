@@ -13,6 +13,7 @@ import {
   GrowthKpiCard,
   GrowthPageHeader,
   GrowthRangeSelect,
+  GrowthTabs,
 } from "@/components/founder/growth/growth-ui";
 import {
   getGrowthFunnel,
@@ -68,6 +69,8 @@ export default function GrowthOverviewPage() {
       >
         <GrowthRangeSelect value={range} onChange={setRange} />
       </GrowthPageHeader>
+
+      <GrowthTabs />
 
       <div className="flex flex-wrap gap-2">
         {QUICK_LINKS.map((l) => (

@@ -88,6 +88,12 @@ class QuickShareSessionListCreateView(APIView):
     def post(self, request):
         require_feature_enabled("quick_share", request.user)
         enforce_plan_limit(request.user, user_plans.RESOURCE_SHARE_LINKS)
+        # Monthly metered limit (free: a few shares/month; Pro: unlimited).
+        from apps.billing import entitlements as billing_entitlements
+
+        billing_entitlements.enforce_feature_usage(
+            request.user, "quick_shares_per_month"
+        )
         serializer = QuickShareCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
@@ -109,6 +115,7 @@ class QuickShareSessionListCreateView(APIView):
             access_code_hash=access_code_hash,
             **data,
         )
+        billing_entitlements.increment_usage(request.user, "quick_shares_per_month")
 
         # Attach selected files — each must be owned by the requester.
         created_any = False

@@ -1775,6 +1775,47 @@ and proof records must belong to the requesting user.
 
 ---
 
+## 13D. Billing, plans & promo codes
+
+DueNest's own monetization (the `apps.billing` app) — distinct from the user
+subscription tracker in §section above. Provider-aware (`manual` for offline
+dev/test, `stripe` for production). Prices are integer minor units. See
+`docs/BILLING.md` for setup. The live Stripe path is integration-ready but not
+verified without credentials.
+
+| Method | Path | Auth | Description |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/billing/plans/` | Public | Active public plans + entitlements (no provider price IDs) |
+| `GET` | `/api/v1/billing/status/` | User | Effective plan, subscription status, renewal/trial/cancel/grace, manual-access badge |
+| `GET` | `/api/v1/billing/usage/` | User | Plan usage snapshot + entitlements |
+| `GET` | `/api/v1/billing/invoices/` | User | Provider invoices mirrored locally |
+| `POST` | `/api/v1/billing/promo/validate/` | User | Validate a promo code (rate-limited) |
+| `POST` | `/api/v1/billing/checkout/` | User | Create a checkout session for `{plan_key, interval, promo_code?}`. Manual mode activates immediately. |
+| `POST` | `/api/v1/billing/portal/` | User | Create a billing-portal session |
+| `POST` | `/api/v1/billing/cancel/` | User | Cancel at period end |
+| `POST` | `/api/v1/billing/resume/` | User | Resume a cancel-at-period-end subscription |
+| `POST` | `/api/v1/billing/webhook/stripe/` | Provider | Signature-verified, idempotent webhook |
+
+Founder/admin (staff/superuser only):
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/v1/founder/billing/overview/` | MRR/ARR estimates (app-derived), counts |
+| `GET` | `/api/v1/founder/billing/subscribers/` | Subscriber list (filter by `status`/`plan`) |
+| `GET`/`POST` | `/api/v1/founder/billing/promo-codes/` | List / create promo codes |
+| `GET`/`PATCH` | `/api/v1/founder/billing/promo-codes/:id/` | Retrieve / update a promo code |
+| `GET`/`POST` | `/api/v1/founder/billing/manual-access/` | List / grant manual access |
+| `DELETE` | `/api/v1/founder/billing/manual-access/:id/` | Revoke a manual grant |
+| `GET` | `/api/v1/founder/billing/events/` | Recent webhook/billing events |
+
+`checkout` validates `plan_key` + `interval` server-side and never trusts a
+client-supplied price. Webhook processing is idempotent on the provider event
+ID. Downgrade/cancel never deletes user documents. `User.plan`
+(`free`/`pro_placeholder`) is kept in sync so existing limit enforcement is
+unchanged.
+
+---
+
 # 14. Dashboard API
 
 ## 14.1 Get Dashboard Summary

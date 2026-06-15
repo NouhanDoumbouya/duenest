@@ -25,6 +25,7 @@ import {
 
 import { SiteHeader } from "@/components/layout/site-header";
 import { SiteFooter } from "@/components/layout/site-footer";
+import { AttributionCapture } from "@/components/marketing/attribution-capture";
 import { SectionHeader } from "@/components/marketing/section";
 import { ScrollReveal } from "@/components/marketing/scroll-reveal";
 import { SystemFlow } from "@/components/marketing/system-flow";
@@ -119,6 +120,7 @@ export default function LandingPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(STRUCTURED_DATA) }}
       />
+      <AttributionCapture />
       <SiteHeader />
       <main className="flex-1">
         <Hero />

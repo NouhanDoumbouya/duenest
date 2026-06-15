@@ -268,3 +268,217 @@ class FounderGrowthActionDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsFounderUser]
     serializer_class = GrowthActionSerializer
     queryset = GrowthAction.objects.all()
+
+
+# ===========================================================================
+# Additional modules: content calendar, segments, ambassadors, referrals,
+# charts, exports, auto-actions, attribution capture.
+# ===========================================================================
+from django.http import HttpResponse  # noqa: E402
+from rest_framework.permissions import IsAuthenticated  # noqa: E402
+
+from .growth_modules import (  # noqa: E402
+    ambassador_leaderboard,
+    build_growth_charts,
+    campaigns_csv,
+    capture_attribution,
+    evaluate_segment_queryset,
+    generate_auto_actions,
+    record_referral_signup,
+    referral_leaderboard,
+    referrals_csv,
+    segment_summary,
+)
+from .models import AmbassadorProfile, AudienceSegment, ContentItem  # noqa: E402
+
+
+class ContentItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ContentItem
+        fields = [
+            "id", "title", "channel", "content_type", "target_audience", "campaign",
+            "status", "priority", "scheduled_at", "published_at", "cta", "utm_link",
+            "notes", "tags", "result_metrics", "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+    def validate_tags(self, value):
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Tags must be a list.")
+        return [str(t)[:40] for t in value][:20]
+
+    def create(self, validated_data):
+        request = self.context.get("request")
+        if request and request.user.is_authenticated:
+            validated_data["created_by"] = request.user
+        return super().create(validated_data)
+
+
+class AudienceSegmentSerializer(serializers.ModelSerializer):
+    summary = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AudienceSegment
+        fields = [
+            "id", "name", "description", "rules_json", "is_dynamic", "status",
+            "summary", "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "summary", "created_at", "updated_at"]
+
+    def get_summary(self, obj):
+        return segment_summary(obj)
+
+    def validate_rules_json(self, value):
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Rules must be an object.")
+        return value
+
+    def create(self, validated_data):
+        request = self.context.get("request")
+        if request and request.user.is_authenticated:
+            validated_data["created_by"] = request.user
+        return super().create(validated_data)
+
+
+class AmbassadorProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AmbassadorProfile
+        fields = [
+            "id", "name", "email", "community", "campus", "referral_code",
+            "status", "notes", "reward_notes", "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+    def create(self, validated_data):
+        request = self.context.get("request")
+        if request and request.user.is_authenticated:
+            validated_data["created_by"] = request.user
+        return super().create(validated_data)
+
+
+class FounderGrowthContentListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsFounderUser]
+    serializer_class = ContentItemSerializer
+
+    def get_queryset(self):
+        qs = ContentItem.objects.all()
+        status_filter = self.request.query_params.get("status")
+        return qs.filter(status=status_filter) if status_filter else qs
+
+
+class FounderGrowthContentDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsFounderUser]
+    serializer_class = ContentItemSerializer
+    queryset = ContentItem.objects.all()
+
+
+class FounderGrowthSegmentListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsFounderUser]
+    serializer_class = AudienceSegmentSerializer
+    queryset = AudienceSegment.objects.all()
+
+
+class FounderGrowthSegmentDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsFounderUser]
+    serializer_class = AudienceSegmentSerializer
+    queryset = AudienceSegment.objects.all()
+
+
+class FounderGrowthSegmentMembersView(APIView):
+    permission_classes = [IsFounderUser]
+
+    def get(self, request, pk):
+        try:
+            segment = AudienceSegment.objects.get(pk=pk)
+        except AudienceSegment.DoesNotExist:
+            return Response({"error": "Segment not found."}, status=status.HTTP_404_NOT_FOUND)
+        from apps.documents.models import Document
+
+        users = evaluate_segment_queryset(segment.rules_json)[:200]
+        activated_ids = set(
+            Document.objects.filter(is_trashed=False).values_list("owner_id", flat=True)
+        )
+        members = [
+            {
+                "id": u.id,
+                "email": u.email,
+                "plan": u.plan,
+                "activated": u.id in activated_ids,
+                "date_joined": u.date_joined.isoformat(),
+            }
+            for u in users
+        ]
+        return Response({"count": len(members), "members": members})
+
+
+class FounderGrowthAmbassadorListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsFounderUser]
+    serializer_class = AmbassadorProfileSerializer
+    queryset = AmbassadorProfile.objects.all()
+
+
+class FounderGrowthAmbassadorDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsFounderUser]
+    serializer_class = AmbassadorProfileSerializer
+    queryset = AmbassadorProfile.objects.all()
+
+
+class FounderGrowthReferralsView(APIView):
+    permission_classes = [IsFounderUser]
+
+    def get(self, request):
+        return Response(
+            {
+                "referrals": referral_leaderboard(limit=50),
+                "ambassadors": ambassador_leaderboard(),
+            }
+        )
+
+
+class FounderGrowthChartsView(APIView):
+    permission_classes = [IsFounderUser]
+
+    def get(self, request):
+        return Response(build_growth_charts(request.query_params.get("range")))
+
+
+class FounderGrowthGenerateActionsView(APIView):
+    permission_classes = [IsFounderUser]
+
+    def post(self, request):
+        created = generate_auto_actions()
+        return Response(
+            {"created": len(created), "actions": GrowthActionSerializer(created, many=True).data}
+        )
+
+
+class FounderGrowthExportView(APIView):
+    permission_classes = [IsFounderUser]
+
+    def get(self, request):
+        export_type = request.query_params.get("type", "campaigns")
+        if export_type == "referrals":
+            content, filename = referrals_csv(), "referrals.csv"
+        else:
+            content, filename = campaigns_csv(), "campaigns.csv"
+        response = HttpResponse(content, content_type="text/csv")
+        response["Content-Disposition"] = f'attachment; filename="duenest-{filename}"'
+        return response
+
+
+class GrowthAttributionCaptureView(APIView):
+    """Any authenticated user records their own acquisition attribution.
+
+    Not founder-only: it writes the *caller's* first/last-touch UTM data (set on
+    landing) and optionally logs a referral. Never returns other users' data.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        data = request.data if isinstance(request.data, dict) else {}
+        capture_attribution(request.user, data)
+        referral_code = data.get("referral_code")
+        if referral_code:
+            record_referral_signup(request.user, referral_code)
+        return Response({"status": "ok"})
