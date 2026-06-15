@@ -15,7 +15,9 @@ import {
   Plus,
   QrCode as QrCodeIcon,
   ShieldCheck,
+  Sparkles,
   Timer,
+  Trash2,
   Users,
 } from "lucide-react";
 
@@ -30,7 +32,11 @@ import { SectionCard } from "@/components/ui/section-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/lib/api";
 import { formatDate } from "@/lib/documents";
-import { listQuickShares, revokeQuickShare } from "@/lib/quick-share";
+import {
+  deleteQuickShare,
+  listQuickShares,
+  revokeQuickShare,
+} from "@/lib/quick-share";
 import { modeLabel } from "@/components/quick-share/shared";
 import { copyToClipboardWithFallback, looksSensitive } from "@/lib/safesend";
 import { cn } from "@/lib/utils";
@@ -83,6 +89,8 @@ export default function QuickShareListPage() {
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [revokeTarget, setRevokeTarget] = useState<QuickShareListItem | null>(null);
   const [revoking, setRevoking] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [clearing, setClearing] = useState(false);
 
   function flash(message: string) {
     setToast(message);
@@ -99,6 +107,33 @@ export default function QuickShareListPage() {
     } else {
       flash("Copy is unavailable in this browser.");
     }
+  }
+
+  async function confirmClearFinished() {
+    const finished = (sessions ?? []).filter((s) => !s.is_active);
+    if (finished.length === 0) {
+      setConfirmClear(false);
+      return;
+    }
+    setClearing(true);
+    // Delete each finished share; ignore individual failures so one bad row
+    // never blocks the rest.
+    const results = await Promise.allSettled(
+      finished.map((s) => deleteQuickShare(s.id)),
+    );
+    const removedIds = new Set(
+      finished
+        .filter((_, i) => results[i].status === "fulfilled")
+        .map((s) => s.id),
+    );
+    setSessions((prev) => (prev ?? []).filter((s) => !removedIds.has(s.id)));
+    setClearing(false);
+    setConfirmClear(false);
+    flash(
+      removedIds.size === finished.length
+        ? "Finished shares cleared."
+        : `Cleared ${removedIds.size} of ${finished.length}.`,
+    );
   }
 
   async function confirmRevoke() {
@@ -148,6 +183,8 @@ export default function QuickShareListPage() {
       opens: list.reduce((sum, s) => sum + s.claim_count, 0),
     };
   }, [sessions]);
+
+  const finishedCount = (sessions ?? []).filter((s) => !s.is_active).length;
 
   const filtered = useMemo(() => {
     const list = sessions ?? [];
@@ -235,6 +272,33 @@ export default function QuickShareListPage() {
         </Link>
       </div>
 
+      {finishedCount > 0 && (
+        <div className="flex flex-col gap-3 rounded-2xl border border-border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+              <Sparkles className="size-4" />
+            </span>
+            <div>
+              <p className="text-sm font-medium">Tidy up finished shares</p>
+              <p className="text-xs text-muted-foreground">
+                {finishedCount} share{finishedCount === 1 ? "" : "s"} expired or
+                closed. Clearing them keeps this list focused — access is already
+                off, so nothing is exposed.
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setConfirmClear(true)}
+            className="shrink-0"
+          >
+            <Trash2 className="size-4" />
+            Clear finished
+          </Button>
+        </div>
+      )}
+
       <SectionCard
         title="Your shares"
         description="Open one to view its QR, send via apps, see live status, and revoke access."
@@ -317,6 +381,18 @@ export default function QuickShareListPage() {
         loading={revoking}
         onConfirm={confirmRevoke}
         onCancel={() => setRevokeTarget(null)}
+      />
+
+      <ConfirmDialog
+        open={confirmClear}
+        title="Clear finished shares?"
+        description={`This permanently removes ${finishedCount} expired or closed share${
+          finishedCount === 1 ? "" : "s"
+        } and their activity history. Active shares are not affected.`}
+        confirmLabel="Clear finished"
+        loading={clearing}
+        onConfirm={confirmClearFinished}
+        onCancel={() => setConfirmClear(false)}
       />
     </PageContainer>
   );

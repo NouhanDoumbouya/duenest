@@ -12,9 +12,8 @@ import {
   ExternalLink,
   Eye,
   EyeOff,
-  FileText,
-  History,
   CalendarPlus,
+  FileText,
   Loader2,
   MessageSquareText,
   ShieldCheck,
@@ -48,6 +47,7 @@ import {
   ShareDistributionActions,
   ShareMessageEditor,
 } from "@/components/quick-share/share-actions";
+import { ShareActivityTimeline } from "@/components/quick-share/activity-timeline";
 import { packageMethods, type SharePackage } from "@/lib/safesend";
 import { cn } from "@/lib/utils";
 import type {
@@ -269,6 +269,17 @@ export default function QuickShareDetailPage() {
   const permLabel = PERMISSION_LABEL[session.permission];
   const expiryLabel = humanizeExpiry(session.expires_at);
   const qrStyle = { dark: qrColor, logo: qrLogo };
+  // A recipient has asked for more time when the latest extension request is
+  // newer than the latest extension we granted.
+  const pendingExtension = (() => {
+    if (!activity) return false;
+    const latest = (action: string) =>
+      activity
+        .filter((a) => a.action === action)
+        .reduce((m, a) => Math.max(m, new Date(a.created_at).getTime()), 0);
+    const requested = latest("extension_requested");
+    return requested > 0 && requested > latest("session_extended");
+  })();
 
   return (
     <PageContainer width="narrow">
@@ -437,6 +448,12 @@ export default function QuickShareDetailPage() {
               {session.is_expired ? "Re-open this share" : "Extend access"}
             </p>
           </div>
+          {pendingExtension && (
+            <p className="mt-2 inline-flex items-center gap-2 rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary">
+              <UserCheck className="size-3.5" />
+              A recipient asked for more time. Add time below to re-open access.
+            </p>
+          )}
           <p className="mt-1 text-xs text-muted-foreground">
             {session.is_expired
               ? "Give the recipient more time by moving the expiry into the future."
@@ -667,7 +684,7 @@ export default function QuickShareDetailPage() {
       )}
 
       {/* Activity log */}
-      <ActivityLog activity={activity} />
+      <ShareActivityTimeline activity={activity} />
 
       {/* Revoke */}
       {!inactive && (
@@ -696,69 +713,6 @@ export default function QuickShareDetailPage() {
         onCancel={() => setConfirmRevoke(false)}
       />
     </PageContainer>
-  );
-}
-
-function formatActivityTime(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-function ActivityLog({ activity }: { activity: QuickShareActivity[] | null }) {
-  return (
-    <div className="rounded-2xl border border-border bg-card p-4 shadow-card">
-      <p className="flex items-center gap-2 text-sm font-semibold">
-        <History className="size-4" />
-        Activity
-      </p>
-      {activity === null ? (
-        <div className="mt-3 space-y-2">
-          {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-6 w-full rounded-md" />
-          ))}
-        </div>
-      ) : activity.length === 0 ? (
-        <p className="mt-3 text-sm text-muted-foreground">
-          No activity yet. You&apos;ll see opens, accepts, previews, downloads,
-          and revokes here as they happen.
-        </p>
-      ) : (
-        <ol className="mt-3 space-y-3">
-          {activity.map((entry) => (
-            <li key={entry.id} className="flex items-start gap-3">
-              <span
-                className={cn(
-                  "mt-1.5 size-2 shrink-0 rounded-full",
-                  entry.actor_type === "owner"
-                    ? "bg-primary"
-                    : entry.actor_type === "receiver"
-                      ? "bg-brand-success"
-                      : "bg-muted-foreground/40",
-                )}
-              />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm">
-                  {entry.safe_summary || entry.action.replace(/_/g, " ")}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {formatActivityTime(entry.created_at)}
-                </p>
-              </div>
-            </li>
-          ))}
-        </ol>
-      )}
-      <p className="mt-3 text-xs text-muted-foreground">
-        We record actions to keep you in control — never access codes or file
-        contents.
-      </p>
-    </div>
   );
 }
 

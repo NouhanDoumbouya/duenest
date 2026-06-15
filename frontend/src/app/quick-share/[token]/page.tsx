@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
   Check,
+  Clock,
   Download,
   EyeOff,
   FileText,
@@ -32,6 +33,7 @@ import {
   downloadQuickShareFile,
   getQuickShareClaim,
   getQuickShareFilePreviewBlob,
+  requestQuickShareExtension,
   saveQuickShareCopy,
   verifyQuickShareCode,
 } from "@/lib/quick-share";
@@ -44,6 +46,7 @@ import type { QuickShareFile, QuickSharePublic } from "@/types/quick-share";
 interface ClaimError {
   title: string;
   message: string;
+  state?: string;
 }
 
 function errorFromApi(err: unknown): ClaimError {
@@ -55,19 +58,24 @@ function errorFromApi(err: unknown): ClaimError {
         ? data.detail
         : "This Quick Share could not be opened.";
     if (state === "expired")
-      return { title: "This Quick Share expired.", message: detail };
+      return { title: "This Quick Share expired.", message: detail, state };
     if (state === "revoked")
-      return { title: "Access revoked.", message: detail };
+      return { title: "Access revoked.", message: detail, state };
     if (state === "consumed")
       return {
         title: "This one-time Quick Share has already been used.",
         message: detail,
+        state,
       };
     if (state === "limit_reached")
-      return { title: "This Quick Share is no longer available.", message: detail };
+      return {
+        title: "This Quick Share is no longer available.",
+        message: detail,
+        state,
+      };
     if (state === "invalid")
-      return { title: "This link is invalid.", message: detail };
-    return { title: detail, message: detail };
+      return { title: "This link is invalid.", message: detail, state };
+    return { title: detail, message: detail, state };
   }
   return {
     title: "This Quick Share could not be opened.",
@@ -94,6 +102,9 @@ export default function QuickShareClaimPage() {
 
   const [actionBusy, setActionBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [extensionRequest, setExtensionRequest] = useState<
+    "idle" | "sending" | "sent"
+  >("idle");
   const [busyFileId, setBusyFileId] = useState<number | null>(null);
   const [savedFileIds, setSavedFileIds] = useState<Set<number>>(new Set());
   const [toast, setToast] = useState<string | null>(null);
@@ -241,6 +252,18 @@ export default function QuickShareClaimPage() {
     }
   }
 
+  async function handleRequestExtension() {
+    setExtensionRequest("sending");
+    try {
+      await requestQuickShareExtension(token);
+      setExtensionRequest("sent");
+    } catch {
+      // Keep it calm — most failures are throttling; let them try again later.
+      setExtensionRequest("idle");
+      flash("Could not send the request. Please try again later.");
+    }
+  }
+
   async function handlePreview(file: QuickShareFile) {
     setActionError(null);
     revokePreviewUrl();
@@ -379,6 +402,29 @@ export default function QuickShareClaimPage() {
               icon={<EyeOff className="size-6" />}
               title={error.title}
               message={error.message}
+              action={
+                (error.state === "expired" || error.state === "consumed") &&
+                (extensionRequest === "sent" ? (
+                  <p className="inline-flex items-center gap-2 rounded-full bg-brand-success/10 px-4 py-2 text-sm font-medium text-brand-success">
+                    <Check className="size-4" />
+                    Request sent. The sender can re-open access.
+                  </p>
+                ) : (
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    onClick={handleRequestExtension}
+                    disabled={extensionRequest === "sending"}
+                  >
+                    {extensionRequest === "sending" ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Clock className="size-4" />
+                    )}
+                    Ask the sender for more time
+                  </Button>
+                ))
+              }
             />
           ) : metadata ? (
             <div className="space-y-5">

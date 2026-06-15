@@ -762,3 +762,42 @@ class ExtendSessionTests(QuickShareBaseTest):
             format="json",
         )
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class RequestExtensionTests(QuickShareBaseTest):
+    """A recipient can ping the owner for more time; the owner sees it in activity."""
+
+    def _url(self, session):
+        return f"/api/v1/quick-share/claim/{session.token}/request-extension/"
+
+    def test_recipient_can_request_extension(self):
+        session = self.make_session(owner=self.alice)
+        resp = self.client.post(self._url(session))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        self.assertTrue(
+            session.activities.filter(
+                action=QuickShareActivity.Action.EXTENSION_REQUESTED
+            ).exists()
+        )
+
+    def test_request_extension_works_on_expired_share(self):
+        session = self.make_session(owner=self.alice)
+        session.expires_at = timezone.now() - timedelta(minutes=1)
+        session.save(update_fields=["expires_at"])
+        resp = self.client.post(self._url(session))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+
+    def test_cannot_request_extension_on_revoked_share(self):
+        session = self.make_session(owner=self.alice)
+        session.revoked_at = timezone.now()
+        session.status = QuickShareSession.Status.REVOKED
+        session.save(update_fields=["revoked_at", "status"])
+        resp = self.client.post(self._url(session))
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data["state"], "revoked")
+
+    def test_request_extension_invalid_token(self):
+        resp = self.client.post(
+            "/api/v1/quick-share/claim/not-a-real-token/request-extension/"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)

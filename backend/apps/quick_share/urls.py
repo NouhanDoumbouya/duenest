@@ -10,6 +10,7 @@ from .views import (
     QuickShareFileDownloadView,
     QuickShareFilePreviewView,
     QuickShareReceiveCodeView,
+    QuickShareRequestExtensionView,
     QuickShareSaveCopyView,
     QuickShareSessionDetailView,
     QuickShareSessionExtendView,
@@ -84,6 +85,11 @@ urlpatterns = [
         "quick-share/claim/<str:token>/decline/",
         QuickShareDeclineView.as_view(),
         name="quick-share-decline",
+    ),
+    path(
+        "quick-share/claim/<str:token>/request-extension/",
+        QuickShareRequestExtensionView.as_view(),
+        name="quick-share-request-extension",
     ),
     path(
         "quick-share/claim/<str:token>/files/<int:file_id>/preview/",

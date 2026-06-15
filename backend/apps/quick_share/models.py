@@ -370,6 +370,7 @@ class QuickShareActivity(models.Model):
         SESSION_REVOKED = "session_revoked", "Quick Share revoked"
         SESSION_EXPIRED = "session_expired", "Quick Share expired"
         SESSION_EXTENDED = "session_extended", "Quick Share extended"
+        EXTENSION_REQUESTED = "extension_requested", "Recipient requested more time"
         ACCESS_CODE_VERIFIED = "access_code_verified", "Access code verified"
         ACCESS_CODE_FAILED = "access_code_failed", "Access code failed"
 

@@ -3510,10 +3510,17 @@ GET  /api/v1/quick-share/claim/:token/
 POST /api/v1/quick-share/claim/:token/verify-code/   { access_code }
 POST /api/v1/quick-share/claim/:token/accept/        (auth)
 POST /api/v1/quick-share/claim/:token/decline/       (auth)
+POST /api/v1/quick-share/claim/:token/request-extension/   (public, throttled)
 GET  /api/v1/quick-share/claim/:token/files/:file_id/preview/
 GET  /api/v1/quick-share/claim/:token/files/:file_id/download/
 POST /api/v1/quick-share/claim/:token/files/:file_id/save-copy/   (auth)
 ```
+
+`request-extension` lets a recipient ping the owner for more time; it records an
+`extension_requested` entry on the share's activity trail (which the owner sees
+on the share detail page) and works on an already-expired share, but not a
+revoked one. It is rate-limited (`quick_share_extension_request`, 5/min) so it
+cannot be used to spam the owner.
 
 The claim metadata response exposes only safe data: mode, title, purpose,
 recipient_label, permission flags, watermark, sender display name/initials,

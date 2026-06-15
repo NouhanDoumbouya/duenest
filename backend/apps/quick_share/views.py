@@ -498,6 +498,48 @@ class QuickShareDeclineView(APIView):
         return Response({"ok": True, "status": claim.status})
 
 
+class QuickShareRequestExtensionView(APIView):
+    """
+    A recipient asks the owner for more time. We record the request as a signal
+    on the share's activity trail; the owner decides whether to extend. Works on
+    an already-expired share (the common case) but never on a revoked one.
+    Rate-limited so it can't be used to spam the owner.
+    """
+
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "quick_share_extension_request"
+
+    def post(self, request, token):
+        session = QuickShareSession.objects.filter(token=token).first()
+        if session is None:
+            return Response(
+                {
+                    "detail": "This share link is invalid or no longer exists.",
+                    "state": "invalid",
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if session.is_revoked:
+            return Response(
+                {
+                    "detail": "The sender closed access to this share.",
+                    "state": "revoked",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        log_activity(
+            session=session,
+            action=QuickShareActivity.Action.EXTENSION_REQUESTED,
+            actor_type=QuickShareActivity.ActorType.RECEIVER,
+            actor=request.user if request.user.is_authenticated else None,
+            summary="Recipient asked for more time.",
+        )
+        return Response(
+            {"ok": True, "detail": "Your request was sent to the sender."}
+        )
+
+
 class _ClaimFileAccessMixin(APIView):
     permission_classes = [AllowAny]
 

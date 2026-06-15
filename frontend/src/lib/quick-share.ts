@@ -157,6 +157,16 @@ export function declineQuickShare(token: string): Promise<{ ok: boolean }> {
   );
 }
 
+/** Recipient pings the owner for more time (works on an expired share). */
+export function requestQuickShareExtension(
+  token: string,
+): Promise<{ ok: boolean; detail: string }> {
+  return apiFetch<{ ok: boolean; detail: string }>(
+    `/quick-share/claim/${encodeURIComponent(token)}/request-extension/`,
+    { method: "POST" },
+  );
+}
+
 async function claimBlob(
   path: string,
   accessCode: string | undefined,
