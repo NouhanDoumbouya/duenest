@@ -321,8 +321,9 @@ export function getActiveShareRisk(shares: QuickShareListItem[]): {
 export function getNextCharge(
   summary: SubscriptionSummary | null,
 ): TopUpcomingRenewal | null {
-  if (!summary || summary.top_upcoming_renewals.length === 0) return null;
-  return [...summary.top_upcoming_renewals].sort(
+  const renewals = summary?.top_upcoming_renewals;
+  if (!renewals || renewals.length === 0) return null;
+  return [...renewals].sort(
     (a, b) => a.days_until_renewal - b.days_until_renewal,
   )[0];
 }

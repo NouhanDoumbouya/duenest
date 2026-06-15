@@ -48,6 +48,7 @@ import { getDocumentSetupChecklist, getOnboardingState } from "@/lib/onboarding"
 import {
   buildLifeRadarSummary,
   computeDashboardReadinessScore,
+  formatMoneyRisk,
   formatRelativeDeadline,
   getActiveShareRisk,
   getEmergencyReadiness,

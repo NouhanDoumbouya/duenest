@@ -33,11 +33,10 @@ function relativeFromDate(iso: string | null | undefined): string {
   );
 }
 
-function firstCurrencyAmount(map: Record<string, string>): {
-  amount: string;
-  currency: string;
-} | null {
-  const entries = Object.entries(map);
+function firstCurrencyAmount(
+  map: Record<string, string> | null | undefined,
+): { amount: string; currency: string } | null {
+  const entries = Object.entries(map ?? {});
   if (entries.length === 0) return null;
   const [currency, amount] = entries[0];
   return { currency, amount };
