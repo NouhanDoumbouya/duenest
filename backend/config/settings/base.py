@@ -25,6 +25,39 @@ GOOGLE_OAUTH_CLIENT_ID = config("GOOGLE_OAUTH_CLIENT_ID", default="")
 # Existing users can still log in when private beta mode is enabled.
 PRIVATE_BETA_ENABLED = config("PRIVATE_BETA_ENABLED", default=False, cast=bool)
 
+# ---- Billing (DueNest's own monetization) ----------------------------------
+# Provider-aware. "manual" works fully offline for local dev/tests; "stripe"
+# uses the Stripe API and requires the keys below. Secrets never reach the
+# frontend — only STRIPE_PUBLISHABLE_KEY is safe to expose.
+BILLING_PROVIDER = config("BILLING_PROVIDER", default="manual")
+BILLING_TEST_MODE = config("BILLING_TEST_MODE", default=True, cast=bool)
+STRIPE_SECRET_KEY = config("STRIPE_SECRET_KEY", default="")
+STRIPE_PUBLISHABLE_KEY = config("STRIPE_PUBLISHABLE_KEY", default="")
+STRIPE_WEBHOOK_SECRET = config("STRIPE_WEBHOOK_SECRET", default="")
+STRIPE_PRICE_PRO_MONTHLY = config("STRIPE_PRICE_PRO_MONTHLY", default="")
+STRIPE_PRICE_PRO_YEARLY = config("STRIPE_PRICE_PRO_YEARLY", default="")
+STRIPE_PRICE_FAMILY_MONTHLY = config("STRIPE_PRICE_FAMILY_MONTHLY", default="")
+STRIPE_PRICE_FAMILY_YEARLY = config("STRIPE_PRICE_FAMILY_YEARLY", default="")
+STRIPE_PRICE_ORG_SEAT_MONTHLY = config("STRIPE_PRICE_ORG_SEAT_MONTHLY", default="")
+STRIPE_PRICE_ORG_SEAT_YEARLY = config("STRIPE_PRICE_ORG_SEAT_YEARLY", default="")
+# Where the provider returns the user after checkout (frontend origin + paths).
+BILLING_SUCCESS_URL = config(
+    "BILLING_SUCCESS_URL",
+    default="http://localhost:3000/dashboard/settings/billing?checkout=success",
+)
+BILLING_CANCEL_URL = config(
+    "BILLING_CANCEL_URL",
+    default="http://localhost:3000/dashboard/settings/billing?checkout=cancelled",
+)
+BILLING_PORTAL_RETURN_URL = config(
+    "BILLING_PORTAL_RETURN_URL",
+    default="http://localhost:3000/dashboard/settings/billing",
+)
+# Grace period (days) after a failed payment before access is downgraded.
+BILLING_GRACE_PERIOD_DAYS = config(
+    "BILLING_GRACE_PERIOD_DAYS", default=7, cast=int
+)
+
 ALLOWED_HOSTS = config(
     "DJANGO_ALLOWED_HOSTS",
     default="localhost,127.0.0.1",
@@ -56,6 +89,7 @@ LOCAL_APPS = [
     "apps.quick_share.apps.QuickShareConfig",
     "apps.notifications.apps.NotificationsConfig",
     "apps.features.apps.FeaturesConfig",
+    "apps.billing.apps.BillingConfig",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -296,6 +330,8 @@ REST_FRAMEWORK = {
         "emergency_code": _throttle_rate("10/min"),
         "room_code": _throttle_rate("10/min"),
         "feedback": _throttle_rate("20/hour"),
+        # Promo-code validation attempts (anti brute-force / enumeration).
+        "billing_promo": _throttle_rate("20/min"),
         # Client UI analytics events (anti-flood; high enough for normal use).
         "client_events": _throttle_rate("120/min"),
         # Document scanner uploads (per authenticated user) — anti spam/abuse.
