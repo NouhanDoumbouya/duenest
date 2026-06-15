@@ -95,10 +95,12 @@ export async function fetchBlob(
   {
     auth = false,
     accessCode,
+    headers: extraHeaders,
     fallbackError,
   }: {
     auth?: boolean;
     accessCode?: string;
+    headers?: Record<string, string>;
     fallbackError: string;
   },
 ): Promise<Blob> {
@@ -110,6 +112,11 @@ export async function fetchBlob(
     if (token) headers.set("Authorization", `Bearer ${token}`);
   }
   if (accessCode) headers.set("X-Access-Code", accessCode);
+  if (extraHeaders) {
+    for (const [key, value] of Object.entries(extraHeaders)) {
+      headers.set(key, value);
+    }
+  }
 
   let response: Response;
   try {
