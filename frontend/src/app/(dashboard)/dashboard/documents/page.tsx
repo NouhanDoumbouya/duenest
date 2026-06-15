@@ -32,6 +32,7 @@ import {
 } from "@/lib/documents";
 import { getTags } from "@/lib/tags";
 import { cn } from "@/lib/utils";
+import { sortDocumentsByRisk } from "@/lib/vault";
 import type {
   DocumentCategory,
   DocumentListParams,
@@ -156,6 +157,9 @@ function DocumentsPageInner() {
       window.localStorage.setItem("duenest.documentsView", next);
     }
   }
+  // Client-side "most urgent first" sort over the loaded results (kept separate
+  // from the server `ordering` param, which has a fixed set of values).
+  const [riskSort, setRiskSort] = useState(false);
 
   const [documents, setDocuments] = useState<DocumentRecord[] | null>(null);
   const [total, setTotal] = useState(0);
@@ -283,6 +287,10 @@ function DocumentsPageInner() {
   const initialLoading = documents === null;
   const refreshing = documents !== null && loadedQueryKey !== queryKey;
   const docs = documents ?? [];
+  const displayedDocs = useMemo(() => {
+    const list = documents ?? [];
+    return riskSort ? sortDocumentsByRisk(list) : list;
+  }, [documents, riskSort]);
 
   return (
     <PageContainer width="wide">
@@ -565,11 +573,26 @@ function DocumentsPageInner() {
               Showing {docs.length} of {total}{" "}
               {filtersActive ? "matching documents" : "documents"}
             </p>
-            <div
-              className="inline-flex items-center rounded-lg border border-border p-0.5"
-              role="group"
-              aria-label="Document view"
-            >
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setRiskSort((v) => !v)}
+                aria-pressed={riskSort}
+                className={cn(
+                  "rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
+                  riskSort
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border text-muted-foreground hover:text-foreground",
+                )}
+                title="Sort the loaded documents with the most urgent first"
+              >
+                Most urgent first
+              </button>
+              <div
+                className="inline-flex items-center rounded-lg border border-border p-0.5"
+                role="group"
+                aria-label="Document view"
+              >
               <button
                 type="button"
                 onClick={() => changeView("list")}
@@ -598,6 +621,7 @@ function DocumentsPageInner() {
               >
                 <LayoutGrid className="size-4" aria-hidden />
               </button>
+              </div>
             </div>
           </div>
           <div
@@ -607,7 +631,7 @@ function DocumentsPageInner() {
                 : "flex flex-col gap-4",
             )}
           >
-            {docs.map((doc) => (
+            {displayedDocs.map((doc) => (
               <DocumentCard
                 key={doc.id}
                 doc={doc}
