@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import {
   Activity,
   ArrowLeft,
+  Check,
   Edit3,
   FileCheck2,
   FileText,
@@ -15,10 +16,12 @@ import {
   Lock,
   Package,
   Paperclip,
+  Pencil,
   RefreshCw,
   Share2,
   ShieldCheck,
   UploadCloud,
+  X,
   type LucideIcon,
 } from "lucide-react";
 
@@ -39,7 +42,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer } from "@/components/ui/page-container";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/lib/api";
-import { formatDate, getDocument } from "@/lib/documents";
+import { formatDate, getDocument, updateDocument } from "@/lib/documents";
 import { tagColorClass } from "@/lib/tags";
 import { cn } from "@/lib/utils";
 import { isSensitiveDocument } from "@/lib/vault";
@@ -175,6 +178,39 @@ export default function DocumentWorkspacePage() {
   );
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>(() => tabFromLocation());
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
+  const [savingTitle, setSavingTitle] = useState(false);
+  const [titleError, setTitleError] = useState<string | null>(null);
+
+  function startTitleEdit() {
+    if (!doc) return;
+    setTitleDraft(doc.title);
+    setTitleError(null);
+    setEditingTitle(true);
+  }
+
+  async function saveTitle() {
+    if (!doc) return;
+    const next = titleDraft.trim();
+    if (!next || next === doc.title) {
+      setEditingTitle(false);
+      return;
+    }
+    setSavingTitle(true);
+    setTitleError(null);
+    try {
+      const updated = await updateDocument(doc.id, { title: next });
+      setDoc(updated);
+      setEditingTitle(false);
+    } catch (err) {
+      setTitleError(
+        err instanceof ApiError ? err.message : "Could not rename. Try again.",
+      );
+    } finally {
+      setSavingTitle(false);
+    }
+  }
 
   const tags = doc?.tags ?? [];
   const meta = useMemo(
@@ -311,9 +347,63 @@ export default function DocumentWorkspacePage() {
                     </span>
                   )}
                 </div>
-                <h1 className="mt-3 font-heading text-2xl font-semibold tracking-tight sm:text-3xl">
-                  {doc.title}
-                </h1>
+                {editingTitle ? (
+                  <div className="mt-3">
+                    <div className="flex items-center gap-2">
+                      <input
+                        autoFocus
+                        value={titleDraft}
+                        onChange={(e) => setTitleDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") void saveTitle();
+                          if (e.key === "Escape") setEditingTitle(false);
+                        }}
+                        aria-label="Document name"
+                        className="min-w-0 flex-1 rounded-md border border-input bg-background px-3 py-1.5 font-heading text-2xl font-semibold tracking-tight outline-none focus-visible:ring-2 focus-visible:ring-ring/50 sm:text-3xl"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => void saveTitle()}
+                        disabled={savingTitle}
+                      >
+                        {savingTitle ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                          <Check className="size-4" />
+                        )}
+                        Save
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setEditingTitle(false)}
+                        disabled={savingTitle}
+                        aria-label="Cancel rename"
+                      >
+                        <X className="size-4" />
+                      </Button>
+                    </div>
+                    {titleError && (
+                      <p className="mt-1 text-sm text-destructive">{titleError}</p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="mt-3 flex items-center gap-2">
+                    <h1 className="font-heading text-2xl font-semibold tracking-tight sm:text-3xl">
+                      {doc.title}
+                    </h1>
+                    <button
+                      type="button"
+                      onClick={startTitleEdit}
+                      aria-label="Rename document"
+                      className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+                    >
+                      <Pencil className="size-4" aria-hidden />
+                    </button>
+                  </div>
+                )}
                 {meta && (
                   <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
                     {meta}
