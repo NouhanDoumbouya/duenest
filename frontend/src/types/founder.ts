@@ -536,3 +536,19 @@ export interface PrivateBetaMetrics {
     "id" | "full_name" | "email" | "persona" | "status" | "country" | "created_at"
   >[];
 }
+
+export type FeatureFlagVisibility =
+  | "enabled"
+  | "beta_only"
+  | "founder_only"
+  | "disabled";
+
+export interface FeatureFlag {
+  id: number;
+  key: string;
+  name: string;
+  description: string;
+  visibility: FeatureFlagVisibility;
+  maintenance_message: string;
+  updated_at: string;
+}
