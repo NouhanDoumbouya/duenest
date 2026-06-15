@@ -193,6 +193,8 @@ export interface DocumentListParams {
   missing_file?: boolean;
   missing_expiry_date?: boolean;
   needs_attention?: boolean;
+  shared?: boolean;
+  in_bundle?: boolean;
   expiry_from?: string;
   expiry_to?: string;
   expiring_within_days?: number;

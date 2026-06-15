@@ -314,6 +314,14 @@ class DocumentViewSet(viewsets.ModelViewSet):
         if expiry_to:
             queryset = queryset.filter(expiry_date__lte=expiry_to)
 
+        # DB-level filters over the usage annotations (avoid a Python pass).
+        shared = self._bool_param("shared")
+        if shared is not None:
+            queryset = queryset.filter(is_shared_ext=shared)
+        in_bundle = self._bool_param("in_bundle")
+        if in_bundle is not None:
+            queryset = queryset.filter(in_bundle_anno=in_bundle)
+
         ordering = params.get("ordering", "-created_at")
         allowed = {
             "expiry_date",
