@@ -8,10 +8,11 @@ const columns: { heading: string; links: FooterLink[] }[] = [
   {
     heading: "Product",
     links: [
-      { label: "Overview", href: "/" },
-      { label: "Features", href: "/#features" },
-      { label: "Quick Share", href: "/#quick-share" },
+      { label: "Life Radar", href: "/#life-radar" },
+      { label: "Vault", href: "/#vault" },
+      { label: "SafeSend", href: "/#safesend" },
       { label: "Emergency Access", href: "/#emergency" },
+      { label: "Money Radar", href: "/#money-radar" },
       { label: "Pricing", href: "/pricing" },
     ],
   },
