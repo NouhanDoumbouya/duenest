@@ -406,9 +406,13 @@ Implemented `Document` fields:
 | `created_at` | DateTime | Yes | Record creation time |
 | `updated_at` | DateTime | Yes | Last update time |
 
-Implemented `DocumentCategory` fields: `id`, `name` (unique), `slug` (unique,
-auto-derived from name), `description`, `created_at`, `updated_at`. Categories
-are a shared controlled vocabulary, not user-owned.
+Implemented `DocumentCategory` fields: `id`, `owner` (nullable FK to User),
+`name`, `slug` (auto-derived from name), `description`, `created_at`,
+`updated_at`. Categories are either **system categories** (`owner` is null — a
+shared controlled vocabulary visible to everyone) or **user categories**
+(`owner` set — private to that user). Names are unique within scope: globally
+among system categories (partial unique on `owner IS NULL`) and per-owner among
+a user's own categories.
 
 Implemented indexes: `(owner, status)`, `(owner, expiry_date)`, and
 `(owner, is_trashed)`; default ordering is `-created_at`.
@@ -1416,10 +1420,13 @@ branch. Every user-owned model is scoped to its owner and follows the existing
   physical-location fields.
 
 ### DocumentCategory — *Implemented*
-- **Purpose:** shared, controlled vocabulary (Passport, Visa, Insurance…).
-- **Key fields:** `name` (unique), `slug`, `description`, timestamps.
-- **Relationships:** referenced by many `Document`.
-- **Security:** app-wide reference data, not user-owned.
+- **Purpose:** grouping for documents (Passport, Visa, Insurance…). System
+  categories (shared) plus optional per-user private categories.
+- **Key fields:** `owner` (nullable), `name`, `slug`, `description`, timestamps.
+- **Relationships:** `owner → User` (nullable); referenced by many `Document`.
+- **Security:** system categories (`owner` null) are shared, read-only reference
+  data; user categories are private to their owner. The list/create endpoint
+  only ever returns system + the requester's own categories.
 
 ### DocumentFile — *Implemented*
 - **Purpose:** a file attached to a `Document` (metadata + stored blob).

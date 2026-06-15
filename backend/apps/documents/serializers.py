@@ -1,5 +1,6 @@
 import os
 
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.reverse import reverse
@@ -89,10 +90,39 @@ class DocumentTagSerializer(serializers.ModelSerializer):
 
 
 class DocumentCategorySerializer(serializers.ModelSerializer):
+    is_system = serializers.BooleanField(read_only=True)
+
     class Meta:
         model = DocumentCategory
-        fields = ["id", "name", "slug", "description", "created_at", "updated_at"]
-        read_only_fields = ["id", "slug", "created_at", "updated_at"]
+        fields = [
+            "id",
+            "name",
+            "slug",
+            "description",
+            "is_system",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "slug", "is_system", "created_at", "updated_at"]
+
+    def validate_name(self, value):
+        name = value.strip()
+        if not name:
+            raise serializers.ValidationError("Enter a category name.")
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        # Reject a name that already exists as a system category or among the
+        # user's own categories (case-insensitive), with a friendly message.
+        clash = DocumentCategory.objects.filter(name__iexact=name).filter(
+            Q(owner__isnull=True) | Q(owner=user)
+        )
+        if self.instance is not None:
+            clash = clash.exclude(pk=self.instance.pk)
+        if clash.exists():
+            raise serializers.ValidationError(
+                "A category with this name already exists."
+            )
+        return name
 
 
 class DocumentSerializer(serializers.ModelSerializer):

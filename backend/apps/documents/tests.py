@@ -847,5 +847,13 @@ class DocumentCategoryListTests(APITestCase):
         # Only the safe, controlled-vocabulary fields are exposed.
         self.assertEqual(
             set(resp.data[0].keys()),
-            {"id", "name", "slug", "description", "created_at", "updated_at"},
+            {
+                "id",
+                "name",
+                "slug",
+                "description",
+                "is_system",
+                "created_at",
+                "updated_at",
+            },
         )

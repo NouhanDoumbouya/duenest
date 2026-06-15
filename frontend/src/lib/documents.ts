@@ -48,9 +48,21 @@ export function getDocument(id: number): Promise<DocumentRecord> {
   return apiFetch<DocumentRecord>(`/documents/${id}/`, { auth: true });
 }
 
-/** The shared document category vocabulary, for filters and selectors. */
+/** System categories plus the current user's own private categories. */
 export function listDocumentCategories(): Promise<DocumentCategory[]> {
   return apiFetch<DocumentCategory[]>("/document-categories/", { auth: true });
+}
+
+/** Create a private category for the current user. */
+export function createDocumentCategory(payload: {
+  name: string;
+  description?: string;
+}): Promise<DocumentCategory> {
+  return apiFetch<DocumentCategory>("/document-categories/", {
+    method: "POST",
+    body: payload,
+    auth: true,
+  });
 }
 
 export function createDocument(

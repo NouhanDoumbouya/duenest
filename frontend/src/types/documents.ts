@@ -51,6 +51,7 @@ export interface DocumentCategory {
   name: string;
   slug: string;
   description: string;
+  is_system: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -159,6 +160,7 @@ export interface DocumentCategory {
   name: string;
   slug: string;
   description: string;
+  is_system: boolean;
   created_at: string;
   updated_at: string;
 }

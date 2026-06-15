@@ -32,14 +32,26 @@ def document_file_upload_to(instance, filename):
 
 class DocumentCategory(models.Model):
     """
-    A shared, app-wide grouping for documents (e.g. Passport, Visa, Insurance).
+    A grouping for documents (e.g. Passport, Visa, Insurance).
 
-    Categories are not user-owned; they are a controlled vocabulary that any
-    user's documents can reference. A document's category is optional.
+    Categories are either:
+    * system categories (``owner`` is null) — a shared controlled vocabulary
+      available to everyone, or
+    * user categories (``owner`` set) — private to that user.
+
+    A document's category is optional. Names are unique within a scope: globally
+    among system categories, and per-owner among a user's own categories.
     """
 
-    name = models.CharField(max_length=100, unique=True)
-    slug = models.SlugField(max_length=120, unique=True, blank=True)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="document_categories",
+        null=True,
+        blank=True,
+    )
+    name = models.CharField(max_length=100)
+    slug = models.SlugField(max_length=120, blank=True)
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -47,9 +59,24 @@ class DocumentCategory(models.Model):
     class Meta:
         verbose_name_plural = "document categories"
         ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["name"],
+                condition=models.Q(owner__isnull=True),
+                name="uniq_system_document_category_name",
+            ),
+            models.UniqueConstraint(
+                fields=["owner", "name"],
+                name="uniq_owner_document_category_name",
+            ),
+        ]
 
     def __str__(self):
         return self.name
+
+    @property
+    def is_system(self) -> bool:
+        return self.owner_id is None
 
     def save(self, *args, **kwargs):
         # Auto-derive a slug from the name when one is not supplied.

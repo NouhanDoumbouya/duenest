@@ -26,6 +26,7 @@ import {
   VaultHealthStat,
   VaultSectionError,
 } from "@/components/vault/pieces";
+import { CategoryCreator } from "@/components/vault/category-creator";
 import { buttonVariants } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer } from "@/components/ui/page-container";
@@ -190,6 +191,21 @@ export default function VaultPage() {
 
   const isEmptyVault = !loading && state.total === 0;
   const inboxStatus = getFileInboxStatus(state?.inboxCount ?? 0);
+  const categoryNames = new Set(
+    (state?.categories ?? []).map((c) => c.name.toLowerCase()),
+  );
+
+  function handleCategoryCreated(category: DocumentCategory) {
+    setState((prev) =>
+      prev
+        ? {
+            ...prev,
+            categories: [category, ...prev.categories],
+            categoryCounts: { ...prev.categoryCounts, [category.id]: 0 },
+          }
+        : prev,
+    );
+  }
 
   return (
     <PageContainer width="wide">
@@ -505,21 +521,29 @@ export default function VaultPage() {
                   <RowsSkeleton rows={3} />
                 ) : state.errors.categories ? (
                   <VaultSectionError message="Categories could not load." onRetry={load} />
-                ) : state.categories.length === 0 ? (
-                  <CalmEmpty
-                    icon={FolderOpen}
-                    title="No categories yet"
-                    description="Create categories for travel, school, finance, work, and identity."
-                  />
                 ) : (
-                  <div className="space-y-2">
-                    {state.categories.slice(0, 6).map((category) => (
-                      <CategoryCard
-                        key={category.id}
-                        category={category}
-                        count={state.categoryCounts[category.id]}
+                  <div>
+                    {state.categories.length === 0 ? (
+                      <CalmEmpty
+                        icon={FolderOpen}
+                        title="No categories yet"
+                        description="Create categories for travel, school, finance, work, and identity."
                       />
-                    ))}
+                    ) : (
+                      <div className="space-y-2">
+                        {state.categories.slice(0, 6).map((category) => (
+                          <CategoryCard
+                            key={category.id}
+                            category={category}
+                            count={state.categoryCounts[category.id]}
+                          />
+                        ))}
+                      </div>
+                    )}
+                    <CategoryCreator
+                      existingNames={categoryNames}
+                      onCreated={handleCategoryCreated}
+                    />
                   </div>
                 )}
               </SectionCard>

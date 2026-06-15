@@ -712,6 +712,14 @@ Base path:
 | `POST`   | `/api/v1/documents/:id/trash/` | Move a document to trash with optional reason |
 | `POST`   | `/api/v1/documents/:id/restore/` | Restore a trashed document |
 | `DELETE` | `/api/v1/documents/:id/permanent-delete/` | Permanently delete a trashed document |
+| `GET`    | `/api/v1/document-categories/` | List system categories + the user's own private categories |
+| `POST`   | `/api/v1/document-categories/` | Create a private category for the current user |
+
+`document-categories` responses include `is_system` (true for the shared system
+vocabulary, false for the user's own). `POST` accepts `{ "name", "description?" }`
+and always assigns `owner` to the requester; names must be unique within scope
+(system vs. the user's own), returning `400` on a clash. The list never exposes
+another user's categories.
 
 ### Authentication
 
