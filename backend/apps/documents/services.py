@@ -22,6 +22,7 @@ from .models import (
     DocumentFile,
     DocumentFileActivity,
     DocumentVersion,
+    EmergencyActivityEvent,
 )
 
 logger = logging.getLogger(__name__)
@@ -2216,6 +2217,74 @@ def log_document_activity(
         )
     except Exception:  # noqa: BLE001 — logging must never break the flow
         logger.warning("Failed to record document activity", exc_info=True)
+
+
+def log_emergency_event(
+    *,
+    pack,
+    event_type: str,
+    actor_label: str = "",
+    description: str = "",
+    metadata: dict | None = None,
+) -> None:
+    """
+    Append one event to a pack's emergency activity trail. Never raises and never
+    persists secrets — callers must pass only non-sensitive, human-readable
+    context (never codes or tokens).
+    """
+    try:
+        EmergencyActivityEvent.objects.create(
+            owner=pack.owner,
+            pack=pack,
+            event_type=event_type,
+            actor_label=actor_label[:120],
+            description=description[:255],
+            metadata=metadata or {},
+        )
+    except Exception:  # noqa: BLE001 — logging must never break the flow
+        logger.warning("Failed to record emergency activity", exc_info=True)
+
+
+def notify_pack_owner(
+    *,
+    pack,
+    notification_type: str,
+    title: str,
+    message: str,
+    severity: str = "info",
+    dedupe_suffix: str = "",
+    metadata: dict | None = None,
+) -> None:
+    """
+    Create an in-app notification for the pack owner about an emergency event.
+    Imported lazily to avoid a documents<->notifications import cycle, and never
+    raises: a notification failure must not break the emergency flow.
+    """
+    try:
+        from apps.notifications.models import Notification
+        from apps.notifications.services import (
+            NotificationCandidate,
+            create_notification,
+            sanitize_metadata,
+        )
+
+        dedupe = f"emergency:{pack.id}:{notification_type}:{dedupe_suffix}"[:255]
+        candidate = NotificationCandidate(
+            user=pack.owner,
+            type=notification_type,
+            title=title[:255],
+            message=message,
+            severity=severity,
+            source_type="emergency_pack",
+            source_id=str(pack.id),
+            action_url=f"/dashboard/emergency/{pack.id}",
+            scheduled_for=timezone.now(),
+            dedupe_key=dedupe,
+            metadata=sanitize_metadata(metadata or {}),
+        )
+        create_notification(candidate)
+    except Exception:  # noqa: BLE001 — notifications must never break the flow
+        logger.warning("Failed to create emergency owner notification", exc_info=True)
 
 
 # ---- Structured export builder ---------------------------------------------

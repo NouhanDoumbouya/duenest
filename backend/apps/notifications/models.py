@@ -79,6 +79,8 @@ class Notification(models.Model):
         EMERGENCY_REVIEW = "emergency_review", "Emergency review"
         EMERGENCY_EXPIRING = "emergency_expiring", "Emergency access expiring"
         EMERGENCY_VIEWED = "emergency_viewed", "Emergency access viewed"
+        EMERGENCY_REQUEST = "emergency_request", "Emergency access requested"
+        EMERGENCY_UNLOCK = "emergency_unlock", "Emergency access unlocked"
         SECURITY_ALERT = "security_alert", "Security alert"
         FAILED_LOGIN_WARNING = "failed_login_warning", "Failed login warning"
         STORAGE_PLAN_WARNING = "storage_plan_warning", "Storage/plan warning"

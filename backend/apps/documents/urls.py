@@ -92,6 +92,8 @@ from .views import (
     PublicEmergencyPackItemPreviewView,
     PublicEmergencyPackMetadataView,
     PublicEmergencyPackVerifyCodeView,
+    PublicEmergencyUnlockRequestCreateView,
+    PublicEmergencyUnlockRequestStatusView,
     PublicSharedFileDownloadView,
     PublicSharedFileMetadataView,
     PublicSharedFilePreviewView,
@@ -546,6 +548,16 @@ urlpatterns = [
         "share/emergency-packs/<str:token>/verify-code/",
         PublicEmergencyPackVerifyCodeView.as_view(),
         name="public-emergency-pack-verify-code",
+    ),
+    path(
+        "share/emergency-packs/<str:token>/request/",
+        PublicEmergencyUnlockRequestCreateView.as_view(),
+        name="public-emergency-pack-request",
+    ),
+    path(
+        "share/emergency-packs/<str:token>/request/<str:request_token>/",
+        PublicEmergencyUnlockRequestStatusView.as_view(),
+        name="public-emergency-pack-request-status",
     ),
     path(
         "share/emergency-packs/<str:token>/items/<int:item_id>/preview/",

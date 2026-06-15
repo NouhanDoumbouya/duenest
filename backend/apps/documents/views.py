@@ -44,6 +44,9 @@ from .models import (
     DocumentVersion,
     EmergencyAccessPack,
     EmergencyAccessPackItem,
+    EmergencyActivityEvent,
+    EmergencyTrustedContact,
+    EmergencyUnlockRequest,
     ProofRecord,
     RoomActivity,
     ShareRoom,
@@ -76,10 +79,14 @@ from .serializers import (
     DocumentVersionSerializer,
     EmergencyAccessPackItemSerializer,
     EmergencyAccessPackSerializer,
+    EmergencyActivityEventSerializer,
+    EmergencyTrustedContactSerializer,
+    EmergencyUnlockRequestSerializer,
     ExtractionApplySerializer,
     ProofRecordSerializer,
     CalendarEventSerializer,
     PublicEmergencyPackSerializer,
+    PublicUnlockRequestCreateSerializer,
     PublicShareRoomSerializer,
     PublicSharedFileSerializer,
     RoomActivitySerializer,
@@ -118,7 +125,9 @@ from .services import (
     get_document_health,
     log_activity,
     log_document_activity,
+    log_emergency_event,
     log_room_activity,
+    notify_pack_owner,
     record_document_version,
     reminder_date_for_rule,
     summarize_field_changes,
@@ -3028,17 +3037,29 @@ class EmergencyPackViewSet(viewsets.ModelViewSet):
         access_required = bool(
             serializer.validated_data.get("access_code_required")
         )
-        pack = serializer.save(
-            owner=self.request.user,
-            access_code_hash=_emergency_pack_code(plain_code)
+        # New packs default to the recommended DELAYED unlock rule unless the
+        # caller explicitly chose another mode. (The model default stays
+        # INSTANT_CODE to preserve behaviour for legacy/direct-ORM rows.)
+        save_kwargs = {
+            "owner": self.request.user,
+            "access_code_hash": _emergency_pack_code(plain_code)
             if (access_required and plain_code)
             else "",
-        )
+        }
+        if "unlock_mode" not in serializer.validated_data:
+            save_kwargs["unlock_mode"] = EmergencyAccessPack.UnlockMode.DELAYED
+        pack = serializer.save(**save_kwargs)
         log_document_activity(
             owner=self.request.user,
             action=DocumentActivity.Action.EMERGENCY_PACK_CREATED,
             title="Emergency pack created",
             description=pack.title,
+        )
+        log_emergency_event(
+            pack=pack,
+            event_type=EmergencyActivityEvent.EventType.SETUP_CREATED,
+            actor_label="Owner",
+            description=f"Created “{pack.title}”.",
         )
         _track_product_event(
             self.request,
@@ -3054,12 +3075,21 @@ class EmergencyPackViewSet(viewsets.ModelViewSet):
             "access_code_required",
             getattr(serializer.instance, "access_code_required", False),
         )
+        previous_mode = serializer.instance.unlock_mode
         extra = {}
         if access_required and plain_code:
             extra["access_code_hash"] = _emergency_pack_code(plain_code)
         elif not access_required:
             extra["access_code_hash"] = ""
-        serializer.save(**extra)
+        pack = serializer.save(**extra)
+        if pack.unlock_mode != previous_mode:
+            log_emergency_event(
+                pack=pack,
+                event_type=EmergencyActivityEvent.EventType.UNLOCK_MODE_CHANGED,
+                actor_label="Owner",
+                description=f"Unlock rule changed to {pack.get_unlock_mode_display()}.",
+                metadata={"unlock_mode": pack.unlock_mode},
+            )
 
     @action(detail=True, methods=["post"], url_path="items")
     def add_item(self, request, pack_id=None):
@@ -3069,6 +3099,12 @@ class EmergencyPackViewSet(viewsets.ModelViewSet):
         )
         serializer.is_valid(raise_exception=True)
         item = serializer.save(owner=request.user, pack=pack)
+        log_emergency_event(
+            pack=pack,
+            event_type=EmergencyActivityEvent.EventType.DOCUMENTS_CHANGED,
+            actor_label="Owner",
+            description=f"Added “{item.document.title}” to the emergency pack.",
+        )
         return Response(
             EmergencyAccessPackItemSerializer(item, context={"request": request}).data,
             status=status.HTTP_201_CREATED,
@@ -3084,7 +3120,14 @@ class EmergencyPackViewSet(viewsets.ModelViewSet):
         item = get_object_or_404(
             EmergencyAccessPackItem, pk=item_id, pack=pack, owner=request.user
         )
+        title = item.document.title
         item.delete()
+        log_emergency_event(
+            pack=pack,
+            event_type=EmergencyActivityEvent.EventType.DOCUMENTS_CHANGED,
+            actor_label="Owner",
+            description=f"Removed “{title}” from the emergency pack.",
+        )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=["post"], url_path="enable")
@@ -3093,12 +3136,27 @@ class EmergencyPackViewSet(viewsets.ModelViewSet):
         pack = self.get_object()
         pack.status = EmergencyAccessPack.Status.ACTIVE
         pack.disabled_at = None
+        new_token = False
         if (
             pack.access_mode == EmergencyAccessPack.AccessMode.SHARE_LINK
             and not pack.token
         ):
             pack.token = generate_share_token()
+            new_token = True
         pack.save(update_fields=["status", "disabled_at", "token", "updated_at"])
+        log_emergency_event(
+            pack=pack,
+            event_type=EmergencyActivityEvent.EventType.SETUP_ENABLED,
+            actor_label="Owner",
+            description="Emergency access activated.",
+        )
+        if new_token:
+            log_emergency_event(
+                pack=pack,
+                event_type=EmergencyActivityEvent.EventType.QR_GENERATED,
+                actor_label="Owner",
+                description="Emergency QR / link generated.",
+            )
         return Response(self.get_serializer(pack).data)
 
     @action(detail=True, methods=["post"], url_path="disable")
@@ -3108,6 +3166,12 @@ class EmergencyPackViewSet(viewsets.ModelViewSet):
         pack.status = EmergencyAccessPack.Status.DISABLED
         pack.disabled_at = timezone.now()
         pack.save(update_fields=["status", "disabled_at", "updated_at"])
+        log_emergency_event(
+            pack=pack,
+            event_type=EmergencyActivityEvent.EventType.SETUP_DISABLED,
+            actor_label="Owner",
+            description="Emergency access disabled.",
+        )
         return Response(self.get_serializer(pack).data)
 
     @action(detail=True, methods=["post"], url_path="regenerate-link")
@@ -3116,7 +3180,227 @@ class EmergencyPackViewSet(viewsets.ModelViewSet):
         pack = self.get_object()
         pack.token = generate_share_token()
         pack.save(update_fields=["token", "updated_at"])
+        log_emergency_event(
+            pack=pack,
+            event_type=EmergencyActivityEvent.EventType.QR_REGENERATED,
+            actor_label="Owner",
+            description="Emergency QR regenerated — previous cards/links no longer work.",
+        )
         return Response(self.get_serializer(pack).data)
+
+    @action(detail=True, methods=["post"], url_path="review")
+    def review(self, request, pack_id=None):
+        """Mark the pack as freshly reviewed by the owner."""
+        pack = self.get_object()
+        pack.last_reviewed_at = timezone.now()
+        pack.save(update_fields=["last_reviewed_at", "updated_at"])
+        return Response(self.get_serializer(pack).data)
+
+    # ---- Trusted contacts --------------------------------------------------
+
+    @action(detail=True, methods=["get", "post"], url_path="contacts")
+    def contacts(self, request, pack_id=None):
+        pack = self.get_object()
+        if request.method == "GET":
+            qs = pack.trusted_contacts.all()
+            return Response(EmergencyTrustedContactSerializer(qs, many=True).data)
+        serializer = EmergencyTrustedContactSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        contact = serializer.save(owner=request.user, pack=pack)
+        log_emergency_event(
+            pack=pack,
+            event_type=EmergencyActivityEvent.EventType.CONTACT_ADDED,
+            actor_label="Owner",
+            description=f"Added trusted contact {contact.name}.",
+        )
+        return Response(
+            EmergencyTrustedContactSerializer(contact).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(
+        detail=True,
+        methods=["patch", "delete"],
+        url_path=r"contacts/(?P<contact_id>[^/.]+)",
+    )
+    def contact_detail(self, request, pack_id=None, contact_id=None):
+        pack = self.get_object()
+        contact = get_object_or_404(
+            EmergencyTrustedContact, pk=contact_id, pack=pack, owner=request.user
+        )
+        if request.method == "DELETE":
+            name = contact.name
+            contact.delete()
+            log_emergency_event(
+                pack=pack,
+                event_type=EmergencyActivityEvent.EventType.CONTACT_REMOVED,
+                actor_label="Owner",
+                description=f"Removed trusted contact {name}.",
+            )
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        serializer = EmergencyTrustedContactSerializer(
+            contact, data=request.data, partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    # ---- Emergency location ------------------------------------------------
+
+    @action(detail=True, methods=["post"], url_path="location")
+    def location(self, request, pack_id=None):
+        """
+        Update the optional emergency location. Location is off by default and is
+        only ever revealed to a trusted person after the unlock rules grant
+        access. This is not live tracking — the owner sets a last-known location.
+        """
+        pack = self.get_object()
+        data = request.data or {}
+        was_enabled = pack.location_enabled
+        if "location_enabled" in data:
+            pack.location_enabled = bool(data.get("location_enabled"))
+        if data.get("location_precision") in (
+            EmergencyAccessPack.LocationPrecision.APPROXIMATE,
+            EmergencyAccessPack.LocationPrecision.PRECISE,
+        ):
+            pack.location_precision = data["location_precision"]
+        location_changed = False
+        if "label" in data or "lat" in data or "lng" in data:
+            label = str(data.get("label", "")).strip()[:160]
+            lat = data.get("lat")
+            lng = data.get("lng")
+            pack.last_known_location = {
+                "label": label,
+                "lat": lat if isinstance(lat, (int, float)) else None,
+                "lng": lng if isinstance(lng, (int, float)) else None,
+            }
+            pack.last_known_location_at = timezone.now()
+            location_changed = True
+        pack.save(
+            update_fields=[
+                "location_enabled",
+                "location_precision",
+                "last_known_location",
+                "last_known_location_at",
+                "updated_at",
+            ]
+        )
+        if pack.location_enabled != was_enabled:
+            log_emergency_event(
+                pack=pack,
+                event_type=EmergencyActivityEvent.EventType.LOCATION_TOGGLED,
+                actor_label="Owner",
+                description=(
+                    "Emergency location turned on."
+                    if pack.location_enabled
+                    else "Emergency location turned off."
+                ),
+            )
+        if location_changed:
+            log_emergency_event(
+                pack=pack,
+                event_type=EmergencyActivityEvent.EventType.LOCATION_UPDATED,
+                actor_label="Owner",
+                description="Last known location updated.",
+            )
+        return Response(self.get_serializer(pack).data)
+
+    # ---- Activity + unlock requests (owner side) ---------------------------
+
+    @action(detail=True, methods=["get"], url_path="activity")
+    def activity(self, request, pack_id=None):
+        pack = self.get_object()
+        events = pack.activity_events.all()[:100]
+        return Response(EmergencyActivityEventSerializer(events, many=True).data)
+
+    @action(detail=True, methods=["get"], url_path="unlock-requests")
+    def unlock_requests(self, request, pack_id=None):
+        pack = self.get_object()
+        # Settle any countdowns that have elapsed before listing.
+        for req in pack.unlock_requests.filter(
+            status=EmergencyUnlockRequest.Status.COUNTDOWN
+        ):
+            if req.settle_due_countdown():
+                req.save(update_fields=["status", "updated_at"])
+        requests = pack.unlock_requests.all()[:100]
+        return Response(EmergencyUnlockRequestSerializer(requests, many=True).data)
+
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path=r"unlock-requests/(?P<req_id>[^/.]+)/approve",
+    )
+    def approve_request(self, request, pack_id=None, req_id=None):
+        pack = self.get_object()
+        req = get_object_or_404(EmergencyUnlockRequest, pk=req_id, pack=pack)
+        if req.status in (
+            EmergencyUnlockRequest.Status.PENDING,
+            EmergencyUnlockRequest.Status.COUNTDOWN,
+        ):
+            req.status = EmergencyUnlockRequest.Status.UNLOCKED
+            req.decided_at = timezone.now()
+            if pack.access_duration_minutes:
+                req.access_expires_at = timezone.now() + timezone.timedelta(
+                    minutes=pack.access_duration_minutes
+                )
+            req.save(
+                update_fields=[
+                    "status",
+                    "decided_at",
+                    "access_expires_at",
+                    "updated_at",
+                ]
+            )
+            log_emergency_event(
+                pack=pack,
+                event_type=EmergencyActivityEvent.EventType.ACCESS_APPROVED,
+                actor_label="Owner",
+                description=f"Approved access for {req.requester_name}.",
+            )
+        return Response(EmergencyUnlockRequestSerializer(req).data)
+
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path=r"unlock-requests/(?P<req_id>[^/.]+)/deny",
+    )
+    def deny_request(self, request, pack_id=None, req_id=None):
+        pack = self.get_object()
+        req = get_object_or_404(EmergencyUnlockRequest, pk=req_id, pack=pack)
+        if req.status in (
+            EmergencyUnlockRequest.Status.PENDING,
+            EmergencyUnlockRequest.Status.COUNTDOWN,
+            EmergencyUnlockRequest.Status.UNLOCKED,
+        ):
+            req.status = EmergencyUnlockRequest.Status.DENIED
+            req.decided_at = timezone.now()
+            req.save(update_fields=["status", "decided_at", "updated_at"])
+            log_emergency_event(
+                pack=pack,
+                event_type=EmergencyActivityEvent.EventType.ACCESS_DENIED,
+                actor_label="Owner",
+                description=f"Denied access for {req.requester_name}.",
+            )
+        return Response(EmergencyUnlockRequestSerializer(req).data)
+
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path=r"unlock-requests/(?P<req_id>[^/.]+)/revoke",
+    )
+    def revoke_request(self, request, pack_id=None, req_id=None):
+        pack = self.get_object()
+        req = get_object_or_404(EmergencyUnlockRequest, pk=req_id, pack=pack)
+        req.status = EmergencyUnlockRequest.Status.REVOKED
+        req.decided_at = timezone.now()
+        req.save(update_fields=["status", "decided_at", "updated_at"])
+        log_emergency_event(
+            pack=pack,
+            event_type=EmergencyActivityEvent.EventType.ACCESS_REVOKED,
+            actor_label="Owner",
+            description=f"Revoked access for {req.requester_name}.",
+        )
+        return Response(EmergencyUnlockRequestSerializer(req).data)
 
 
 # ---- Emergency access packs (public, token-gated) --------------------------
@@ -3163,6 +3447,68 @@ def _check_pack_access_code(pack, request):
     return None
 
 
+def _resolve_open_unlock_request(pack, request):
+    """
+    Resolve the requester's unlock request from the X-Request-Token header (or a
+    ``request_token`` query/body value). Settles an elapsed delayed countdown to
+    UNLOCKED. Returns the request instance (any status) or None.
+    """
+    token = (
+        request.headers.get("X-Request-Token", "")
+        or request.query_params.get("request_token", "")
+        or (request.data.get("request_token", "") if hasattr(request, "data") else "")
+    ).strip()
+    if not token:
+        return None
+    try:
+        req = pack.unlock_requests.get(request_token=token)
+    except EmergencyUnlockRequest.DoesNotExist:
+        return None
+    if req.settle_due_countdown():
+        req.save(update_fields=["status", "updated_at"])
+        log_emergency_event(
+            pack=pack,
+            event_type=EmergencyActivityEvent.EventType.ACCESS_UNLOCKED,
+            actor_label=req.requester_name,
+            description="Delayed unlock opened automatically.",
+        )
+        notify_pack_owner(
+            pack=pack,
+            notification_type="emergency_unlock",
+            title="Emergency access opened",
+            message=f"Emergency access for “{pack.title}” has opened.",
+            severity="warning",
+            dedupe_suffix=f"req{req.id}",
+        )
+    return req
+
+
+def _public_pack_payload(pack, *, include_items, unlock_request=None):
+    data = PublicEmergencyPackSerializer(
+        pack, context={"include_items": include_items}
+    ).data
+    if unlock_request is not None:
+        data["request"] = {
+            "status": unlock_request.status,
+            "unlock_at": (
+                unlock_request.unlock_at.isoformat()
+                if unlock_request.unlock_at
+                else None
+            ),
+        }
+    if include_items and pack.location_enabled and pack.last_known_location:
+        # Record that the (already-permitted) viewer was shown the location.
+        log_emergency_event(
+            pack=pack,
+            event_type=EmergencyActivityEvent.EventType.LOCATION_REVEALED,
+            actor_label=(
+                unlock_request.requester_name if unlock_request else "Shared viewer"
+            ),
+            description="Emergency location revealed after unlock.",
+        )
+    return data
+
+
 class PublicEmergencyPackMetadataView(APIView):
     permission_classes = [AllowAny]
 
@@ -3180,10 +3526,152 @@ class PublicEmergencyPackMetadataView(APIView):
             title="Emergency pack opened",
             description=pack.title,
         )
+        log_emergency_event(
+            pack=pack,
+            event_type=EmergencyActivityEvent.EventType.QR_SCANNED,
+            actor_label="Shared viewer",
+            description="Emergency link opened.",
+        )
+
+        if pack.requires_unlock_request:
+            # Items are never shown until an unlock request is open. The access
+            # code (if any) is checked when the request is submitted, not here, so
+            # the gate page itself leaks nothing.
+            req = _resolve_open_unlock_request(pack, request)
+            include = bool(req and req.is_open)
+            return Response(
+                _public_pack_payload(pack, include_items=include, unlock_request=req)
+            )
+
+        # Instant / legacy share links: code-gate, then expose items directly.
         code_err = _check_pack_access_code(pack, request)
         if code_err:
             return code_err
-        return Response(PublicEmergencyPackSerializer(pack).data)
+        return Response(_public_pack_payload(pack, include_items=True))
+
+
+class PublicEmergencyUnlockRequestCreateView(APIView):
+    """Start an emergency unlock request from the public link."""
+
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "emergency_code"
+
+    def post(self, request, token):
+        require_feature_enabled("emergency_public_viewer")
+        pack, err = _resolve_emergency_pack(token)
+        if err:
+            return err
+
+        # Access code (if required) is verified at request time.
+        if pack.access_code_required:
+            code = str(request.data.get("access_code", "")).strip()
+            if not code or not check_password(code, pack.access_code_hash):
+                log_emergency_event(
+                    pack=pack,
+                    event_type=EmergencyActivityEvent.EventType.WRONG_CODE,
+                    actor_label="Shared viewer",
+                    description="Wrong access code at emergency request.",
+                )
+                notify_pack_owner(
+                    pack=pack,
+                    notification_type="security_alert",
+                    title="Wrong emergency code attempt",
+                    message=f"Someone entered a wrong code for “{pack.title}”.",
+                    severity="security",
+                    dedupe_suffix=timezone.now().strftime("%Y%m%d%H%M"),
+                )
+                return Response(
+                    {"detail": "That code does not match.", "state": "wrong_code"},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+        serializer = PublicUnlockRequestCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        vd = serializer.validated_data
+
+        if not pack.requires_unlock_request:
+            # Instant-with-code (or legacy) packs open immediately once the code
+            # checks out — no request row is needed.
+            return Response({"state": "open"})
+
+        req = EmergencyUnlockRequest(
+            pack=pack,
+            request_token=generate_share_token(),
+            requester_name=vd["requester_name"],
+            relationship=vd.get("relationship", ""),
+            reason=vd.get("reason", ""),
+            contact_info=vd.get("contact_info", ""),
+        )
+        if pack.unlock_mode == EmergencyAccessPack.UnlockMode.DELAYED:
+            req.status = EmergencyUnlockRequest.Status.COUNTDOWN
+            req.unlock_at = timezone.now() + timezone.timedelta(
+                hours=pack.unlock_delay_hours
+            )
+        else:  # owner_approval
+            req.status = EmergencyUnlockRequest.Status.PENDING
+        req.save()
+
+        log_emergency_event(
+            pack=pack,
+            event_type=EmergencyActivityEvent.EventType.REQUEST_SUBMITTED,
+            actor_label=req.requester_name,
+            description=f"{req.requester_name} requested emergency access.",
+        )
+        if req.status == EmergencyUnlockRequest.Status.COUNTDOWN:
+            log_emergency_event(
+                pack=pack,
+                event_type=EmergencyActivityEvent.EventType.COUNTDOWN_STARTED,
+                actor_label=req.requester_name,
+                description=f"Delayed unlock counting down ({pack.unlock_delay_hours}h).",
+            )
+        notify_pack_owner(
+            pack=pack,
+            notification_type="emergency_request",
+            title="Emergency access requested",
+            message=(
+                f"{req.requester_name} requested access to “{pack.title}”."
+                + (
+                    f" It will unlock in {pack.unlock_delay_hours}h unless you deny it."
+                    if req.status == EmergencyUnlockRequest.Status.COUNTDOWN
+                    else " Approve or deny it from your dashboard."
+                )
+            ),
+            severity="urgent",
+            dedupe_suffix=f"req{req.id}",
+        )
+        return Response(
+            {
+                "request_token": req.request_token,
+                "status": req.status,
+                "unlock_at": req.unlock_at.isoformat() if req.unlock_at else None,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class PublicEmergencyUnlockRequestStatusView(APIView):
+    """Poll the status of an unlock request (and read items once unlocked)."""
+
+    permission_classes = [AllowAny]
+
+    def get(self, request, token, request_token):
+        pack, err = _resolve_emergency_pack(token)
+        if err:
+            return err
+        try:
+            req = pack.unlock_requests.get(request_token=request_token)
+        except EmergencyUnlockRequest.DoesNotExist:
+            return Response(
+                {"detail": "This request was not found.", "state": "invalid"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if req.settle_due_countdown():
+            req.save(update_fields=["status", "updated_at"])
+        payload = _public_pack_payload(
+            pack, include_items=req.is_open, unlock_request=req
+        )
+        return Response(payload)
 
 
 class PublicEmergencyPackVerifyCodeView(APIView):
@@ -3212,10 +3700,23 @@ class _PublicEmergencyItemMixin(APIView):
     def resolve(self, request, token, item_id):
         pack, err = _resolve_emergency_pack(token)
         if err:
-            return None, err
-        code_err = _check_pack_access_code(pack, request)
-        if code_err:
-            return None, code_err
+            return None, err, None
+        unlock_request = None
+        if pack.requires_unlock_request:
+            # Documents are only served once the unlock rules have opened access.
+            unlock_request = _resolve_open_unlock_request(pack, request)
+            if not (unlock_request and unlock_request.is_open):
+                return None, Response(
+                    {
+                        "detail": "Emergency access has not been unlocked yet.",
+                        "state": "locked",
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                ), None
+        else:
+            code_err = _check_pack_access_code(pack, request)
+            if code_err:
+                return None, code_err, None
         item = get_object_or_404(
             EmergencyAccessPackItem.objects.select_related("document", "file"),
             pk=item_id,
@@ -3226,18 +3727,18 @@ class _PublicEmergencyItemMixin(APIView):
             return None, Response(
                 {"detail": "This item is no longer available.", "state": "unavailable"},
                 status=status.HTTP_410_GONE,
-            )
+            ), None
         if item.file is None:
             return None, Response(
                 {"detail": "This item has no file attached."},
                 status=status.HTTP_404_NOT_FOUND,
-            )
-        return item, None
+            ), None
+        return item, None, unlock_request
 
 
 class PublicEmergencyPackItemPreviewView(_PublicEmergencyItemMixin):
     def get(self, request, token, item_id):
-        item, err = self.resolve(request, token, item_id)
+        item, err, unlock_request = self.resolve(request, token, item_id)
         if err:
             return err
         if not item.file.is_previewable:
@@ -3245,14 +3746,46 @@ class PublicEmergencyPackItemPreviewView(_PublicEmergencyItemMixin):
                 {"detail": "Preview is not available for this file type."},
                 status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             )
+        log_emergency_event(
+            pack=item.pack,
+            event_type=EmergencyActivityEvent.EventType.DOCUMENT_VIEWED,
+            actor_label=(
+                unlock_request.requester_name if unlock_request else "Shared viewer"
+            ),
+            description=f"Viewed “{item.document.title}”.",
+        )
         return _inline_file_response(item.file)
 
 
 class PublicEmergencyPackItemDownloadView(_PublicEmergencyItemMixin):
     def get(self, request, token, item_id):
-        item, err = self.resolve(request, token, item_id)
+        item, err, unlock_request = self.resolve(request, token, item_id)
         if err:
             return err
+        if not item.pack.allow_downloads:
+            return Response(
+                {
+                    "detail": "Downloads are turned off for this emergency access.",
+                    "state": "downloads_disabled",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        log_emergency_event(
+            pack=item.pack,
+            event_type=EmergencyActivityEvent.EventType.DOCUMENT_DOWNLOADED,
+            actor_label=(
+                unlock_request.requester_name if unlock_request else "Shared viewer"
+            ),
+            description=f"Downloaded “{item.document.title}”.",
+        )
+        notify_pack_owner(
+            pack=item.pack,
+            notification_type="emergency_viewed",
+            title="Emergency document downloaded",
+            message=f"A document in “{item.pack.title}” was downloaded.",
+            severity="warning",
+            dedupe_suffix=f"dl{item.id}:{timezone.now().strftime('%Y%m%d%H')}",
+        )
         return _file_response(item.file, as_attachment=True)
 
 
