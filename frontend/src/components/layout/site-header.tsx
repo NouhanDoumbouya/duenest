@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 const navLinks = [
   { label: "Product", href: "/#product" },
   { label: "Life Radar", href: "/#life-radar" },
+  { label: "Features", href: "/#capabilities" },
   { label: "Security", href: "/security" },
   { label: "Use cases", href: "/#use-cases" },
   { label: "Pricing", href: "/pricing" },

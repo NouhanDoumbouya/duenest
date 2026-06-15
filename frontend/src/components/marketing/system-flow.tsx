@@ -1,3 +1,4 @@
+import { type CSSProperties } from "react";
 import {
   CreditCard,
   FileText,
@@ -37,7 +38,7 @@ export function SystemFlow() {
                 <p className="mt-0.5 text-xs text-muted-foreground">{node.tag}</p>
               </div>
             </div>
-            {i < nodes.length - 1 && <Connector />}
+            {i < nodes.length - 1 && <Connector index={i} />}
           </div>
         );
       })}
@@ -45,7 +46,7 @@ export function SystemFlow() {
   );
 }
 
-function Connector() {
+function Connector({ index }: { index: number }) {
   return (
     <div
       aria-hidden
@@ -55,7 +56,13 @@ function Connector() {
         "py-1.5 sm:w-8 sm:py-0 lg:w-10",
       )}
     >
-      <span className="h-5 w-px bg-gradient-to-b from-brand-teal/50 to-primary/40 sm:h-px sm:w-full sm:bg-gradient-to-r" />
+      {/* `.flow-line` draws this link in (scaleY on mobile, scaleX on desktop)
+          when the section scrolls into view; staggered so the chain "connects"
+          left to right. Static when motion is reduced. */}
+      <span
+        style={{ "--flow-delay": `${index * 120}ms` } as CSSProperties}
+        className="flow-line h-5 w-px bg-gradient-to-b from-brand-teal/50 to-primary/40 sm:h-px sm:w-full sm:bg-gradient-to-r"
+      />
     </div>
   );
 }

@@ -3,15 +3,22 @@ import Link from "next/link";
 import {
   ArrowRight,
   Ban,
+  BellRing,
+  Building2,
   Check,
+  DoorClosed,
   Eye,
   Folder,
   KeyRound,
   LifeBuoy,
   Lock,
+  Package,
+  Plus,
   Radar,
+  ScanLine,
   Search,
   ShieldCheck,
+  Sparkles,
   Timer,
   X,
 } from "lucide-react";
@@ -22,6 +29,7 @@ import { AttributionCapture } from "@/components/marketing/attribution-capture";
 import { SectionHeader } from "@/components/marketing/section";
 import { ScrollReveal } from "@/components/marketing/scroll-reveal";
 import { SystemFlow } from "@/components/marketing/system-flow";
+import { FeatureCard, type Feature } from "@/components/marketing/feature-card";
 import {
   EmergencyMockup,
   FixFirstCard,
@@ -31,32 +39,103 @@ import {
   VaultMockup,
 } from "@/components/marketing/mockups";
 import { LiveCountdown } from "@/components/marketing/live-countdown";
+import { TiltCard } from "@/components/marketing/tilt-card";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "DueNest — Stay ready before it's due",
   description:
-    "DueNest is the calm place to organize important documents, track renewals, share securely, and prepare emergency access — before life asks for them. Private by default. Join the beta.",
+    "DueNest is the calm place to scan and organize important documents, track renewals, prepare application bundles, share securely, and set up emergency access — before life asks for them. Private by default. Join the beta.",
   alternates: { canonical: "/" },
+};
+
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://duenest.app";
+
+// Shared by the FAQ section and the FAQPage structured data below, so the two
+// can never drift apart.
+const FAQ_ITEMS: { q: string; a: string }[] = [
+  {
+    q: "Is DueNest free?",
+    a: "DueNest is free during its private beta. Paid Pro and Organization plans are previewed on the pricing page, but pricing isn't final yet.",
+  },
+  {
+    q: "Is my data private?",
+    a: "Yes. Nothing is shared until you choose to, and files are encrypted at rest. A share or emergency access exposes only the items you pick — never your whole vault.",
+  },
+  {
+    q: "Does DueNest read my documents?",
+    a: "Only to help you. DueNest can optionally pull key fields and dates from a file so you type less, and always asks you to confirm before saving. We never sell your data.",
+  },
+  {
+    q: "Can I export or delete my data?",
+    a: "Anytime. You can request a full export of your documents, and manage or permanently delete your data from Data & privacy in your settings.",
+  },
+  {
+    q: "How does sharing work?",
+    a: "You send access — a QR, a secure link, or a code — not the original file. Require an access code, set an expiry, watermark the preview, and revoke access whenever you want.",
+  },
+  {
+    q: "How do reminders work?",
+    a: "DueNest tracks expiry dates and renewal rules, surfaces what needs attention first, and shows it on a calendar and timeline. Rule-based checks — no AI guesswork.",
+  },
+  {
+    q: "What happens after the beta?",
+    a: "We'll email you before anything changes. Organizing and tracking your documents is built to stay useful, and we'll be clear about any plan limits ahead of time.",
+  },
+];
+
+const STRUCTURED_DATA = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      name: "DueNest",
+      url: SITE_URL,
+      logo: `${SITE_URL}/og.png`,
+    },
+    {
+      "@type": "SoftwareApplication",
+      name: "DueNest",
+      applicationCategory: "BusinessApplication",
+      operatingSystem: "Web",
+      url: SITE_URL,
+      offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+    },
+    {
+      "@type": "FAQPage",
+      mainEntity: FAQ_ITEMS.map((item) => ({
+        "@type": "Question",
+        name: item.q,
+        acceptedAnswer: { "@type": "Answer", text: item.a },
+      })),
+    },
+  ],
 };
 
 export default function LandingPage() {
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(STRUCTURED_DATA) }}
+      />
       <AttributionCapture />
       <SiteHeader />
       <main className="flex-1">
         <Hero />
-        <Connected />
         <Pain />
+        <HowItWorks />
+        <Connected />
         <LifeRadar />
         <Vault />
         <SafeSend />
         <Emergency />
         <MoneyRadar />
+        <Capabilities />
         <Security />
         <UseCases />
+        <Faq />
         <FinalCta />
       </main>
       <SiteFooter />
@@ -89,20 +168,24 @@ function Hero() {
           </h1>
 
           <p className="mt-6 max-w-md text-lg leading-relaxed text-pretty text-muted-foreground">
-            Organize important documents, track renewals, share securely, and
-            prepare emergency access — before life asks for them.
+            DueNest keeps your important documents, renewals, and deadlines in
+            one calm place — and quietly watches them, so an expiry or a missed
+            date never catches you off guard.
           </p>
 
           <div className="mt-9 flex flex-col gap-3 sm:flex-row">
             <Link
               href="/waitlist"
-              className={cn(buttonVariants({ size: "lg" }), "h-12 px-7 text-base")}
+              className={cn(
+                buttonVariants({ size: "lg" }),
+                "cta-sheen h-12 px-7 text-base",
+              )}
             >
-              Start free
+              Join the beta
               <ArrowRight className="size-4" />
             </Link>
             <Link
-              href="/#life-radar"
+              href="/#how-it-works"
               className={cn(
                 buttonVariants({ variant: "outline", size: "lg" }),
                 "h-12 px-7 text-base",
@@ -121,7 +204,8 @@ function Hero() {
             <span>Revoke anytime</span>
           </p>
           <p className="mt-3 text-sm text-muted-foreground">
-            Built for students, travelers, families, and busy professionals.
+            Made for anyone who can&apos;t afford to miss a passport, a visa, or
+            a deadline.
           </p>
         </div>
 
@@ -132,12 +216,78 @@ function Hero() {
             className="pointer-events-none absolute -inset-8 -z-10 rounded-[2.5rem] bg-gradient-to-tr from-primary/12 via-brand-teal/10 to-transparent blur-3xl"
           />
           <div className="relative mx-auto max-w-md">
-            <FixFirstCard />
-            <span className="absolute -top-3 -right-2 hidden items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground shadow-card sm:inline-flex">
+            <TiltCard>
+              <FixFirstCard />
+            </TiltCard>
+            <span className="absolute -top-3 -right-2 z-10 hidden items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground shadow-card sm:inline-flex">
               <span className="pulse-soft flex size-1.5 rounded-full bg-brand-success" />
               Updates as things change
             </span>
           </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ---- How it works (3 steps) ------------------------------------------------
+
+function HowItWorks() {
+  const steps = [
+    {
+      icon: ScanLine,
+      title: "Add it once",
+      body: "Scan or upload a document — DueNest captures the key dates and details for you.",
+    },
+    {
+      icon: Radar,
+      title: "DueNest watches",
+      body: "Rule-based checks track every expiry, renewal, and deadline quietly in the background.",
+    },
+    {
+      icon: ShieldCheck,
+      title: "You stay ready",
+      body: "Get a heads-up before anything's due, share securely, and keep emergency access prepared.",
+    },
+  ];
+  return (
+    <section id="how-it-works" className="scroll-mt-20">
+      <div className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:py-24">
+        <ScrollReveal>
+          <SectionHeader
+            eyebrow="How it works"
+            title="Three steps to never being caught off guard."
+            description="No setup marathon. Add what matters once, and DueNest keeps it ready for the moment you need it."
+          />
+        </ScrollReveal>
+        <div className="mt-12 grid gap-5 sm:grid-cols-3">
+          {steps.map((step, i) => {
+            const Icon = step.icon;
+            return (
+              <ScrollReveal
+                key={step.title}
+                delay={i * 90}
+                className="flex h-full flex-col gap-4 rounded-2xl border border-border bg-card p-6 shadow-card"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="flex size-11 items-center justify-center rounded-xl bg-brand-navy text-brand-teal">
+                    <Icon className="size-5" />
+                  </span>
+                  <span className="font-heading text-2xl font-semibold tabular-nums text-muted-foreground/30">
+                    {i + 1}
+                  </span>
+                </div>
+                <div>
+                  <h3 className="font-heading text-lg font-semibold">
+                    {step.title}
+                  </h3>
+                  <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+                    {step.body}
+                  </p>
+                </div>
+              </ScrollReveal>
+            );
+          })}
         </div>
       </div>
     </section>
@@ -278,6 +428,12 @@ function LifeRadar() {
             <div
               aria-hidden
               className="pointer-events-none absolute -inset-6 -z-10 rounded-[2rem] bg-gradient-to-tr from-brand-teal/10 via-primary/10 to-transparent blur-2xl"
+            />
+            {/* Signature motion: an "always watching" radar sweep behind the
+                dashboard, peeking past its edges. */}
+            <div
+              aria-hidden
+              className="radar-sweep pointer-events-none absolute -inset-[14%] -z-10 opacity-70"
             />
             <LifeRadarMockup />
           </ScrollReveal>
@@ -491,6 +647,71 @@ function MoneyRadar() {
       ]}
       visual={<MoneyRadarMockup />}
     />
+  );
+}
+
+// ---- Capabilities (breadth grid) -------------------------------------------
+
+function Capabilities() {
+  const features: Feature[] = [
+    {
+      icon: ScanLine,
+      title: "Scan with your camera",
+      description:
+        "Capture a document, auto-detect the edges, and save a clean, shareable PDF straight into your vault.",
+    },
+    {
+      icon: Sparkles,
+      title: "Details filled in for you",
+      description:
+        "DueNest reads key fields and dates from a file, then asks you to confirm before saving — you stay in control.",
+    },
+    {
+      icon: Package,
+      title: "Application & renewal bundles",
+      description:
+        "Group the right documents into a pack with a readiness score — ready for visas, scholarships, jobs, and renewals.",
+    },
+    {
+      icon: BellRing,
+      title: "Reminders & calendar",
+      description:
+        "Renewal and deadline reminders on a calendar and timeline, so the next step never sneaks up on you.",
+    },
+    {
+      icon: DoorClosed,
+      title: "Secure rooms",
+      description:
+        "Open a private, access-controlled room to share a set of documents — and close it the moment you're done.",
+      badge: "Beta",
+    },
+    {
+      icon: Building2,
+      title: "Shared workspaces",
+      description:
+        "Bring family or a small team into a shared space to keep important documents organized together.",
+      badge: "Beta",
+    },
+  ];
+  return (
+    <section id="capabilities" className="scroll-mt-20">
+      <div className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:py-24">
+        <ScrollReveal>
+          <SectionHeader
+            eyebrow="The full toolkit"
+            title="More ways to stay ready — one calm system."
+            description="Beyond documents and renewals, DueNest gives you the tools to capture, prepare, and share important paperwork without the last-minute scramble."
+          />
+        </ScrollReveal>
+        <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {features.map((feature, i) => (
+            <ScrollReveal key={feature.title} delay={(i % 3) * 80}>
+              <FeatureCard feature={feature} />
+            </ScrollReveal>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -711,6 +932,49 @@ function UseCases() {
   );
 }
 
+// ---- FAQ -------------------------------------------------------------------
+
+function Faq() {
+  return (
+    <section id="faq" className="scroll-mt-20 border-t border-border bg-card/50">
+      <div className="mx-auto w-full max-w-3xl px-4 py-20 sm:px-6 lg:py-24">
+        <ScrollReveal>
+          <SectionHeader
+            eyebrow="Questions & answers"
+            title="Everything you might be wondering."
+            description="Straight answers on privacy, pricing, sharing, and what happens during the beta."
+          />
+        </ScrollReveal>
+        <ScrollReveal
+          delay={80}
+          className="mt-10 divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card shadow-card"
+        >
+          {FAQ_ITEMS.map((item) => (
+            <details key={item.q} className="group">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
+                {item.q}
+                <Plus
+                  className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-45"
+                  aria-hidden
+                />
+              </summary>
+              <p className="px-5 pb-5 text-sm leading-relaxed text-muted-foreground">
+                {item.a}
+              </p>
+            </details>
+          ))}
+        </ScrollReveal>
+        <p className="mx-auto mt-8 max-w-xl text-center text-sm leading-relaxed text-muted-foreground">
+          A note on the beta: DueNest is still being shaped with early users. You
+          can export or delete your data anytime, and we&apos;ll always be clear
+          about what changes before it does.{" "}
+          <span className="font-medium text-foreground">— The DueNest team</span>
+        </p>
+      </div>
+    </section>
+  );
+}
+
 // ---- Final CTA -------------------------------------------------------------
 
 function FinalCta() {
@@ -734,14 +998,14 @@ function FinalCta() {
               href="/waitlist"
               className={cn(
                 buttonVariants({ size: "lg" }),
-                "h-12 bg-white px-7 text-base text-brand-navy shadow-sm hover:bg-white/90",
+                "cta-sheen h-12 bg-white px-7 text-base text-brand-navy shadow-sm hover:bg-white/90",
               )}
             >
-              Start free
+              Join the beta
               <ArrowRight className="size-4" />
             </Link>
             <Link
-              href="/#life-radar"
+              href="/#how-it-works"
               className={cn(
                 buttonVariants({ variant: "outline", size: "lg" }),
                 "h-12 border-white/25 bg-transparent px-7 text-base text-white hover:bg-white/10 hover:text-white",
@@ -749,6 +1013,18 @@ function FinalCta() {
             >
               See how it works
             </Link>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm text-white/75">
+            {[
+              "Free during the private beta",
+              "No credit card",
+              "Private by default — export anytime",
+            ].map((item) => (
+              <span key={item} className="inline-flex items-center gap-1.5">
+                <Check className="size-4 text-brand-teal" />
+                {item}
+              </span>
+            ))}
           </div>
           <p className="text-xs text-white/50">
             Private beta · rolls out gradually to selected users.

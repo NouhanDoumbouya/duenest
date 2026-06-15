@@ -336,7 +336,8 @@ export function FixFirstCard() {
     },
   ];
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-floating">
+    <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-floating">
+      <span aria-hidden className="live-scan" />
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <p className="font-heading text-sm font-semibold">Fix first</p>
         <span className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-success">

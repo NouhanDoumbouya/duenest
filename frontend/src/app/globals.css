@@ -283,6 +283,135 @@
     -webkit-mask-image: linear-gradient(to bottom, black 55%, transparent);
     mask-image: linear-gradient(to bottom, black 55%, transparent);
   }
+
+  /* --- Motion: living hero card "scan" -------------------------------------
+     A soft highlight sweeps down a card to suggest DueNest continuously
+     checking each item. Clipped by the card's own overflow-hidden. */
+  .live-scan {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    border-radius: inherit;
+  }
+  .live-scan::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 42%;
+    background: linear-gradient(
+      to bottom,
+      transparent,
+      color-mix(in srgb, var(--brand-teal) 12%, transparent),
+      transparent
+    );
+    transform: translateY(-120%);
+    animation: duenest-scan 4.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+  @keyframes duenest-scan {
+    0% {
+      transform: translateY(-120%);
+      opacity: 0;
+    }
+    12% {
+      opacity: 1;
+    }
+    80% {
+      opacity: 1;
+    }
+    100% {
+      transform: translateY(320%);
+      opacity: 0;
+    }
+  }
+
+  /* --- Motion: 2.5D pointer tilt (depth without a 3D engine) --------------- */
+  .tilt-card {
+    transform: perspective(1100px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+    transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+    transform-style: preserve-3d;
+    will-change: transform;
+  }
+  /* Soft light that follows the pointer, sold as glass/depth. */
+  .tilt-glare {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-radius: 1rem;
+    background: radial-gradient(
+      220px circle at var(--mx, 50%) var(--my, 0%),
+      color-mix(in srgb, white 22%, transparent),
+      transparent 60%
+    );
+    opacity: 0;
+    transition: opacity 260ms ease;
+  }
+  .tilt-card:hover .tilt-glare {
+    opacity: 1;
+  }
+
+  /* --- Motion: signature radar sweep (the "always watching" motif) --------- */
+  .radar-sweep {
+    border-radius: 9999px;
+    background: conic-gradient(
+      from 0deg,
+      transparent 0deg,
+      color-mix(in srgb, var(--brand-teal) 24%, transparent) 38deg,
+      transparent 76deg
+    );
+    -webkit-mask-image: radial-gradient(closest-side, black 62%, transparent);
+    mask-image: radial-gradient(closest-side, black 62%, transparent);
+    animation: duenest-radar 6s linear infinite;
+  }
+  @keyframes duenest-radar {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  /* --- Motion: system-flow connectors draw in as the section reveals ------- */
+  .flow-line {
+    transform: scaleY(0);
+    transform-origin: top;
+    transition: transform 600ms cubic-bezier(0.22, 1, 0.36, 1);
+    transition-delay: var(--flow-delay, 0ms);
+  }
+  .reveal.is-visible .flow-line {
+    transform: scaleY(1);
+  }
+  @media (min-width: 640px) {
+    .flow-line {
+      transform: scaleX(0);
+      transform-origin: left;
+    }
+    .reveal.is-visible .flow-line {
+      transform: scaleX(1);
+    }
+  }
+
+  /* --- Motion: a sheen that sweeps a primary CTA on hover ------------------ */
+  .cta-sheen {
+    position: relative;
+    overflow: hidden;
+  }
+  .cta-sheen::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      120deg,
+      transparent 30%,
+      color-mix(in srgb, white 32%, transparent) 50%,
+      transparent 70%
+    );
+    transform: translateX(-130%);
+    transition: transform 720ms ease;
+    pointer-events: none;
+  }
+  .cta-sheen:hover::after {
+    transform: translateX(130%);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -307,5 +436,29 @@
 
   .pulse-soft {
     animation: none;
+  }
+
+  /* Motion add-ons: keep everything static and visible when motion is reduced. */
+  .live-scan::before,
+  .radar-sweep {
+    animation: none;
+  }
+  .live-scan::before {
+    opacity: 0;
+  }
+  .tilt-card {
+    transform: none;
+    transition: none;
+  }
+  .tilt-glare {
+    display: none;
+  }
+  .flow-line,
+  .reveal.is-visible .flow-line {
+    transform: none;
+    transition: none;
+  }
+  .cta-sheen::after {
+    display: none;
   }
 }
