@@ -87,6 +87,29 @@ SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
 
+# ---------------------------------------------------------------------------
+# Cookie-based JWT auth (see apps/users/cookie_auth.py, docs/AUTH.md).
+# Access/refresh tokens are carried in HttpOnly cookies. The CSRF cookie is
+# readable by JS (double-submit) so the SPA can echo it as X-CSRFToken on unsafe
+# requests. Same-site deployment is assumed; set AUTH_COOKIE_SAMESITE=None +
+# AUTH_COOKIE_SECURE=True for cross-site, plus matching CSRF_COOKIE_SAMESITE.
+# ---------------------------------------------------------------------------
+AUTH_ACCESS_COOKIE_NAME = config("AUTH_ACCESS_COOKIE_NAME", default="duenest_access")
+AUTH_REFRESH_COOKIE_NAME = config("AUTH_REFRESH_COOKIE_NAME", default="duenest_refresh")
+AUTH_COOKIE_SECURE = config("AUTH_COOKIE_SECURE", default=False, cast=bool)
+AUTH_COOKIE_SAMESITE = config("AUTH_COOKIE_SAMESITE", default="Lax")
+AUTH_COOKIE_DOMAIN = config("AUTH_COOKIE_DOMAIN", default="")
+AUTH_COOKIE_PATH = config("AUTH_COOKIE_PATH", default="/")
+
+CSRF_COOKIE_NAME = config("AUTH_CSRF_COOKIE_NAME", default="duenest_csrftoken")
+CSRF_COOKIE_HTTPONLY = False  # SPA must read it to send X-CSRFToken
+CSRF_COOKIE_SECURE = config("AUTH_COOKIE_SECURE", default=False, cast=bool)
+if AUTH_COOKIE_DOMAIN:
+    CSRF_COOKIE_DOMAIN = AUTH_COOKIE_DOMAIN
+
+# Cookie auth requires credentialed CORS (never with allow-all origins).
+CORS_ALLOW_CREDENTIALS = config("DJANGO_CORS_ALLOW_CREDENTIALS", default=True, cast=bool)
+
 # Allow the custom headers used by the public share/room flow in addition to
 # the django-cors-headers defaults. The grant is normally passed as a query
 # param (no preflight), but the raw-code header path must work cross-origin too.
@@ -242,7 +265,10 @@ PASSWORD_HASHERS = [
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        # Cookie-first JWT auth (HttpOnly cookies); transparently falls back to
+        # the Authorization: Bearer header for API/test clients. CSRF is enforced
+        # only on the cookie path. See apps/users/cookie_auth.py.
+        "apps.users.cookie_auth.CookieJWTAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",

@@ -51,9 +51,11 @@ SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 X_FRAME_OPTIONS = "DENY"
 
 # CORS / CSRF — explicit allowlists in production (never allow-all).
+# Cookie auth requires credentialed CORS (defaults to True now); origins must be
+# an explicit allowlist (never "*") — enforced by never enabling allow-all.
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = config(
-    "DJANGO_CORS_ALLOW_CREDENTIALS", default=False, cast=bool
+    "DJANGO_CORS_ALLOW_CREDENTIALS", default=True, cast=bool
 )
 CORS_ALLOWED_ORIGINS = config(
     "DJANGO_CORS_ALLOWED_ORIGINS", default="", cast=Csv()
@@ -61,6 +63,10 @@ CORS_ALLOWED_ORIGINS = config(
 CSRF_TRUSTED_ORIGINS = config(
     "DJANGO_CSRF_TRUSTED_ORIGINS", default="", cast=Csv()
 )
+
+# Auth cookies must be Secure in production regardless of the base default.
+AUTH_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
 
 # Content-Security-Policy applied by apps.core.middleware.SecurityHeadersMiddleware.
 # Connect-src must include the API + any storage/analytics origins; tune via env.

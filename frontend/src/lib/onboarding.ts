@@ -109,6 +109,7 @@ async function getDocumentExportBlob(exportId: number): Promise<Blob> {
   try {
     response = await fetch(`${API_BASE_URL}/document-exports/${exportId}/download/`, {
       headers,
+      credentials: "include",
     });
   } catch {
     throw new ApiError("Unable to reach the server. Please try again.", 0, null);

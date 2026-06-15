@@ -5,12 +5,15 @@ from .views import (
     AccountDataSummaryView,
     AccountRequestDataExportView,
     AccountRequestDeletionView,
+    CookieTokenRefreshView,
+    CsrfTokenView,
     CurrentUserView,
     DemoDocumentDataClearView,
     DemoDocumentDataCreateView,
     DocumentSetupChecklistView,
     GoogleAuthView,
     LoginView,
+    LogoutView,
     OnboardingAttentionReviewedView,
     OnboardingCompleteView,
     OnboardingDismissView,
@@ -19,12 +22,13 @@ from .views import (
     RegisterView,
     TrustSecuritySummaryView,
 )
-from rest_framework_simplejwt.views import TokenRefreshView
 
 urlpatterns = [
     path("auth/register/", RegisterView.as_view(), name="auth-register"),
     path("auth/login/", LoginView.as_view(), name="auth-login"),
-    path("auth/refresh/", TokenRefreshView.as_view(), name="auth-refresh"),
+    path("auth/refresh/", CookieTokenRefreshView.as_view(), name="auth-refresh"),
+    path("auth/logout/", LogoutView.as_view(), name="auth-logout"),
+    path("auth/csrf/", CsrfTokenView.as_view(), name="auth-csrf"),
     path("auth/google/", GoogleAuthView.as_view(), name="auth-google"),
     path("users/me/", CurrentUserView.as_view(), name="users-me"),
     path("onboarding/state/", OnboardingStateView.as_view(), name="onboarding-state"),

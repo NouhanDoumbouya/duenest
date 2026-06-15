@@ -1,13 +1,12 @@
 // Auth helpers for the DueNest frontend.
 //
-// TODO: Move token handling to HttpOnly secure cookies before production.
-// localStorage is used here for development speed only and is vulnerable to
-// XSS. Keep the call sites below stable so only this file has to change when
-// the cookie/BFF strategy lands.
+// Tokens are stored in HttpOnly cookies set by the backend — JavaScript never
+// reads or writes access/refresh tokens. Auth state is derived from `/users/me/`
+// (see getCurrentUser), not from any client-readable token. The API client
+// (lib/api.ts) sends cookies automatically and handles CSRF + refresh.
 
 import { apiFetch } from "./api";
 import type {
-  AuthTokens,
   GoogleAuthRequest,
   GoogleAuthResponse,
   LoginRequest,
@@ -16,57 +15,44 @@ import type {
   User,
 } from "@/types/auth";
 
-const ACCESS_TOKEN_KEY = "duenest.access";
-const REFRESH_TOKEN_KEY = "duenest.refresh";
+// Legacy localStorage keys from the previous (insecure) token storage. We no
+// longer write these; this is only used to clean them up on existing devices.
+const LEGACY_TOKEN_KEYS = ["duenest.access", "duenest.refresh"];
 
-// ---- Dev token storage helpers --------------------------------------------
-// All reads are guarded with `typeof window` so they are safe to import from
-// server components without crashing during SSR.
-
-export function getAccessToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(ACCESS_TOKEN_KEY);
-}
-
-export function getRefreshToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(REFRESH_TOKEN_KEY);
-}
-
-export function saveTokens(tokens: AuthTokens): void {
+/** One-time removal of any tokens left in localStorage by older builds. */
+export function cleanupLegacyTokenStorage(): void {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(ACCESS_TOKEN_KEY, tokens.access);
-  window.localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh);
+  for (const key of LEGACY_TOKEN_KEYS) {
+    window.localStorage.removeItem(key);
+  }
 }
 
-export function clearTokens(): void {
-  if (typeof window === "undefined") return;
-  window.localStorage.removeItem(ACCESS_TOKEN_KEY);
-  window.localStorage.removeItem(REFRESH_TOKEN_KEY);
-}
-
-export function isAuthenticated(): boolean {
-  return getAccessToken() !== null;
+/**
+ * Deprecated: tokens are HttpOnly cookies and cannot be read by JS. Always
+ * returns null. Kept so existing imports compile; gate UI on getCurrentUser
+ * instead. Calling it also opportunistically clears legacy localStorage tokens.
+ */
+export function getAccessToken(): null {
+  cleanupLegacyTokenStorage();
+  return null;
 }
 
 // ---- Auth API calls --------------------------------------------------------
 
-/** Log in, persist the returned tokens, and return them. */
+/** Log in. The backend sets HttpOnly auth cookies; nothing is stored client-side. */
 export async function login(
   credentials: LoginRequest,
 ): Promise<LoginResponse> {
-  const tokens = await apiFetch<LoginResponse>("/auth/login/", {
+  const result = await apiFetch<LoginResponse>("/auth/login/", {
     method: "POST",
     body: credentials,
   });
-  saveTokens(tokens);
-  return tokens;
+  cleanupLegacyTokenStorage();
+  return result;
 }
 
 /**
- * Register a new account.
- *
- * The current backend register endpoint returns the created user (no tokens),
+ * Register a new account. The backend returns the created user (no auto-login),
  * so callers should redirect to /login afterwards.
  */
 export async function register(payload: RegisterRequest): Promise<User> {
@@ -77,11 +63,9 @@ export async function register(payload: RegisterRequest): Promise<User> {
 }
 
 /**
- * Exchange a verified Google ID token for DueNest tokens via the backend.
- *
- * NOTE: this is wired to the backend contract but is not yet called from the
- * UI — the "Continue with Google" buttons stay disabled until the Google
- * Identity client is configured. We never fake a Google login.
+ * Exchange a verified Google ID token for a DueNest session (cookies set by the
+ * backend). Not yet called from the UI — Google buttons stay disabled until the
+ * Identity client is configured; we never fake a Google login.
  */
 export async function googleLogin(
   payload: GoogleAuthRequest,
@@ -90,33 +74,39 @@ export async function googleLogin(
     method: "POST",
     body: payload,
   });
-  saveTokens(result);
+  cleanupLegacyTokenStorage();
   return result;
 }
 
-/** Fetch the currently authenticated user using the stored access token. */
+/** Fetch the currently authenticated user (cookie-authenticated). */
 export async function getCurrentUser(): Promise<User> {
-  return apiFetch<User>("/users/me/", { auth: true });
+  return apiFetch<User>("/users/me/");
 }
 
 /**
- * Use the stored refresh token to obtain a fresh access token, persisting it.
- * Returns the new access token, or null if there is no refresh token.
+ * Refresh the session using the refresh cookie. Returns true on success. The
+ * API client refreshes automatically on 401; this is for explicit callers.
  */
-export async function refreshAccessToken(): Promise<string | null> {
-  const refresh = getRefreshToken();
-  if (!refresh) return null;
-
-  const data = await apiFetch<{ access: string; refresh?: string }>(
-    "/auth/refresh/",
-    { method: "POST", body: { refresh } },
-  );
-
-  saveTokens({ access: data.access, refresh: data.refresh ?? refresh });
-  return data.access;
+export async function refreshSession(): Promise<boolean> {
+  try {
+    await apiFetch("/auth/refresh/", { method: "POST", body: {} });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
-/** Clear local tokens. (Backend logout/blacklist can be wired in later.) */
-export function logout(): void {
-  clearTokens();
+/**
+ * Log out: ask the backend to blacklist the refresh token and clear cookies,
+ * and clean up any legacy localStorage tokens. Best-effort — resolves even if
+ * the network call fails so logout always feels immediate.
+ */
+export async function logout(): Promise<void> {
+  try {
+    await apiFetch("/auth/logout/", { method: "POST", body: {} });
+  } catch {
+    // ignore — cookies will expire and the user is treated as logged out
+  } finally {
+    cleanupLegacyTokenStorage();
+  }
 }

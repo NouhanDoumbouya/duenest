@@ -3,8 +3,11 @@
 // extraction foundation. All calls go through the shared `apiFetch` so token
 // and error handling stay in one place.
 
-import { API_BASE_URL, ApiError, apiFetch } from "./api";
+import { API_BASE_URL, ApiError, apiFetch, readCookie } from "./api";
 import { getAccessToken } from "./auth";
+
+const CSRF_COOKIE_NAME =
+  process.env.NEXT_PUBLIC_CSRF_COOKIE_NAME ?? "duenest_csrftoken";
 import type { Paginated } from "@/types/documents";
 import type {
   ApplyExtractionResponse,
@@ -287,7 +290,7 @@ async function getBundleExportBlob(
   try {
     response = await fetch(
       `${API_BASE_URL}/document-bundles/${bundleId}/exports/${exportId}/download/`,
-      { headers },
+      { headers, credentials: "include" },
     );
   } catch {
     throw new ApiError("Unable to reach the server. Please try again.", 0, null);
@@ -355,12 +358,16 @@ async function postZipAndSave(
   const token = getAccessToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
   if (body) headers.set("Content-Type", "application/json");
+  // Unsafe (POST) cookie-authenticated request: send the CSRF token.
+  const csrf = readCookie(CSRF_COOKIE_NAME);
+  if (csrf) headers.set("X-CSRFToken", csrf);
 
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
       method: "POST",
       headers,
+      credentials: "include",
       body: body ? JSON.stringify(body) : undefined,
     });
   } catch {

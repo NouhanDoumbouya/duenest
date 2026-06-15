@@ -1,13 +1,20 @@
 // Minimal fetch wrapper for talking to the DueNest backend.
 //
-// Keep this dependency-free and predictable: a single `apiFetch` helper that
-// adds JSON headers, attaches the dev access token, and normalizes errors into
-// a typed `ApiError` the UI can render.
+// Auth model: tokens live in HttpOnly cookies set by the backend. The browser
+// sends them automatically, so every request uses `credentials: "include"`.
+// JavaScript never reads the access/refresh tokens. For unsafe methods we send
+// the CSRF token (double-submit) read from the readable CSRF cookie.
 
-import { getAccessToken } from "./auth";
-
+// Default to the SAME-ORIGIN path so the Next rewrite (see next.config.ts)
+// proxies to the backend and auth cookies stay first-party. Override with an
+// absolute URL only for a split-origin setup (then handle CORS/CSRF/cookies).
 export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api/v1";
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api/v1";
+
+const CSRF_COOKIE_NAME =
+  process.env.NEXT_PUBLIC_CSRF_COOKIE_NAME ?? "duenest_csrftoken";
+
+const UNSAFE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 /** Error thrown for any non-2xx response, carrying status + parsed body. */
 export class ApiError extends Error {
@@ -28,14 +35,29 @@ interface ApiFetchOptions extends Omit<RequestInit, "body"> {
    * is sent as multipart (the browser sets the boundary). Omit for GET/DELETE.
    */
   body?: unknown;
-  /** Attach the stored access token as a Bearer header. Default: false. */
+  /**
+   * Deprecated/no-op: authentication now flows through HttpOnly cookies, which
+   * are always sent. Kept so existing call sites compile unchanged.
+   */
   auth?: boolean;
+  /** Internal: prevents infinite refresh loops. */
+  _retried?: boolean;
 }
 
-/**
- * Try to read a useful message out of a DRF error body, which can look like
- * `{ "detail": "..." }`, `{ "field": ["msg"] }`, or a plain string.
- */
+/** Read a browser cookie value by name (CSRF token is readable; tokens are not). */
+export function readCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = document.cookie.match(new RegExp(`(?:^|; )${escaped}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function withCsrf(headers: Headers): Headers {
+  const token = readCookie(CSRF_COOKIE_NAME);
+  if (token) headers.set("X-CSRFToken", token);
+  return headers;
+}
+
 function extractErrorMessage(data: unknown, fallback: string): string {
   if (typeof data === "string" && data) return data;
   if (data && typeof data === "object") {
@@ -50,12 +72,37 @@ function extractErrorMessage(data: unknown, fallback: string): string {
   return fallback;
 }
 
+// Single-flight refresh so a burst of 401s triggers only one refresh call.
+let refreshInFlight: Promise<boolean> | null = null;
+
+function tryRefresh(): Promise<boolean> {
+  if (!refreshInFlight) {
+    refreshInFlight = fetch(`${API_BASE_URL}/auth/refresh/`, {
+      method: "POST",
+      headers: withCsrf(new Headers({ "Content-Type": "application/json" })),
+      credentials: "include",
+      body: "{}",
+    })
+      .then((res) => res.ok)
+      .catch(() => false)
+      .finally(() => {
+        refreshInFlight = null;
+      });
+  }
+  return refreshInFlight;
+}
+
 export async function apiFetch<T>(
   path: string,
-  { body, auth = false, headers, ...init }: ApiFetchOptions = {},
+  options: ApiFetchOptions = {},
 ): Promise<T> {
+  // `auth` is accepted for backward compatibility but ignored (cookies are
+  // always sent); make sure it isn't forwarded to fetch().
+  const { body, _retried, headers, auth, ...init } = options;
+  void auth;
   const isFormData =
     typeof FormData !== "undefined" && body instanceof FormData;
+  const method = (init.method ?? "GET").toUpperCase();
 
   const requestHeaders = new Headers(headers);
   requestHeaders.set("Accept", "application/json");
@@ -64,16 +111,15 @@ export async function apiFetch<T>(
   if (body !== undefined && !isFormData) {
     requestHeaders.set("Content-Type", "application/json");
   }
-  if (auth) {
-    const token = getAccessToken();
-    if (token) requestHeaders.set("Authorization", `Bearer ${token}`);
-  }
+  if (UNSAFE_METHODS.has(method)) withCsrf(requestHeaders);
 
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
       ...init,
+      method,
       headers: requestHeaders,
+      credentials: "include",
       body:
         body === undefined
           ? undefined
@@ -84,6 +130,15 @@ export async function apiFetch<T>(
   } catch {
     // Network-level failure (server down, CORS, offline).
     throw new ApiError("Unable to reach the server. Please try again.", 0, null);
+  }
+
+  // On 401, attempt a single token refresh and replay the request once. Skip
+  // the auth endpoints themselves to avoid refresh loops.
+  if (response.status === 401 && !_retried && !path.startsWith("/auth/")) {
+    const refreshed = await tryRefresh();
+    if (refreshed) {
+      return apiFetch<T>(path, { ...init, body, headers, _retried: true });
+    }
   }
 
   // 204 No Content and other empty bodies should not be JSON-parsed.

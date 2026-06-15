@@ -7,9 +7,25 @@ DEBUG = True
 
 ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
 
+# Recommended dev setup: open the app at any host (localhost / 127.0.0.1 / LAN
+# IP) and let Next proxy /api/v1/* to this backend (see frontend/next.config.ts +
+# NEXT_PUBLIC_API_BASE_URL=/api/v1). That keeps the auth cookies first-party.
+#
+# If you open the app from a LAN IP (e.g. http://172.16.114.9:3000), add that
+# origin so Django trusts it for CSRF on authenticated writes:
+#   DJANGO_DEV_EXTRA_ORIGINS=http://172.16.114.9:3000
+_DEV_EXTRA_ORIGINS = config("DJANGO_DEV_EXTRA_ORIGINS", default="", cast=Csv())  # noqa: F405
+
+CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    *_DEV_EXTRA_ORIGINS,
+]
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    *_DEV_EXTRA_ORIGINS,
 ]
 
 # Local development / test encryption key. If a real key is provided via the

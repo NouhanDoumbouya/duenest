@@ -27,7 +27,7 @@ import {
 import { Logo } from "@/components/layout/logo";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { getAccessToken, logout } from "@/lib/auth";
+import { logout } from "@/lib/auth";
 import { getFounderMe } from "@/lib/founder";
 import { cn } from "@/lib/utils";
 
@@ -108,11 +108,8 @@ export function FounderShell({ children }: { children: ReactNode }) {
   const [allowed, setAllowed] = useState<boolean | null>(null);
 
   useEffect(() => {
-    if (!getAccessToken()) {
-      router.replace("/login");
-      return;
-    }
-
+    // Middleware already requires a session to reach /founder; here we verify
+    // founder/staff role with the backend (the API client refreshes on 401).
     let active = true;
     getFounderMe()
       .then(() => active && setAllowed(true))

@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/file-preview-dialog";
 import { Input } from "@/components/ui/input";
 import { ApiError } from "@/lib/api";
-import { getAccessToken } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
 import { formatFileSize } from "@/lib/document-files";
 import {
   acceptQuickShare,
@@ -87,6 +87,8 @@ export default function QuickShareClaimPage() {
   const [accessCode, setAccessCode] = useState<string | undefined>(undefined);
 
   const [codeInput, setCodeInput] = useState("");
+  // Cookie tokens aren't JS-readable; derive login state from /users/me/.
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [codeError, setCodeError] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
 
@@ -111,6 +113,17 @@ export default function QuickShareClaimPage() {
     }
   }
   useEffect(() => () => revokePreviewUrl(), []);
+
+  // Resolve whether the visitor is signed in (account-mode receive flow).
+  useEffect(() => {
+    let active = true;
+    getCurrentUser()
+      .then(() => active && setIsLoggedIn(true))
+      .catch(() => active && setIsLoggedIn(false));
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Stable appliers so both the load effect and the action handlers share the
   // same state transitions without putting synchronous setState in the effect.
@@ -305,7 +318,6 @@ export default function QuickShareClaimPage() {
   const accepted = metadata?.claim_status === "accepted";
   const awaitingApproval = metadata?.claim_approval === "pending";
   const declined = metadata?.claim_status === "declined";
-  const isLoggedIn = typeof window !== "undefined" && Boolean(getAccessToken());
 
   // A logged-in account-mode receiver must accept before file actions appear.
   const canUseFiles =
