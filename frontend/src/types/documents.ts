@@ -112,6 +112,7 @@ export interface DocumentRecord {
   // Soft delete (trash).
   is_trashed: boolean;
   trashed_at: string | null;
+  days_until_permanent_deletion: number | null;
   computed_status: DocumentComputedStatus;
   status_label: string;
   status_reason: string;

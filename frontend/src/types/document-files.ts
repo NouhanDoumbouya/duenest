@@ -17,6 +17,7 @@ export interface DocumentFile {
   is_previewable: boolean;
   is_trashed: boolean;
   trashed_at: string | null;
+  days_until_permanent_deletion: number | null;
   created_at: string;
   updated_at: string;
 }

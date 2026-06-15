@@ -192,6 +192,11 @@ STORAGES = build_storages(lambda key, default="": config(key, default=default))
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# How long trashed documents/files are kept before the `purge_expired_trash`
+# management command permanently removes them. Powers the "days until permanent
+# deletion" countdown shown in Trash. Set to 0 to disable auto-purge.
+TRASH_RETENTION_DAYS = config("TRASH_RETENTION_DAYS", default=30, cast=int)
+
 # Email/reminder delivery (see docs/EMAIL_REMINDERS.md). Provider-neutral:
 # EMAIL_PROVIDER selects console (dev default), smtp, or a known provider
 # (resend/postmark/sendgrid/mailgun/ses) over SMTP — no paid credentials are
