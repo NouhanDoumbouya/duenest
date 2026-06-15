@@ -6,7 +6,6 @@ import {
   CheckSquare,
   Download,
   Eye,
-  FileText,
   FolderInput,
   Loader2,
   Plus,
@@ -17,6 +16,7 @@ import {
 } from "lucide-react";
 
 import { DocumentFileViewer } from "@/components/documents/document-file-viewer";
+import { FileThumbnail } from "@/components/documents/file-thumbnail";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -541,9 +541,7 @@ export default function FileInboxPage() {
                       aria-label={`Select ${file.original_filename}`}
                       className="mt-2.5 size-4 shrink-0 cursor-pointer accent-primary"
                     />
-                    <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
-                      <FileText className="size-5" />
-                    </span>
+                    <FileThumbnail file={file} />
                     <div className="min-w-0">
                       <h3 className="truncate font-medium">
                         {file.original_filename}
