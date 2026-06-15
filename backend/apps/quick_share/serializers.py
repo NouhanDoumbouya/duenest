@@ -67,6 +67,9 @@ class QuickShareCreateSerializer(serializers.Serializer):
     )
     title = serializers.CharField(max_length=255, required=False, allow_blank=True)
     purpose = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    recipient_label = serializers.CharField(
+        max_length=255, required=False, allow_blank=True
+    )
     permission = serializers.ChoiceField(
         choices=QuickShareSession.Permission.choices,
         default=QuickShareSession.Permission.VIEW_ONLY,
@@ -166,6 +169,7 @@ class QuickShareSessionSerializer(serializers.ModelSerializer):
             "share_method",
             "title",
             "purpose",
+            "recipient_label",
             "permission",
             "download_allowed",
             "save_copy_allowed",
@@ -222,6 +226,8 @@ class QuickShareListItemSerializer(serializers.ModelSerializer):
     is_expired = serializers.BooleanField(read_only=True)
     is_revoked = serializers.BooleanField(read_only=True)
     short_id = serializers.CharField(read_only=True)
+    dn_code = serializers.CharField(read_only=True)
+    claim_path = serializers.SerializerMethodField()
     file_count = serializers.SerializerMethodField()
 
     class Meta:
@@ -232,6 +238,7 @@ class QuickShareListItemSerializer(serializers.ModelSerializer):
             "share_method",
             "title",
             "purpose",
+            "recipient_label",
             "permission",
             "download_allowed",
             "status",
@@ -242,10 +249,15 @@ class QuickShareListItemSerializer(serializers.ModelSerializer):
             "claim_count",
             "access_code_required",
             "short_id",
+            "dn_code",
+            "claim_path",
             "file_count",
             "created_at",
             "last_accessed_at",
         ]
+
+    def get_claim_path(self, obj):
+        return f"/quick-share/{obj.token}"
 
     def get_file_count(self, obj):
         # Count the files actually exposed (bundle/document items expand to
@@ -268,6 +280,7 @@ class QuickSharePublicSerializer(serializers.Serializer):
     mode = serializers.CharField()
     title = serializers.CharField()
     purpose = serializers.CharField()
+    recipient_label = serializers.CharField()
     permission = serializers.CharField()
     download_allowed = serializers.BooleanField()
     save_copy_allowed = serializers.BooleanField()
@@ -294,6 +307,7 @@ def build_public_payload(session, *, claim=None, viewer=None) -> dict:
         "mode": session.mode,
         "title": session.title or "Shared files",
         "purpose": session.purpose,
+        "recipient_label": session.recipient_label,
         "permission": session.permission,
         "download_allowed": session.download_allowed,
         "save_copy_allowed": session.save_copy_allowed,

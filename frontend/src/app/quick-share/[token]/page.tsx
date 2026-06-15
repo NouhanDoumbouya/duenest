@@ -401,6 +401,11 @@ export default function QuickShareClaimPage() {
                         {metadata.title}
                       </p>
                     )}
+                    {(metadata.recipient_label || metadata.purpose) && (
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        For: {metadata.recipient_label || metadata.purpose}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -570,6 +575,13 @@ export default function QuickShareClaimPage() {
             </div>
           ) : null}
         </section>
+
+        <footer className="mt-auto border-t border-border pt-4 pb-2 text-center">
+          <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+            <ShieldCheck className="size-3.5 text-brand-success" />
+            Shared securely through DueNest. Access is controlled by the sender.
+          </p>
+        </footer>
       </div>
     </main>
   );

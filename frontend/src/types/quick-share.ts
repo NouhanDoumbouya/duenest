@@ -65,6 +65,7 @@ export interface QuickShareSession {
   share_method: QuickShareMethod;
   title: string;
   purpose: string;
+  recipient_label: string;
   permission: QuickSharePermission;
   download_allowed: boolean;
   save_copy_allowed: boolean;
@@ -100,6 +101,7 @@ export interface QuickShareListItem {
   share_method: QuickShareMethod;
   title: string;
   purpose: string;
+  recipient_label: string;
   permission: QuickSharePermission;
   download_allowed: boolean;
   status: QuickShareStatus;
@@ -110,6 +112,8 @@ export interface QuickShareListItem {
   claim_count: number;
   access_code_required: boolean;
   short_id: string;
+  dn_code: string;
+  claim_path: string;
   file_count: number;
   created_at: string;
   last_accessed_at: string | null;
@@ -129,6 +133,7 @@ export interface CreateQuickSharePayload {
   share_method?: QuickShareMethod;
   title?: string;
   purpose?: string;
+  recipient_label?: string;
   permission: QuickSharePermission;
   expires_at: string;
   access_code_required: boolean;
@@ -146,6 +151,7 @@ export interface QuickSharePublic {
   mode: QuickShareMode;
   title: string;
   purpose: string;
+  recipient_label: string;
   permission: QuickSharePermission;
   download_allowed: boolean;
   save_copy_allowed: boolean;
