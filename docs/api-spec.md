@@ -973,41 +973,6 @@ they behave like document files.
 | `POST`   | `/api/v1/files/:file_id/create-document/` | Create a new document from the inbox file |
 | `GET`    | `/api/v1/files/check-duplicate/?filename=` | Whether the user already has a non-trashed file with this name (owner-scoped), to warn before duplicate uploads |
 
-### Document Scanner API
-
-The in-browser scanner (`/dashboard/scanner`) captures a document, flattens and
-enhances it, builds a PDF client-side, and uploads it here. The scanned PDF
-becomes a normal owner-scoped **inbox file** through the existing encrypted
-storage pipeline; OCR text (best effort) is stored as a `DocumentExtraction`.
-
-| Method | Path | Description |
-| ------ | ---- | ----------- |
-| `POST` | `/api/v1/scanner/upload-scanned-document/` | Upload a scanned PDF (or imported image). Multipart field `file`. |
-
-Authenticated (owner). Rate-limited per user (DRF throttle scope `scanner_upload`,
-`30/min`) and counts against the file plan limit. Validates size
-(`SCANNER_MAX_UPLOAD_MB`), MIME (`SCANNER_ALLOWED_MIME_TYPES`), and PDF structure;
-optional ClamAV malware scan (`CLAMD_ENABLED`); lossless `pypdf` compression.
-
-Success (`201`):
-
-```json
-{
-  "status": "success",
-  "document_id": 123,
-  "file_uuid": "…",
-  "preview_url": "<secure preview route>",
-  "download_url": "<secure download route>",
-  "ocr_text_stored": true,
-  "size_bytes": 84211
-}
-```
-
-Raw storage paths are never returned. Errors return `{"error": "…"}` with status
-`400` (invalid/malware), `413` (too large), `415` (unsupported type), `422`
-(OCR required and failed), `429` (rate limited), or `503` (malware scan
-unavailable, fail-closed). See `docs/DOCUMENT_SCANNER.md` for the full design.
-
 `create-document/` accepts optional `title`, `document_type`, `notes`,
 `expiry_date`, `issue_date`, `category` (a system or the caller's own category
 id — others are ignored), `country`, and `reference_number`, so metadata can be
@@ -1554,27 +1519,52 @@ bundle_metadata_json | bundle_requirements_csv
 Bundle export types are rejected by `/api/v1/document-exports/`; vault-wide
 export types are rejected by the bundle export endpoint.
 
-## 13C.3 Emergency access packs
+## 13C.3 Emergency access packs (Emergency Protocol)
 
 Emergency packs are owner-selected document/file collections. A pack never
 grants access to the whole vault, and public responses expose only safe item
 metadata plus preview/download routes for selected files.
 
+Each pack has an **unlock rule** (`unlock_mode`) governing what happens when a
+trusted person opens the public link:
+
+- `delayed` (recommended default for new packs): a request starts a countdown of
+  `unlock_delay_hours` and unlocks automatically unless the owner denies it.
+- `owner_approval`: access opens only when the owner approves the request.
+- `instant_code`: the QR + access code open selected documents immediately.
+- `disabled_until_activated`: prepared but closed until the owner activates.
+
+Additional pack fields: `access_duration_minutes` (how long an unlocked request
+stays open; null = until pack expiry/revoke), `allow_downloads`, optional
+off-by-default location (`location_enabled`, `location_precision`,
+`last_known_location`, `last_known_location_at`), and `last_reviewed_at`.
+
 | Method | Path | Description |
 | --- | --- | --- |
 | `GET` | `/api/v1/emergency-packs/` | List the user's packs |
-| `POST` | `/api/v1/emergency-packs/` | Create a pack |
+| `POST` | `/api/v1/emergency-packs/` | Create a pack (defaults to `delayed`) |
 | `GET` | `/api/v1/emergency-packs/:pack_id/` | Retrieve a pack |
-| `PATCH` | `/api/v1/emergency-packs/:pack_id/` | Update a pack |
+| `PATCH` | `/api/v1/emergency-packs/:pack_id/` | Update a pack (incl. `unlock_mode`, `unlock_delay_hours`, `allow_downloads`) |
 | `DELETE` | `/api/v1/emergency-packs/:pack_id/` | Delete a pack |
 | `POST` | `/api/v1/emergency-packs/:pack_id/items/` | Add an owner-owned document/file |
 | `DELETE` | `/api/v1/emergency-packs/:pack_id/items/:item_id/` | Remove an item |
 | `POST` | `/api/v1/emergency-packs/:pack_id/enable/` | Activate the pack |
 | `POST` | `/api/v1/emergency-packs/:pack_id/disable/` | Disable public access |
 | `POST` | `/api/v1/emergency-packs/:pack_id/regenerate-link/` | Rotate the public token |
+| `POST` | `/api/v1/emergency-packs/:pack_id/review/` | Mark the setup as freshly reviewed |
+| `GET`/`POST` | `/api/v1/emergency-packs/:pack_id/contacts/` | List / add trusted contacts |
+| `PATCH`/`DELETE` | `/api/v1/emergency-packs/:pack_id/contacts/:contact_id/` | Edit / remove a trusted contact |
+| `POST` | `/api/v1/emergency-packs/:pack_id/location/` | Toggle / update the optional last-known location |
+| `GET` | `/api/v1/emergency-packs/:pack_id/activity/` | Emergency activity log (latest 100) |
+| `GET` | `/api/v1/emergency-packs/:pack_id/unlock-requests/` | List unlock requests (settles due countdowns) |
+| `POST` | `/api/v1/emergency-packs/:pack_id/unlock-requests/:req_id/approve/` | Approve a request |
+| `POST` | `/api/v1/emergency-packs/:pack_id/unlock-requests/:req_id/deny/` | Deny a request |
+| `POST` | `/api/v1/emergency-packs/:pack_id/unlock-requests/:req_id/revoke/` | Revoke access |
 
 If `access_code_required` is true, `access_code` must be supplied. The code is
-write-only and stored hashed; it is never returned by the API.
+write-only and stored hashed; it is never returned by the API. Trusted contacts
+never receive credentials automatically — storing a contact does not grant
+access; access is always governed by the unlock rules.
 
 While a pack is shareable, the owner serializer returns two relative paths:
 `share_url_path` (the public JSON API path) and `public_url_path`
@@ -1585,16 +1575,27 @@ Public emergency-pack endpoints:
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `GET` | `/api/v1/share/emergency-packs/:token/` | Public pack metadata after code check |
+| `GET` | `/api/v1/share/emergency-packs/:token/` | Public pack metadata. Items are only included when access is open; request-gated packs return `access_state: "request_required"` with empty items. |
+| `POST` | `/api/v1/share/emergency-packs/:token/request/` | Start an unlock request (verifies access code if required). Returns `request_token` + `status` + `unlock_at`, or `{state: "open"}` for instant packs. |
+| `GET` | `/api/v1/share/emergency-packs/:token/request/:request_token/` | Poll request status; settles a due countdown and includes items + location once unlocked. |
 | `POST` | `/api/v1/share/emergency-packs/:token/verify-code/` | Verify a pack access code |
-| `GET` | `/api/v1/share/emergency-packs/:token/items/:item_id/preview/` | Preview a selected file |
-| `GET` | `/api/v1/share/emergency-packs/:token/items/:item_id/download/` | Download a selected file |
+| `GET` | `/api/v1/share/emergency-packs/:token/items/:item_id/preview/` | Preview a selected file (gated by request token for request-gated packs) |
+| `GET` | `/api/v1/share/emergency-packs/:token/items/:item_id/download/` | Download a selected file (requires `allow_downloads`) |
 
-Access-code protected public requests use the same header as file share links:
+For request-gated packs the requester proves an open request with the header
+`X-Request-Token: <request_token>`. Access-code protected public requests use the
+same header as file share links:
 
 ```http
 X-Access-Code: 246810
 ```
+
+The emergency **location** is off by default and is only included in public
+responses after access is unlocked AND the owner enabled it; `approximate`
+precision withholds exact coordinates. Scans, requests, wrong-code attempts,
+approvals/denials, views, downloads, and location reveals are written to the
+pack's activity log (never storing codes or tokens), and the owner receives
+in-app notifications for requests, unlocks, downloads, and wrong-code attempts.
 
 Expired, disabled, non-share-link, or trashed-item packs return unavailable
 responses and do not expose file contents.
