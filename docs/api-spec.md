@@ -714,12 +714,18 @@ Base path:
 | `DELETE` | `/api/v1/documents/:id/permanent-delete/` | Permanently delete a trashed document |
 | `GET`    | `/api/v1/document-categories/` | List system categories + the user's own private categories |
 | `POST`   | `/api/v1/document-categories/` | Create a private category for the current user |
+| `PATCH`/`DELETE` | `/api/v1/document-categories/:id/` | Rename/restyle or delete one of the user's **own** categories |
 
 `document-categories` responses include `is_system` (true for the shared system
-vocabulary, false for the user's own). `POST` accepts `{ "name", "description?" }`
-and always assigns `owner` to the requester; names must be unique within scope
-(system vs. the user's own), returning `400` on a clash. The list never exposes
-another user's categories.
+vocabulary, false for the user's own), plus optional `icon`/`color`. `POST`
+accepts `{ "name", "description?", "icon?", "color?" }` and always assigns
+`owner` to the requester; names must be unique within scope (system vs. the
+user's own), returning `400` on a clash. The detail endpoint (`PATCH`/`DELETE`)
+only operates on the user's **own** categories — system categories return `404`
+there and are never editable. Deleting a category leaves its documents
+(`category` FK is `SET_NULL`). The documents list accepts `?category=none`
+(or `uncategorized`) to return documents with no category. The list never
+exposes another user's categories.
 
 Document responses include read-only, owner-scoped usage indicators:
 `is_shared_externally` (an active external share exists), `in_bundle` (linked by

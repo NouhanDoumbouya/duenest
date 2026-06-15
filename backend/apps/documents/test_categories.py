@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from apps.documents.models import DocumentCategory
+from apps.documents.models import Document, DocumentCategory
 
 User = get_user_model()
 
@@ -67,3 +67,57 @@ class DocumentCategoryTests(APITestCase):
         self.client.force_authenticate(self.alice)
         res = self.client.post(URL, {"name": "   "}, format="json")
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_create_with_icon_and_color(self):
+        self.client.force_authenticate(self.alice)
+        res = self.client.post(
+            URL,
+            {"name": "Travel", "icon": "plane", "color": "#2563EB"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data["icon"], "plane")
+        self.assertEqual(res.data["color"], "#2563EB")
+
+    def test_owner_can_rename_own_category(self):
+        cat = DocumentCategory.objects.create(owner=self.alice, name="Skool")
+        self.client.force_authenticate(self.alice)
+        res = self.client.patch(
+            f"{URL}{cat.id}/", {"name": "School"}, format="json"
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        cat.refresh_from_db()
+        self.assertEqual(cat.name, "School")
+
+    def test_owner_can_delete_own_category(self):
+        cat = DocumentCategory.objects.create(owner=self.alice, name="Temp")
+        self.client.force_authenticate(self.alice)
+        res = self.client.delete(f"{URL}{cat.id}/")
+        self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(DocumentCategory.objects.filter(id=cat.id).exists())
+
+    def test_cannot_edit_system_category(self):
+        self.client.force_authenticate(self.alice)
+        res = self.client.patch(
+            f"{URL}{self.system_cat.id}/", {"name": "Hacked"}, format="json"
+        )
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_cannot_edit_another_users_category(self):
+        bob_cat = DocumentCategory.objects.create(owner=self.bob, name="Bob Only")
+        self.client.force_authenticate(self.alice)
+        res = self.client.patch(
+            f"{URL}{bob_cat.id}/", {"name": "Stolen"}, format="json"
+        )
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_uncategorized_filter(self):
+        cat = DocumentCategory.objects.create(owner=self.alice, name="Travel")
+        Document.objects.create(owner=self.alice, title="In category", category=cat)
+        Document.objects.create(owner=self.alice, title="Loose doc")
+        self.client.force_authenticate(self.alice)
+        res = self.client.get("/api/v1/documents/?category=none")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        titles = {d["title"] for d in res.data["results"]}
+        self.assertIn("Loose doc", titles)
+        self.assertNotIn("In category", titles)

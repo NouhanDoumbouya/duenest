@@ -285,7 +285,9 @@ class DocumentViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(status=params["status"])
         if params.get("category"):
             category = params["category"].strip()
-            if category.isdigit():
+            if category.lower() in {"none", "uncategorized"}:
+                queryset = queryset.filter(category__isnull=True)
+            elif category.isdigit():
                 queryset = queryset.filter(category_id=int(category))
             else:
                 queryset = queryset.filter(category__slug=category)
@@ -800,6 +802,20 @@ class DocumentCategoryListView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         # New categories are always private to the creating user.
         serializer.save(owner=self.request.user)
+
+
+class DocumentCategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    Rename / restyle / delete one of the user's **own** categories. System
+    categories (owner is null) are never returned here, so they cannot be edited
+    or deleted. Deleting a category leaves its documents (FK is SET_NULL).
+    """
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = DocumentCategorySerializer
+
+    def get_queryset(self):
+        return DocumentCategory.objects.filter(owner=self.request.user)
 
 
 class FileInboxListCreateView(generics.ListCreateAPIView):

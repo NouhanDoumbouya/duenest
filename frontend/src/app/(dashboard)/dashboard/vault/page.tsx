@@ -191,10 +191,6 @@ export default function VaultPage() {
 
   const isEmptyVault = !loading && state.total === 0;
   const inboxStatus = getFileInboxStatus(state?.inboxCount ?? 0);
-  const categoryNames = new Set(
-    (state?.categories ?? []).map((c) => c.name.toLowerCase()),
-  );
-
   function handleCategoryCreated(category: DocumentCategory) {
     setState((prev) =>
       prev
@@ -203,6 +199,27 @@ export default function VaultPage() {
             categories: [category, ...prev.categories],
             categoryCounts: { ...prev.categoryCounts, [category.id]: 0 },
           }
+        : prev,
+    );
+  }
+
+  function handleCategoryUpdated(category: DocumentCategory) {
+    setState((prev) =>
+      prev
+        ? {
+            ...prev,
+            categories: prev.categories.map((c) =>
+              c.id === category.id ? category : c,
+            ),
+          }
+        : prev,
+    );
+  }
+
+  function handleCategoryDeleted(id: number) {
+    setState((prev) =>
+      prev
+        ? { ...prev, categories: prev.categories.filter((c) => c.id !== id) }
         : prev,
     );
   }
@@ -540,9 +557,21 @@ export default function VaultPage() {
                         ))}
                       </div>
                     )}
+                    <Link
+                      href="/dashboard/documents?category=none"
+                      className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-dashed border-border px-3 py-2 text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+                    >
+                      <span className="flex items-center gap-2">
+                        <FolderOpen className="size-4" aria-hidden />
+                        Uncategorized documents
+                      </span>
+                      <span className="text-xs">Organize</span>
+                    </Link>
                     <CategoryCreator
-                      existingNames={categoryNames}
+                      categories={state.categories}
                       onCreated={handleCategoryCreated}
+                      onUpdated={handleCategoryUpdated}
+                      onDeleted={handleCategoryDeleted}
                     />
                   </div>
                 )}

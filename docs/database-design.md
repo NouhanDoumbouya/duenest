@@ -1422,7 +1422,8 @@ branch. Every user-owned model is scoped to its owner and follows the existing
 ### DocumentCategory — *Implemented*
 - **Purpose:** grouping for documents (Passport, Visa, Insurance…). System
   categories (shared) plus optional per-user private categories.
-- **Key fields:** `owner` (nullable), `name`, `slug`, `description`, timestamps.
+- **Key fields:** `owner` (nullable), `name`, `slug`, `description`, `icon`,
+  `color`, timestamps.
 - **Relationships:** `owner → User` (nullable); referenced by many `Document`.
 - **Security:** system categories (`owner` null) are shared, read-only reference
   data; user categories are private to their owner. The list/create endpoint

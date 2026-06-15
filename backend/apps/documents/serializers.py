@@ -99,6 +99,8 @@ class DocumentCategorySerializer(serializers.ModelSerializer):
             "name",
             "slug",
             "description",
+            "icon",
+            "color",
             "is_system",
             "created_at",
             "updated_at",
