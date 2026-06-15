@@ -32,7 +32,7 @@ import {
 } from "@/lib/documents";
 import { getTags } from "@/lib/tags";
 import { cn } from "@/lib/utils";
-import { sortDocumentsByRisk } from "@/lib/vault";
+import { getDeleteWarning, sortDocumentsByRisk } from "@/lib/vault";
 import type {
   DocumentCategory,
   DocumentListParams,
@@ -652,7 +652,12 @@ function DocumentsPageInner() {
         title="Move document to trash?"
         description={
           pendingDelete
-            ? `"${pendingDelete.title}" will be moved to Trash. You can restore it later, or delete it permanently from there.`
+            ? [
+                `"${pendingDelete.title}" will be moved to Trash. You can restore it later, or delete it permanently from there.`,
+                getDeleteWarning(pendingDelete),
+              ]
+                .filter(Boolean)
+                .join(" ")
             : ""
         }
         confirmLabel="Move to trash"
