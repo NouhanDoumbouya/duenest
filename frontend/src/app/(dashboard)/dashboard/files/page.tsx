@@ -37,10 +37,10 @@ import {
   uploadInboxFileWithProgress,
   validateFile,
 } from "@/lib/document-files";
-import { getDocuments } from "@/lib/documents";
+import { getDocuments, listDocumentCategories } from "@/lib/documents";
 import { cn } from "@/lib/utils";
 import type { DocumentFile } from "@/types/document-files";
-import type { DocumentRecord } from "@/types/documents";
+import type { DocumentCategory, DocumentRecord } from "@/types/documents";
 
 interface UploadProgress {
   id: string;
@@ -78,17 +78,25 @@ export default function FileInboxPage() {
   const [newDocTitle, setNewDocTitle] = useState<Record<number, string>>({});
   const [newDocType, setNewDocType] = useState<Record<number, string>>({});
   const [newDocNotes, setNewDocNotes] = useState<Record<number, string>>({});
+  const [newDocExpiry, setNewDocExpiry] = useState<Record<number, string>>({});
+  const [newDocCategory, setNewDocCategory] = useState<Record<number, string>>({});
+  const [categories, setCategories] = useState<DocumentCategory[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [confirmBulk, setConfirmBulk] = useState(false);
 
   useEffect(() => {
     let active = true;
-    Promise.all([getFileInbox(), getDocuments({ ordering: "title" })])
-      .then(([fileResult, documentResult]) => {
+    Promise.all([
+      getFileInbox(),
+      getDocuments({ ordering: "title" }),
+      listDocumentCategories(),
+    ])
+      .then(([fileResult, documentResult, categoryResult]) => {
         if (!active) return;
         setFiles(fileResult.results);
         setDocuments(documentResult.results);
+        setCategories(categoryResult);
       })
       .catch((err) => {
         if (!active) return;
@@ -203,6 +211,8 @@ export default function FileInboxPage() {
         title: newDocTitle[file.id],
         document_type: newDocType[file.id],
         notes: newDocNotes[file.id],
+        ...(newDocExpiry[file.id] ? { expiry_date: newDocExpiry[file.id] } : {}),
+        ...(newDocCategory[file.id] ? { category: newDocCategory[file.id] } : {}),
       });
       setFiles((current) => (current ?? []).filter((item) => item.id !== file.id));
       setDocuments((current) => [result.document, ...current]);
@@ -655,6 +665,53 @@ export default function FileInboxPage() {
                         }))
                       }
                     />
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label
+                          htmlFor={`expiry-${file.id}`}
+                          className="text-xs text-muted-foreground"
+                        >
+                          Expiry date
+                        </Label>
+                        <Input
+                          id={`expiry-${file.id}`}
+                          type="date"
+                          value={newDocExpiry[file.id] ?? ""}
+                          onChange={(event) =>
+                            setNewDocExpiry((current) => ({
+                              ...current,
+                              [file.id]: event.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div>
+                        <Label
+                          htmlFor={`category-select-${file.id}`}
+                          className="text-xs text-muted-foreground"
+                        >
+                          Category
+                        </Label>
+                        <select
+                          id={`category-select-${file.id}`}
+                          value={newDocCategory[file.id] ?? ""}
+                          onChange={(event) =>
+                            setNewDocCategory((current) => ({
+                              ...current,
+                              [file.id]: event.target.value,
+                            }))
+                          }
+                          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                        >
+                          <option value="">No category</option>
+                          {categories.map((category) => (
+                            <option key={category.id} value={category.id}>
+                              {category.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
                     <Textarea
                       value={newDocNotes[file.id] ?? ""}
                       placeholder="Notes"

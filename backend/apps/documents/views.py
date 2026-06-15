@@ -1044,11 +1044,28 @@ class FileInboxCreateDocumentView(APIView):
         title = (request.data.get("title") or "").strip()
         if not title:
             title = file.original_filename.rsplit(".", 1)[0] or file.original_filename
+        # Optional metadata captured during the post-upload "what is this?" flow.
+        category = None
+        raw_category = request.data.get("category")
+        if raw_category:
+            try:
+                category = DocumentCategory.objects.filter(
+                    Q(owner__isnull=True) | Q(owner=request.user),
+                    pk=int(raw_category),
+                ).first()
+            except (TypeError, ValueError):
+                category = None
+        reference_number = (request.data.get("reference_number") or "").strip()
         document = Document.objects.create(
             owner=request.user,
             title=title[:255],
             document_type=(request.data.get("document_type") or "").strip()[:100],
             notes=(request.data.get("notes") or "").strip(),
+            category=category,
+            country=(request.data.get("country") or "").strip()[:100],
+            reference_number=reference_number[:255] or None,
+            issue_date=parse_date((request.data.get("issue_date") or "").strip() or ""),
+            expiry_date=parse_date((request.data.get("expiry_date") or "").strip() or ""),
         )
         file.document = document
         file.save(update_fields=["document", "updated_at"])

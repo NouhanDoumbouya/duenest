@@ -234,6 +234,11 @@ export function createDocumentFromInboxFile(
     title?: string;
     document_type?: string;
     notes?: string;
+    category?: number | string;
+    expiry_date?: string;
+    issue_date?: string;
+    country?: string;
+    reference_number?: string;
   },
 ): Promise<{ document: DocumentRecord; file: DocumentFile }> {
   return apiFetch<{ document: DocumentRecord; file: DocumentFile }>(
