@@ -12,9 +12,18 @@ limit enforcement in apps.documents.plan_usage keeps working unchanged.
 
 from __future__ import annotations
 
+from django.db.models import F
 from django.utils import timezone
+from rest_framework import status
+from rest_framework.exceptions import APIException
 
-from .models import ManualAccessGrant, Plan, PlanEntitlement, UserSubscription
+from .models import (
+    FeatureUsageCounter,
+    ManualAccessGrant,
+    Plan,
+    PlanEntitlement,
+    UserSubscription,
+)
 
 
 def _free_plan() -> Plan | None:
@@ -145,3 +154,97 @@ def build_upgrade_context(user, feature_key: str) -> dict:
             "use the full scanner, and unlock secure sharing."
         ),
     }
+
+
+# ---- Metered usage (per-period counters) -----------------------------------
+
+
+class FeatureLimitExceeded(APIException):
+    """
+    Raised when a metered feature is over its plan limit. Uses the same
+    ``plan_limit_exceeded`` code/shape as documents.PlanLimitExceeded so the
+    frontend's global upgrade paywall picks it up automatically.
+    """
+
+    status_code = status.HTTP_403_FORBIDDEN
+    default_code = "plan_limit_exceeded"
+
+    def __init__(self, feature_key: str, limit: int):
+        nice = feature_key.replace("_", " ")
+        super().__init__(
+            detail={
+                "detail": (
+                    f"You've reached your plan limit for {nice}. "
+                    "Upgrade to Pro for more."
+                ),
+                "code": self.default_code,
+                "resource": feature_key,
+                "limit": limit,
+            },
+            code=self.default_code,
+        )
+
+
+def _period_key(period: str, now=None) -> str:
+    now = now or timezone.now()
+    if period == "month":
+        return now.strftime("%Y-%m")
+    if period == "day":
+        return now.strftime("%Y-%m-%d")
+    return "total"
+
+
+def _entitlement(user, feature_key: str):
+    return get_user_entitlements(user).get(feature_key)
+
+
+def get_usage_count(user, feature_key: str) -> int:
+    ent = _entitlement(user, feature_key)
+    period = ent["period"] if ent else "month"
+    row = FeatureUsageCounter.objects.filter(
+        user=user, feature_key=feature_key, period_key=_period_key(period)
+    ).first()
+    return row.count if row else 0
+
+
+def check_usage_limit(user, feature_key: str) -> dict:
+    """Return {allowed, limit, used, remaining, unlimited} for a metered feature."""
+    ent = _entitlement(user, feature_key)
+    # Feature disabled on this plan -> blocked. Missing entitlement -> allow
+    # (feature not metered for this plan).
+    if ent is None:
+        return {"allowed": True, "limit": None, "used": 0, "remaining": None, "unlimited": True}
+    if not ent["enabled"]:
+        return {"allowed": False, "limit": 0, "used": 0, "remaining": 0, "unlimited": False}
+    limit = ent["limit"]
+    if limit is None:
+        return {"allowed": True, "limit": None, "used": 0, "remaining": None, "unlimited": True}
+    used = get_usage_count(user, feature_key)
+    return {
+        "allowed": used < limit,
+        "limit": limit,
+        "used": used,
+        "remaining": max(limit - used, 0),
+        "unlimited": False,
+    }
+
+
+def enforce_feature_usage(user, feature_key: str) -> None:
+    """Raise FeatureLimitExceeded if the user is at/over a metered feature limit."""
+    result = check_usage_limit(user, feature_key)
+    if not result["allowed"]:
+        raise FeatureLimitExceeded(feature_key, result["limit"] or 0)
+
+
+def increment_usage(user, feature_key: str, amount: int = 1) -> None:
+    """Bump the current-period counter (no-op-safe for unlimited features)."""
+    ent = _entitlement(user, feature_key)
+    period = ent["period"] if ent else "month"
+    row, created = FeatureUsageCounter.objects.get_or_create(
+        user=user,
+        feature_key=feature_key,
+        period_key=_period_key(period),
+        defaults={"count": amount},
+    )
+    if not created:
+        FeatureUsageCounter.objects.filter(pk=row.pk).update(count=F("count") + amount)

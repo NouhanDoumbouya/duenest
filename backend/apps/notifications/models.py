@@ -84,6 +84,9 @@ class Notification(models.Model):
         SECURITY_ALERT = "security_alert", "Security alert"
         FAILED_LOGIN_WARNING = "failed_login_warning", "Failed login warning"
         STORAGE_PLAN_WARNING = "storage_plan_warning", "Storage/plan warning"
+        BILLING_PAYMENT_FAILED = "billing_payment_failed", "Billing payment failed"
+        BILLING_CANCELED = "billing_canceled", "Billing canceled"
+        BILLING_TRIAL_ENDING = "billing_trial_ending", "Billing trial ending"
         GENERIC_REMINDER = "generic_reminder", "Generic reminder"
 
     class Severity(models.TextChoices):

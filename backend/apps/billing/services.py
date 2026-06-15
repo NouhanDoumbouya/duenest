@@ -29,6 +29,39 @@ from .providers import BillingError, get_provider, get_provider_name
 VALID_INTERVALS = ("month", "year")
 
 
+def notify_billing(user, notification_type, title, message, severity="info", suffix=""):
+    """
+    Create an in-app billing notification. Imported lazily to avoid an import
+    cycle and never raises — a notification failure must not break billing.
+    """
+    if user is None:
+        return
+    try:
+        from apps.notifications.services import (
+            NotificationCandidate,
+            create_notification,
+            sanitize_metadata,
+        )
+
+        create_notification(
+            NotificationCandidate(
+                user=user,
+                type=notification_type,
+                title=title[:255],
+                message=message,
+                severity=severity,
+                source_type="billing",
+                source_id=str(user.id),
+                action_url="/dashboard/settings/billing",
+                scheduled_for=timezone.now(),
+                dedupe_key=f"billing:{user.id}:{notification_type}:{suffix}"[:255],
+                metadata=sanitize_metadata({}),
+            )
+        )
+    except Exception:  # noqa: BLE001 — notifications must never break billing
+        pass
+
+
 def get_or_create_billing_profile(user) -> CustomerBillingProfile:
     profile, _ = CustomerBillingProfile.objects.get_or_create(
         user=user,
@@ -81,17 +114,27 @@ def _activate_manual_subscription(user, plan, interval, promo_code) -> UserSubsc
     amount = plan.yearly_price if interval == "year" else plan.monthly_price
     now = timezone.now()
     period_end = now + timezone.timedelta(days=365 if interval == "year" else 30)
+    # Start a trial when the plan offers one.
+    trial_start = trial_end = None
+    sub_status = UserSubscription.Status.ACTIVE
+    if plan.trial_days:
+        trial_start = now
+        trial_end = now + timezone.timedelta(days=plan.trial_days)
+        period_end = trial_end
+        sub_status = UserSubscription.Status.TRIALING
     sub, _ = UserSubscription.objects.update_or_create(
         user=user,
         provider="manual",
         defaults=dict(
             plan=plan,
-            status=UserSubscription.Status.ACTIVE,
+            status=sub_status,
             billing_interval=interval,
             currency=plan.currency,
             amount=amount or 0,
             current_period_start=now,
             current_period_end=period_end,
+            trial_start=trial_start,
+            trial_end=trial_end,
             cancel_at_period_end=False,
             canceled_at=None,
             active_promo_code=promo_code,
@@ -334,6 +377,15 @@ def _mark_subscription_canceled(obj, record):
         sub.canceled_at = timezone.now()
         sub.save(update_fields=["status", "canceled_at", "updated_at"])
         entitlements.sync_user_plan(sub.user)
+        notify_billing(
+            sub.user,
+            "billing_canceled",
+            "Your plan was canceled",
+            "Your DueNest plan has been canceled. Your documents are safe — "
+            "resubscribe anytime to unlock Pro again.",
+            severity="warning",
+            suffix=str(sub.id),
+        )
 
 
 def _handle_checkout_completed(obj, record):
@@ -370,6 +422,15 @@ def _handle_payment_failed(obj, record):
     sub.save(update_fields=["status", "grace_period_until", "updated_at"])
     if user:
         entitlements.sync_user_plan(user)
+        notify_billing(
+            user,
+            "billing_payment_failed",
+            "Payment failed",
+            "We couldn't process your payment. Your Pro features stay active "
+            "during the grace period — update your payment method to keep Pro.",
+            severity="urgent",
+            suffix=sub.grace_period_until.strftime("%Y%m%d") if sub.grace_period_until else "",
+        )
 
 
 def _record_invoice(obj, record, paid: bool):

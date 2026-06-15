@@ -93,6 +93,8 @@ class StripeProvider:
             "metadata": {"user_id": str(user.id), "plan_key": plan.key},
             "allow_promotion_codes": True,
         }
+        if plan.trial_days:
+            params["subscription_data"] = {"trial_period_days": plan.trial_days}
         if profile and profile.provider_customer_id:
             params["customer"] = profile.provider_customer_id
         else:

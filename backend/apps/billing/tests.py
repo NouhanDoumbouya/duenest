@@ -365,3 +365,58 @@ class BillingImprovementTests(APITestCase):
         self.assertEqual(sub.status, "unpaid")
         self.user.refresh_from_db()
         self.assertEqual(self.user.plan, "free")
+
+
+@override_settings(BILLING_PROVIDER="manual", BILLING_TEST_MODE=True)
+class BillingMeteredAndTrialTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="meter", email="meter@example.com", password="StrongPassword123!DN"
+        )
+        self.pro = Plan.objects.get(key="pro")
+
+    def test_metered_feature_blocks_free_after_limit(self):
+        # Free scanner limit is 5/month.
+        res = entitlements.check_usage_limit(self.user, "scanner_scans_per_month")
+        self.assertTrue(res["allowed"])
+        self.assertEqual(res["limit"], 5)
+        for _ in range(5):
+            entitlements.increment_usage(self.user, "scanner_scans_per_month")
+        res = entitlements.check_usage_limit(self.user, "scanner_scans_per_month")
+        self.assertFalse(res["allowed"])
+        self.assertEqual(res["used"], 5)
+        with self.assertRaises(entitlements.FeatureLimitExceeded):
+            entitlements.enforce_feature_usage(self.user, "scanner_scans_per_month")
+
+    def test_metered_feature_unlimited_for_pro(self):
+        ManualAccessGrant.objects.create(
+            user=self.user, plan=self.pro,
+            grant_status=UserSubscription.Status.MANUAL_PRO,
+        )
+        for _ in range(50):
+            entitlements.increment_usage(self.user, "scanner_scans_per_month")
+        res = entitlements.check_usage_limit(self.user, "scanner_scans_per_month")
+        self.assertTrue(res["allowed"])
+        self.assertTrue(res["unlimited"])
+        entitlements.enforce_feature_usage(self.user, "scanner_scans_per_month")  # no raise
+
+    def test_metered_limit_error_uses_plan_limit_code(self):
+        try:
+            raise entitlements.FeatureLimitExceeded("scanner_scans_per_month", 5)
+        except entitlements.FeatureLimitExceeded as exc:
+            self.assertEqual(exc.detail["code"], "plan_limit_exceeded")
+            self.assertEqual(exc.detail["resource"], "scanner_scans_per_month")
+
+    def test_trial_checkout_sets_trialing(self):
+        self.pro.trial_days = 14
+        self.pro.save(update_fields=["trial_days"])
+        self.client.force_authenticate(self.user)
+        resp = self.client.post(
+            "/api/v1/billing/checkout/",
+            {"plan_key": "pro", "interval": "month"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        sub = UserSubscription.objects.get(user=self.user)
+        self.assertEqual(sub.status, "trialing")
+        self.assertIsNotNone(sub.trial_end)

@@ -68,6 +68,29 @@ class Command(BaseCommand):
                 sub.status = UserSubscription.Status.CANCELED
                 sub.save(update_fields=["status", "updated_at"])
 
+        # 4) Trial-ending reminders (within 3 days). Deduped by trial date.
+        trial_notices = 0
+        soon = now + timezone.timedelta(days=3)
+        for sub in UserSubscription.objects.filter(
+            status=UserSubscription.Status.TRIALING,
+            trial_end__isnull=False,
+            trial_end__gt=now,
+            trial_end__lte=soon,
+        ).select_related("user"):
+            trial_notices += 1
+            if not dry_run:
+                from apps.billing.services import notify_billing
+
+                notify_billing(
+                    sub.user,
+                    "billing_trial_ending",
+                    "Your trial is ending soon",
+                    "Your DueNest Pro trial ends soon. Add a payment method to "
+                    "keep Pro features without interruption.",
+                    severity="warning",
+                    suffix=sub.trial_end.strftime("%Y%m%d"),
+                )
+
         # Re-sync the denormalized tier for everyone affected.
         synced = 0
         if not dry_run:
@@ -81,6 +104,7 @@ class Command(BaseCommand):
             self.style.SUCCESS(
                 f"billing access sync{' (dry-run)' if dry_run else ''}: "
                 f"grants_expired={expired_grants} grace_expired={expired_grace} "
-                f"period_canceled={expired_canceled} users_resynced={synced}"
+                f"period_canceled={expired_canceled} trial_notices={trial_notices} "
+                f"users_resynced={synced}"
             )
         )

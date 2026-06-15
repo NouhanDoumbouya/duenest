@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { SiteHeader } from "@/components/layout/site-header";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { PricingPlans } from "@/components/billing/pricing-plans";
+import { PlanComparisonTable } from "@/components/billing/plan-comparison-table";
 
 export const metadata: Metadata = {
   title: "Pricing",
@@ -55,6 +56,8 @@ export default function PricingPage() {
         </div>
 
         <PricingPlans />
+
+        <PlanComparisonTable />
 
         {/* FAQ */}
         <section className="mx-auto mt-20 max-w-2xl">

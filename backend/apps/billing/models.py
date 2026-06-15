@@ -437,3 +437,28 @@ class ManualAccessGrant(models.Model):
         if self.ends_at and now >= self.ends_at:
             return False
         return True
+
+
+class FeatureUsageCounter(models.Model):
+    """
+    Per-user, per-period counter for metered features (e.g. scanner scans or
+    quick shares per month). ``period_key`` is "total", "YYYY-MM" (monthly), or
+    "YYYY-MM-DD" (daily) so a new period starts a fresh count automatically.
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="feature_usage_counters",
+    )
+    feature_key = models.CharField(max_length=64)
+    period_key = models.CharField(max_length=16)
+    count = models.PositiveIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("user", "feature_key", "period_key")
+        indexes = [models.Index(fields=["user", "feature_key", "period_key"])]
+
+    def __str__(self):
+        return f"Usage<{self.user_id}:{self.feature_key}:{self.period_key}={self.count}>"

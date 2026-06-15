@@ -120,6 +120,10 @@ class BillingUsageView(APIView):
         usage = compute_plan_usage(request.user)
         usage["entitlements"] = entitlements.get_user_entitlements(request.user)
         usage["is_pro"] = entitlements.is_pro(request.user)
+        usage["metered"] = {
+            key: entitlements.check_usage_limit(request.user, key)
+            for key in ("scanner_scans_per_month", "quick_shares_per_month")
+        }
         return Response(usage)
 
 
