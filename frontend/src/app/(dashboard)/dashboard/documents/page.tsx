@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   FileText,
   Filter,
@@ -122,7 +123,9 @@ function buildListParams({
   return params;
 }
 
-export default function DocumentsPage() {
+function DocumentsPageInner() {
+  const searchParams = useSearchParams();
+  const browseByCategory = searchParams.get("view") === "categories";
   const [search, setSearch] = useState("");
   const [quickFilter, setQuickFilter] =
     useState<QuickFilter>(initialQuickFilter);
@@ -280,6 +283,48 @@ export default function DocumentsPage() {
           </Link>
         }
       />
+
+      {browseByCategory && (
+        <Card>
+          <CardContent className="space-y-3">
+            <div>
+              <p className="text-sm font-medium">Browse by category</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Categories help you organize meaningful records — pick one to
+                filter your documents.
+              </p>
+            </div>
+            {categories.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No categories yet. Categories appear here as you organize your
+                documents.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={category === "" ? "default" : "outline"}
+                  onClick={() => setCategory("")}
+                >
+                  All categories
+                </Button>
+                {categories.map((c) => (
+                  <Button
+                    key={c.id}
+                    type="button"
+                    size="sm"
+                    variant={category === c.id ? "default" : "outline"}
+                    onClick={() => setCategory(c.id)}
+                  >
+                    {c.name}
+                  </Button>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardContent className="space-y-5">
@@ -535,5 +580,13 @@ export default function DocumentsPage() {
         onCancel={() => setPendingDelete(null)}
       />
     </PageContainer>
+  );
+}
+
+export default function DocumentsPage() {
+  return (
+    <Suspense fallback={null}>
+      <DocumentsPageInner />
+    </Suspense>
   );
 }
