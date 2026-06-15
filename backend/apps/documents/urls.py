@@ -1,6 +1,7 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 
+from .scanner import UploadScannedDocumentView
 from .views import (
     BundleExportDetailView,
     BundleExportDownloadView,
@@ -121,6 +122,11 @@ urlpatterns = [
         "document-categories/<int:pk>/",
         DocumentCategoryDetailView.as_view(),
         name="document-category-detail",
+    ),
+    path(
+        "scanner/upload-scanned-document/",
+        UploadScannedDocumentView.as_view(),
+        name="upload_scanned_document",
     ),
     path("files/", FileInboxListCreateView.as_view(), name="file-inbox"),
     path(

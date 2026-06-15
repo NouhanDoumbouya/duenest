@@ -25,6 +25,18 @@
 - **Antivirus scanning**: e.g. ClamAV before a file is marked available.
 - **Per-user storage quota** enforcement / monitoring.
 
+## Document scanner upload (`/api/v1/scanner/upload-scanned-document/`)
+The scanner endpoint reuses the same encrypted storage pipeline, plus extra
+hardening for camera-sourced PDFs (see `docs/DOCUMENT_SCANNER.md`):
+- Per-user rate limiting (DRF throttle scope `scanner_upload`).
+- Structural PDF validation via `pypdf` (magic bytes + parseable pages) on top of
+  the size/MIME checks.
+- **Optional ClamAV scan** via `clamd` (`CLAMD_ENABLED`), with `CLAMD_FAIL_CLOSED`
+  rejecting uploads when the engine is unreachable (recommended in production) —
+  begins to close the antivirus gap above for scanned uploads.
+- Client-supplied filenames are sanitised (no paths/traversal); the response
+  returns secure preview/download routes and a document id, never a raw path.
+
 ## If archive or new types are ever added
 Restrict, sniff real type, scan, and never auto-extract server-side. Default to
 deny; widen the allowlist deliberately.
