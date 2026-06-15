@@ -730,6 +730,8 @@ exposes another user's categories.
 Document responses include read-only, owner-scoped usage indicators:
 `is_shared_externally` (an active external share exists), `in_bundle` (linked by
 a bundle requirement), and `in_emergency` (included in an emergency access pack).
+The documents list can filter on these: `?shared=true` and
+`?in_bundle=true|false` (e.g. `in_bundle=false` for "not in a bundle").
 
 ### Authentication
 

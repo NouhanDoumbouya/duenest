@@ -56,3 +56,29 @@ class DocumentUsageIndicatorTests(APITestCase):
         row = res.data["results"][0]
         self.assertIn("in_bundle", row)
         self.assertIn("in_emergency", row)
+
+    def test_in_bundle_filter(self):
+        # self.doc is unbundled; add a second doc that is in a bundle.
+        bundled = Document.objects.create(owner=self.alice, title="Bundled doc")
+        bundle = DocumentBundle.objects.create(owner=self.alice, title="Visa app")
+        DocumentBundleRequirement.objects.create(
+            owner=self.alice, bundle=bundle, title="req", linked_document=bundled
+        )
+
+        in_res = self.client.get("/api/v1/documents/?in_bundle=true")
+        in_titles = {d["title"] for d in in_res.data["results"]}
+        self.assertIn("Bundled doc", in_titles)
+        self.assertNotIn("Passport", in_titles)
+
+        out_res = self.client.get("/api/v1/documents/?in_bundle=false")
+        out_titles = {d["title"] for d in out_res.data["results"]}
+        self.assertIn("Passport", out_titles)
+        self.assertNotIn("Bundled doc", out_titles)
+
+    def test_shared_filter_smoke(self):
+        # No active shares -> ?shared=true returns nothing, ?shared=false returns all.
+        shared = self.client.get("/api/v1/documents/?shared=true")
+        self.assertEqual(shared.status_code, status.HTTP_200_OK)
+        self.assertEqual(shared.data["count"], 0)
+        unshared = self.client.get("/api/v1/documents/?shared=false")
+        self.assertGreaterEqual(unshared.data["count"], 1)
