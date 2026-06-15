@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { LiveCountdown } from "@/components/marketing/live-countdown";
 
 // Polished, static product mockups for the marketing page. Built entirely from
 // the real DueNest design tokens (no screenshots, no image files) so they stay
@@ -195,7 +196,12 @@ export function LifeRadarMockup() {
     {
       icon: Link2,
       title: "Passport share",
-      meta: "Active · expires in 18h",
+      meta: (
+        <>
+          Active · expires in{" "}
+          <LiveCountdown hoursFromNow={18} className="tabular-nums" />
+        </>
+      ),
       tone: "teal",
       chip: <StatusChip tone="shared">Shared</StatusChip>,
     },
@@ -298,6 +304,79 @@ export function LifeRadarMockup() {
   );
 }
 
+// ---- Fix-first card (compact hero teaser) ----------------------------------
+
+export function FixFirstCard() {
+  const rows = [
+    {
+      icon: FileText,
+      title: "Student visa",
+      meta: "Expires in 23 days",
+      tone: "amber",
+      chip: <StatusChip tone="expiring">Expiring</StatusChip>,
+    },
+    {
+      icon: CreditCard,
+      title: "Spotify",
+      meta: "Renews tomorrow",
+      tone: "blue",
+      chip: <StatusChip tone="info">Renews</StatusChip>,
+    },
+    {
+      icon: Link2,
+      title: "Passport share",
+      meta: (
+        <>
+          Active ·{" "}
+          <LiveCountdown hoursFromNow={18} className="tabular-nums" />
+        </>
+      ),
+      tone: "teal",
+      chip: <StatusChip tone="shared">Shared</StatusChip>,
+    },
+  ];
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-floating">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <p className="font-heading text-sm font-semibold">Fix first</p>
+        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-success">
+          <span className="pulse-soft flex size-1.5 rounded-full bg-brand-success" />
+          Watching
+        </span>
+      </div>
+      <div className="space-y-2 p-4">
+        {rows.map((r) => {
+          const Icon = r.icon;
+          return (
+            <div
+              key={r.title}
+              className="flex items-center gap-3 rounded-xl border border-border bg-background px-3 py-2.5"
+            >
+              <span
+                className={cn(
+                  "flex size-8 shrink-0 items-center justify-center rounded-lg",
+                  iconTone[r.tone],
+                )}
+              >
+                <Icon className="size-4" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">{r.title}</p>
+                <p className="truncate text-xs text-muted-foreground">{r.meta}</p>
+              </div>
+              {r.chip}
+            </div>
+          );
+        })}
+        <div className="flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2.5">
+          <Search className="size-4 shrink-0 text-primary" />
+          <p className="text-xs font-medium text-primary">What am I forgetting?</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---- Vault -----------------------------------------------------------------
 
 export function VaultMockup() {
@@ -396,7 +475,8 @@ export function SafeSendMockup() {
         <div className="flex items-center justify-center">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-accent px-3 py-1 text-xs font-medium text-accent-foreground">
             <Timer className="size-3.5" />
-            Expires in 18h
+            Expires in{" "}
+            <LiveCountdown hoursFromNow={18} className="tabular-nums" />
           </span>
         </div>
 
