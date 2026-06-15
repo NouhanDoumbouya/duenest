@@ -427,10 +427,11 @@ function SafeSend() {
 
 function Emergency() {
   const bullets = [
-    "Only the documents you select are ever shown",
-    "Add a trusted contact and an emergency note",
-    "The emergency QR can be locked by default",
-    "Revoke or regenerate access anytime, with an access log",
+    "Guided setup with a readiness score — you always know what's left",
+    "Choose how access opens: owner approval, a delayed unlock, or instant with a code",
+    "A locked emergency QR and printable wallet card — scanning starts a request, not an instant unlock",
+    "Trusted contacts, optional location (off by default), and a full activity log",
+    "Revoke, regenerate, or disable access at any time",
   ];
   return (
     <section id="emergency" className="scroll-mt-20 bg-brand-navy text-white">
@@ -443,15 +444,16 @@ function Emergency() {
           <ScrollReveal className="max-w-lg">
             <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-medium text-brand-mint">
               <LifeBuoy className="size-3.5" />
-              Emergency Access
+              Emergency Protocol
             </span>
             <h2 className="mt-5 font-heading text-3xl font-semibold tracking-tight text-balance text-white sm:text-4xl">
               Prepare emergency access before it&apos;s needed.
             </h2>
             <p className="mt-4 text-pretty text-white/70">
-              Let trusted people reach selected documents if you need help —
-              without exposing your full vault. Calm, prepared, and entirely in
-              your control.
+              If something happens, trusted people can request access to selected
+              documents — without ever seeing your full vault. You choose how
+              access opens, keep a printable card ready, and stay in control with
+              a full activity log.
             </p>
             <ul className="mt-6 space-y-2.5">
               {bullets.map((b) => (

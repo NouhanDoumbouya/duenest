@@ -519,22 +519,38 @@ export function SafeSendMockup() {
   );
 }
 
-// ---- Emergency Access ------------------------------------------------------
+// ---- Emergency Protocol ----------------------------------------------------
 
 export function EmergencyMockup() {
   const checklist = [
     { label: "Selected documents", done: true },
     { label: "Trusted contact added", done: true },
-    { label: "Emergency note", done: true },
-    { label: "Access lock enabled", done: false },
+    { label: "Unlock rule · Delayed (24h)", done: true },
+    { label: "Printable card ready", done: true },
+    { label: "Test emergency access", done: false },
   ];
   return (
     <BrowserFrame url="app.duenest.com/emergency">
       <div className="grid gap-4 p-4 sm:grid-cols-[1fr_auto] sm:p-5">
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <p className="font-heading text-sm font-semibold">Emergency access</p>
-            <StatusChip tone="info">Almost ready</StatusChip>
+            <p className="font-heading text-sm font-semibold">
+              Emergency Protocol
+            </p>
+            <StatusChip tone="safe">80% ready</StatusChip>
+          </div>
+
+          {/* Readiness bar */}
+          <div className="flex items-center gap-2">
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-brand-success"
+                style={{ width: "80%" }}
+              />
+            </div>
+            <span className="text-[11px] font-medium tabular-nums text-muted-foreground">
+              4 / 5
+            </span>
           </div>
 
           <div className="space-y-1.5">
@@ -565,7 +581,7 @@ export function EmergencyMockup() {
           </div>
 
           <p className="rounded-lg bg-muted/50 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
-            Only the 3 documents you selected are shown. Your full vault stays
+            Only the documents you select are shown. Your full vault stays
             private.
           </p>
         </div>
@@ -577,6 +593,9 @@ export function EmergencyMockup() {
           <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
             <Lock className="size-3" />
             Locked QR
+          </span>
+          <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+            Wallet card
           </span>
         </div>
       </div>

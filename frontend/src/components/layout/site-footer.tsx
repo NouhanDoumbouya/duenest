@@ -11,7 +11,7 @@ const columns: { heading: string; links: FooterLink[] }[] = [
       { label: "Life Radar", href: "/#life-radar" },
       { label: "Vault", href: "/#vault" },
       { label: "SafeSend", href: "/#safesend" },
-      { label: "Emergency Access", href: "/#emergency" },
+      { label: "Emergency Protocol", href: "/#emergency" },
       { label: "Money Radar", href: "/#money-radar" },
       { label: "Pricing", href: "/pricing" },
     ],
