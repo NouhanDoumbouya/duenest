@@ -8,6 +8,8 @@ import type {
   ChecklistTemplate,
   ChecklistTemplateItem,
   CountryActivityResponse,
+  FeatureFlag,
+  FeatureFlagVisibility,
   FeatureCompletionItem,
   FeatureCompletionResponse,
   FeatureAdoption,
@@ -423,3 +425,23 @@ export const FOUNDER_PRIORITY_LABELS: Record<FounderPriority, string> = {
   high: "High",
   critical: "Critical",
 };
+
+// --- Feature Control Center (Feature Flags Lite) ---
+
+export function getFounderFeatureFlags(): Promise<FeatureFlag[]> {
+  return apiFetch<FeatureFlag[]>("/founder/feature-flags/", { auth: true });
+}
+
+export function updateFounderFeatureFlag(
+  key: string,
+  payload: {
+    visibility?: FeatureFlagVisibility;
+    maintenance_message?: string;
+  },
+): Promise<FeatureFlag> {
+  return apiFetch<FeatureFlag>(`/founder/feature-flags/${key}/`, {
+    method: "PATCH",
+    body: payload,
+    auth: true,
+  });
+}
