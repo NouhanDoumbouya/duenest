@@ -287,6 +287,8 @@ REST_FRAMEWORK = {
         "quick_share_code": _throttle_rate("10/min"),
         # Quick Share "Receive code" lookups (anti code-enumeration).
         "quick_share_receive": _throttle_rate("10/min"),
+        # Recipient "request more time" pings (anti-spam to the owner).
+        "quick_share_extension_request": _throttle_rate("5/min"),
         # Auth + public access-code brute-force protection.
         "login": _throttle_rate("10/min"),
         "register": _throttle_rate("10/hour"),
