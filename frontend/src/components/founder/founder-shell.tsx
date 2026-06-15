@@ -21,6 +21,7 @@ import {
   MessageSquare,
   ShieldCheck,
   TicketCheck,
+  TrendingUp,
   UserRoundCheck,
   Users,
 } from "lucide-react";
@@ -34,6 +35,7 @@ import { cn } from "@/lib/utils";
 
 const nav = [
   { label: "Overview", href: "/founder", icon: LayoutDashboard, exact: true },
+  { label: "Growth", href: "/founder/growth", icon: TrendingUp },
   { label: "Analytics", href: "/founder/analytics", icon: BarChart3 },
   { label: "Billing", href: "/founder/billing", icon: CreditCard },
   { label: "Notifications", href: "/founder/notifications", icon: BellRing },

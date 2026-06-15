@@ -68,11 +68,11 @@ export function SetupChecklistCard({
                 <ListChecks className="size-4" />
               )}
             </span>
-            <CardTitle className="text-lg">Document setup</CardTitle>
+            <CardTitle className="text-lg">Readiness checklist</CardTitle>
           </div>
           <CardDescription className="mt-2">
             {complete
-              ? "The required setup steps are complete."
+              ? "You’re set up and ready. DueNest is watching your important dates."
               : nextStep
                 ? `Next: ${nextStep.title}`
                 : "Finish the remaining optional trust and sharing checks."}
@@ -136,10 +136,12 @@ export function SetupChecklistCard({
               steps complete.
             </p>
             <Link
-              href="/dashboard/onboarding"
-              className={cn(buttonVariants({ variant: "outline" }))}
+              href="/dashboard/readiness-setup"
+              className={cn(buttonVariants())}
             >
-              Continue setup
+              {checklist.counts.documents > 0
+                ? "Continue your readiness setup"
+                : "Start readiness setup"}
               <ArrowRight className="size-4" />
             </Link>
           </div>

@@ -22,7 +22,6 @@ import {
   CreditCard,
   DoorClosed,
   FileText,
-  FolderTree,
   Inbox,
   LayoutDashboard,
   LifeBuoy,
@@ -99,12 +98,6 @@ export const NAV_SECTIONS: NavSection[] = [
         href: "/dashboard/scanner",
         description:
           "Capture a document with your camera, auto-detect edges, and save a clean PDF.",
-      },
-      {
-        label: "Categories",
-        href: "/dashboard/documents?view=categories",
-        description:
-          "Browse documents by category such as Identity, Immigration, Education, Health, or Finance.",
       },
       {
         label: "Trash",
@@ -258,11 +251,6 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
             featureKey: "file_inbox",
           },
           { label: "Scan", href: "/dashboard/scanner", icon: ScanLine },
-          {
-            label: "Categories",
-            href: "/dashboard/documents?view=categories",
-            icon: FolderTree,
-          },
           { label: "Trash", href: "/dashboard/trash", icon: Trash2 },
         ],
       },
@@ -347,7 +335,7 @@ export const FOUNDER_SIDEBAR_ITEM: SidebarLeaf = {
 
 /**
  * Whether a sidebar leaf is active for the current location. Handles exact
- * matches, query-driven items (Categories → ?view=categories), and prefix
+ * matches, any future query-driven items (via `tabViewParam`), and prefix
  * matches for detail routes (e.g. /dashboard/documents/123 keeps Documents on).
  */
 export function isLeafActive(
@@ -361,10 +349,9 @@ export function isLeafActive(
   if (leafView) return pathname === leafPath && view === leafView;
   if (leaf.exact) return pathname === leafPath;
 
-  const matches = pathname === leafPath || pathname.startsWith(`${leafPath}/`);
-  if (!matches) return false;
-  // Don't activate a plain item when a sibling's view param owns the same path
-  // (so Documents isn't active on /dashboard/documents?view=categories).
-  if (view && leafPath === pathname) return false;
-  return true;
+  // Plain path/prefix match. No sidebar leaf owns a `view` param anymore (the
+  // old Categories item used `?view=categories`), so a stale view query no
+  // longer suppresses the Documents item — e.g. /dashboard/documents?view=categories
+  // correctly keeps Documents active.
+  return pathname === leafPath || pathname.startsWith(`${leafPath}/`);
 }
