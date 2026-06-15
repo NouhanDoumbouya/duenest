@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { ArrowDownRight, ArrowUpRight, Minus, TrendingUp } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -186,5 +188,41 @@ export function GrowthPageHeader({
       </div>
       {children && <div className="flex items-center gap-2">{children}</div>}
     </div>
+  );
+}
+
+const GROWTH_TABS = [
+  { href: "/founder/growth", label: "Overview", exact: true },
+  { href: "/founder/growth/insights", label: "Insights" },
+  { href: "/founder/growth/campaigns", label: "Campaigns" },
+  { href: "/founder/growth/utm-builder", label: "UTM" },
+  { href: "/founder/growth/content", label: "Content" },
+  { href: "/founder/growth/segments", label: "Segments" },
+  { href: "/founder/growth/actions", label: "Actions" },
+  { href: "/founder/growth/referrals", label: "Referrals" },
+  { href: "/founder/beta", label: "Beta CRM" },
+];
+
+export function GrowthTabs() {
+  const pathname = usePathname();
+  return (
+    <nav className="-mx-1 flex gap-1 overflow-x-auto pb-1" aria-label="Growth sections">
+      {GROWTH_TABS.map((t) => {
+        const active = t.exact ? pathname === t.href : pathname.startsWith(t.href);
+        return (
+          <Link
+            key={t.href}
+            href={t.href}
+            aria-current={active ? "page" : undefined}
+            className={cn(
+              "shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+              active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+            )}
+          >
+            {t.label}
+          </Link>
+        );
+      })}
+    </nav>
   );
 }

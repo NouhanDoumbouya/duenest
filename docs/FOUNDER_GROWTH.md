@@ -87,3 +87,70 @@ funnel + overview shape, action create/resolve. Full founder suite: 38 passing.
 - Auto-generated `GrowthAction`s aren't scheduled yet (the model + `rule_key`
   de-dupe field are in place); actions are currently created manually.
 - Deferred modules listed above.
+
+---
+
+## Second increment (previously-deferred modules — now built)
+
+This adds the modules that the first PR deferred, all founder-only and reusing
+`ProductEvent` + the existing analytics.
+
+### New models (migration `0009`)
+`ContentItem`, `AudienceSegment`, `AmbassadorProfile`, `ReferralProfile`,
+`ReferralAttribution`, `UserAttribution`. Services live in
+`apps/founder/growth_modules.py`.
+
+### Content Calendar
+`ContentItem` CRUD (title, channel, type, status workflow, scheduled/published,
+UTM link, tags, result metrics). UI: `/founder/growth/content`.
+
+### Audience Segments
+A safe rule engine (`evaluate_segment_queryset`) over plan, activation status,
+onboarding goal, acquisition source/campaign, signup date, and min documents.
+Each segment shows live size, activation rate, and average documents; a members
+endpoint returns privacy-safe summaries (no document contents). UI:
+`/founder/growth/segments`.
+
+### Referrals & Ambassadors
+`ReferralProfile` (per-user code), `ReferralAttribution` (with **self-referral
+prevention** and one-attribution-per-user de-dupe), and `AmbassadorProfile` CRUD.
+Leaderboards compute signups + activated counts from real data. UI:
+`/founder/growth/referrals`.
+
+### Attribution (first/last touch)
+`UserAttribution` stores first- and last-touch UTM + referrer + landing page.
+Captured two ways: (1) the SPA stashes UTM on landing (`lib/attribution.ts` +
+`AttributionCapture`) and the register payload forwards it — `RegisterView` now
+records attribution and tags the `user_signed_up` event metadata with UTM, so
+campaign/funnel attribution lights up; (2) `POST /api/v1/growth/attribution/`
+(any authenticated user, writes only their own data). Best-effort and never
+blocks signup/auth.
+
+### Insights & visualizations
+`/founder/growth/insights` renders dependency-free charts (signups + activated
+over time, channel comparison, activation by segment, open actions by priority,
+referral leaderboard) each with a screen-reader summary, plus a one-click
+**Generate actions** button that turns critical/high insights into de-duplicated
+`GrowthAction`s (`rule_key`).
+
+### Exports
+`GET /api/v1/founder/growth/export/?type=campaigns|referrals` returns founder-only
+CSV (no document contents).
+
+### Beta CRM
+Reuses the existing Founder Console **Beta Users** page/endpoints (tags, notes,
+invite status) rather than duplicating a CRM. The Growth sub-nav links to it.
+
+### Tests
+`apps/founder/test_growth_modules.py` (10 tests): access control, content CRUD,
+segment summary + members + rule engine, referral anti-self/de-dupe, ambassador
+leaderboard, attribution first/last touch + signup capture + auth requirement.
+Full founder+users suite: 81 passing.
+
+### Remaining limitations / follow-ups
+- First-touch capture runs on the marketing landing + register pages; it isn't
+  threaded through every public entry point (e.g. blog/share pages) yet.
+- Auto-action generation is on-demand (button); no scheduled cron yet.
+- Segment rules cover the common cases listed above; richer boolean composition
+  (OR groups, nesting) is not implemented.
+- MRR/ARR still unavailable (no billing integration).

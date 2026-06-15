@@ -231,3 +231,137 @@ export const UTM_MEDIUM_SUGGESTIONS = [
   "social", "community", "post", "dm", "email", "video", "bio_link",
   "flyer", "qr", "referral", "partner",
 ];
+
+// --- Remaining modules: content, segments, ambassadors, referrals, charts ---
+
+export interface ContentItem {
+  id: number;
+  title: string;
+  channel: string;
+  content_type: string;
+  target_audience: string;
+  campaign: number | null;
+  status: "idea" | "draft" | "scheduled" | "published" | "measuring" | "repurpose" | "archived";
+  priority: "high" | "medium" | "low";
+  scheduled_at: string | null;
+  published_at: string | null;
+  cta: string;
+  utm_link: string;
+  notes: string;
+  tags: string[];
+  result_metrics: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SegmentSummary {
+  size: number;
+  activation_rate: number | null;
+  avg_documents: number | null;
+  error?: string;
+}
+
+export interface AudienceSegment {
+  id: number;
+  name: string;
+  description: string;
+  rules_json: Record<string, unknown>;
+  is_dynamic: boolean;
+  status: "active" | "archived";
+  summary: SegmentSummary;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Ambassador {
+  id: number;
+  name: string;
+  email: string;
+  community: string;
+  campus: string;
+  referral_code: string;
+  status: "candidate" | "invited" | "active" | "paused" | "completed" | "removed";
+  notes: string;
+  reward_notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReferralRow {
+  referrer_id: number;
+  referrer_email: string;
+  signups: number;
+  activated: number;
+}
+
+export interface AmbassadorLeaderRow {
+  id: number;
+  name: string;
+  community: string;
+  campus: string;
+  status: string;
+  referral_code: string;
+  signups: number;
+  activated: number;
+}
+
+export interface GrowthCharts {
+  range: string;
+  signups_over_time: { date: string; count: number }[];
+  activated_over_time: { date: string; count: number }[];
+  channel_comparison: { name: string; signups: number }[];
+  action_priority_breakdown: { priority: string; count: number }[];
+  activation_by_segment: { name: string; activation_rate: number | null; size: number }[];
+  referral_leaderboard: ReferralRow[];
+  ambassador_leaderboard: AmbassadorLeaderRow[];
+}
+
+interface Paginated2<T> {
+  count: number;
+  results: T[];
+}
+
+export function listContentItems(): Promise<Paginated2<ContentItem>> {
+  return apiFetch("/founder/growth/content/", { auth: true });
+}
+export function createContentItem(payload: Partial<ContentItem>): Promise<ContentItem> {
+  return apiFetch("/founder/growth/content/", { method: "POST", body: payload, auth: true });
+}
+export function updateContentItem(id: number, payload: Partial<ContentItem>): Promise<ContentItem> {
+  return apiFetch(`/founder/growth/content/${id}/`, { method: "PATCH", body: payload, auth: true });
+}
+
+export function listSegments(): Promise<Paginated2<AudienceSegment>> {
+  return apiFetch("/founder/growth/segments/", { auth: true });
+}
+export function createSegment(payload: Partial<AudienceSegment>): Promise<AudienceSegment> {
+  return apiFetch("/founder/growth/segments/", { method: "POST", body: payload, auth: true });
+}
+export function getSegmentMembers(
+  id: number,
+): Promise<{ count: number; members: { id: number; email: string; plan: string; activated: boolean; date_joined: string }[] }> {
+  return apiFetch(`/founder/growth/segments/${id}/members/`, { auth: true });
+}
+
+export function listAmbassadors(): Promise<Paginated2<Ambassador>> {
+  return apiFetch("/founder/growth/ambassadors/", { auth: true });
+}
+export function createAmbassador(payload: Partial<Ambassador>): Promise<Ambassador> {
+  return apiFetch("/founder/growth/ambassadors/", { method: "POST", body: payload, auth: true });
+}
+
+export function getReferrals(): Promise<{ referrals: ReferralRow[]; ambassadors: AmbassadorLeaderRow[] }> {
+  return apiFetch("/founder/growth/referrals/", { auth: true });
+}
+
+export function getGrowthCharts(range?: GrowthRange): Promise<GrowthCharts> {
+  return apiFetch(`/founder/growth/charts/${range ? `?range=${range}` : ""}`, { auth: true });
+}
+
+export function generateAutoActions(): Promise<{ created: number; actions: GrowthAction[] }> {
+  return apiFetch("/founder/growth/actions/generate/", { method: "POST", auth: true });
+}
+
+export function captureAttribution(payload: Record<string, string>): Promise<{ status: string }> {
+  return apiFetch("/growth/attribution/", { method: "POST", body: payload, auth: true });
+}
