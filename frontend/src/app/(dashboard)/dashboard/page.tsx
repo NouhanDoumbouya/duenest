@@ -1,539 +1,541 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
-  ArrowRight,
-  BellRing,
   CalendarClock,
+  CreditCard,
   FileText,
   LifeBuoy,
-  Package,
-  Paperclip,
   Plus,
+  Share2,
   ShieldAlert,
 } from "lucide-react";
 
-import { CalendarUpcomingWidget } from "@/components/dashboard/calendar-upcoming-widget";
-import { OrganizationsWidget } from "@/components/dashboard/organizations-widget";
-import { SubscriptionRenewalsWidget } from "@/components/dashboard/subscription-renewals-widget";
-import { StatCard, type Stat } from "@/components/dashboard/stat-card";
+import { LifeRadarHero } from "@/components/dashboard/life-radar/hero";
+import {
+  LifeRadarMetricGrid,
+  type LifeRadarMetric,
+} from "@/components/dashboard/life-radar/metric-grid";
+import { FixFirstSection } from "@/components/dashboard/life-radar/fix-first";
+import { QuickActionsPanel } from "@/components/dashboard/life-radar/quick-actions";
+import {
+  MoneyRadarPanel,
+  RecentActivityPanel,
+  SharingEmergencyPanel,
+  ThisWeekPanel,
+} from "@/components/dashboard/life-radar/panels";
+import {
+  FixFirstSkeleton,
+  HeroSkeleton,
+  MetricGridSkeleton,
+  PanelSkeleton,
+} from "@/components/dashboard/life-radar/states";
 import { useDashboardUser } from "@/components/dashboard/user-context";
-import { DocumentStatusBadge } from "@/components/documents/status-badge";
-import { UrgencyBadge } from "@/components/documents/urgency-badge";
 import { SetupChecklistCard } from "@/components/onboarding/setup-checklist-card";
 import { buttonVariants } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer } from "@/components/ui/page-container";
 import { SectionCard } from "@/components/ui/section-card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { ApiError } from "@/lib/api";
+import { getAttentionNeeded, getDocuments } from "@/lib/documents";
+import { getCalendarEvents, getCalendarSummary } from "@/lib/calendar";
+import { getEmergencyPacks } from "@/lib/emergency";
 import {
-  daysUntil,
-  formatDate,
-  getAttentionNeeded,
-  getDocuments,
-  getUpcomingDocumentReminders,
-} from "@/lib/documents";
-import {
-  formatNotificationTime,
-  getNotificationSummary,
-  NOTIFICATION_SEVERITY_LABELS,
-} from "@/lib/notifications";
+  getSubscriptionAttention,
+  getSubscriptionSummary,
+} from "@/lib/subscriptions";
+import { listQuickShares, revokeQuickShare } from "@/lib/quick-share";
 import { getDocumentSetupChecklist, getOnboardingState } from "@/lib/onboarding";
+import {
+  buildLifeRadarSummary,
+  computeDashboardReadinessScore,
+  formatRelativeDeadline,
+  getActiveShareRisk,
+  getEmergencyReadiness,
+  getNextCharge,
+  getNextDeadline,
+  type EmergencyReadiness,
+} from "@/lib/life-radar";
 import { cn } from "@/lib/utils";
-import type { DocumentRecord, DocumentReminderRule } from "@/types/documents";
-import type { NotificationRecord } from "@/types/notifications";
+import type { CalendarEvent, CalendarSummary } from "@/types/calendar";
+import type { DocumentRecord } from "@/types/documents";
+import type { EmergencyPack } from "@/types/emergency";
+import type { QuickShareListItem } from "@/types/quick-share";
+import type {
+  SubscriptionAttentionItem,
+  SubscriptionSummary,
+} from "@/types/subscriptions";
 import type {
   DocumentSetupChecklist,
   OnboardingState,
 } from "@/types/onboarding";
 
-interface DashboardData {
-  total: number;
-  needsAttention: number;
+/** Raw, per-source dashboard state. Each section fails independently. */
+interface RadarState {
+  totalDocs: number;
   expiringSoon: number;
   missingFiles: number;
-  upcomingReminders: number;
-  unreadNotifications: number;
-  urgentNotifications: number;
+  recentDocs: DocumentRecord[];
+  attentionDocs: DocumentRecord[];
+  subSummary: SubscriptionSummary | null;
+  subAttention: SubscriptionAttentionItem[];
+  shares: QuickShareListItem[];
+  packs: EmergencyPack[];
+  calSummary: CalendarSummary | null;
+  calEvents: CalendarEvent[];
+  onboarding: OnboardingState | null;
+  checklist: DocumentSetupChecklist | null;
+  errors: {
+    documents: boolean;
+    subscriptions: boolean;
+    shares: boolean;
+    emergency: boolean;
+    calendar: boolean;
+  };
 }
 
-const QUICK_ACTIONS = [
-  { label: "Add document", href: "/dashboard/documents/new", icon: Plus },
-  { label: "Review attention", href: "/dashboard/attention", icon: ShieldAlert },
-  { label: "Create bundle", href: "/dashboard/bundles/new", icon: Package },
-  { label: "Emergency access", href: "/dashboard/emergency", icon: LifeBuoy },
-];
+const EMPTY_STATE: RadarState = {
+  totalDocs: 0,
+  expiringSoon: 0,
+  missingFiles: 0,
+  recentDocs: [],
+  attentionDocs: [],
+  subSummary: null,
+  subAttention: [],
+  shares: [],
+  packs: [],
+  calSummary: null,
+  calEvents: [],
+  onboarding: null,
+  checklist: null,
+  errors: {
+    documents: false,
+    subscriptions: false,
+    shares: false,
+    emergency: false,
+    calendar: false,
+  },
+};
 
-function reminderWhen(rule: DocumentReminderRule): string {
-  const date = rule.upcoming_reminder_date;
-  if (!date) return "—";
-  const days = daysUntil(date);
-  if (days === null) return formatDate(date);
-  if (days < 0) return "Overdue";
-  if (days === 0) return "Today";
-  if (days === 1) return "Tomorrow";
-  return `In ${days} days`;
+function val<T>(r: PromiseSettledResult<T>): T | null {
+  return r.status === "fulfilled" ? r.value : null;
 }
 
-function notificationHref(notification: NotificationRecord): string {
-  return notification.action_url?.startsWith("/")
-    ? notification.action_url
-    : "/dashboard/notifications";
+function isoDate(offsetDays: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  return d.toISOString().slice(0, 10);
 }
 
 export default function DashboardPage() {
   const user = useDashboardUser();
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [attention, setAttention] = useState<DocumentRecord[] | null>(null);
-  const [recent, setRecent] = useState<DocumentRecord[]>([]);
-  const [reminders, setReminders] = useState<DocumentReminderRule[]>([]);
-  const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
-  const [setupChecklist, setSetupChecklist] =
-    useState<DocumentSetupChecklist | null>(null);
-  const [onboardingState, setOnboardingState] =
-    useState<OnboardingState | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [state, setState] = useState<RadarState | null>(null);
+  const [revokingId, setRevokingId] = useState<number | null>(null);
+  const mountedRef = useRef(true);
+
+  const load = useCallback(async () => {
+    // One parallel batch (no waterfall). allSettled so a single failed section
+    // never breaks the whole dashboard.
+    let results;
+    try {
+      results = await Promise.allSettled([
+        getDocuments({ page_size: 1 }),
+        getDocuments({ computed_status: "expiring_soon", page_size: 1 }),
+        getDocuments({ missing_file: true, page_size: 1 }),
+        getDocuments({ ordering: "-updated_at", page_size: 5 }),
+        getAttentionNeeded(),
+        getSubscriptionSummary(),
+        getSubscriptionAttention(),
+        listQuickShares(),
+        getEmergencyPacks(),
+        getCalendarSummary(),
+        getCalendarEvents({ start: isoDate(0), end: isoDate(7) }),
+        getOnboardingState(),
+        getDocumentSetupChecklist(),
+      ]);
+    } catch {
+      if (mountedRef.current) setState(EMPTY_STATE);
+      return;
+    }
+    if (!mountedRef.current) return;
+    const [
+      total,
+      expiring,
+      missing,
+      recent,
+      attention,
+      subSummary,
+      subAttention,
+      shares,
+      packs,
+      calSummary,
+      calEvents,
+      onboarding,
+      checklist,
+    ] = results;
+
+    const documentsError =
+      total.status === "rejected" ||
+      expiring.status === "rejected" ||
+      missing.status === "rejected" ||
+      attention.status === "rejected";
+
+    setState({
+      totalDocs: val(total)?.count ?? 0,
+      expiringSoon: val(expiring)?.count ?? 0,
+      missingFiles: val(missing)?.count ?? 0,
+      recentDocs: (val(recent)?.results ?? []).slice(0, 5),
+      attentionDocs: val(attention)?.items ?? [],
+      subSummary: val(subSummary),
+      subAttention: val(subAttention)?.items ?? [],
+      shares: val(shares) ?? [],
+      packs: val(packs)?.results ?? [],
+      calSummary: val(calSummary),
+      calEvents: val(calEvents)?.events ?? [],
+      onboarding: val(onboarding),
+      checklist: val(checklist),
+      errors: {
+        documents: documentsError,
+        subscriptions:
+          subSummary.status === "rejected" || subAttention.status === "rejected",
+        shares: shares.status === "rejected",
+        emergency: packs.status === "rejected",
+        calendar:
+          calSummary.status === "rejected" || calEvents.status === "rejected",
+      },
+    });
+  }, []);
 
   useEffect(() => {
-    let active = true;
-    Promise.all([
-      // These three only need the paginated `count`, so request a single row
-      // instead of serializing a full page of heavy document objects.
-      getDocuments({ page_size: 1 }),
-      getDocuments({ computed_status: "expiring_soon", page_size: 1 }),
-      getDocuments({ missing_file: true, page_size: 1 }),
-      // The "recent" widget shows at most 5 items.
-      getDocuments({ ordering: "-updated_at", page_size: 5 }),
-      getAttentionNeeded(),
-      getUpcomingDocumentReminders(),
-      getNotificationSummary(),
-      getDocumentSetupChecklist(),
-      getOnboardingState(),
-    ])
-      .then(
-        ([
-          allDocs,
-          expiringSoon,
-          missingFiles,
-          recentDocs,
-          attentionResult,
-          remindersResult,
-          notificationSummary,
-          checklistResult,
-          onboardingResult,
-        ]) => {
-          if (!active) return;
-          setData({
-            total: allDocs.count,
-            needsAttention: attentionResult.count,
-            expiringSoon: expiringSoon.count,
-            missingFiles: missingFiles.count,
-            upcomingReminders: remindersResult.count,
-            unreadNotifications: notificationSummary.unread_count,
-            urgentNotifications: notificationSummary.urgent_count,
-          });
-          setAttention(attentionResult.items);
-          setRecent(recentDocs.results.slice(0, 5));
-          setReminders(remindersResult.items.slice(0, 4));
-          setNotifications(notificationSummary.latest.slice(0, 3));
-          setSetupChecklist(checklistResult);
-          setOnboardingState(onboardingResult);
-          setError(null);
-        },
-      )
-      .catch((err) => {
-        if (!active) return;
-        setError(
-          err instanceof ApiError
-            ? err.message
-            : "We couldn't load your workspace. Please try again.",
-        );
-        setData({
-          total: 0,
-          needsAttention: 0,
-          expiringSoon: 0,
-          missingFiles: 0,
-          upcomingReminders: 0,
-          unreadNotifications: 0,
-          urgentNotifications: 0,
-        });
-        setAttention([]);
-        setNotifications([]);
-      });
+    mountedRef.current = true;
+    void load();
     return () => {
-      active = false;
+      mountedRef.current = false;
     };
+  }, [load]);
+
+  const handleRevoke = useCallback(async (id: number) => {
+    setRevokingId(id);
+    try {
+      await revokeQuickShare(id);
+      // Optimistic: drop it locally so Fix First + panels update instantly.
+      setState((prev) =>
+        prev ? { ...prev, shares: prev.shares.filter((s) => s.id !== id) } : prev,
+      );
+    } catch {
+      // Soft-fail: leave it in place; the user can retry.
+    } finally {
+      setRevokingId(null);
+    }
   }, []);
 
   const greetingName = user.first_name?.trim() || user.username;
-  const today = new Date().toLocaleDateString(undefined, {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  });
+  const loading = state === null;
 
-  const loading = data === null || attention === null;
+  // ---- Derived (memoized) -------------------------------------------------
+  const emergency: EmergencyReadiness = useMemo(
+    () => getEmergencyReadiness(state?.packs ?? []),
+    [state?.packs],
+  );
+
+  const radar = useMemo(
+    () =>
+      buildLifeRadarSummary({
+        attentionDocuments: state?.attentionDocs ?? [],
+        subscriptionAttention: state?.subAttention ?? [],
+        activeShares: state?.shares ?? [],
+        emergency,
+      }),
+    [state?.attentionDocs, state?.subAttention, state?.shares, emergency],
+  );
+
+  const shareRisk = useMemo(
+    () => getActiveShareRisk(state?.shares ?? []),
+    [state?.shares],
+  );
+
+  const readinessScore = useMemo(
+    () =>
+      computeDashboardReadinessScore({
+        fixFirst: radar.fixFirst,
+        totalDocuments: state?.totalDocs ?? 0,
+        emergency,
+      }),
+    [radar.fixFirst, state?.totalDocs, emergency],
+  );
+
+  const metrics: LifeRadarMetric[] = useMemo(() => {
+    if (!state) return [];
+    const nextDeadline = getNextDeadline(state.attentionDocs, state.calSummary);
+    const nextCharge = getNextCharge(state.subSummary);
+    const atRisk = state.expiringSoon + state.missingFiles;
+    return [
+      {
+        key: "attention",
+        label: "Needs attention",
+        value: String(radar.fixFirst.length),
+        subtitle:
+          radar.fixFirst.length === 0
+            ? "All clear · most urgent first"
+            : `${radar.criticalCount} critical · most urgent first`,
+        icon: ShieldAlert,
+        href: "/dashboard/attention",
+        severity: radar.worstSeverity,
+        tone: radar.criticalCount > 0 ? "red" : "amber",
+      },
+      {
+        key: "deadline",
+        label: "Next deadline",
+        value: nextDeadline ? nextDeadline.relative : "—",
+        subtitle: nextDeadline ? nextDeadline.label : "Nothing scheduled",
+        icon: CalendarClock,
+        href: nextDeadline?.href ?? "/dashboard/calendar",
+        tone: "blue",
+      },
+      {
+        key: "charge",
+        label: "Next charge",
+        value: nextCharge
+          ? formatRelativeDeadline(nextCharge.days_until_renewal)
+          : "—",
+        subtitle: nextCharge
+          ? `${nextCharge.name} · ${formatMoneyRisk(nextCharge.amount, nextCharge.currency)}`
+          : "No upcoming charges",
+        icon: CreditCard,
+        href: "/dashboard/subscriptions",
+        severity:
+          nextCharge && nextCharge.days_until_renewal <= 3 ? "soon" : undefined,
+        tone: "teal",
+      },
+      {
+        key: "at-risk",
+        label: "Documents at risk",
+        value: String(atRisk),
+        subtitle: `${state.expiringSoon} expiring · ${state.missingFiles} missing info`,
+        icon: FileText,
+        href: "/dashboard/documents?quick=expiring_soon",
+        severity: atRisk > 0 ? "review" : undefined,
+        tone: "amber",
+      },
+      {
+        key: "shares",
+        label: "Active shares",
+        value: String(shareRisk.activeCount),
+        subtitle:
+          shareRisk.activeCount === 0
+            ? "No active shares"
+            : `${shareRisk.sensitiveCount} sensitive access open`,
+        icon: Share2,
+        href: "/dashboard/quick-share",
+        severity: shareRisk.sensitiveCount > 0 ? "review" : undefined,
+        tone: "blue",
+      },
+      {
+        key: "emergency",
+        label: "Emergency readiness",
+        value: emergency.ready ? "Ready" : emergency.label,
+        subtitle: emergency.ready
+          ? "Trusted access prepared"
+          : `${emergency.stepsLeft} step${emergency.stepsLeft === 1 ? "" : "s"} left`,
+        icon: LifeBuoy,
+        href: "/dashboard/emergency",
+        severity: emergency.ready ? "safe" : "review",
+        tone: emergency.ready ? "green" : "amber",
+      },
+    ];
+  }, [state, radar, shareRisk, emergency]);
+
+  const isBrandNew =
+    !loading &&
+    state.totalDocs === 0 &&
+    (state.subSummary?.total_count ?? 0) === 0 &&
+    state.shares.length === 0 &&
+    state.packs.length === 0;
+
   const showSetupChecklist =
-    setupChecklist !== null &&
-    onboardingState !== null &&
-    !onboardingState.has_completed_document_onboarding &&
-    !onboardingState.dismissed_onboarding_at;
-
-  const stats: Stat[] = data
-    ? [
-        {
-          label: "Documents",
-          value: data.total,
-          hint: "in your vault",
-          icon: FileText,
-          tone: "blue",
-        },
-        {
-          label: "Needs attention",
-          value: data.needsAttention,
-          hint: "ranked by urgency",
-          icon: ShieldAlert,
-          tone: "amber",
-        },
-        {
-          label: "Expiring soon",
-          value: data.expiringSoon,
-          hint: "within 90 days",
-          icon: CalendarClock,
-          tone: "amber",
-        },
-        {
-          label: "Missing files",
-          value: data.missingFiles,
-          hint: "no file attached",
-          icon: Paperclip,
-          tone: "slate",
-        },
-        {
-          label: "Upcoming reminders",
-          value: data.upcomingReminders,
-          hint: "scheduled ahead",
-          icon: BellRing,
-          tone: "teal",
-        },
-        {
-          label: "Unread notifications",
-          value: data.unreadNotifications,
-          hint: `${data.urgentNotifications} urgent`,
-          icon: BellRing,
-          tone: "teal",
-        },
-      ]
-    : [];
-  const statHref: Record<string, string> = {
-    "Needs attention": "/dashboard/attention",
-    "Expiring soon": "/dashboard/documents?quick=expiring_soon",
-    "Missing files": "/dashboard/documents?quick=missing_file",
-    "Upcoming reminders": "/dashboard/reminders",
-    "Unread notifications": "/dashboard/notifications",
-  };
-  const attentionItems = (attention ?? []).slice(0, 5);
-  const isEmptyVault = !loading && data?.total === 0;
+    !loading &&
+    state.checklist !== null &&
+    state.onboarding !== null &&
+    !state.onboarding.has_completed_document_onboarding &&
+    !state.onboarding.dismissed_onboarding_at;
 
   return (
     <PageContainer>
-      {/* Welcome + primary action */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            {today}
-          </p>
-          <h1 className="mt-2 font-heading text-3xl font-semibold tracking-tight">
-            Welcome back, {greetingName}
-          </h1>
-          <p className="mt-1.5 text-muted-foreground">
-            Keep important documents, expiry dates, and renewal tasks under
-            control.
-          </p>
-        </div>
-        <Link
-          href="/dashboard/documents/new"
-          className={cn(buttonVariants({ size: "lg" }))}
-        >
-          <Plus className="size-4" />
-          Add document
-        </Link>
-      </div>
-
-      {error && (
-        <p
-          className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive"
-          role="alert"
-        >
-          {error}
-        </p>
-      )}
-
-      {/* Metrics */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        {loading
-          ? Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-[124px] w-full rounded-xl" />
-            ))
-          : stats.map((stat) => (
-              <Link
-                key={stat.label}
-                href={statHref[stat.label] ?? "/dashboard/documents"}
-                className="rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-              >
-                <StatCard stat={stat} />
-              </Link>
-            ))}
-      </div>
-
-      {showSetupChecklist && <SetupChecklistCard checklist={setupChecklist} />}
-
-      {isEmptyVault ? (
-        <Card>
-          <CardContent>
-            <EmptyState
-              icon={FileText}
-              title="Your vault is ready"
-              description="Start with your passport, a visa, or an insurance policy. DueNest will track expiry dates, flag what needs attention, and keep your files in one calm place."
-              action={
-                <Link
-                  href="/dashboard/documents/new"
-                  className={cn(buttonVariants({ size: "lg" }))}
-                >
-                  <Plus className="size-4" />
-                  Add your first document
-                </Link>
-              }
-            />
-          </CardContent>
-        </Card>
+      {/* Hero */}
+      {loading ? (
+        <HeroSkeleton />
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
-          {/* Needs attention */}
-          <SectionCard
-            title="Needs attention"
-            description="Expired, due, expiring soon, or missing key tracking information."
-            action={
-              <Link
-                href="/dashboard/attention"
-                className="text-sm font-medium text-primary hover:underline"
-              >
-                View all
-              </Link>
-            }
-          >
-            {loading ? (
-              <div className="space-y-2">
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <Skeleton key={i} className="h-14 w-full" />
-                ))}
-              </div>
-            ) : attentionItems.length === 0 ? (
-              <div className="flex flex-col items-center gap-3 py-10 text-center">
-                <span className="flex size-11 items-center justify-center rounded-full bg-brand-success/10 text-brand-success">
-                  <ShieldAlert className="size-5" />
-                </span>
-                <div>
-                  <p className="text-sm font-medium">
-                    No documents need attention right now.
-                  </p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Everything you track looks calm and up to date.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <ul className="divide-y divide-border">
-                {attentionItems.map((doc) => (
-                  <li key={doc.id}>
-                    <Link
-                      href={`/dashboard/documents/${doc.id}`}
-                      className="flex items-center justify-between gap-3 py-3 transition-colors hover:text-primary"
-                    >
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="truncate text-sm font-medium">
-                            {doc.title}
-                          </span>
-                          <UrgencyBadge level={doc.urgency_level} />
-                        </div>
-                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                          {doc.status_reason}
-                        </p>
-                      </div>
-                      <DocumentStatusBadge status={doc.computed_status} />
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </SectionCard>
-
-          {/* Side rail: upcoming dates + reminders + recent */}
-          <div className="flex flex-col gap-6">
-            <SectionCard
-              title="Today’s reminders"
-              action={
-                <Link
-                  href="/dashboard/notifications"
-                  className="text-sm font-medium text-primary hover:underline"
-                >
-                  Open
-                </Link>
-              }
-            >
-              {loading ? (
-                <div className="space-y-2">
-                  {Array.from({ length: 3 }).map((_, i) => (
-                    <Skeleton key={i} className="h-12 w-full" />
-                  ))}
-                </div>
-              ) : notifications.length === 0 ? (
-                <p className="py-2 text-sm text-muted-foreground">
-                  No unread notifications right now.
-                </p>
-              ) : (
-                <ul className="space-y-3">
-                  {notifications.map((notification) => (
-                    <li key={notification.id}>
-                      <Link
-                        href={notificationHref(notification)}
-                        className="block rounded-lg border border-border px-3 py-2 transition-colors hover:border-primary/40 hover:bg-muted/40"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <span className="line-clamp-2 text-sm font-medium">
-                            {notification.title}
-                          </span>
-                          <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[0.68rem] font-medium text-muted-foreground">
-                            {NOTIFICATION_SEVERITY_LABELS[notification.severity]}
-                          </span>
-                        </div>
-                        <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-                          {notification.message}
-                        </p>
-                        <p className="mt-2 text-[0.68rem] font-medium text-muted-foreground">
-                          {formatNotificationTime(notification.created_at)}
-                        </p>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </SectionCard>
-
-            <CalendarUpcomingWidget />
-
-            <OrganizationsWidget />
-
-            <SubscriptionRenewalsWidget />
-
-            <SectionCard
-              title="Upcoming reminders"
-              action={
-                <Link
-                  href="/dashboard/reminders"
-                  className="text-sm font-medium text-primary hover:underline"
-                >
-                  All
-                </Link>
-              }
-            >
-              {loading ? (
-                <div className="space-y-2">
-                  {Array.from({ length: 3 }).map((_, i) => (
-                    <Skeleton key={i} className="h-10 w-full" />
-                  ))}
-                </div>
-              ) : reminders.length === 0 ? (
-                <p className="py-2 text-sm text-muted-foreground">
-                  No reminders scheduled yet. Add one from any document with an
-                  expiry or renewal date.
-                </p>
-              ) : (
-                <ul className="space-y-2.5">
-                  {reminders.map((rule) => (
-                    <li key={rule.id}>
-                      <Link
-                        href={`/dashboard/documents/${rule.document}`}
-                        className="flex items-center justify-between gap-2 text-sm transition-colors hover:text-primary"
-                      >
-                        <span className="min-w-0 truncate">
-                          {rule.document_title ?? "Document"}
-                        </span>
-                        <span className="shrink-0 text-xs text-muted-foreground">
-                          {reminderWhen(rule)}
-                        </span>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </SectionCard>
-
-            <SectionCard title="Recently updated">
-              {loading ? (
-                <div className="space-y-2">
-                  {Array.from({ length: 3 }).map((_, i) => (
-                    <Skeleton key={i} className="h-10 w-full" />
-                  ))}
-                </div>
-              ) : recent.length === 0 ? (
-                <p className="py-2 text-sm text-muted-foreground">
-                  Documents you add or edit will show up here.
-                </p>
-              ) : (
-                <ul className="space-y-2.5">
-                  {recent.map((doc) => (
-                    <li key={doc.id}>
-                      <Link
-                        href={`/dashboard/documents/${doc.id}`}
-                        className="flex items-center justify-between gap-2 text-sm transition-colors hover:text-primary"
-                      >
-                        <span className="min-w-0 truncate">{doc.title}</span>
-                        <span className="shrink-0 text-xs text-muted-foreground">
-                          {formatDate(doc.updated_at)}
-                        </span>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </SectionCard>
-          </div>
-        </div>
+        <LifeRadarHero
+          name={greetingName}
+          sentence={radar.statusSentence}
+          worstSeverity={radar.worstSeverity}
+          readinessScore={readinessScore}
+          lastChecked="just now"
+          clear={radar.fixFirst.length === 0}
+        />
       )}
 
-      {/* Quick actions */}
-      {!isEmptyVault && (
-        <SectionCard
-          title="Quick actions"
-          description="Jump straight to the things you do most."
-        >
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {QUICK_ACTIONS.map((action) => {
-              const Icon = action.icon;
-              return (
-                <Link
-                  key={action.label}
-                  href={action.href}
-                  className="group flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 transition-colors hover:border-primary/40 hover:bg-muted/40"
-                >
-                  <span className="flex size-9 items-center justify-center rounded-lg bg-accent text-accent-foreground">
-                    <Icon className="size-4" />
-                  </span>
-                  <span className="flex-1 text-sm font-medium">
-                    {action.label}
-                  </span>
-                  <ArrowRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-                </Link>
-              );
-            })}
+      {showSetupChecklist && state?.checklist && (
+        <SetupChecklistCard checklist={state.checklist} />
+      )}
+
+      {isBrandNew ? (
+        <BrandNewState />
+      ) : (
+        <>
+          {/* Metric cards */}
+          {loading ? (
+            <MetricGridSkeleton />
+          ) : (
+            <LifeRadarMetricGrid metrics={metrics} />
+          )}
+
+          {/* Main grid: Fix first + right rail */}
+          <div className="grid gap-6 lg:grid-cols-[1.55fr_1fr]">
+            <div className="flex flex-col gap-6" id="fix-first">
+              <SectionCard
+                title="Fix first"
+                description="Most urgent first, across documents, money, shares, and emergency."
+                action={
+                  <Link
+                    href="/dashboard/attention"
+                    className="text-sm font-medium text-primary hover:underline"
+                  >
+                    View all
+                  </Link>
+                }
+              >
+                {loading ? (
+                  <FixFirstSkeleton />
+                ) : (
+                  <FixFirstSection
+                    items={radar.fixFirst}
+                    onRevoke={handleRevoke}
+                    revokingId={revokingId}
+                  />
+                )}
+              </SectionCard>
+
+              <SectionCard
+                title="Quick actions"
+                description="Jump straight to the things you do most."
+              >
+                <QuickActionsPanel />
+              </SectionCard>
+
+              {/* Recent activity sits under the main column on desktop. */}
+              {loading ? (
+                <SectionCard title="Recent activity">
+                  <PanelSkeleton />
+                </SectionCard>
+              ) : (
+                <RecentActivityPanel
+                  recentDocs={state.recentDocs}
+                  error={state.errors.documents}
+                />
+              )}
+            </div>
+
+            {/* Right rail */}
+            <div className="flex flex-col gap-6">
+              {loading ? (
+                <>
+                  <SectionCard title="This week">
+                    <PanelSkeleton />
+                  </SectionCard>
+                  <SectionCard title="Money Radar">
+                    <PanelSkeleton />
+                  </SectionCard>
+                  <SectionCard title="Sharing & emergency">
+                    <PanelSkeleton rows={2} />
+                  </SectionCard>
+                </>
+              ) : (
+                <>
+                  <ThisWeekPanel
+                    events={state.calEvents}
+                    summary={state.calSummary}
+                    error={state.errors.calendar}
+                    onRetry={load}
+                  />
+                  <MoneyRadarPanel
+                    summary={state.subSummary}
+                    error={state.errors.subscriptions}
+                    onRetry={load}
+                  />
+                  <SharingEmergencyPanel
+                    shareRisk={shareRisk}
+                    emergency={emergency}
+                    error={state.errors.shares || state.errors.emergency}
+                    onRetry={load}
+                  />
+                </>
+              )}
+            </div>
           </div>
-        </SectionCard>
+        </>
       )}
     </PageContainer>
+  );
+}
+
+/** Premium first-run state with three concrete next steps. */
+function BrandNewState() {
+  const steps = [
+    {
+      title: "Add your first document",
+      body: "Start with your passport, ID, visa, insurance, certificate, or any document you can't afford to lose.",
+      href: "/dashboard/documents/new",
+      cta: "Add document",
+      icon: FileText,
+    },
+    {
+      title: "Track a subscription",
+      body: "Catch silent renewals and trial endings before they charge you.",
+      href: "/dashboard/subscriptions/new",
+      cta: "Add subscription",
+      icon: CreditCard,
+    },
+    {
+      title: "Prepare emergency access",
+      body: "Set up trusted access so the right people can help if needed.",
+      href: "/dashboard/emergency",
+      cta: "Set up",
+      icon: LifeBuoy,
+    },
+  ];
+  return (
+    <SectionCard
+      title="Get started in 3 steps"
+      description="DueNest will start watching your renewals, deadlines, shares, and emergency setup as soon as you add something."
+    >
+      <div className="grid gap-3 sm:grid-cols-3">
+        {steps.map((step) => {
+          const Icon = step.icon;
+          return (
+            <div
+              key={step.title}
+              className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4"
+            >
+              <span className="flex size-9 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+                <Icon className="size-4" aria-hidden />
+              </span>
+              <div className="flex-1">
+                <p className="text-sm font-semibold">{step.title}</p>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  {step.body}
+                </p>
+              </div>
+              <Link
+                href={step.href}
+                className={cn(buttonVariants({ size: "sm" }), "w-full")}
+              >
+                <Plus className="size-3.5" aria-hidden />
+                {step.cta}
+              </Link>
+            </div>
+          );
+        })}
+      </div>
+    </SectionCard>
   );
 }
