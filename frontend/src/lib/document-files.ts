@@ -228,6 +228,16 @@ export function attachInboxFileToDocument(
   });
 }
 
+/** Whether the user already has a non-trashed file with this name. */
+export function checkInboxDuplicate(
+  filename: string,
+): Promise<{ exists: boolean; count: number }> {
+  return apiFetch<{ exists: boolean; count: number }>(
+    `/files/check-duplicate/?filename=${encodeURIComponent(filename)}`,
+    { auth: true },
+  );
+}
+
 export function createDocumentFromInboxFile(
   fileId: number,
   payload: {

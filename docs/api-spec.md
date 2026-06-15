@@ -966,6 +966,7 @@ they behave like document files.
 | `DELETE` | `/api/v1/files/:file_id/permanent-delete/` | Permanently delete a trashed standalone file |
 | `POST`   | `/api/v1/files/:file_id/attach-document/` | Attach inbox file to an existing owned document |
 | `POST`   | `/api/v1/files/:file_id/create-document/` | Create a new document from the inbox file |
+| `GET`    | `/api/v1/files/check-duplicate/?filename=` | Whether the user already has a non-trashed file with this name (owner-scoped), to warn before duplicate uploads |
 
 `create-document/` accepts optional `title`, `document_type`, `notes`,
 `expiry_date`, `issue_date`, `category` (a system or the caller's own category

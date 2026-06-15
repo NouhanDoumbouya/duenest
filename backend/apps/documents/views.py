@@ -830,6 +830,27 @@ class DocumentCategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
         return DocumentCategory.objects.filter(owner=self.request.user)
 
 
+class FileInboxDuplicateCheckView(APIView):
+    """
+    Read-only: whether the user already has a non-trashed file with a given
+    filename (inbox or attached). Lets the UI warn before an accidental
+    duplicate upload. Owner-scoped — never reveals other users' files.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        filename = (request.query_params.get("filename") or "").strip()
+        if not filename:
+            return Response({"exists": False, "count": 0})
+        count = (
+            _owned_file_queryset(request.user)
+            .filter(original_filename__iexact=filename)
+            .count()
+        )
+        return Response({"exists": count > 0, "count": count})
+
+
 class FileInboxListCreateView(generics.ListCreateAPIView):
     """GET lists standalone files; POST uploads a file without creating a document."""
 

@@ -469,6 +469,45 @@ class DocumentFileAPITests(APITestCase):
         doc = Document.objects.get(id=response.data["document"]["id"])
         self.assertIsNone(doc.category_id)  # another user's category is ignored
 
+    def test_duplicate_filename_check(self):
+        DocumentFile.objects.create(
+            uploaded_by=self.alice,
+            file=make_pdf("dup.pdf"),
+            original_filename="dup.pdf",
+            content_type="application/pdf",
+            file_size=10,
+        )
+        self.client.force_authenticate(self.alice)
+        hit = self.client.get("/api/v1/files/check-duplicate/?filename=dup.pdf")
+        self.assertEqual(hit.status_code, status.HTTP_200_OK)
+        self.assertTrue(hit.data["exists"])
+        self.assertEqual(hit.data["count"], 1)
+        # Case-insensitive.
+        self.assertTrue(
+            self.client.get("/api/v1/files/check-duplicate/?filename=DUP.pdf").data[
+                "exists"
+            ]
+        )
+        miss = self.client.get("/api/v1/files/check-duplicate/?filename=other.pdf")
+        self.assertFalse(miss.data["exists"])
+
+    def test_duplicate_check_is_owner_scoped(self):
+        from django.contrib.auth import get_user_model
+
+        bob = get_user_model().objects.create_user(
+            username="bob_dup", email="bobdup@example.com", password="StrongPass123!Dup"
+        )
+        DocumentFile.objects.create(
+            uploaded_by=bob,
+            file=make_pdf("bobsecret.pdf"),
+            original_filename="bobsecret.pdf",
+            content_type="application/pdf",
+            file_size=10,
+        )
+        self.client.force_authenticate(self.alice)
+        res = self.client.get("/api/v1/files/check-duplicate/?filename=bobsecret.pdf")
+        self.assertFalse(res.data["exists"])  # never sees another user's file
+
     def test_user_can_trash_restore_and_permanently_delete_inbox_file(self):
         inbox_file = DocumentFile.objects.create(
             uploaded_by=self.alice,
