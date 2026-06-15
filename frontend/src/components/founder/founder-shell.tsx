@@ -9,6 +9,7 @@ import {
   BarChart3,
   BellRing,
   CheckSquare,
+  CreditCard,
   FileText,
   Globe2,
   LayoutDashboard,
@@ -34,6 +35,7 @@ import { cn } from "@/lib/utils";
 const nav = [
   { label: "Overview", href: "/founder", icon: LayoutDashboard, exact: true },
   { label: "Analytics", href: "/founder/analytics", icon: BarChart3 },
+  { label: "Billing", href: "/founder/billing", icon: CreditCard },
   { label: "Notifications", href: "/founder/notifications", icon: BellRing },
   { label: "Waitlist", href: "/founder/waitlist", icon: MailCheck },
   { label: "Invites", href: "/founder/invites", icon: TicketCheck },

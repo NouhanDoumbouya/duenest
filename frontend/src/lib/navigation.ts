@@ -331,7 +331,7 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
     heading: "Account",
     items: [
       { label: "Trust & security", href: "/dashboard/trust", icon: ShieldCheck },
-      { label: "Plan & usage", href: "/dashboard/settings/plan", icon: CreditCard },
+      { label: "Plan & Billing", href: "/dashboard/settings/billing", icon: CreditCard },
       { label: "Data & privacy", href: "/dashboard/settings/data", icon: Settings },
       { label: "Feedback", href: "/dashboard/feedback", icon: MessageSquare, featureKey: "feedback" },
     ],
