@@ -2,7 +2,6 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import {
   FileText,
   Filter,
@@ -80,12 +79,43 @@ function isQuickFilter(value: string | null): value is QuickFilter {
   return QUICK_FILTERS.some((filter) => filter.value === value);
 }
 
+/** Inbound `?status=` aliases (e.g. from links) mapped to internal quick filters. */
+const STATUS_ALIASES: Record<string, QuickFilter> = {
+  expiring: "expiring_soon",
+  expiring_soon: "expiring_soon",
+  "expiring-soon": "expiring_soon",
+  expired: "expired",
+  "missing-file": "missing_file",
+  missing_file: "missing_file",
+  "missing-expiry": "missing_expiry_date",
+  missing_expiry: "missing_expiry_date",
+  missing_expiry_date: "missing_expiry_date",
+  "needs-attention": "needs_attention",
+  needs_attention: "needs_attention",
+};
+
 function initialQuickFilter(): QuickFilter {
   if (typeof window === "undefined") return "all";
   const params = new URLSearchParams(window.location.search);
   if (params.get("attention") === "1") return "needs_attention";
   const quick = params.get("quick");
-  return isQuickFilter(quick) ? quick : "all";
+  if (isQuickFilter(quick)) return quick;
+  const status = params.get("status");
+  if (status && STATUS_ALIASES[status]) return STATUS_ALIASES[status];
+  return "all";
+}
+
+/** A selected category: a category id, "none" (uncategorized), or "" (all). */
+type CategorySelection = number | "none" | "";
+
+/** Read the initial category filter from the `?category=` query param. */
+function initialCategory(): CategorySelection {
+  if (typeof window === "undefined") return "";
+  const raw = new URLSearchParams(window.location.search).get("category");
+  if (!raw) return "";
+  if (raw === "none" || raw === "uncategorized") return "none";
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : "";
 }
 
 function buildListParams({
@@ -108,7 +138,7 @@ function buildListParams({
   expiryFrom: string;
   expiryTo: string;
   tag: number | "";
-  category: number | "";
+  category: CategorySelection;
   ordering: DocumentOrdering;
 }): DocumentListParams {
   const params: DocumentListParams = { ordering };
@@ -136,8 +166,6 @@ function buildListParams({
 }
 
 function DocumentsPageInner() {
-  const searchParams = useSearchParams();
-  const browseByCategory = searchParams.get("view") === "categories";
   const [search, setSearch] = useState("");
   const [quickFilter, setQuickFilter] =
     useState<QuickFilter>(initialQuickFilter);
@@ -148,7 +176,7 @@ function DocumentsPageInner() {
   const [expiryTo, setExpiryTo] = useState("");
   const [tag, setTag] = useState<number | "">("");
   const [tags, setTags] = useState<DocumentTag[]>([]);
-  const [category, setCategory] = useState<number | "">("");
+  const [category, setCategory] = useState<CategorySelection>(initialCategory);
   const [categories, setCategories] = useState<DocumentCategory[]>([]);
   const [ordering, setOrdering] = useState<DocumentOrdering>("-created_at");
   // Grid/list toggle, remembered locally (item 176/197). Lazy init reads the
@@ -243,6 +271,25 @@ function DocumentsPageInner() {
     };
   }, []);
 
+  // Keep the `?category=` query param in sync so the filter is shareable and
+  // survives a refresh. Other params (status, search, etc.) are preserved, and
+  // any stale `?view=categories` from the old Categories page is normalized away.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    params.delete("view");
+    if (category === "") params.delete("category");
+    else params.set("category", String(category));
+    const qs = params.toString();
+    const next = qs
+      ? `${window.location.pathname}?${qs}`
+      : window.location.pathname;
+    const current = `${window.location.pathname}${window.location.search}`;
+    if (next !== current) {
+      window.history.replaceState(null, "", next);
+    }
+  }, [category]);
+
   async function handleConfirmDelete() {
     if (!pendingDelete) return;
     setDeleting(true);
@@ -293,6 +340,11 @@ function DocumentsPageInner() {
     tag !== "" ||
     category !== "" ||
     ordering !== "-created_at";
+  const categoryActive = category !== "";
+  const selectedCategoryName =
+    category === "none"
+      ? "Uncategorized"
+      : (categories.find((c) => c.id === category)?.name ?? null);
   const initialLoading = documents === null;
   const refreshing = documents !== null && loadedQueryKey !== queryKey;
   const docs = documents ?? [];
@@ -318,48 +370,6 @@ function DocumentsPageInner() {
         }
       />
 
-      {browseByCategory && (
-        <Card>
-          <CardContent className="space-y-3">
-            <div>
-              <p className="text-sm font-medium">Browse by category</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Categories help you organize meaningful records — pick one to
-                filter your documents.
-              </p>
-            </div>
-            {categories.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No categories yet. Categories appear here as you organize your
-                documents.
-              </p>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={category === "" ? "default" : "outline"}
-                  onClick={() => setCategory("")}
-                >
-                  All categories
-                </Button>
-                {categories.map((c) => (
-                  <Button
-                    key={c.id}
-                    type="button"
-                    size="sm"
-                    variant={category === c.id ? "default" : "outline"}
-                    onClick={() => setCategory(c.id)}
-                  >
-                    {c.name}
-                  </Button>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
       <Card>
         <CardContent className="space-y-5">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -383,19 +393,71 @@ function DocumentsPageInner() {
             )}
           </div>
 
-          <div className="flex flex-wrap gap-2" aria-label="Document quick filters">
+          <div
+            className="flex flex-wrap gap-2"
+            role="group"
+            aria-label="Filter by status"
+          >
             {QUICK_FILTERS.map((filter) => (
               <Button
                 key={filter.value}
                 type="button"
                 size="sm"
                 variant={quickFilter === filter.value ? "default" : "outline"}
+                aria-pressed={quickFilter === filter.value}
                 onClick={() => setQuickFilter(filter.value)}
               >
                 {filter.label}
               </Button>
             ))}
           </div>
+
+          {categories.length > 0 && (
+            <div className="space-y-2">
+              <p
+                className="text-xs font-medium tracking-wide text-muted-foreground uppercase"
+                id="category-filter-label"
+              >
+                Browse by category
+              </p>
+              <div
+                className="flex flex-wrap gap-2"
+                role="group"
+                aria-labelledby="category-filter-label"
+              >
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={category === "" ? "default" : "outline"}
+                  aria-pressed={category === ""}
+                  onClick={() => setCategory("")}
+                >
+                  All categories
+                </Button>
+                {categories.map((c) => (
+                  <Button
+                    key={c.id}
+                    type="button"
+                    size="sm"
+                    variant={category === c.id ? "default" : "outline"}
+                    aria-pressed={category === c.id}
+                    onClick={() => setCategory(c.id)}
+                  >
+                    {c.name}
+                  </Button>
+                ))}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={category === "none" ? "default" : "outline"}
+                  aria-pressed={category === "none"}
+                  onClick={() => setCategory("none")}
+                >
+                  Uncategorized
+                </Button>
+              </div>
+            </div>
+          )}
 
           <div className="grid gap-3 lg:grid-cols-[1.4fr_1fr_1fr]">
             <label className="relative block">
@@ -430,7 +492,7 @@ function DocumentsPageInner() {
             </label>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_1fr_1.1fr_auto]">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_1.1fr_auto]">
             <label className="block">
               <span className="sr-only">Country</span>
               <Input
@@ -439,26 +501,6 @@ function DocumentsPageInner() {
                 onChange={(event) => setCountry(event.target.value)}
                 placeholder="Country"
               />
-            </label>
-            <label className="block">
-              <span className="sr-only">Filter by category</span>
-              <select
-                className="h-10 w-full rounded-lg border border-input bg-card px-3 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                value={category}
-                onChange={(event) =>
-                  setCategory(
-                    event.target.value === "" ? "" : Number(event.target.value),
-                  )
-                }
-                disabled={categories.length === 0}
-              >
-                <option value="">All categories</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
             </label>
             <label className="block">
               <span className="sr-only">Filter by tag</span>
@@ -547,21 +589,40 @@ function DocumentsPageInner() {
             <EmptyState
               icon={filtersActive ? Filter : FileText}
               title={
-                filtersActive
-                  ? "No documents match these filters"
-                  : "Start your document vault"
+                categoryActive
+                  ? selectedCategoryName
+                    ? `No documents in ${selectedCategoryName}`
+                    : "No documents found in this category"
+                  : filtersActive
+                    ? "No documents match these filters"
+                    : "Start your document vault"
               }
               description={
-                filtersActive
-                  ? "Try clearing filters or adjusting your search."
-                  : "Track passports, visas, licences, certificates, and important records around the dates that matter."
+                categoryActive
+                  ? "Try another category, clear filters, or add a document."
+                  : filtersActive
+                    ? "Try clearing filters or adjusting your search."
+                    : "Track passports, visas, licences, certificates, and important records around the dates that matter."
               }
               action={
                 filtersActive ? (
-                  <Button type="button" size="lg" onClick={clearFilters}>
-                    <X className="size-4" />
-                    Clear filters
-                  </Button>
+                  <div className="flex flex-wrap items-center justify-center gap-3">
+                    <Button type="button" size="lg" onClick={clearFilters}>
+                      <X className="size-4" />
+                      Clear filters
+                    </Button>
+                    {categoryActive && (
+                      <Link
+                        href="/dashboard/documents/new"
+                        className={cn(
+                          buttonVariants({ size: "lg", variant: "outline" }),
+                        )}
+                      >
+                        <Plus className="size-4" />
+                        Add document
+                      </Link>
+                    )}
+                  </div>
                 ) : (
                   <Link
                     href="/dashboard/documents/new"
