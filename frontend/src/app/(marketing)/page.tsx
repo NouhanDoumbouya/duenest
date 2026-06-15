@@ -3,15 +3,21 @@ import Link from "next/link";
 import {
   ArrowRight,
   Ban,
+  BellRing,
+  Building2,
   Check,
+  DoorClosed,
   Eye,
   Folder,
   KeyRound,
   LifeBuoy,
   Lock,
+  Package,
   Radar,
+  ScanLine,
   Search,
   ShieldCheck,
+  Sparkles,
   Timer,
   X,
 } from "lucide-react";
@@ -21,6 +27,7 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SectionHeader } from "@/components/marketing/section";
 import { ScrollReveal } from "@/components/marketing/scroll-reveal";
 import { SystemFlow } from "@/components/marketing/system-flow";
+import { FeatureCard, type Feature } from "@/components/marketing/feature-card";
 import {
   EmergencyMockup,
   FixFirstCard,
@@ -36,7 +43,7 @@ import { cn } from "@/lib/utils";
 export const metadata: Metadata = {
   title: "DueNest — Stay ready before it's due",
   description:
-    "DueNest is the calm place to organize important documents, track renewals, share securely, and prepare emergency access — before life asks for them. Private by default. Join the beta.",
+    "DueNest is the calm place to scan and organize important documents, track renewals, prepare application bundles, share securely, and set up emergency access — before life asks for them. Private by default. Join the beta.",
   alternates: { canonical: "/" },
 };
 
@@ -53,6 +60,7 @@ export default function LandingPage() {
         <SafeSend />
         <Emergency />
         <MoneyRadar />
+        <Capabilities />
         <Security />
         <UseCases />
         <FinalCta />
@@ -87,8 +95,9 @@ function Hero() {
           </h1>
 
           <p className="mt-6 max-w-md text-lg leading-relaxed text-pretty text-muted-foreground">
-            Organize important documents, track renewals, share securely, and
-            prepare emergency access — before life asks for them.
+            Scan and organize important documents, track renewals, prepare
+            application bundles, share securely, and set up emergency access —
+            before life asks for them.
           </p>
 
           <div className="mt-9 flex flex-col gap-3 sm:flex-row">
@@ -489,6 +498,71 @@ function MoneyRadar() {
       ]}
       visual={<MoneyRadarMockup />}
     />
+  );
+}
+
+// ---- Capabilities (breadth grid) -------------------------------------------
+
+function Capabilities() {
+  const features: Feature[] = [
+    {
+      icon: ScanLine,
+      title: "Scan with your camera",
+      description:
+        "Capture a document, auto-detect the edges, and save a clean, shareable PDF straight into your vault.",
+    },
+    {
+      icon: Sparkles,
+      title: "Details filled in for you",
+      description:
+        "DueNest reads key fields and dates from a file, then asks you to confirm before saving — you stay in control.",
+    },
+    {
+      icon: Package,
+      title: "Application & renewal bundles",
+      description:
+        "Group the right documents into a pack with a readiness score — ready for visas, scholarships, jobs, and renewals.",
+    },
+    {
+      icon: BellRing,
+      title: "Reminders & calendar",
+      description:
+        "Renewal and deadline reminders on a calendar and timeline, so the next step never sneaks up on you.",
+    },
+    {
+      icon: DoorClosed,
+      title: "Secure rooms",
+      description:
+        "Open a private, access-controlled room to share a set of documents — and close it the moment you're done.",
+      badge: "Beta",
+    },
+    {
+      icon: Building2,
+      title: "Shared workspaces",
+      description:
+        "Bring family or a small team into a shared space to keep important documents organized together.",
+      badge: "Beta",
+    },
+  ];
+  return (
+    <section id="capabilities" className="scroll-mt-20">
+      <div className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:py-24">
+        <ScrollReveal>
+          <SectionHeader
+            eyebrow="The full toolkit"
+            title="More ways to stay ready — one calm system."
+            description="Beyond documents and renewals, DueNest gives you the tools to capture, prepare, and share important paperwork without the last-minute scramble."
+          />
+        </ScrollReveal>
+        <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {features.map((feature, i) => (
+            <ScrollReveal key={feature.title} delay={(i % 3) * 80}>
+              <FeatureCard feature={feature} />
+            </ScrollReveal>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
 
