@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Menu, X } from "lucide-react";
+import { ArrowRight, Menu, X } from "lucide-react";
 
 import { Logo } from "@/components/layout/logo";
 import { buttonVariants } from "@/components/ui/button";
@@ -11,20 +11,34 @@ import { cn } from "@/lib/utils";
 // Anchors are absolute ("/#…") so they also work from sub-pages (e.g. /security),
 // navigating home and scrolling rather than doing nothing.
 const navLinks = [
-  { label: "Features", href: "/#features" },
-  { label: "Quick Share", href: "/#quick-share" },
-  { label: "Use cases", href: "/#use-cases" },
+  { label: "Product", href: "/#product" },
+  { label: "Life Radar", href: "/#life-radar" },
   { label: "Security", href: "/security" },
+  { label: "Use cases", href: "/#use-cases" },
   { label: "Pricing", href: "/pricing" },
-  { label: "FAQ", href: "/#faq" },
 ];
 
 /** Top navigation for marketing pages, with a mobile menu under `md`. */
 export function SiteHeader() {
   const [open, setOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border/70 bg-background/80 backdrop-blur-md">
+    <header
+      className={cn(
+        "sticky top-0 z-40 transition-colors duration-200",
+        scrolled
+          ? "border-b border-border/70 bg-background/80 shadow-xs backdrop-blur-md"
+          : "border-b border-transparent bg-background/60 backdrop-blur-sm",
+      )}
+    >
       <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4 sm:px-6">
         <Logo />
 
@@ -43,7 +57,10 @@ export function SiteHeader() {
         <div className="flex items-center gap-1.5 sm:gap-2">
           <Link
             href="/login"
-            className={cn(buttonVariants({ variant: "ghost", size: "lg" }))}
+            className={cn(
+              buttonVariants({ variant: "ghost", size: "lg" }),
+              "hidden sm:inline-flex",
+            )}
           >
             Sign in
           </Link>
@@ -51,7 +68,8 @@ export function SiteHeader() {
             href="/waitlist"
             className={cn(buttonVariants({ size: "lg" }), "shadow-sm")}
           >
-            Join waitlist
+            Join the beta
+            <ArrowRight className="size-4" />
           </Link>
           <button
             type="button"
@@ -84,6 +102,15 @@ export function SiteHeader() {
                 </a>
               </li>
             ))}
+            <li className="mt-1 border-t border-border pt-2">
+              <Link
+                href="/login"
+                onClick={() => setOpen(false)}
+                className="block rounded-lg px-2 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                Sign in
+              </Link>
+            </li>
           </ul>
         </nav>
       )}

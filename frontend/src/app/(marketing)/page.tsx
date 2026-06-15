@@ -2,244 +2,39 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import {
   ArrowRight,
-  BellRing,
-  CalendarCheck,
+  Ban,
+  Check,
   CreditCard,
-  FileCheck2,
-  Layers,
+  FileText,
   LifeBuoy,
-  ListChecks,
+  Link2,
   Lock,
-  QrCode,
-  RotateCcw,
+  Radar,
+  Search,
   ShieldCheck,
-  Sparkles,
-  TimerReset,
-  UploadCloud,
+  Timer,
+  X,
 } from "lucide-react";
 
 import { SiteHeader } from "@/components/layout/site-header";
 import { SiteFooter } from "@/components/layout/site-footer";
-import { AppPreview } from "@/components/marketing/app-preview";
-import { FeatureCard, type Feature } from "@/components/marketing/feature-card";
+import { SectionHeader } from "@/components/marketing/section";
+import {
+  EmergencyMockup,
+  LifeRadarMockup,
+  MoneyRadarMockup,
+  SafeSendMockup,
+  VaultMockup,
+} from "@/components/marketing/mockups";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
-  title:
-    "DueNest — Stay ready for important documents, renewals, and secure sharing",
+  title: "DueNest — Stay ready before it's due",
   description:
-    "DueNest is a calm, secure command center for important documents, renewals, applications, subscriptions, bundles, emergency access, and secure sharing. Join the private beta.",
+    "DueNest is the calm place to organize important documents, track renewals, share securely, and prepare emergency access — before life asks for them. Private by default. Join the beta.",
   alternates: { canonical: "/" },
 };
-
-const features: Feature[] = [
-  {
-    icon: FileCheck2,
-    title: "Documents & File Inbox",
-    description:
-      "Keep passports, visas, licenses, insurance, and certificates in one place — capture a file fast, organize it later.",
-  },
-  {
-    icon: CalendarCheck,
-    title: "Renewal & expiry tracking",
-    description:
-      "Every document carries the date that matters, so what's expiring or renewing soon rises to the top.",
-  },
-  {
-    icon: BellRing,
-    title: "Reminders & notifications",
-    description:
-      "A notification center and email reminders give you a heads-up before a deadline or renewal arrives.",
-  },
-  {
-    icon: CreditCard,
-    title: "Subscription tracking",
-    description:
-      "Track recurring subscriptions and trials so the next charge never takes you by surprise. DueNest tracks — it does not process payments.",
-  },
-  {
-    icon: ListChecks,
-    title: "Application bundles",
-    description:
-      "Group the documents an application needs, see what's still missing, and reuse the pack for the next one.",
-  },
-  {
-    icon: QrCode,
-    title: "Quick Share",
-    description:
-      "Share selected documents by secure link, DueNest code, or QR — with expiry, revocation, and view-only control.",
-  },
-  {
-    icon: LifeBuoy,
-    title: "Emergency Access",
-    description:
-      "Prepare a chosen set of items for moments when access matters. Only what you pick is visible — never your full vault.",
-  },
-  {
-    icon: Sparkles,
-    title: "AI document support",
-    description:
-      "Automatic date extraction and smart classification to keep records accurate with less manual entry.",
-    badge: "Coming soon",
-  },
-];
-
-const pains = [
-  "Documents scattered across phone, email, WhatsApp, Drive, and laptop.",
-  "Passports, visas, and certificates expiring unnoticed.",
-  "Subscriptions renewing without warning.",
-  "Application files missing at the last minute.",
-  "Sending sensitive documents through unsafe channels.",
-  "Family or emergency contacts without the information they need.",
-];
-
-const steps = [
-  {
-    icon: UploadCloud,
-    title: "Add your documents",
-    description:
-      "Upload files or create document records with type, issuer, and the key dates that matter.",
-  },
-  {
-    icon: ListChecks,
-    title: "Organize and prepare",
-    description:
-      "Add categories, reminders, and bundles so you walk into any application or renewal already prepared.",
-  },
-  {
-    icon: QrCode,
-    title: "Share when needed",
-    description:
-      "Share only the items you choose — by secure link, code, or QR — with expiry and revocation in your control.",
-  },
-  {
-    icon: BellRing,
-    title: "Stay reminded",
-    description:
-      "Get notified before expiry and renewal dates, so nothing important slips by quietly.",
-  },
-];
-
-const quickShare = [
-  "Secure link, DueNest code, or QR — your choice of hand-off.",
-  "Set an expiry and revoke access at any time.",
-  "View-only or allow download, per share.",
-  "Share a single file or a whole bundle.",
-  "An activity log shows opens, accepts, and downloads.",
-];
-
-const emergency = [
-  "Only the items you choose are visible.",
-  "Add an emergency note or contact alongside them.",
-  "Set an expiry and revoke whenever you want.",
-  "A public viewer opens the selected items — nothing more.",
-];
-
-const useCases = [
-  {
-    title: "International students & visa holders",
-    description:
-      "Keep passports, visas, and enrolment letters ready, and share selected documents securely with schools or sponsors.",
-  },
-  {
-    title: "Scholarship & job applicants",
-    description:
-      "Build a complete application bundle, track what's still missing, and reuse it for the next opportunity.",
-  },
-  {
-    title: "Families",
-    description:
-      "Organize the household's important documents and prepare emergency access for the people who may need it.",
-  },
-  {
-    title: "Freelancers & professionals",
-    description:
-      "Track contracts, insurance, and renewals, and send clients only the files they need — not your whole vault.",
-  },
-  {
-    title: "Travelers",
-    description:
-      "Carry a calm, organized copy of the documents a trip depends on, ready to show or share when asked.",
-  },
-  {
-    title: "Student groups & small organizations",
-    description:
-      "Collect and manage documents from members without the chaos of scattered messages and threads.",
-  },
-];
-
-const trustPoints = [
-  {
-    icon: Lock,
-    title: "Encrypted at rest",
-    description:
-      "Uploaded files are encrypted at rest. DueNest decrypts a file only after its permission checks pass.",
-  },
-  {
-    icon: ShieldCheck,
-    title: "You choose what's shared",
-    description:
-      "Nothing is shared by default. A share exposes only the items you select — your wider vault stays private.",
-  },
-  {
-    icon: TimerReset,
-    title: "Expiry & revocation",
-    description:
-      "Shares and emergency access can expire and be revoked. Once revoked or expired, access stops.",
-  },
-  {
-    icon: RotateCcw,
-    title: "Access-controlled by design",
-    description:
-      "Records are scoped to your account, access codes are stored hashed, and revoked or expired links are blocked server-side.",
-  },
-];
-
-const faqs = [
-  {
-    q: "Is DueNest a replacement for Google Drive?",
-    a: "Not quite. Drive stores files; DueNest organizes important documents around their dates, reminders, application bundles, and controlled sharing — so you stay ready, not just stored.",
-  },
-  {
-    q: "What kind of documents can I manage?",
-    a: "Passports, visas, licenses, insurance, certificates, contracts, receipts, and similar life-admin documents — whatever you need to keep ready and track.",
-  },
-  {
-    q: "Can I share documents securely?",
-    a: "Yes. Quick Share lets you share selected items by secure link, DueNest code, or QR, with expiry, revocation, and view-only or download control. Your full vault is never exposed.",
-  },
-  {
-    q: "Is my full vault shared when I use Quick Share?",
-    a: "No. Only the specific files or bundle you select for that share are visible. Everything else stays private.",
-  },
-  {
-    q: "Can DueNest remind me before expiry dates?",
-    a: "Yes. DueNest surfaces what's expiring or renewing soon and can send reminders. You should still verify official deadlines and requirements yourself.",
-  },
-  {
-    q: "Does DueNest process payments?",
-    a: "No. DueNest helps you track subscriptions and renewals. It does not process payments or cancel subscriptions on your behalf.",
-  },
-  {
-    q: "What is Emergency Access?",
-    a: "A way to prepare a chosen set of information for moments when access matters. Only the items you select are visible, with expiry and revocation. It is a document access aid, not an emergency service.",
-  },
-  {
-    q: "Are my files secure?",
-    a: "Uploaded files are encrypted at rest and access is permission-checked. Watermarking can help discourage misuse, but no web app can fully prevent screenshots on every device.",
-  },
-  {
-    q: "Can I delete my data?",
-    a: "Yes. You can delete files and request account deletion and a data export from your account's data controls. See the Data & Deletion page for details.",
-  },
-  {
-    q: "Is DueNest available now?",
-    a: "DueNest is in a private beta that rolls out gradually to selected users. Join the waitlist to request access.",
-  },
-];
-
-const audience = ["Students", "Professionals", "Travelers", "Freelancers", "Families"];
 
 export default function LandingPage() {
   return (
@@ -247,400 +42,565 @@ export default function LandingPage() {
       <SiteHeader />
 
       <main className="flex-1">
-        {/* Hero */}
-        <section className="relative overflow-hidden">
-          <div
-            aria-hidden
-            className="bg-grid mask-fade-b pointer-events-none absolute inset-0 -z-10 opacity-60"
-          />
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-x-0 -top-32 -z-10 h-[420px] [background:radial-gradient(50%_60%_at_70%_0%,rgba(37,99,235,0.10),transparent_70%),radial-gradient(40%_50%_at_15%_10%,rgba(20,184,166,0.10),transparent_70%)]"
-          />
-          <div className="mx-auto grid w-full max-w-6xl items-center gap-12 px-4 py-16 sm:px-6 lg:grid-cols-[1.05fr_1fr] lg:py-24">
-            <div className="flex flex-col items-start text-left">
-              <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card/80 px-3 py-1 text-xs font-medium text-muted-foreground shadow-xs backdrop-blur">
-                <span className="flex size-1.5 rounded-full bg-brand-teal" />
-                Your calm command center for life-admin
-              </span>
-
-              <h1 className="mt-6 text-4xl font-semibold leading-[1.05] text-balance sm:text-5xl md:text-[3.4rem]">
-                Stay ready for life&apos;s{" "}
-                <span className="bg-gradient-to-r from-primary to-brand-teal bg-clip-text text-transparent">
-                  important documents
-                </span>
-                .
-              </h1>
-
-              <p className="mt-6 max-w-xl text-lg leading-relaxed text-pretty text-muted-foreground">
-                DueNest helps you organize important files, track renewals, build
-                application bundles, manage subscriptions, and share selected
-                documents securely — all from one trusted place.
-              </p>
-
-              <div className="mt-9 flex flex-col gap-3 sm:flex-row">
-                <Link
-                  href="/waitlist"
-                  className={cn(
-                    buttonVariants({ size: "lg" }),
-                    "h-12 px-7 text-base",
-                  )}
-                >
-                  Join the waitlist
-                  <ArrowRight className="size-4" />
-                </Link>
-                <Link
-                  href="#how"
-                  className={cn(
-                    buttonVariants({ variant: "outline", size: "lg" }),
-                    "h-12 px-7 text-base",
-                  )}
-                >
-                  See how it works
-                </Link>
-              </div>
-
-              <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
-                <span className="inline-flex items-center gap-1.5">
-                  <Lock className="size-4 text-brand-success" />
-                  Encrypted at rest
-                </span>
-                <span className="hidden text-border sm:inline">•</span>
-                <span className="inline-flex items-center gap-1.5">
-                  <ShieldCheck className="size-4 text-brand-success" />
-                  Selected-item sharing only
-                </span>
-                <span className="hidden text-border sm:inline">•</span>
-                <span className="inline-flex items-center gap-1.5">
-                  Invite-only private beta
-                </span>
-              </div>
-            </div>
-
-            <div className="lg:pl-4">
-              <AppPreview />
-            </div>
-          </div>
-        </section>
-
-        {/* Audience strip */}
-        <section className="border-y border-border bg-card/60">
-          <div className="mx-auto flex w-full max-w-6xl flex-col items-center gap-4 px-4 py-8 sm:px-6">
-            <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-              Made for the way real life-admin works
-            </p>
-            <div className="flex flex-wrap items-center justify-center gap-x-2.5 gap-y-2">
-              {audience.map((item) => (
-                <span
-                  key={item}
-                  className="rounded-full border border-border bg-card px-3 py-1 text-sm font-medium text-foreground/80 shadow-xs"
-                >
-                  {item}
-                </span>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Pain */}
-        <section className="scroll-mt-20">
-          <div className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:py-24">
-            <div className="mx-auto max-w-2xl text-center">
-              <p className="text-sm font-semibold text-primary">
-                The problem
-              </p>
-              <h2 className="mt-2 text-3xl font-semibold text-balance sm:text-4xl">
-                Important documents are usually remembered only when something
-                goes wrong
-              </h2>
-              <p className="mt-4 text-pretty text-muted-foreground">
-                Life-admin is scattered by default. DueNest brings it into one
-                calm, organized place — before a deadline becomes an emergency.
-              </p>
-            </div>
-            <ul className="mx-auto mt-12 grid max-w-4xl gap-3 sm:grid-cols-2">
-              {pains.map((pain) => (
-                <li
-                  key={pain}
-                  className="flex items-start gap-3 rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground shadow-xs"
-                >
-                  <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-brand-amber" />
-                  {pain}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </section>
-
-        {/* Features */}
-        <section id="features" className="scroll-mt-20 border-y border-border bg-card/60">
-          <div className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:py-24">
-            <div className="mx-auto max-w-2xl text-center">
-              <p className="text-sm font-semibold text-primary">
-                Everything in one place
-              </p>
-              <h2 className="mt-2 text-3xl font-semibold text-balance sm:text-4xl">
-                One organized home for your important documents
-              </h2>
-              <p className="mt-4 text-pretty text-muted-foreground">
-                Turn scattered files, screenshots, and forgotten dates into a
-                system you can actually trust.
-              </p>
-            </div>
-
-            <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-              {features.map((feature) => (
-                <FeatureCard key={feature.title} feature={feature} />
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* How it works */}
-        <section id="how" className="scroll-mt-20">
-          <div className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:py-24">
-            <div className="mx-auto max-w-2xl text-center">
-              <p className="text-sm font-semibold text-primary">How it works</p>
-              <h2 className="mt-2 text-3xl font-semibold text-balance sm:text-4xl">
-                From scattered and stressful to organized and ahead
-              </h2>
-            </div>
-
-            <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-              {steps.map((step, index) => {
-                const Icon = step.icon;
-                return (
-                  <div
-                    key={step.title}
-                    className="relative flex h-full flex-col gap-4 rounded-2xl border border-border bg-card p-6 shadow-card"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="flex size-11 items-center justify-center rounded-xl bg-brand-navy text-brand-teal">
-                        <Icon className="size-5" />
-                      </span>
-                      <span className="font-heading text-3xl font-semibold text-muted-foreground/25">
-                        {String(index + 1).padStart(2, "0")}
-                      </span>
-                    </div>
-                    <h3 className="font-heading text-lg font-semibold">
-                      {step.title}
-                    </h3>
-                    <p className="text-sm leading-relaxed text-muted-foreground">
-                      {step.description}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </section>
-
-        {/* Quick Share highlight */}
-        <section
-          id="quick-share"
-          className="scroll-mt-20 border-y border-border bg-card/60"
-        >
-          <div className="mx-auto grid w-full max-w-6xl gap-10 px-4 py-20 sm:px-6 lg:grid-cols-2 lg:items-center lg:py-24">
-            <div className="max-w-md">
-              <span className="flex size-11 items-center justify-center rounded-xl bg-accent text-accent-foreground">
-                <QrCode className="size-5" />
-              </span>
-              <h2 className="mt-5 text-3xl font-semibold text-balance sm:text-4xl">
-                Share selected documents without exposing your full vault
-              </h2>
-              <p className="mt-4 text-pretty text-muted-foreground">
-                Quick Share gives a recipient exactly what you choose — and
-                nothing else — with the controls you&apos;d expect from a serious
-                document tool.
-              </p>
-              <p className="mt-4 rounded-xl border border-border bg-card p-3 text-xs leading-relaxed text-muted-foreground">
-                Watermarking helps discourage misuse, but no web app can fully
-                prevent screenshots on every device.
-              </p>
-            </div>
-            <ul className="grid gap-3">
-              {quickShare.map((point) => (
-                <li
-                  key={point}
-                  className="flex items-start gap-3 rounded-xl border border-border bg-card p-4 text-sm shadow-xs"
-                >
-                  <ShieldCheck className="mt-0.5 size-4 shrink-0 text-brand-success" />
-                  <span className="text-muted-foreground">{point}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </section>
-
-        {/* Emergency Access highlight */}
-        <section id="emergency" className="scroll-mt-20">
-          <div className="mx-auto grid w-full max-w-6xl gap-10 px-4 py-20 sm:px-6 lg:grid-cols-2 lg:items-center lg:py-24">
-            <ul className="order-2 grid gap-3 lg:order-1">
-              {emergency.map((point) => (
-                <li
-                  key={point}
-                  className="flex items-start gap-3 rounded-xl border border-border bg-card p-4 text-sm shadow-xs"
-                >
-                  <LifeBuoy className="mt-0.5 size-4 shrink-0 text-primary" />
-                  <span className="text-muted-foreground">{point}</span>
-                </li>
-              ))}
-            </ul>
-            <div className="order-1 max-w-md lg:order-2">
-              <span className="flex size-11 items-center justify-center rounded-xl bg-accent text-accent-foreground">
-                <LifeBuoy className="size-5" />
-              </span>
-              <h2 className="mt-5 text-3xl font-semibold text-balance sm:text-4xl">
-                Prepare selected information for moments when access matters
-              </h2>
-              <p className="mt-4 text-pretty text-muted-foreground">
-                Only the items you choose are visible. Your full DueNest vault
-                remains private. Emergency Access is a document access aid — not
-                a medical, legal, or emergency service.
-              </p>
-            </div>
-          </div>
-        </section>
-
-        {/* Use cases */}
-        <section
-          id="use-cases"
-          className="scroll-mt-20 border-y border-border bg-card/60"
-        >
-          <div className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:py-24">
-            <div className="mx-auto max-w-2xl text-center">
-              <p className="text-sm font-semibold text-primary">Use cases</p>
-              <h2 className="mt-2 text-3xl font-semibold text-balance sm:text-4xl">
-                Built for the people juggling important documents
-              </h2>
-            </div>
-            <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {useCases.map((useCase) => (
-                <div
-                  key={useCase.title}
-                  className="flex h-full flex-col gap-2 rounded-2xl border border-border bg-card p-6 shadow-card"
-                >
-                  <Layers className="size-5 text-primary" />
-                  <h3 className="mt-2 font-heading text-base font-semibold">
-                    {useCase.title}
-                  </h3>
-                  <p className="text-sm leading-relaxed text-muted-foreground">
-                    {useCase.description}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Trust / security */}
-        <section className="scroll-mt-20">
-          <div className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:py-24">
-            <div className="grid gap-10 lg:grid-cols-[1fr_1.1fr] lg:items-center">
-              <div className="max-w-md">
-                <p className="text-sm font-semibold text-primary">
-                  Trust &amp; security
-                </p>
-                <h2 className="mt-2 text-3xl font-semibold text-balance sm:text-4xl">
-                  Built for sensitive life-admin
-                </h2>
-                <p className="mt-4 text-pretty text-muted-foreground">
-                  Files, sharing links, emergency access, and reminders are built
-                  with access control, expiry, revocation, and privacy-safe
-                  operations in mind.
-                </p>
-                <Link
-                  href="/security"
-                  className="mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
-                >
-                  Read our trust &amp; security page
-                  <ArrowRight className="size-4" />
-                </Link>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                {trustPoints.map((point) => {
-                  const Icon = point.icon;
-                  return (
-                    <div
-                      key={point.title}
-                      className="rounded-2xl border border-border bg-card p-5 shadow-card"
-                    >
-                      <span className="flex size-10 items-center justify-center rounded-xl bg-accent text-accent-foreground">
-                        <Icon className="size-5" />
-                      </span>
-                      <h3 className="mt-4 text-sm font-semibold">
-                        {point.title}
-                      </h3>
-                      <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                        {point.description}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* FAQ */}
-        <section
-          id="faq"
-          className="scroll-mt-20 border-y border-border bg-card/60"
-        >
-          <div className="mx-auto w-full max-w-3xl px-4 py-20 sm:px-6 lg:py-24">
-            <div className="text-center">
-              <p className="text-sm font-semibold text-primary">FAQ</p>
-              <h2 className="mt-2 text-3xl font-semibold sm:text-4xl">
-                Questions, answered
-              </h2>
-            </div>
-            <div className="mt-10 divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card shadow-card">
-              {faqs.map((faq) => (
-                <div key={faq.q} className="p-6">
-                  <h3 className="font-heading text-base font-semibold">
-                    {faq.q}
-                  </h3>
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                    {faq.a}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Final CTA */}
-        <section className="px-4 py-20 sm:px-6 lg:py-24">
-          <div className="relative mx-auto w-full max-w-6xl overflow-hidden rounded-3xl bg-brand-navy px-6 py-16 text-center text-white shadow-floating sm:px-12">
-            <div
-              aria-hidden
-              className="pointer-events-none absolute inset-0 [background:radial-gradient(50%_60%_at_50%_0%,rgba(20,184,166,0.28),transparent_60%),radial-gradient(45%_55%_at_100%_100%,rgba(37,99,235,0.38),transparent_60%)]"
-            />
-            <div className="relative mx-auto flex max-w-2xl flex-col items-center gap-6">
-              <h2 className="text-3xl font-semibold text-balance text-white sm:text-4xl">
-                Be ready before deadlines become emergencies
-              </h2>
-              <p className="text-pretty text-white/70">
-                Private beta access rolls out gradually to selected users. Join
-                the waitlist to request yours.
-              </p>
-              <Link
-                href="/waitlist"
-                className={cn(
-                  buttonVariants({ size: "lg" }),
-                  "h-12 bg-white px-7 text-base text-brand-navy shadow-sm hover:bg-white/90",
-                )}
-              >
-                Join the waitlist
-                <ArrowRight className="size-4" />
-              </Link>
-            </div>
-          </div>
-        </section>
+        <Hero />
+        <TrustStrip />
+        <Pain />
+        <LifeRadar />
+        <Vault />
+        <SafeSend />
+        <Emergency />
+        <MoneyRadar />
+        <Security />
+        <UseCases />
+        <FinalCta />
       </main>
 
       <SiteFooter />
     </>
+  );
+}
+
+// ---- Hero ------------------------------------------------------------------
+
+function Hero() {
+  return (
+    <section id="product" className="relative overflow-hidden scroll-mt-20">
+      <div
+        aria-hidden
+        className="bg-grid mask-fade-b pointer-events-none absolute inset-0 -z-10 opacity-60"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 -top-32 -z-10 h-[420px] [background:radial-gradient(50%_60%_at_70%_0%,rgba(37,99,235,0.10),transparent_70%),radial-gradient(40%_50%_at_15%_10%,rgba(20,184,166,0.10),transparent_70%)]"
+      />
+      <div className="mx-auto grid w-full max-w-6xl items-center gap-12 px-4 py-16 sm:px-6 lg:grid-cols-[1.05fr_1fr] lg:py-24">
+        <div className="content-fade-in flex flex-col items-start text-left">
+          <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card/80 px-3 py-1 text-xs font-medium text-muted-foreground shadow-xs backdrop-blur">
+            <span className="flex size-1.5 rounded-full bg-brand-teal" />
+            The Life Admin OS for documents &amp; deadlines
+          </span>
+
+          <h1 className="mt-6 font-heading text-4xl leading-[1.05] font-semibold tracking-tight text-balance sm:text-5xl md:text-[3.4rem]">
+            Stay ready{" "}
+            <span className="bg-gradient-to-r from-primary to-brand-teal bg-clip-text text-transparent">
+              before it&apos;s due
+            </span>
+            .
+          </h1>
+
+          <p className="mt-6 max-w-xl text-lg leading-relaxed text-pretty text-muted-foreground">
+            DueNest helps you organize important documents, track renewals, share
+            securely, and prepare emergency access — before life asks for them.
+          </p>
+
+          <div className="mt-9 flex flex-col gap-3 sm:flex-row">
+            <Link
+              href="/waitlist"
+              className={cn(buttonVariants({ size: "lg" }), "h-12 px-7 text-base")}
+            >
+              Start free
+              <ArrowRight className="size-4" />
+            </Link>
+            <Link
+              href="/#life-radar"
+              className={cn(
+                buttonVariants({ variant: "outline", size: "lg" }),
+                "h-12 px-7 text-base",
+              )}
+            >
+              See how it works
+            </Link>
+          </div>
+
+          <p className="mt-6 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+            <ShieldCheck className="size-4 text-brand-success" />
+            <span>Private by default</span>
+            <span className="text-border">·</span>
+            <span>Secure sharing</span>
+            <span className="text-border">·</span>
+            <span>Revoke anytime</span>
+          </p>
+
+          <p className="mt-4 text-sm text-muted-foreground">
+            Built for students, travelers, families, and busy professionals.
+          </p>
+        </div>
+
+        <div className="content-fade-in lg:pl-4">
+          <LifeRadarMockup />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ---- Trust strip -----------------------------------------------------------
+
+function TrustStrip() {
+  const flow = [
+    "Vault",
+    "Life Radar",
+    "SafeSend",
+    "Emergency Access",
+    "Money Radar",
+  ];
+  return (
+    <section className="border-y border-border bg-card/60">
+      <div className="mx-auto flex w-full max-w-6xl flex-col items-center gap-5 px-4 py-8 sm:px-6">
+        <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+          One connected system for personal readiness
+        </p>
+        <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-2 text-sm">
+          {flow.map((item, i) => (
+            <span key={item} className="flex items-center gap-2">
+              {i > 0 && <ArrowRight className="size-3.5 text-muted-foreground/50" />}
+              <span className="rounded-full border border-border bg-card px-3 py-1 font-medium text-foreground/80 shadow-xs">
+                {item}
+              </span>
+            </span>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ---- Pain ------------------------------------------------------------------
+
+function Pain() {
+  const before = [
+    "Files scattered across WhatsApp, email, Drive, and your phone gallery",
+    "No idea what expires or renews soon",
+    "Subscriptions charge you by surprise",
+    "Shared files are hard to take back",
+    "Trusted people can't help in an emergency",
+  ];
+  const after = [
+    "Important documents organized in one place",
+    "Deadlines and renewals visible at a glance",
+    "Renewals tracked before money leaves your account",
+    "Secure sharing you can revoke anytime",
+    "Emergency access prepared before it's needed",
+  ];
+  return (
+    <section className="scroll-mt-20">
+      <div className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:py-24">
+        <SectionHeader
+          eyebrow="The problem"
+          title="Life admin gets messy fast."
+          description="Important documents are usually remembered only when something goes wrong. DueNest brings them into one calm place — before a deadline becomes an emergency."
+        />
+        <div className="mx-auto mt-12 grid max-w-4xl gap-5 md:grid-cols-2">
+          <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
+            <p className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+              <span className="flex size-6 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+                <X className="size-3.5" />
+              </span>
+              Without DueNest
+            </p>
+            <ul className="mt-4 space-y-3">
+              {before.map((p) => (
+                <li
+                  key={p}
+                  className="flex items-start gap-3 text-sm text-muted-foreground"
+                >
+                  <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-brand-amber" />
+                  {p}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="rounded-2xl border border-primary/20 bg-primary/5 p-6 shadow-card">
+            <p className="flex items-center gap-2 text-sm font-semibold">
+              <span className="flex size-6 items-center justify-center rounded-full bg-brand-success/15 text-brand-success">
+                <Check className="size-3.5" />
+              </span>
+              With DueNest
+            </p>
+            <ul className="mt-4 space-y-3">
+              {after.map((p) => (
+                <li key={p} className="flex items-start gap-3 text-sm">
+                  <Check className="mt-0.5 size-4 shrink-0 text-brand-success" />
+                  <span>{p}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ---- Reusable product section ----------------------------------------------
+
+function ProductSection({
+  id,
+  eyebrow,
+  title,
+  description,
+  bullets,
+  visual,
+  reverse,
+  tone = "default",
+}: {
+  id: string;
+  eyebrow: string;
+  title: string;
+  description: string;
+  bullets: string[];
+  visual: React.ReactNode;
+  reverse?: boolean;
+  tone?: "default" | "muted";
+}) {
+  return (
+    <section
+      id={id}
+      className={cn(
+        "scroll-mt-20",
+        tone === "muted" && "border-y border-border bg-card/60",
+      )}
+    >
+      <div className="mx-auto grid w-full max-w-6xl items-center gap-10 px-4 py-20 sm:px-6 lg:grid-cols-2 lg:gap-14 lg:py-24">
+        <div className={cn("max-w-lg", reverse && "lg:order-2 lg:justify-self-end")}>
+          <p className="text-sm font-semibold text-primary">{eyebrow}</p>
+          <h2 className="mt-2 font-heading text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
+            {title}
+          </h2>
+          <p className="mt-4 text-pretty text-muted-foreground">{description}</p>
+          <ul className="mt-6 space-y-2.5">
+            {bullets.map((b) => (
+              <li key={b} className="flex items-start gap-3 text-sm">
+                <ShieldCheck className="mt-0.5 size-4 shrink-0 text-brand-success" />
+                <span className="text-muted-foreground">{b}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className={cn(reverse && "lg:order-1")}>{visual}</div>
+      </div>
+    </section>
+  );
+}
+
+// ---- Life Radar ------------------------------------------------------------
+
+function LifeRadar() {
+  const signals = [
+    { icon: Search, label: "Fix first", meta: "What needs you today" },
+    { icon: Timer, label: "Next deadline", meta: "Student visa · 23 days" },
+    { icon: CreditCard, label: "Next charge", meta: "Spotify · tomorrow" },
+    { icon: Link2, label: "Active share", meta: "Passport · expires 18h" },
+    { icon: LifeBuoy, label: "Emergency", meta: "1 step left" },
+    { icon: Radar, label: "What am I forgetting?", meta: "DueNest keeps watching" },
+  ];
+  return (
+    <section id="life-radar" className="scroll-mt-20">
+      <div className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:py-24">
+        <SectionHeader
+          eyebrow="Life Radar"
+          title="Know what needs attention before it becomes a problem."
+          description="Life Radar checks your documents, renewals, subscriptions, shares, bundles, and emergency setup, then tells you what to fix first — rule-based, calm, and always on."
+        />
+        <div className="mt-12 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {signals.map((s) => {
+            const Icon = s.icon;
+            return (
+              <div
+                key={s.label}
+                className="surface-hover flex items-start gap-3 rounded-2xl border border-border bg-card p-5 shadow-card"
+              >
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-navy text-brand-teal">
+                  <Icon className="size-5" />
+                </span>
+                <div>
+                  <p className="text-sm font-semibold">{s.label}</p>
+                  <p className="mt-0.5 text-sm text-muted-foreground">{s.meta}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <p className="mx-auto mt-8 max-w-xl text-center text-sm text-muted-foreground">
+          A calm week looks calm: “Nothing urgent. DueNest will keep watching.”
+        </p>
+      </div>
+    </section>
+  );
+}
+
+// ---- Product sections ------------------------------------------------------
+
+function Vault() {
+  return (
+    <ProductSection
+      id="vault"
+      tone="muted"
+      eyebrow="Vault"
+      title="A vault that does more than store files."
+      description="Every important document has a status, a place, and a next action — not just a filename in a folder."
+      bullets={[
+        "Status at a glance: Safe, Expiring, Expired, Missing info, Shared",
+        "Drop a file into File Inbox now, organize it later",
+        "Expiry tracking, categories, and secure preview",
+        "Trash and recovery, so nothing is lost by accident",
+      ]}
+      visual={<VaultMockup />}
+    />
+  );
+}
+
+function SafeSend() {
+  return (
+    <ProductSection
+      id="safesend"
+      reverse
+      eyebrow="Quick Share · SafeSend"
+      title="Share safely. Stay in control."
+      description="Send secure access through a QR, a link, or a DueNest code — without losing control of your documents. You share access, not raw files."
+      bullets={[
+        "QR, secure link, or DueNest code — send via WhatsApp, Telegram, or email",
+        "View-only, access codes, expiry countdown, and watermarking",
+        "See a recipient preview, and revoke access anytime",
+        "Your wider vault is never exposed",
+      ]}
+      visual={
+        <div className="relative">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -inset-6 -z-10 rounded-[2rem] bg-gradient-to-tr from-brand-teal/10 via-primary/10 to-transparent blur-2xl"
+          />
+          <SafeSendMockup />
+        </div>
+      }
+    />
+  );
+}
+
+function Emergency() {
+  return (
+    <ProductSection
+      id="emergency"
+      tone="muted"
+      eyebrow="Emergency Access"
+      title="Prepare emergency access before it's needed."
+      description="Let trusted people reach selected documents if you need help — without exposing your full vault. Calm, prepared, and entirely in your control."
+      bullets={[
+        "Only the documents you select are ever shown",
+        "Add a trusted contact and an emergency note",
+        "The emergency QR can be locked by default",
+        "Revoke or regenerate access anytime, with an access log",
+      ]}
+      visual={<EmergencyMockup />}
+    />
+  );
+}
+
+function MoneyRadar() {
+  return (
+    <ProductSection
+      id="money-radar"
+      reverse
+      eyebrow="Money Radar"
+      title="Catch silent renewals before they charge you."
+      description="Track subscriptions, trials, cancellation deadlines, and upcoming charges before the money leaves your account."
+      bullets={[
+        "See your next charge, monthly spend, and yearly estimate",
+        "Trial-ending and cancellation-deadline reminders",
+        "“Still using this?” prompts to review what you pay for",
+        "DueNest tracks renewals — it never processes payments",
+      ]}
+      visual={<MoneyRadarMockup />}
+    />
+  );
+}
+
+// ---- Security --------------------------------------------------------------
+
+function Security() {
+  const pillars = [
+    {
+      icon: Lock,
+      title: "Private by default",
+      description:
+        "Nothing is shared until you choose to. Your vault is scoped to your account, and uploaded files are encrypted at rest.",
+    },
+    {
+      icon: ShieldCheck,
+      title: "Share selected access, not your vault",
+      description:
+        "A share exposes only the items you pick. Everything else stays private — no full-vault exposure.",
+    },
+    {
+      icon: Timer,
+      title: "Expiring access",
+      description:
+        "Shares and emergency access can expire automatically, so access never lingers longer than you intend.",
+    },
+    {
+      icon: Ban,
+      title: "Revoke anytime",
+      description:
+        "Change your mind and close access instantly. Revoked and expired links are blocked server-side.",
+    },
+    {
+      icon: FileText,
+      title: "Activity visibility",
+      description:
+        "An activity log shows opens, accepts, previews, and downloads — so you always know what happened.",
+    },
+    {
+      icon: Search,
+      title: "Honest about limits",
+      description:
+        "Watermarking discourages misuse, but no web app can fully block screenshots. We tell you what's true.",
+    },
+  ];
+  return (
+    <section id="security" className="scroll-mt-20">
+      <div className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:py-24">
+        <SectionHeader
+          eyebrow="Trust & security"
+          title="Built for sensitive life documents."
+          description="DueNest is designed around controlled access. You choose what to share, how long access lasts, and when to revoke it."
+        />
+        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {pillars.map((p) => {
+            const Icon = p.icon;
+            return (
+              <div
+                key={p.title}
+                className="rounded-2xl border border-border bg-card p-5 shadow-card"
+              >
+                <span className="flex size-10 items-center justify-center rounded-xl bg-accent text-accent-foreground">
+                  <Icon className="size-5" />
+                </span>
+                <h3 className="mt-4 text-sm font-semibold">{p.title}</h3>
+                <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                  {p.description}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+        <div className="mt-8 text-center">
+          <Link
+            href="/security"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+          >
+            Read the trust &amp; security page
+            <ArrowRight className="size-4" />
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ---- Use cases -------------------------------------------------------------
+
+function UseCases() {
+  const cases = [
+    {
+      title: "International students",
+      description:
+        "Track passport, visa, insurance, and student letters — and share selected documents with schools or sponsors.",
+    },
+    {
+      title: "Travelers",
+      description:
+        "Carry a secure backup of travel documents and keep emergency access ready, wherever you are.",
+    },
+    {
+      title: "Scholarship applicants",
+      description:
+        "Prepare document bundles and avoid missing application requirements at the last minute.",
+    },
+    {
+      title: "Families",
+      description:
+        "Keep important documents organized and prepare emergency access for the people you trust.",
+    },
+    {
+      title: "Young professionals",
+      description:
+        "Track contracts, certificates, subscriptions, and the deadlines that matter for your career.",
+    },
+    {
+      title: "Freelancers",
+      description:
+        "Organize contracts, invoices, and renewals, and share only the files a client needs.",
+    },
+  ];
+  return (
+    <section id="use-cases" className="scroll-mt-20 border-y border-border bg-card/60">
+      <div className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:py-24">
+        <SectionHeader
+          eyebrow="Use cases"
+          title="Built for the people juggling important documents."
+        />
+        <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {cases.map((c) => (
+            <div
+              key={c.title}
+              className="surface-hover flex h-full flex-col gap-2 rounded-2xl border border-border bg-card p-6 shadow-card"
+            >
+              <h3 className="font-heading text-base font-semibold">{c.title}</h3>
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                {c.description}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ---- Final CTA -------------------------------------------------------------
+
+function FinalCta() {
+  return (
+    <section className="px-4 py-20 sm:px-6 lg:py-24">
+      <div className="relative mx-auto w-full max-w-6xl overflow-hidden rounded-3xl bg-brand-navy px-6 py-16 text-center text-white shadow-floating sm:px-12">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 [background:radial-gradient(50%_60%_at_50%_0%,rgba(20,184,166,0.28),transparent_60%),radial-gradient(45%_55%_at_100%_100%,rgba(37,99,235,0.38),transparent_60%)]"
+        />
+        <div className="relative mx-auto flex max-w-2xl flex-col items-center gap-6">
+          <h2 className="font-heading text-3xl font-semibold text-balance text-white sm:text-4xl">
+            Start getting ready before things are due.
+          </h2>
+          <p className="text-pretty text-white/70">
+            Organize your first document, track your next renewal, and share
+            securely when life asks for proof.
+          </p>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Link
+              href="/waitlist"
+              className={cn(
+                buttonVariants({ size: "lg" }),
+                "h-12 bg-white px-7 text-base text-brand-navy shadow-sm hover:bg-white/90",
+              )}
+            >
+              Start free
+              <ArrowRight className="size-4" />
+            </Link>
+            <Link
+              href="/#life-radar"
+              className={cn(
+                buttonVariants({ variant: "outline", size: "lg" }),
+                "h-12 border-white/25 bg-transparent px-7 text-base text-white hover:bg-white/10 hover:text-white",
+              )}
+            >
+              See how it works
+            </Link>
+          </div>
+          <p className="text-xs text-white/50">
+            Private beta · rolls out gradually to selected users.
+          </p>
+        </div>
+      </div>
+    </section>
   );
 }
