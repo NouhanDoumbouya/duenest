@@ -721,6 +721,10 @@ and always assigns `owner` to the requester; names must be unique within scope
 (system vs. the user's own), returning `400` on a clash. The list never exposes
 another user's categories.
 
+Document responses include read-only, owner-scoped usage indicators:
+`is_shared_externally` (an active external share exists), `in_bundle` (linked by
+a bundle requirement), and `in_emergency` (included in an emergency access pack).
+
 ### Authentication
 
 Required (`Authorization: Bearer <access_token>`).

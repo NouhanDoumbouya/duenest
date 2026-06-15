@@ -161,6 +161,8 @@ class DocumentSerializer(serializers.ModelSerializer):
     )
 
     is_shared_externally = serializers.SerializerMethodField()
+    in_bundle = serializers.SerializerMethodField()
+    in_emergency = serializers.SerializerMethodField()
 
     # Tags: nested for reads, id list for writes (scoped to the owner).
     tags = DocumentTagSerializer(many=True, read_only=True)
@@ -223,6 +225,8 @@ class DocumentSerializer(serializers.ModelSerializer):
             "last_safe_action_status",
             "last_safe_action_is_manual",
             "is_shared_externally",
+            "in_bundle",
+            "in_emergency",
             "created_at",
             "updated_at",
         ]
@@ -252,6 +256,8 @@ class DocumentSerializer(serializers.ModelSerializer):
             "last_safe_action_status",
             "last_safe_action_is_manual",
             "is_shared_externally",
+            "in_bundle",
+            "in_emergency",
             "created_at",
             "updated_at",
         ]
@@ -351,6 +357,18 @@ class DocumentSerializer(serializers.ModelSerializer):
         return obj.file_share_links.filter(
             revoked_at__isnull=True, expires_at__gt=timezone.now()
         ).exists()
+
+    def get_in_bundle(self, obj):
+        annotated = getattr(obj, "in_bundle_anno", None)
+        if annotated is not None:
+            return bool(annotated)
+        return obj.bundle_requirements.exists()
+
+    def get_in_emergency(self, obj):
+        annotated = getattr(obj, "in_emergency_anno", None)
+        if annotated is not None:
+            return bool(annotated)
+        return obj.emergency_pack_items.exists()
 
     def validate_custom_fields(self, value):
         """Custom fields are a flat object of string keys to scalar values."""

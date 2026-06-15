@@ -97,6 +97,8 @@ export interface DocumentRecord {
   last_safe_action_status: LastSafeActionStatus;
   last_safe_action_is_manual: boolean;
   is_shared_externally: boolean;
+  in_bundle: boolean;
+  in_emergency: boolean;
   // Physical document location — "where is the original?" details.
   physical_location_label: string;
   physical_location_details: string;

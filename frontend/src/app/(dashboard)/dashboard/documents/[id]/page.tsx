@@ -10,8 +10,10 @@ import {
   FileCheck2,
   FileText,
   Info,
+  LifeBuoy,
   Loader2,
   Lock,
+  Package,
   Paperclip,
   RefreshCw,
   Share2,
@@ -340,6 +342,12 @@ export default function DocumentWorkspacePage() {
                   )}
                   {doc.is_shared_externally && (
                     <GlanceChip icon={Share2} label="Shared" tone="blue" />
+                  )}
+                  {doc.in_bundle && (
+                    <GlanceChip icon={Package} label="In bundle" tone="slate" />
+                  )}
+                  {doc.in_emergency && (
+                    <GlanceChip icon={LifeBuoy} label="Emergency access" tone="amber" />
                   )}
                   {doc.missing_file && (
                     <GlanceChip icon={Paperclip} label="No file attached" tone="amber" />
