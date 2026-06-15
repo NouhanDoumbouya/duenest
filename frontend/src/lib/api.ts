@@ -148,6 +148,19 @@ export async function apiFetch<T>(
   const data: unknown = isJson ? await response.json() : null;
 
   if (!response.ok) {
+    // Surface free-plan limit hits globally so a single listener can show the
+    // upgrade modal, instead of every create flow wiring it up individually.
+    if (
+      response.status === 403 &&
+      typeof window !== "undefined" &&
+      data &&
+      typeof data === "object" &&
+      (data as Record<string, unknown>).code === "plan_limit_exceeded"
+    ) {
+      window.dispatchEvent(
+        new CustomEvent("duenest:plan-limit", { detail: data }),
+      );
+    }
     throw new ApiError(
       extractErrorMessage(data, "Something went wrong. Please try again."),
       response.status,
