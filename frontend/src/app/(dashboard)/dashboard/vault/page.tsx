@@ -60,6 +60,7 @@ interface VaultState {
   inbox: DocumentFile[];
   inboxCount: number;
   categories: DocumentCategory[];
+  categoryCounts: Record<number, number>;
   errors: {
     counts: boolean;
     attention: boolean;
@@ -134,6 +135,7 @@ export default function VaultPage() {
       inbox: (val(inbox)?.results ?? []).slice(0, 3),
       inboxCount: val(inbox)?.count ?? 0,
       categories: val(categories) ?? [],
+      categoryCounts: {},
       errors: {
         counts: countsError,
         attention: attention.status === "rejected",
@@ -142,6 +144,24 @@ export default function VaultPage() {
         categories: categories.status === "rejected",
       },
     });
+
+    // Lazily fetch per-category document counts for the shown categories
+    // (bounded to 6 lightweight count queries) and merge them in once ready.
+    const shownCategories = (val(categories) ?? []).slice(0, 6);
+    if (shownCategories.length > 0) {
+      const countResults = await Promise.allSettled(
+        shownCategories.map((c) =>
+          getDocuments({ category: c.id, page_size: 1 }),
+        ),
+      );
+      if (!mountedRef.current) return;
+      const map: Record<number, number> = {};
+      shownCategories.forEach((c, i) => {
+        const r = countResults[i];
+        if (r.status === "fulfilled") map[c.id] = r.value.count;
+      });
+      setState((prev) => (prev ? { ...prev, categoryCounts: map } : prev));
+    }
   }, []);
 
   useEffect(() => {
@@ -494,7 +514,11 @@ export default function VaultPage() {
                 ) : (
                   <div className="space-y-2">
                     {state.categories.slice(0, 6).map((category) => (
-                      <CategoryCard key={category.id} category={category} />
+                      <CategoryCard
+                        key={category.id}
+                        category={category}
+                        count={state.categoryCounts[category.id]}
+                      />
                     ))}
                   </div>
                 )}

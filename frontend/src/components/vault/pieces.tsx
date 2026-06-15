@@ -107,7 +107,14 @@ export function DocRow({ doc }: { doc: DocumentRecord }) {
   );
 }
 
-export function CategoryCard({ category }: { category: DocumentCategory }) {
+export function CategoryCard({
+  category,
+  count,
+}: {
+  category: DocumentCategory;
+  /** Document count; omit while still loading (renders nothing). */
+  count?: number;
+}) {
   return (
     <Link
       href={`/dashboard/documents?category=${category.id}`}
@@ -126,7 +133,14 @@ export function CategoryCard({ category }: { category: DocumentCategory }) {
           )}
         </span>
       </span>
-      <ArrowRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+      <span className="flex shrink-0 items-center gap-2">
+        {count !== undefined && (
+          <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+            {count}
+          </span>
+        )}
+        <ArrowRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+      </span>
     </Link>
   );
 }
