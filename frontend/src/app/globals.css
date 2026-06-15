@@ -209,6 +209,22 @@
     transform: none;
   }
 
+  /* A calm "always watching" pulse for live status dots. */
+  .pulse-soft {
+    animation: duenest-pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes duenest-pulse {
+    0%,
+    100% {
+      opacity: 1;
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand-success) 45%, transparent);
+    }
+    50% {
+      opacity: 0.65;
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand-success) 0%, transparent);
+    }
+  }
+
   /* Quick Share QR entrance — a calm, fast fade + slight scale (180–260ms). */
   .quick-share-qr-in {
     animation: quick-share-qr-pop 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -287,5 +303,9 @@
     opacity: 1;
     transform: none;
     transition: none;
+  }
+
+  .pulse-soft {
+    animation: none;
   }
 }
