@@ -18,6 +18,7 @@ import {
 
 import { SiteHeader } from "@/components/layout/site-header";
 import { SiteFooter } from "@/components/layout/site-footer";
+import { AttributionCapture } from "@/components/marketing/attribution-capture";
 import { SectionHeader } from "@/components/marketing/section";
 import { ScrollReveal } from "@/components/marketing/scroll-reveal";
 import { SystemFlow } from "@/components/marketing/system-flow";
@@ -43,6 +44,7 @@ export const metadata: Metadata = {
 export default function LandingPage() {
   return (
     <>
+      <AttributionCapture />
       <SiteHeader />
       <main className="flex-1">
         <Hero />

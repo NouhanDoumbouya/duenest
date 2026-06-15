@@ -34,6 +34,15 @@ export interface RegisterRequest {
   email: string;
   password: string;
   invite_code?: string;
+  // Optional acquisition attribution captured on landing (UTM + referral).
+  utm_source?: string;
+  utm_medium?: string;
+  utm_campaign?: string;
+  utm_content?: string;
+  utm_term?: string;
+  referrer?: string;
+  landing_page?: string;
+  referral_code?: string;
 }
 
 /** Payload sent to POST /api/v1/auth/google/ (Google ID token from the client). */

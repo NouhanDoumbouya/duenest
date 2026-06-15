@@ -3,11 +3,23 @@ from django.urls import path
 from .growth_api import (
     FounderGrowthActionDetailView,
     FounderGrowthActionListCreateView,
+    FounderGrowthAmbassadorDetailView,
+    FounderGrowthAmbassadorListCreateView,
     FounderGrowthCampaignDetailView,
     FounderGrowthCampaignListCreateView,
+    FounderGrowthChartsView,
+    FounderGrowthContentDetailView,
+    FounderGrowthContentListCreateView,
+    FounderGrowthExportView,
     FounderGrowthFunnelView,
+    FounderGrowthGenerateActionsView,
     FounderGrowthOverviewView,
+    FounderGrowthReferralsView,
+    FounderGrowthSegmentDetailView,
+    FounderGrowthSegmentListCreateView,
+    FounderGrowthSegmentMembersView,
     FounderGrowthUtmBuilderView,
+    GrowthAttributionCaptureView,
 )
 from .views import (
     ClientErrorLogCreateView,
@@ -216,5 +228,65 @@ urlpatterns = [
         "founder/growth/actions/<int:pk>/",
         FounderGrowthActionDetailView.as_view(),
         name="founder-growth-action-detail",
+    ),
+    path(
+        "founder/growth/actions/generate/",
+        FounderGrowthGenerateActionsView.as_view(),
+        name="founder-growth-actions-generate",
+    ),
+    path(
+        "founder/growth/content/",
+        FounderGrowthContentListCreateView.as_view(),
+        name="founder-growth-content",
+    ),
+    path(
+        "founder/growth/content/<int:pk>/",
+        FounderGrowthContentDetailView.as_view(),
+        name="founder-growth-content-detail",
+    ),
+    path(
+        "founder/growth/segments/",
+        FounderGrowthSegmentListCreateView.as_view(),
+        name="founder-growth-segments",
+    ),
+    path(
+        "founder/growth/segments/<int:pk>/",
+        FounderGrowthSegmentDetailView.as_view(),
+        name="founder-growth-segment-detail",
+    ),
+    path(
+        "founder/growth/segments/<int:pk>/members/",
+        FounderGrowthSegmentMembersView.as_view(),
+        name="founder-growth-segment-members",
+    ),
+    path(
+        "founder/growth/ambassadors/",
+        FounderGrowthAmbassadorListCreateView.as_view(),
+        name="founder-growth-ambassadors",
+    ),
+    path(
+        "founder/growth/ambassadors/<int:pk>/",
+        FounderGrowthAmbassadorDetailView.as_view(),
+        name="founder-growth-ambassador-detail",
+    ),
+    path(
+        "founder/growth/referrals/",
+        FounderGrowthReferralsView.as_view(),
+        name="founder-growth-referrals",
+    ),
+    path(
+        "founder/growth/charts/",
+        FounderGrowthChartsView.as_view(),
+        name="founder-growth-charts",
+    ),
+    path(
+        "founder/growth/export/",
+        FounderGrowthExportView.as_view(),
+        name="founder-growth-export",
+    ),
+    path(
+        "growth/attribution/",
+        GrowthAttributionCaptureView.as_view(),
+        name="growth-attribution-capture",
     ),
 ]

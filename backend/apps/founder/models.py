@@ -769,3 +769,230 @@ class GrowthAction(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class ContentItem(models.Model):
+    """Founder marketing content calendar item."""
+
+    class Status(models.TextChoices):
+        IDEA = "idea", "Idea"
+        DRAFT = "draft", "Draft"
+        SCHEDULED = "scheduled", "Scheduled"
+        PUBLISHED = "published", "Published"
+        MEASURING = "measuring", "Measuring"
+        REPURPOSE = "repurpose", "Repurpose"
+        ARCHIVED = "archived", "Archived"
+
+    class Priority(models.TextChoices):
+        HIGH = "high", "High"
+        MEDIUM = "medium", "Medium"
+        LOW = "low", "Low"
+
+    title = models.CharField(max_length=200)
+    channel = models.CharField(max_length=80, blank=True)
+    content_type = models.CharField(max_length=80, blank=True)
+    target_audience = models.CharField(max_length=120, blank=True)
+    campaign = models.ForeignKey(
+        "MarketingCampaign",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="content_items",
+    )
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.IDEA)
+    priority = models.CharField(
+        max_length=12, choices=Priority.choices, default=Priority.MEDIUM
+    )
+    scheduled_at = models.DateTimeField(null=True, blank=True)
+    published_at = models.DateTimeField(null=True, blank=True)
+    cta = models.CharField(max_length=160, blank=True)
+    utm_link = models.URLField(max_length=600, blank=True)
+    notes = models.TextField(blank=True)
+    tags = models.JSONField(default=list, blank=True)
+    # Founder-recorded qualitative/quantitative results.
+    result_metrics = models.JSONField(default=dict, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="growth_content_items",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-scheduled_at", "-created_at"]
+        indexes = [models.Index(fields=["status", "scheduled_at"])]
+
+    def __str__(self):
+        return self.title
+
+
+class AudienceSegment(models.Model):
+    """A founder-defined audience segment evaluated against user data."""
+
+    class Status(models.TextChoices):
+        ACTIVE = "active", "Active"
+        ARCHIVED = "archived", "Archived"
+
+    name = models.CharField(max_length=160)
+    description = models.TextField(blank=True)
+    # Simple, safe rule object, e.g. {"plan": "free", "activation": "activated",
+    # "goal": "international_student", "min_documents": 1}.
+    rules_json = models.JSONField(default=dict, blank=True)
+    is_dynamic = models.BooleanField(default=True)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.ACTIVE)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="growth_segments",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class AmbassadorProfile(models.Model):
+    """A campus/community ambassador and their tracked performance."""
+
+    class Status(models.TextChoices):
+        CANDIDATE = "candidate", "Candidate"
+        INVITED = "invited", "Invited"
+        ACTIVE = "active", "Active"
+        PAUSED = "paused", "Paused"
+        COMPLETED = "completed", "Completed"
+        REMOVED = "removed", "Removed"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ambassador_profiles",
+    )
+    name = models.CharField(max_length=160)
+    email = models.EmailField(blank=True)
+    community = models.CharField(max_length=160, blank=True)
+    campus = models.CharField(max_length=160, blank=True)
+    referral_code = models.CharField(max_length=40, blank=True, db_index=True)
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.CANDIDATE
+    )
+    notes = models.TextField(blank=True)
+    reward_notes = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="growth_ambassadors_created",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return self.name
+
+
+class ReferralProfile(models.Model):
+    """A user's referral code/link. Metrics are computed from attributions."""
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="referral_profile",
+    )
+    referral_code = models.CharField(max_length=40, unique=True, db_index=True)
+    reward_status = models.CharField(max_length=40, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Referral {self.referral_code} (user {self.user_id})"
+
+
+class ReferralAttribution(models.Model):
+    """Logs that a referred user signed up via a referrer (anti self-referral)."""
+
+    class Status(models.TextChoices):
+        SIGNED_UP = "signed_up", "Signed up"
+        ACTIVATED = "activated", "Activated"
+        CONVERTED = "converted", "Converted"
+
+    referrer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="referrals_made",
+    )
+    referred_user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="referral_source",
+    )
+    referral_code = models.CharField(max_length=40, blank=True)
+    campaign = models.ForeignKey(
+        "MarketingCampaign",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="referral_attributions",
+    )
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.SIGNED_UP
+    )
+    reward_status = models.CharField(max_length=40, blank=True)
+    signup_at = models.DateTimeField(default=timezone.now)
+    activated_at = models.DateTimeField(null=True, blank=True)
+    converted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-signup_at"]
+        indexes = [models.Index(fields=["referrer", "status"])]
+
+    def __str__(self):
+        return f"{self.referrer_id} → {self.referred_user_id}"
+
+
+class UserAttribution(models.Model):
+    """First- and last-touch acquisition attribution for a user (privacy-safe)."""
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="attribution",
+    )
+    first_utm_source = models.CharField(max_length=120, blank=True)
+    first_utm_medium = models.CharField(max_length=120, blank=True)
+    first_utm_campaign = models.CharField(max_length=120, blank=True)
+    first_utm_content = models.CharField(max_length=120, blank=True)
+    first_utm_term = models.CharField(max_length=120, blank=True)
+    first_referrer = models.CharField(max_length=300, blank=True)
+    first_landing_page = models.CharField(max_length=300, blank=True)
+    last_utm_source = models.CharField(max_length=120, blank=True)
+    last_utm_medium = models.CharField(max_length=120, blank=True)
+    last_utm_campaign = models.CharField(max_length=120, blank=True)
+    last_utm_content = models.CharField(max_length=120, blank=True)
+    last_utm_term = models.CharField(max_length=120, blank=True)
+    last_referrer = models.CharField(max_length=300, blank=True)
+    last_landing_page = models.CharField(max_length=300, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["first_utm_campaign"])]
+
+    def __str__(self):
+        return f"Attribution for user {self.user_id}"
