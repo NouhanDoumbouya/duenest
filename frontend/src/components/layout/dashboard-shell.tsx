@@ -9,33 +9,10 @@ import {
 } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import {
-  Bell,
-  Building2,
-  CalendarClock,
-  CheckCheck,
-  CreditCard,
-  LayoutDashboard,
-  LifeBuoy,
-  LogOut,
-  Menu,
-  MessageSquare,
-  Package,
-  RefreshCw,
-  Settings,
-  Share2,
-  ShieldCheck,
-  Vault,
-  Wrench,
-  X,
-  type LucideIcon,
-} from "lucide-react";
+import { Bell, CheckCheck, LogOut, Menu, X } from "lucide-react";
 
 import { Logo } from "@/components/layout/logo";
-import { SectionTabs } from "@/components/layout/section-tabs";
-import { useFeatures } from "@/components/features/feature-flags-provider";
-import { FEATURE_BY_NAV_HREF } from "@/lib/features";
-import { isSectionActive, type NavSection } from "@/lib/navigation";
+import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { Button } from "@/components/ui/button";
 import { getFounderMe } from "@/lib/founder";
 import { logout } from "@/lib/auth";
@@ -49,67 +26,6 @@ import {
 import { cn } from "@/lib/utils";
 import type { NotificationRecord, NotificationSummary } from "@/types/notifications";
 
-interface NavItem {
-  label: string;
-  href: string;
-  icon: LucideIcon;
-  /** When set, the item is active only on an exact path match. */
-  exact?: boolean;
-  /**
-   * When set, the item is a grouped section and stays active across all of that
-   * section's child routes (e.g. "Vault" highlights on /dashboard/documents).
-   */
-  sectionKey?: NavSection["key"];
-}
-
-interface NavGroup {
-  heading: string;
-  items: NavItem[];
-}
-
-// Grouped, logically-ordered navigation. Only real, working routes appear here.
-// Section items (Vault, Planning, Sharing) are conceptual homes; their child
-// routes still work and are reached via the contextual sub-nav (SectionTabs).
-const navGroups: NavGroup[] = [
-  {
-    heading: "Workspace",
-    items: [
-      { label: "Overview", href: "/dashboard", icon: LayoutDashboard, exact: true },
-      { label: "Vault", href: "/dashboard/vault", icon: Vault, sectionKey: "vault" },
-      {
-        label: "Planning",
-        href: "/dashboard/planning",
-        icon: CalendarClock,
-        sectionKey: "planning",
-      },
-      { label: "Subscriptions", href: "/dashboard/subscriptions", icon: RefreshCw },
-      { label: "Organizations", href: "/dashboard/organizations", icon: Building2 },
-    ],
-  },
-  {
-    heading: "Prepare & share",
-    items: [
-      { label: "Bundles", href: "/dashboard/bundles", icon: Package },
-      {
-        label: "Sharing",
-        href: "/dashboard/sharing",
-        icon: Share2,
-        sectionKey: "sharing",
-      },
-      { label: "Emergency access", href: "/dashboard/emergency", icon: LifeBuoy },
-    ],
-  },
-  {
-    heading: "Account",
-    items: [
-      { label: "Trust & security", href: "/dashboard/trust", icon: ShieldCheck },
-      { label: "Plan & usage", href: "/dashboard/settings/plan", icon: CreditCard },
-      { label: "Data & privacy", href: "/dashboard/settings/data", icon: Settings },
-      { label: "Feedback", href: "/dashboard/feedback", icon: MessageSquare },
-    ],
-  },
-];
-
 export interface ShellUser {
   name: string;
   email: string;
@@ -119,104 +35,6 @@ function initials(name: string) {
   const parts = name.trim().split(/\s+/);
   const letters = (parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "");
   return letters.toUpperCase() || name.slice(0, 2).toUpperCase();
-}
-
-function isItemActive(pathname: string, item: NavItem) {
-  if (item.sectionKey) return isSectionActive(pathname, item.sectionKey);
-  return item.exact ? pathname === item.href : pathname.startsWith(item.href);
-}
-
-function NavLink({
-  item,
-  active,
-  onNavigate,
-}: {
-  item: NavItem;
-  active: boolean;
-  onNavigate?: () => void;
-}) {
-  const Icon = item.icon;
-  return (
-    <Link
-      href={item.href}
-      onClick={onNavigate}
-      aria-current={active ? "page" : undefined}
-      className={cn(
-        "group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-        active
-          ? "bg-accent text-accent-foreground"
-          : "text-muted-foreground hover:bg-muted hover:text-foreground",
-      )}
-    >
-      {active && (
-        <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-accent-foreground/70" />
-      )}
-      <Icon
-        className={cn(
-          "size-4 transition-colors",
-          active
-            ? "text-accent-foreground"
-            : "text-muted-foreground/80 group-hover:text-foreground",
-        )}
-      />
-      <span className="flex-1">{item.label}</span>
-    </Link>
-  );
-}
-
-function NavLinks({
-  hasFounderAccess,
-  onNavigate,
-}: {
-  hasFounderAccess: boolean;
-  onNavigate?: () => void;
-}) {
-  const pathname = usePathname();
-  const features = useFeatures();
-
-  return (
-    <nav className="flex flex-1 flex-col gap-5 overflow-y-auto p-3">
-      {navGroups.map((group) => (
-        <div key={group.heading} className="flex flex-col gap-0.5">
-          <p className="px-3 pb-1.5 text-[0.68rem] font-semibold tracking-wider text-muted-foreground/60 uppercase">
-            {group.heading}
-          </p>
-          {group.items
-            .filter((item) => {
-              const key = FEATURE_BY_NAV_HREF[item.href];
-              if (!key) return true;
-              const state = features[key];
-              return state ? state.enabled : true;
-            })
-            .map((item) => (
-              <NavLink
-                key={item.href}
-                item={item}
-                active={isItemActive(pathname, item)}
-                onNavigate={onNavigate}
-              />
-            ))}
-        </div>
-      ))}
-
-      {hasFounderAccess && (
-        <div className="flex flex-col gap-0.5">
-          <p className="px-3 pb-1.5 text-[0.68rem] font-semibold tracking-wider text-muted-foreground/60 uppercase">
-            Founder
-          </p>
-          <NavLink
-            item={{
-              label: "Founder console",
-              href: "/founder",
-              icon: Wrench,
-            }}
-            active={pathname.startsWith("/founder")}
-            onNavigate={onNavigate}
-          />
-        </div>
-      )}
-    </nav>
-  );
 }
 
 function UserFooter({
@@ -493,7 +311,9 @@ export function DashboardShell({
           <Logo href="/dashboard" />
         </div>
 
-        <NavLinks hasFounderAccess={hasFounderAccess} />
+        <Suspense fallback={null}>
+          <SidebarNav hasFounderAccess={hasFounderAccess} />
+        </Suspense>
 
         <UserFooter user={user} onLogout={handleLogout} />
       </aside>
@@ -554,22 +374,19 @@ export function DashboardShell({
                 </Button>
               </div>
 
-              <NavLinks
-                hasFounderAccess={hasFounderAccess}
-                onNavigate={() => setMobileNavOpen(false)}
-              />
+              <Suspense fallback={null}>
+                <SidebarNav
+                  hasFounderAccess={hasFounderAccess}
+                  onNavigate={() => setMobileNavOpen(false)}
+                />
+              </Suspense>
 
               <UserFooter user={user} onLogout={handleLogout} />
             </aside>
           </div>
         )}
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-10">
-          <Suspense fallback={null}>
-            <SectionTabs />
-          </Suspense>
-          {children}
-        </main>
+        <main className="flex-1 p-4 sm:p-6 lg:p-10">{children}</main>
       </div>
     </div>
   );
