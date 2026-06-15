@@ -148,6 +148,11 @@ export interface FileInboxStatus {
   description: string;
 }
 
+/** Calm, reassuring copy for the Trash page. */
+export function getTrashWarningCopy(): string {
+  return "Trash protects you from accidental deletion. Restore an item to put it back, or permanently delete it to remove it for good.";
+}
+
 export function getFileInboxStatus(count: number): FileInboxStatus {
   if (count === 0) {
     return {

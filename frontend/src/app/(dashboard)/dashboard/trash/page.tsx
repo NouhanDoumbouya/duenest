@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { RotateCcw, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { RotateCcw, Search, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/lib/api";
+import { getTrashWarningCopy } from "@/lib/vault";
 import {
   formatDate,
   getTrashedDocuments,
@@ -34,6 +36,7 @@ export default function TrashPage() {
     null,
   );
   const [deleting, setDeleting] = useState(false);
+  const [query, setQuery] = useState("");
 
   function load() {
     setError(null);
@@ -144,6 +147,22 @@ export default function TrashPage() {
     }
   }
 
+  const q = query.trim().toLowerCase();
+  const filteredDocs = useMemo(
+    () => (docs ?? []).filter((d) => !q || d.title.toLowerCase().includes(q)),
+    [docs, q],
+  );
+  const filteredFiles = useMemo(
+    () =>
+      (files ?? []).filter(
+        (f) => !q || f.original_filename.toLowerCase().includes(q),
+      ),
+    [files, q],
+  );
+  const hasAnyItems = (docs ?? []).length > 0 || (files ?? []).length > 0;
+  const noSearchMatch =
+    hasAnyItems && q.length > 0 && filteredDocs.length === 0 && filteredFiles.length === 0;
+
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6">
       <div>
@@ -154,9 +173,7 @@ export default function TrashPage() {
           Trash
         </h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Deleted documents are kept here so you can recover them. Restore one to
-          put it back in your vault, or permanently delete it to remove it for
-          good.
+          {getTrashWarningCopy()}
         </p>
       </div>
 
@@ -210,11 +227,34 @@ export default function TrashPage() {
         </div>
       ) : (
         <div className="space-y-6">
-          {docs.length > 0 && (
+          <div className="relative">
+            <Search
+              className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden
+            />
+            <Input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search trash"
+              aria-label="Search trash"
+              className="pl-9"
+            />
+          </div>
+
+          {noSearchMatch && (
+            <p className="rounded-lg border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">
+              No deleted item matches this search.
+            </p>
+          )}
+
+          {filteredDocs.length > 0 && (
             <section className="space-y-3">
-              <h2 className="text-sm font-semibold">Documents</h2>
+              <h2 className="text-sm font-semibold">
+                Documents ({filteredDocs.length})
+              </h2>
               <ul className="space-y-3">
-                {docs.map((doc) => (
+                {filteredDocs.map((doc) => (
                   <li
                     key={doc.id}
                     className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-4"
@@ -237,11 +277,13 @@ export default function TrashPage() {
             </section>
           )}
 
-          {(files ?? []).length > 0 && (
+          {filteredFiles.length > 0 && (
             <section className="space-y-3">
-              <h2 className="text-sm font-semibold">File Inbox</h2>
+              <h2 className="text-sm font-semibold">
+                File Inbox ({filteredFiles.length})
+              </h2>
               <ul className="space-y-3">
-                {(files ?? []).map((file) => (
+                {filteredFiles.map((file) => (
                   <li
                     key={file.id}
                     className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-4"
