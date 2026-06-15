@@ -32,6 +32,9 @@ from .models import (
     DocumentVersion,
     EmergencyAccessPack,
     EmergencyAccessPackItem,
+    EmergencyActivityEvent,
+    EmergencyTrustedContact,
+    EmergencyUnlockRequest,
     ProofRecord,
     RoomActivity,
     ShareRoom,
@@ -1469,9 +1472,18 @@ class EmergencyAccessPackSerializer(serializers.ModelSerializer):
             "description",
             "status",
             "access_mode",
+            "unlock_mode",
+            "unlock_delay_hours",
             "expires_at",
             "access_code_required",
             "access_code",
+            "access_duration_minutes",
+            "allow_downloads",
+            "location_enabled",
+            "location_precision",
+            "last_known_location",
+            "last_known_location_at",
+            "last_reviewed_at",
             "share_url_path",
             "public_url_path",
             "last_accessed_at",
@@ -1484,11 +1496,15 @@ class EmergencyAccessPackSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         # token + access_code_hash are never serialized. status/token are managed
-        # through dedicated enable/disable/regenerate actions.
+        # through dedicated enable/disable/regenerate actions. Location is updated
+        # through the dedicated location action so reveals can be audited.
         read_only_fields = [
             "id",
             "owner",
             "status",
+            "last_known_location",
+            "last_known_location_at",
+            "last_reviewed_at",
             "share_url_path",
             "public_url_path",
             "last_accessed_at",
@@ -1499,6 +1515,13 @@ class EmergencyAccessPackSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+    def validate_unlock_delay_hours(self, value):
+        if value < 1 or value > 168:
+            raise serializers.ValidationError(
+                "Choose a delay between 1 and 168 hours."
+            )
+        return value
 
     def get_item_count(self, obj):
         # items is prefetched and fully serialized; len() reuses the prefetch
@@ -1538,15 +1561,36 @@ class EmergencyAccessPackSerializer(serializers.ModelSerializer):
 
 
 class PublicEmergencyPackSerializer(serializers.Serializer):
-    """SAFE public view of a shared pack. No owner identity, no internal ids."""
+    """
+    SAFE public view of a shared pack. No owner identity, no internal ids, no
+    tokens. The document items are only included when ``include_items`` is set in
+    the serializer context (i.e. the unlock rules currently allow access). The
+    emergency location is only included when the pack has it enabled AND access
+    is unlocked, never before.
+    """
 
     title = serializers.CharField()
     description = serializers.CharField()
     access_code_required = serializers.BooleanField()
     expires_at = serializers.DateTimeField()
+    unlock_mode = serializers.CharField()
+    requires_unlock_request = serializers.BooleanField()
+    allow_downloads = serializers.BooleanField()
+    access_state = serializers.SerializerMethodField()
     items = serializers.SerializerMethodField()
+    location = serializers.SerializerMethodField()
+
+    def get_access_state(self, obj):
+        # "open" when items are visible now, otherwise the gate the viewer shows.
+        if self.context.get("include_items"):
+            return "open"
+        if obj.requires_unlock_request:
+            return "request_required"
+        return "open"
 
     def get_items(self, obj):
+        if not self.context.get("include_items"):
+            return []
         rows = []
         for item in obj.items.select_related("document", "file"):
             document = item.document
@@ -1566,6 +1610,118 @@ class PublicEmergencyPackSerializer(serializers.Serializer):
                 }
             )
         return rows
+
+    def get_location(self, obj):
+        # Location is revealed only after unlock AND only when enabled by the
+        # owner. Precise coordinates are withheld unless the owner chose precise.
+        if not (self.context.get("include_items") and obj.location_enabled):
+            return None
+        loc = obj.last_known_location or {}
+        precise = obj.location_precision == EmergencyAccessPack.LocationPrecision.PRECISE
+        return {
+            "label": loc.get("label", ""),
+            "precision": obj.location_precision,
+            "lat": loc.get("lat") if precise else None,
+            "lng": loc.get("lng") if precise else None,
+            "updated_at": (
+                obj.last_known_location_at.isoformat()
+                if obj.last_known_location_at
+                else None
+            ),
+        }
+
+
+class EmergencyTrustedContactSerializer(serializers.ModelSerializer):
+    owner = serializers.PrimaryKeyRelatedField(read_only=True)
+    pack = serializers.PrimaryKeyRelatedField(read_only=True)
+
+    class Meta:
+        model = EmergencyTrustedContact
+        fields = [
+            "id",
+            "owner",
+            "pack",
+            "name",
+            "relationship",
+            "email",
+            "phone",
+            "note",
+            "is_primary",
+            "is_backup",
+            "access_level",
+            "verification_status",
+            "last_notified_at",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "owner",
+            "pack",
+            "verification_status",
+            "last_notified_at",
+            "created_at",
+            "updated_at",
+        ]
+
+    def validate_name(self, value):
+        if not value.strip():
+            raise serializers.ValidationError("Give the contact a name.")
+        return value.strip()
+
+
+class EmergencyActivityEventSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EmergencyActivityEvent
+        fields = [
+            "id",
+            "event_type",
+            "actor_label",
+            "description",
+            "metadata",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+
+class EmergencyUnlockRequestSerializer(serializers.ModelSerializer):
+    """Owner-facing view of an unlock request."""
+
+    class Meta:
+        model = EmergencyUnlockRequest
+        fields = [
+            "id",
+            "requester_name",
+            "relationship",
+            "reason",
+            "contact_info",
+            "status",
+            "unlock_at",
+            "access_expires_at",
+            "decided_at",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+
+class PublicUnlockRequestCreateSerializer(serializers.Serializer):
+    """Validates the public emergency-access request form. No code is stored."""
+
+    requester_name = serializers.CharField(max_length=120)
+    relationship = serializers.CharField(
+        max_length=60, required=False, allow_blank=True, default=""
+    )
+    reason = serializers.CharField(
+        max_length=500, required=False, allow_blank=True, default=""
+    )
+    contact_info = serializers.CharField(
+        max_length=255, required=False, allow_blank=True, default=""
+    )
+
+    def validate_requester_name(self, value):
+        if not value.strip():
+            raise serializers.ValidationError("Enter your name.")
+        return value.strip()
 
 
 class ProofRecordSerializer(serializers.ModelSerializer):

@@ -40,7 +40,7 @@ export default function EmergencyPacksPage() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [accessMode, setAccessMode] =
-    useState<EmergencyPackAccessMode>("owner_only_preview");
+    useState<EmergencyPackAccessMode>("share_link");
   const [expiresAt, setExpiresAt] = useState("");
   const [codeRequired, setCodeRequired] = useState(false);
   const [accessCode, setAccessCode] = useState("");
@@ -116,12 +116,12 @@ export default function EmergencyPacksPage() {
             Emergency access
           </p>
           <h1 className="mt-2 font-heading text-2xl font-semibold tracking-tight sm:text-3xl">
-            Emergency access packs
+            Emergency Protocol
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Prepare a small set of important documents that a trusted person can
-            reach in an emergency. A pack only ever exposes the items you add —
-            never your whole vault.
+            Prepare selected documents and trusted access so people you choose can
+            help if needed. They can only see what you choose — your full vault
+            stays private.
           </p>
         </div>
         <Button

@@ -1583,14 +1583,23 @@ branch. Every user-owned model is scoped to its owner and follows the existing
   used for owner-scoped filtering.
 
 ### EmergencyAccessPack — *Implemented*
-- **Purpose:** owner-selected collection of documents/files for emergency use.
+- **Purpose:** owner-selected collection of documents/files for emergency use
+  (the "Emergency Protocol").
 - **Key fields:** `owner`, `title`, `description`, `status`, `access_mode`,
-  `expires_at`, `access_code_required`, `access_code_hash`, public `token`,
-  access timestamps, `metadata`, timestamps.
-- **Relationships:** `owner → User`; has many `EmergencyAccessPackItem`.
+  `unlock_mode` (`owner_approval`/`delayed`/`instant_code`/`disabled_until_activated`;
+  model default `instant_code` for legacy rows, API default `delayed`),
+  `unlock_delay_hours`, `expires_at`, `access_code_required`, `access_code_hash`,
+  `access_duration_minutes`, `allow_downloads`, optional off-by-default location
+  (`location_enabled`, `location_precision`, `last_known_location`,
+  `last_known_location_at`), `last_reviewed_at`, public `token`, access
+  timestamps, `metadata`, timestamps.
+- **Relationships:** `owner → User`; has many `EmergencyAccessPackItem`,
+  `EmergencyTrustedContact`, `EmergencyUnlockRequest`, `EmergencyActivityEvent`.
 - **Security:** a pack grants access only to explicitly added items, never the
-  whole vault. Public token access requires active/shareable state, optional
-  access code, and non-trashed items. Access codes are hashed.
+  whole vault. For `owner_approval`/`delayed` packs, public item access requires
+  an open `EmergencyUnlockRequest`. Public token access requires active/shareable
+  state, optional access code, and non-trashed items. Access codes are hashed.
+  Location is off by default and revealed only after unlock.
 
 ### EmergencyAccessPackItem — *Implemented*
 - **Purpose:** one selected document and optional selected file inside an
@@ -1601,6 +1610,34 @@ branch. Every user-owned model is scoped to its owner and follows the existing
   `document → Document`; optional `file → DocumentFile`.
 - **Security:** linked document/file must belong to the pack owner and must not
   be trashed.
+
+### EmergencyTrustedContact — *Implemented*
+- **Purpose:** a person the owner trusts to request (or be given) emergency
+  access. Storing a contact never grants access on its own.
+- **Key fields:** `owner`, `pack`, `name`, `relationship`, `email`, `phone`,
+  `note`, `is_primary`, `is_backup`, `access_level`, `verification_status`,
+  `last_notified_at`, timestamps.
+- **Security:** no access credentials are generated automatically; access is
+  always governed by the pack's unlock rules.
+
+### EmergencyUnlockRequest — *Implemented*
+- **Purpose:** a request, started from the public link, to open a pack. Drives
+  the owner-approval and delayed-unlock flows.
+- **Key fields:** `pack`, opaque `request_token`, `requester_name`,
+  `relationship`, `reason`, `contact_info`, `status`
+  (`pending`/`countdown`/`unlocked`/`denied`/`revoked`/`expired`), `unlock_at`,
+  `access_expires_at`, `decided_at`, timestamps.
+- **Security:** identified publicly by an opaque token; stores no secrets. A
+  `denied`/`revoked` request never opens; a `countdown` only auto-unlocks once
+  `unlock_at` passes.
+
+### EmergencyActivityEvent — *Implemented*
+- **Purpose:** append-only audit trail for a pack (setup changes, scans,
+  requests, approvals, views, downloads, location reveals, revocations).
+- **Key fields:** `owner`, `pack`, `event_type`, `actor_label`, `description`,
+  `metadata`, `created_at`.
+- **Security:** never stores secrets (codes/tokens) — only human-readable,
+  non-sensitive context.
 
 ### ProofRecord — *Implemented*
 - **Purpose:** proof of submission, payment, tracking, approval/rejection, or

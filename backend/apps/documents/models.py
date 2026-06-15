@@ -1224,6 +1224,17 @@ class EmergencyAccessPack(models.Model):
         SHARE_LINK = "share_link", "Shareable link"
         FUTURE_TRUSTED_CONTACT = "future_trusted_contact", "Trusted contact (future)"
 
+    class UnlockMode(models.TextChoices):
+        # How a scanned/opened emergency link turns into document access.
+        OWNER_APPROVAL = "owner_approval", "Owner approval only"
+        DELAYED = "delayed", "Delayed unlock"
+        INSTANT_CODE = "instant_code", "Instant with code"
+        DISABLED_UNTIL_ACTIVATED = "disabled_until_activated", "Disabled until activated"
+
+    class LocationPrecision(models.TextChoices):
+        APPROXIMATE = "approximate", "Approximate"
+        PRECISE = "precise", "Precise"
+
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -1239,12 +1250,38 @@ class EmergencyAccessPack(models.Model):
         choices=AccessMode.choices,
         default=AccessMode.OWNER_ONLY_PREVIEW,
     )
+    # Unlock rule applied when a trusted person opens the public link. The model
+    # default stays INSTANT_CODE so that links/packs created directly (and legacy
+    # rows) keep their original "code unlocks immediately" behaviour; the API
+    # surfaces DELAYED as the recommended default for new packs.
+    unlock_mode = models.CharField(
+        max_length=32,
+        choices=UnlockMode.choices,
+        default=UnlockMode.INSTANT_CODE,
+    )
+    unlock_delay_hours = models.PositiveIntegerField(default=24)
     expires_at = models.DateTimeField(null=True, blank=True)
     access_code_required = models.BooleanField(default=False)
     access_code_hash = models.CharField(max_length=255, blank=True)
     token = models.CharField(
         max_length=128, unique=True, null=True, blank=True, db_index=True
     )
+    # Optional duration (minutes) that an approved/unlocked request stays open.
+    # Null means it follows the pack expiry / stays open until revoked.
+    access_duration_minutes = models.PositiveIntegerField(null=True, blank=True)
+    allow_downloads = models.BooleanField(default=True)
+    # --- Optional emergency location (off by default; revealed only after the
+    # unlock rules allow access). This is NOT live tracking. ---
+    location_enabled = models.BooleanField(default=False)
+    location_precision = models.CharField(
+        max_length=16,
+        choices=LocationPrecision.choices,
+        default=LocationPrecision.APPROXIMATE,
+    )
+    # Stored shape: {"label": str, "lat": float|None, "lng": float|None}.
+    last_known_location = models.JSONField(null=True, blank=True)
+    last_known_location_at = models.DateTimeField(null=True, blank=True)
+    last_reviewed_at = models.DateTimeField(null=True, blank=True)
     last_accessed_at = models.DateTimeField(null=True, blank=True)
     disabled_at = models.DateTimeField(null=True, blank=True)
     metadata = models.JSONField(default=dict, blank=True)
@@ -1272,6 +1309,17 @@ class EmergencyAccessPack(models.Model):
             and self.status == self.Status.ACTIVE
             and bool(self.token)
             and not self.is_expired
+        )
+
+    @property
+    def requires_unlock_request(self) -> bool:
+        """
+        Whether opening the link starts a request flow (owner approval or a
+        delayed countdown) rather than unlocking documents immediately.
+        """
+        return self.unlock_mode in (
+            self.UnlockMode.OWNER_APPROVAL,
+            self.UnlockMode.DELAYED,
         )
 
 
@@ -1312,6 +1360,210 @@ class EmergencyAccessPackItem(models.Model):
 
     def __str__(self):
         return f"Item doc {self.document_id} in pack {self.pack_id}"
+
+
+class EmergencyTrustedContact(models.Model):
+    """
+    A person the owner trusts to request (or be given) emergency access. Storing
+    a contact does NOT grant access on its own — access is always governed by the
+    pack's unlock rules. No credentials are ever generated automatically.
+    """
+
+    class Relationship(models.TextChoices):
+        PARENT = "parent", "Parent"
+        SIBLING = "sibling", "Sibling"
+        SPOUSE = "spouse", "Spouse"
+        FRIEND = "friend", "Friend"
+        GUARDIAN = "guardian", "Guardian"
+        ROOMMATE = "roommate", "Roommate"
+        COLLEAGUE = "colleague", "Colleague"
+        OTHER = "other", "Other"
+
+    class AccessLevel(models.TextChoices):
+        CAN_REQUEST = "can_request", "Can request access"
+        INSTANT_WITH_CODE = "instant_with_code", "Can access instantly with QR + code"
+        NOTIFY_ONLY = "notify_only", "Can only be notified"
+
+    class VerificationStatus(models.TextChoices):
+        UNVERIFIED = "unverified", "Unverified"
+        NOTIFIED = "notified", "Setup notice sent"
+        VERIFIED = "verified", "Verified"
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="emergency_trusted_contacts",
+    )
+    pack = models.ForeignKey(
+        EmergencyAccessPack,
+        on_delete=models.CASCADE,
+        related_name="trusted_contacts",
+    )
+    name = models.CharField(max_length=120)
+    relationship = models.CharField(
+        max_length=20, choices=Relationship.choices, default=Relationship.OTHER
+    )
+    email = models.EmailField(blank=True)
+    phone = models.CharField(max_length=40, blank=True)
+    note = models.CharField(max_length=255, blank=True)
+    is_primary = models.BooleanField(default=False)
+    is_backup = models.BooleanField(default=False)
+    access_level = models.CharField(
+        max_length=24,
+        choices=AccessLevel.choices,
+        default=AccessLevel.CAN_REQUEST,
+    )
+    verification_status = models.CharField(
+        max_length=16,
+        choices=VerificationStatus.choices,
+        default=VerificationStatus.UNVERIFIED,
+    )
+    last_notified_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-is_primary", "name"]
+        indexes = [
+            models.Index(fields=["pack", "is_primary"]),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.get_relationship_display()})"
+
+
+class EmergencyUnlockRequest(models.Model):
+    """
+    A request, started from the public emergency link, to open a pack's selected
+    documents. The flow depends on the pack's unlock_mode:
+
+    * owner_approval -> PENDING until the owner approves or denies.
+    * delayed        -> COUNTDOWN until ``unlock_at``; auto-unlocks unless denied.
+    * instant_code   -> handled inline by the viewer (no request row needed).
+
+    The request is identified publicly by an opaque ``request_token`` so the
+    requester can poll status without authenticating. No sensitive secrets are
+    stored on this row.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending owner approval"
+        COUNTDOWN = "countdown", "Delayed unlock counting down"
+        UNLOCKED = "unlocked", "Unlocked"
+        DENIED = "denied", "Denied"
+        REVOKED = "revoked", "Revoked"
+        EXPIRED = "expired", "Expired"
+
+    pack = models.ForeignKey(
+        EmergencyAccessPack,
+        on_delete=models.CASCADE,
+        related_name="unlock_requests",
+    )
+    request_token = models.CharField(max_length=128, unique=True, db_index=True)
+    requester_name = models.CharField(max_length=120)
+    relationship = models.CharField(max_length=60, blank=True)
+    reason = models.CharField(max_length=500, blank=True)
+    contact_info = models.CharField(max_length=255, blank=True)
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.PENDING
+    )
+    unlock_at = models.DateTimeField(null=True, blank=True)
+    access_expires_at = models.DateTimeField(null=True, blank=True)
+    decided_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["pack", "status"]),
+        ]
+
+    def __str__(self):
+        return f"Unlock request for pack {self.pack_id} ({self.status})"
+
+    def settle_due_countdown(self):
+        """
+        Promote a COUNTDOWN request to UNLOCKED once its delay has elapsed.
+        Returns True if the status changed (caller persists). Pure time check;
+        never silently unlocks a denied/revoked request.
+        """
+        if (
+            self.status == self.Status.COUNTDOWN
+            and self.unlock_at is not None
+            and timezone.now() >= self.unlock_at
+        ):
+            self.status = self.Status.UNLOCKED
+            return True
+        return False
+
+    @property
+    def is_open(self) -> bool:
+        """Whether this request currently grants access to pack items."""
+        if self.status != self.Status.UNLOCKED:
+            return False
+        if self.access_expires_at is not None and timezone.now() >= self.access_expires_at:
+            return False
+        return True
+
+
+class EmergencyActivityEvent(models.Model):
+    """
+    Append-only audit trail for a pack: setup changes, scans, requests,
+    approvals, views, downloads, location reveals, revocations, etc. Never stores
+    secrets (codes, tokens) — only human-readable, non-sensitive context.
+    """
+
+    class EventType(models.TextChoices):
+        SETUP_CREATED = "setup_created", "Setup created"
+        DOCUMENTS_CHANGED = "documents_changed", "Emergency documents changed"
+        CONTACT_ADDED = "contact_added", "Trusted contact added"
+        CONTACT_REMOVED = "contact_removed", "Trusted contact removed"
+        CONTACT_NOTIFIED = "contact_notified", "Trusted contact notified"
+        QR_GENERATED = "qr_generated", "QR generated"
+        QR_REGENERATED = "qr_regenerated", "QR regenerated"
+        QR_SCANNED = "qr_scanned", "QR scanned / link opened"
+        REQUEST_SUBMITTED = "request_submitted", "Request submitted"
+        WRONG_CODE = "wrong_code", "Wrong code attempt"
+        COUNTDOWN_STARTED = "countdown_started", "Delayed countdown started"
+        ACCESS_APPROVED = "access_approved", "Access approved"
+        ACCESS_DENIED = "access_denied", "Access denied"
+        ACCESS_UNLOCKED = "access_unlocked", "Access unlocked"
+        DOCUMENT_VIEWED = "document_viewed", "Document viewed"
+        DOCUMENT_DOWNLOADED = "document_downloaded", "Document downloaded"
+        LOCATION_REQUESTED = "location_requested", "Location requested"
+        LOCATION_REVEALED = "location_revealed", "Location revealed"
+        LOCATION_UPDATED = "location_updated", "Location updated"
+        LOCATION_TOGGLED = "location_toggled", "Location sharing toggled"
+        ACCESS_REVOKED = "access_revoked", "Access revoked"
+        UNLOCK_MODE_CHANGED = "unlock_mode_changed", "Unlock mode changed"
+        SETUP_DISABLED = "setup_disabled", "Setup disabled"
+        SETUP_ENABLED = "setup_enabled", "Setup enabled"
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="emergency_activity_events",
+    )
+    pack = models.ForeignKey(
+        EmergencyAccessPack,
+        on_delete=models.CASCADE,
+        related_name="activity_events",
+    )
+    event_type = models.CharField(max_length=32, choices=EventType.choices)
+    actor_label = models.CharField(max_length=120, blank=True)
+    description = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["pack", "-created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.event_type} on pack {self.pack_id}"
 
 
 class ProofRecord(models.Model):

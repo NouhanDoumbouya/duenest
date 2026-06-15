@@ -1009,12 +1009,27 @@ not a later add-on.
   through the same metadata export generator, and track deletion as a pending
   request rather than deleting synchronously.
 
-### Emergency access (implemented foundation, high risk)
+### Emergency access (Emergency Protocol — implemented, high risk)
 
 - Emergency packs are **very high risk** and must remain explicit, limited, and
   revocable. A pack grants access only to selected documents/files, never the
   whole vault. Require explicit setup, optional expiry, optional hashed access
   codes, token rotation, and immediate disable controls.
+- **Unlock rules:** packs set to `owner_approval` or `delayed` never expose items
+  on a public scan — item preview/download requires an open `EmergencyUnlockRequest`
+  (proved with the `X-Request-Token` header). A denied/revoked request never
+  opens; a delayed countdown only auto-unlocks once its `unlock_at` passes.
+  `instant_code`/legacy share links keep the original code-gated behaviour.
+- **Trusted contacts** store no credentials and never grant access on their own.
+- **Emergency location** is **off by default**, never live tracking, and is
+  revealed only after access is unlocked; `approximate` precision withholds exact
+  coordinates. It is never included in pre-unlock responses.
+- **Audit + notifications:** every scan, request, wrong-code attempt, approval,
+  denial, view, download, and location reveal is recorded in an append-only
+  `EmergencyActivityEvent` log that stores no secrets (codes/tokens), and the
+  owner receives in-app notifications for requests, unlocks, downloads, and
+  wrong-code attempts. The public request endpoint is rate-limited
+  (`emergency_code` scope).
 
 ### Production storage
 
