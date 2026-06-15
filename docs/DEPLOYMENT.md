@@ -179,6 +179,8 @@ This copies ciphertext as-is, never decrypts, skips already-present objects, and
 - [ ] Emergency Access: open public viewer for selected items only; expired/revoked blocked
 - [ ] Secure Room: open via token + access code; preview/download/zip
 - [ ] Schedule `python manage.py process_due_notifications` (cron) for reminders
+- [ ] Schedule `python manage.py purge_expired_trash` (e.g. daily) to enforce
+      `TRASH_RETENTION_DAYS` (the Trash "days until permanent deletion" countdown)
 
 ---
 

@@ -736,6 +736,11 @@ The documents list can filter on these: `?shared=true` and
 Documents have a writable `is_pinned` flag (set via `PATCH /documents/:id/`);
 pinned documents always sort first, and `?pinned=true` filters to them.
 
+Trashed documents and files include `days_until_permanent_deletion` (null when
+not trashed or auto-purge is disabled). The `purge_expired_trash` management
+command permanently removes items older than `TRASH_RETENTION_DAYS` (default 30;
+run it on a schedule).
+
 ### Authentication
 
 Required (`Authorization: Bearer <access_token>`).

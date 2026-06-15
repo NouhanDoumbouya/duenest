@@ -1,5 +1,7 @@
 import os
+from datetime import timedelta
 
+from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework import serializers
@@ -62,6 +64,18 @@ def _document_file_is_unavailable(file) -> bool:
         file.is_trashed
         or (file.document_id and file.document.is_trashed)
     )
+
+
+def days_until_trash_purge(trashed_at):
+    """Days until a trashed item is permanently purged, or None when not trashed
+    / auto-purge is disabled."""
+    if not trashed_at:
+        return None
+    retention = getattr(settings, "TRASH_RETENTION_DAYS", 30)
+    if retention <= 0:
+        return None
+    purge_on = (trashed_at + timedelta(days=retention)).date()
+    return max(0, (purge_on - timezone.now().date()).days)
 
 
 class DocumentTagSerializer(serializers.ModelSerializer):
@@ -165,6 +179,7 @@ class DocumentSerializer(serializers.ModelSerializer):
     is_shared_externally = serializers.SerializerMethodField()
     in_bundle = serializers.SerializerMethodField()
     in_emergency = serializers.SerializerMethodField()
+    days_until_permanent_deletion = serializers.SerializerMethodField()
 
     # Tags: nested for reads, id list for writes (scoped to the owner).
     tags = DocumentTagSerializer(many=True, read_only=True)
@@ -230,6 +245,7 @@ class DocumentSerializer(serializers.ModelSerializer):
             "is_shared_externally",
             "in_bundle",
             "in_emergency",
+            "days_until_permanent_deletion",
             "created_at",
             "updated_at",
         ]
@@ -261,6 +277,7 @@ class DocumentSerializer(serializers.ModelSerializer):
             "is_shared_externally",
             "in_bundle",
             "in_emergency",
+            "days_until_permanent_deletion",
             "created_at",
             "updated_at",
         ]
@@ -373,6 +390,9 @@ class DocumentSerializer(serializers.ModelSerializer):
             return bool(annotated)
         return obj.emergency_pack_items.exists()
 
+    def get_days_until_permanent_deletion(self, obj):
+        return days_until_trash_purge(obj.trashed_at)
+
     def validate_custom_fields(self, value):
         """Custom fields are a flat object of string keys to scalar values."""
         if not isinstance(value, dict):
@@ -425,6 +445,7 @@ class DocumentFileSerializer(serializers.ModelSerializer):
     is_previewable = serializers.BooleanField(read_only=True)
     document_title = serializers.SerializerMethodField()
     assignment_status = serializers.SerializerMethodField()
+    days_until_permanent_deletion = serializers.SerializerMethodField()
 
     class Meta:
         model = DocumentFile
@@ -443,11 +464,15 @@ class DocumentFileSerializer(serializers.ModelSerializer):
             "is_previewable",
             "is_trashed",
             "trashed_at",
+            "days_until_permanent_deletion",
             "created_at",
             "updated_at",
         ]
         # Everything is server-derived; nothing here is client-writable.
         read_only_fields = fields
+
+    def get_days_until_permanent_deletion(self, obj):
+        return days_until_trash_purge(obj.trashed_at)
 
     def get_download_url(self, obj):
         if obj.document_id is None:

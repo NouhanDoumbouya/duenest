@@ -25,6 +25,12 @@ import {
 import type { DocumentFile } from "@/types/document-files";
 import type { DocumentRecord } from "@/types/documents";
 
+function purgeCopy(days: number): string {
+  if (days <= 0) return "Will be permanently deleted soon";
+  if (days === 1) return "Permanently deletes tomorrow";
+  return `Permanently deletes in ${days} days`;
+}
+
 export default function TrashPage() {
   const [docs, setDocs] = useState<DocumentRecord[] | null>(null);
   const [files, setFiles] = useState<DocumentFile[] | null>(null);
@@ -265,6 +271,11 @@ export default function TrashPage() {
                         {doc.document_type || "Document"}
                         {doc.trashed_at && ` · Deleted ${formatDate(doc.trashed_at)}`}
                       </p>
+                      {doc.days_until_permanent_deletion !== null && (
+                        <p className="mt-0.5 text-xs font-medium text-brand-amber">
+                          {purgeCopy(doc.days_until_permanent_deletion)}
+                        </p>
+                      )}
                     </div>
                     <TrashActions
                       restoring={restoringId === doc.id}
@@ -296,6 +307,11 @@ export default function TrashPage() {
                         {formatFileSize(file.file_size)}
                         {file.trashed_at && ` · Deleted ${formatDate(file.trashed_at)}`}
                       </p>
+                      {file.days_until_permanent_deletion !== null && (
+                        <p className="mt-0.5 text-xs font-medium text-brand-amber">
+                          {purgeCopy(file.days_until_permanent_deletion)}
+                        </p>
+                      )}
                     </div>
                     <TrashActions
                       restoring={restoringId === file.id}
