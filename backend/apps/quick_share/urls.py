@@ -12,6 +12,7 @@ from .views import (
     QuickShareReceiveCodeView,
     QuickShareSaveCopyView,
     QuickShareSessionDetailView,
+    QuickShareSessionExtendView,
     QuickShareSessionListCreateView,
     QuickShareSessionRevokeView,
     QuickShareVerifyCodeView,
@@ -36,6 +37,11 @@ urlpatterns = [
         "quick-share/sessions/<int:session_id>/revoke/",
         QuickShareSessionRevokeView.as_view(),
         name="quick-share-session-revoke",
+    ),
+    path(
+        "quick-share/sessions/<int:session_id>/extend/",
+        QuickShareSessionExtendView.as_view(),
+        name="quick-share-session-extend",
     ),
     path(
         "quick-share/sessions/<int:session_id>/approve-claim/",

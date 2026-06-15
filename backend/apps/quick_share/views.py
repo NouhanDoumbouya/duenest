@@ -19,6 +19,7 @@ from django.contrib.auth.hashers import check_password, make_password
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -206,6 +207,58 @@ class QuickShareSessionRevokeView(_OwnedSessionMixin, APIView):
                 actor=request.user,
                 summary="Quick Share revoked.",
             )
+        return Response(QuickShareSessionSerializer(session).data)
+
+
+class QuickShareSessionExtendView(_OwnedSessionMixin, APIView):
+    """Owner extends (or re-opens) a share by moving its expiry into the future."""
+
+    def post(self, request, session_id):
+        session = self.get_session()
+        if session.is_revoked:
+            return Response(
+                {
+                    "detail": "This Quick Share was revoked and cannot be extended. "
+                    "Create a new share instead.",
+                    "state": "revoked",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if session.is_consumed:
+            return Response(
+                {
+                    "detail": "This one-time Quick Share has already been used and "
+                    "cannot be extended.",
+                    "state": "consumed",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        raw = request.data.get("expires_at")
+        new_expiry = parse_datetime(raw) if isinstance(raw, str) else None
+        if new_expiry is None:
+            return Response(
+                {"detail": "Provide a valid new expiry time."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if timezone.is_naive(new_expiry):
+            new_expiry = timezone.make_aware(new_expiry)
+        if new_expiry <= timezone.now():
+            return Response(
+                {"detail": "New expiry must be in the future."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        session.expires_at = new_expiry
+        session.save(update_fields=["expires_at", "updated_at"])
+        log_activity(
+            session=session,
+            action=QuickShareActivity.Action.SESSION_EXTENDED,
+            actor_type=QuickShareActivity.ActorType.OWNER,
+            actor=request.user,
+            summary="Quick Share expiry extended.",
+            metadata={"expires_at": new_expiry.isoformat()},
+        )
         return Response(QuickShareSessionSerializer(session).data)
 
 

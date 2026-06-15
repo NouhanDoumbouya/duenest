@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, KeyRound, Loader2, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Check, KeyRound, Loader2, ShieldCheck } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,8 @@ import { PageContainer } from "@/components/ui/page-container";
 import { InlineAlert, TrustNotice } from "@/components/ui/product-ui";
 import { ApiError } from "@/lib/api";
 import { receiveByCode } from "@/lib/quick-share";
+import { formatDueNestCode, normalizeDueNestCode } from "@/lib/safesend";
+import { cn } from "@/lib/utils";
 
 export default function ReceiveCodePage() {
   const router = useRouter();
@@ -19,8 +21,15 @@ export default function ReceiveCodePage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const trimmed = code.trim();
-  const canSubmit = trimmed.length > 0 && !submitting;
+  // Tolerate lowercase, spaces, and dashes; auto-format toward DN-XXXX-XXXX.
+  const normalized = normalizeDueNestCode(code);
+  const looksComplete = normalized.length > 0;
+  const canSubmit = code.trim().length > 0 && !submitting;
+
+  function handleChange(value: string) {
+    setCode(formatDueNestCode(value));
+    if (error) setError(null);
+  }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -28,14 +37,16 @@ export default function ReceiveCodePage() {
     setSubmitting(true);
     setError(null);
     try {
-      const result = await receiveByCode(trimmed);
+      // Send the normalized form when valid, else the raw input (the backend
+      // re-normalizes and returns a calm error if it cannot be resolved).
+      const result = await receiveByCode(normalized || code.trim());
       // Hand off to the normal, fully guarded claim flow.
       router.push(result.claim_path);
     } catch (err) {
       setError(
         err instanceof ApiError
           ? err.message
-          : "Could not look up that code. Please try again.",
+          : "Code does not match. Check with the sender and try again.",
       );
       setSubmitting(false);
     }
@@ -67,23 +78,32 @@ export default function ReceiveCodePage() {
 
         <div className="space-y-2">
           <Label htmlFor="dn-code">DueNest code</Label>
-          <Input
-            id="dn-code"
-            value={code}
-            onChange={(e) => setCode(e.target.value.toUpperCase())}
-            placeholder="DN-4KQ7-PXMR"
-            autoFocus
-            autoComplete="off"
-            autoCapitalize="characters"
-            spellCheck={false}
-            maxLength={16}
-            inputMode="text"
-            className="text-center text-lg font-semibold tracking-[0.2em] uppercase"
-            aria-describedby="dn-code-hint"
-          />
+          <div className="relative">
+            <Input
+              id="dn-code"
+              value={code}
+              onChange={(e) => handleChange(e.target.value)}
+              placeholder="DN-4KQ7-PXMR"
+              autoFocus
+              autoComplete="off"
+              autoCapitalize="characters"
+              spellCheck={false}
+              maxLength={11}
+              inputMode="text"
+              className={cn(
+                "text-center text-lg font-semibold tracking-[0.2em] uppercase",
+                looksComplete && "border-brand-success/60",
+              )}
+              aria-describedby="dn-code-hint"
+            />
+            {looksComplete && (
+              <Check className="absolute top-1/2 right-3 size-4 -translate-y-1/2 text-brand-success" />
+            )}
+          </div>
           <p id="dn-code-hint" className="text-xs text-muted-foreground">
-            The code looks like <span className="font-medium">DN-4KQ7-PXMR</span>.
-            Dashes and spacing don&apos;t matter.
+            Codes look like <span className="font-medium">DN-4KQ7-PXMR</span>.
+            Dashes, spacing, and lowercase don&apos;t matter — paste it however you
+            received it.
           </p>
         </div>
 
@@ -93,7 +113,7 @@ export default function ReceiveCodePage() {
           ) : (
             <KeyRound className="size-4" />
           )}
-          Find this share
+          {submitting ? "Finding share…" : "Find this share"}
         </Button>
       </form>
 

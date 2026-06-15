@@ -54,6 +54,18 @@ export function revokeQuickShare(id: number): Promise<QuickShareSession> {
   });
 }
 
+/** Move a share's expiry forward (or re-open an expired share). */
+export function extendQuickShare(
+  id: number,
+  expiresAt: string,
+): Promise<QuickShareSession> {
+  return apiFetch<QuickShareSession>(`/quick-share/sessions/${id}/extend/`, {
+    method: "POST",
+    body: { expires_at: expiresAt },
+    auth: true,
+  });
+}
+
 export function deleteQuickShare(id: number): Promise<void> {
   return apiFetch<void>(`/quick-share/sessions/${id}/`, {
     method: "DELETE",

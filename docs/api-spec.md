@@ -3454,6 +3454,7 @@ GET    /api/v1/quick-share/sessions/
 GET    /api/v1/quick-share/sessions/:id/
 DELETE /api/v1/quick-share/sessions/:id/
 POST   /api/v1/quick-share/sessions/:id/revoke/
+POST   /api/v1/quick-share/sessions/:id/extend/          { expires_at }
 POST   /api/v1/quick-share/sessions/:id/approve-claim/   { claim_id }
 POST   /api/v1/quick-share/sessions/:id/deny-claim/      { claim_id }
 GET    /api/v1/quick-share/sessions/:id/activity/
@@ -3461,7 +3462,8 @@ GET    /api/v1/quick-share/sessions/:id/activity/
 
 Create body: `mode`, `share_method` (`qr` | `link` | `code`, default `qr` —
 presentation only; every share supports all three), `title?`, `purpose?`,
-`permission`, `expires_at`,
+`recipient_label?` (optional sender note about who the share is for; echoed back
+to the recipient for trust context), `permission`, `expires_at`,
 `access_code_required`, `access_code?` (write-only; auto-generated when required
 but blank), `one_time`, `max_claims?`, `require_sender_approval`,
 `watermark_enabled`, `file_ids[]`, and `bundle_ids[]` (both must be owned by the
@@ -3477,6 +3479,13 @@ code (e.g. `DN-4KQ7-PXMR`) the owner can read out for the "Receive code" flow.
 `fallback_code` field is kept as an alias of `dn_code`. The `access_code_hash` is
 never returned. Creating a session counts toward the existing `active_share_links`
 plan limit.
+
+`extend` (owner only) moves a share's `expires_at` forward — and can re-open a
+share that has already expired — by posting a future `expires_at`. It rejects a
+past time, and a revoked or consumed share (returns `state: "revoked"` /
+`"consumed"`); the action is recorded in the activity log as `session_extended`.
+The owner list rows now also include `dn_code` and `claim_path` so list cards can
+offer copy-link and quick actions without re-fetching each session.
 
 ## 31.2b Receive by DueNest code — public
 
@@ -3507,9 +3516,10 @@ POST /api/v1/quick-share/claim/:token/files/:file_id/save-copy/   (auth)
 ```
 
 The claim metadata response exposes only safe data: mode, title, purpose,
-permission flags, watermark, sender display name/initials, expiry, and the
-selected files (id, name, source document title, size, type, previewable). It
-never returns the token, hash, storage paths, or unrelated vault data.
+recipient_label, permission flags, watermark, sender display name/initials,
+expiry, and the selected files (id, name, source document title, size, type,
+previewable). It never returns the token, hash, storage paths, or unrelated
+vault data.
 
 Access codes are supplied via the `X-Access-Code` request header and
 re-validated on every request. Failed attempts are logged safely and throttled

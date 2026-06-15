@@ -35,12 +35,19 @@ export interface SelectedFile {
   name: string;
   size: number;
   documentTitle: string;
+  // Optional parent-document context, used for share readiness warnings. Inbox
+  // files have no parent document, so these stay undefined.
+  documentType?: string;
+  documentExpired?: boolean;
+  documentMissingExpiry?: boolean;
 }
 
 export interface SelectedBundle {
   id: number;
   title: string;
   requirementCount: number;
+  // True when the bundle is not fully ready (some requirements have no file yet).
+  incomplete?: boolean;
 }
 
 export function FilePicker({
@@ -202,6 +209,7 @@ export function FilePicker({
                               id: bundle.id,
                               title: bundle.title,
                               requirementCount: bundle.requirement_count,
+                              incomplete: bundle.readiness_score < 100,
                             })
                           }
                           className="size-4 accent-primary"
@@ -360,6 +368,9 @@ export function FilePicker({
                                     name: file.original_filename,
                                     size: file.file_size,
                                     documentTitle: doc.title,
+                                    documentType: doc.document_type,
+                                    documentExpired: doc.is_expired,
+                                    documentMissingExpiry: doc.missing_expiry_date,
                                   })
                                 }
                                 className="size-4 accent-primary"

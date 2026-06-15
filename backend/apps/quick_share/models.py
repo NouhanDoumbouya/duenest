@@ -124,6 +124,9 @@ class QuickShareSession(models.Model):
     )
     title = models.CharField(max_length=255, blank=True)
     purpose = models.CharField(max_length=255, blank=True)
+    # Optional sender-supplied note about who the share is for (e.g. a recipient
+    # name or organization). Surfaced back to the recipient for trust context.
+    recipient_label = models.CharField(max_length=255, blank=True)
     permission = models.CharField(
         max_length=32, choices=Permission.choices, default=Permission.VIEW_ONLY
     )
@@ -366,6 +369,7 @@ class QuickShareActivity(models.Model):
         COPY_SAVED = "copy_saved", "Copy saved to vault"
         SESSION_REVOKED = "session_revoked", "Quick Share revoked"
         SESSION_EXPIRED = "session_expired", "Quick Share expired"
+        SESSION_EXTENDED = "session_extended", "Quick Share extended"
         ACCESS_CODE_VERIFIED = "access_code_verified", "Access code verified"
         ACCESS_CODE_FAILED = "access_code_failed", "Access code failed"
 

@@ -32,7 +32,12 @@ from apps.documents.models import (
     DocumentFile,
 )
 
-from .models import QuickShareClaim, QuickShareItem, QuickShareSession
+from .models import (
+    QuickShareActivity,
+    QuickShareClaim,
+    QuickShareItem,
+    QuickShareSession,
+)
 
 User = get_user_model()
 
@@ -683,3 +688,77 @@ class BundleSharingTests(QuickShareBaseTest):
         resp = self.client.get(f"/api/v1/quick-share/claim/{session.token}/")
         names = {f["name"] for f in resp.data["files"]}
         self.assertEqual(names, {"passport.pdf", "visa.pdf"})
+
+
+class ExtendSessionTests(QuickShareBaseTest):
+    """Owner extends or re-opens a share by moving its expiry forward."""
+
+    def _url(self, session):
+        return f"/api/v1/quick-share/sessions/{session.id}/extend/"
+
+    def test_owner_can_extend_active_session(self):
+        session = self.make_session(owner=self.alice)
+        new_expiry = timezone.now() + timedelta(days=2)
+        self.client.force_authenticate(self.alice)
+        resp = self.client.post(
+            self._url(session), {"expires_at": new_expiry.isoformat()}, format="json"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        session.refresh_from_db()
+        self.assertAlmostEqual(
+            session.expires_at.timestamp(), new_expiry.timestamp(), delta=2
+        )
+        self.assertTrue(
+            session.activities.filter(
+                action=QuickShareActivity.Action.SESSION_EXTENDED
+            ).exists()
+        )
+
+    def test_extend_reopens_expired_session(self):
+        session = self.make_session(owner=self.alice)
+        session.expires_at = timezone.now() - timedelta(minutes=1)
+        session.save(update_fields=["expires_at"])
+        self.assertFalse(session.is_active)
+        self.client.force_authenticate(self.alice)
+        resp = self.client.post(
+            self._url(session),
+            {"expires_at": (timezone.now() + timedelta(hours=1)).isoformat()},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        session.refresh_from_db()
+        self.assertTrue(session.is_active)
+
+    def test_cannot_extend_into_the_past(self):
+        session = self.make_session(owner=self.alice)
+        self.client.force_authenticate(self.alice)
+        resp = self.client.post(
+            self._url(session),
+            {"expires_at": (timezone.now() - timedelta(minutes=1)).isoformat()},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_cannot_extend_revoked_session(self):
+        session = self.make_session(owner=self.alice)
+        session.revoked_at = timezone.now()
+        session.status = QuickShareSession.Status.REVOKED
+        session.save(update_fields=["revoked_at", "status"])
+        self.client.force_authenticate(self.alice)
+        resp = self.client.post(
+            self._url(session),
+            {"expires_at": (timezone.now() + timedelta(hours=1)).isoformat()},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data["state"], "revoked")
+
+    def test_non_owner_cannot_extend(self):
+        session = self.make_session(owner=self.alice)
+        self.client.force_authenticate(self.bob)
+        resp = self.client.post(
+            self._url(session),
+            {"expires_at": (timezone.now() + timedelta(hours=1)).isoformat()},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)

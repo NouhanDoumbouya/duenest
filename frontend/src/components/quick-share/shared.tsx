@@ -38,27 +38,110 @@ export const modeLabel: Record<QuickShareMode, string> = {
   organization_collection: "Organization collection",
 };
 
-/** Filenames that hint at sensitive documents — used for a gentle warning. */
-const SENSITIVE_HINTS = [
-  "passport",
-  "license",
-  "licence",
-  "ssn",
-  "social-security",
-  "tax",
-  "bank",
-  "statement",
-  "id-card",
-  "national-id",
-  "birth",
-  "visa",
-  "insurance",
-  "medical",
+// Sensitivity detection lives in lib/safesend (single source of truth, shared
+// with the recommendation engine). Re-exported here for existing call sites.
+export { looksSensitive } from "@/lib/safesend";
+
+// ---- QR data URL (shared by the renderer, downloads, and the share card) ---
+
+/** Optional QR appearance. `dark` is the module color; `logo` centers a badge. */
+export interface QrStyle {
+  dark?: string;
+  logo?: boolean;
+}
+
+export const QR_COLOR_PRESETS: { id: string; label: string; dark: string }[] = [
+  { id: "navy", label: "Navy", dark: "#0b1220" },
+  { id: "blue", label: "Brand", dark: "#1f6feb" },
+  { id: "forest", label: "Forest", dark: "#166534" },
+  { id: "plum", label: "Plum", dark: "#6d28d9" },
 ];
 
-export function looksSensitive(name: string): boolean {
-  const lower = name.toLowerCase();
-  return SENSITIVE_HINTS.some((hint) => lower.includes(hint));
+const DEFAULT_QR_DARK = "#0b1220";
+
+/**
+ * Generate a PNG data URL for a QR encoding `value`. The heavy `qrcode` lib is
+ * dynamically imported so only the screens that need a QR pay for it. When
+ * `style.logo` is set, the error-correction level is raised to H and a small
+ * DueNest badge is drawn over the (redundant) center modules.
+ */
+export async function generateQrDataUrl(
+  value: string,
+  size = 480,
+  style?: QrStyle,
+): Promise<string> {
+  const mod = await import("qrcode");
+  const dark = style?.dark || DEFAULT_QR_DARK;
+  const base = await mod.toDataURL(value, {
+    errorCorrectionLevel: style?.logo ? "H" : "M",
+    margin: 1,
+    width: size,
+    color: { dark, light: "#ffffff" },
+  });
+  if (!style?.logo) return base;
+  try {
+    return await overlayDueNestBadge(base, size, dark);
+  } catch {
+    // Never let a badge failure break the QR — fall back to the plain code.
+    return base;
+  }
+}
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+function roundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+async function overlayDueNestBadge(
+  dataUrl: string,
+  size: number,
+  dark: string,
+): Promise<string> {
+  const img = await loadImage(dataUrl);
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return dataUrl;
+  ctx.drawImage(img, 0, 0, size, size);
+
+  const badge = size * 0.2;
+  const c = size / 2;
+  // White cushion so the badge reads cleanly against the modules.
+  ctx.fillStyle = "#ffffff";
+  roundRect(ctx, c - badge * 0.62, c - badge * 0.62, badge * 1.24, badge * 1.24, badge * 0.3);
+  ctx.fill();
+  // Brand-colored badge with the DueNest monogram.
+  ctx.fillStyle = dark;
+  roundRect(ctx, c - badge / 2, c - badge / 2, badge, badge, badge * 0.26);
+  ctx.fill();
+  ctx.fillStyle = "#ffffff";
+  ctx.font = `700 ${badge * 0.44}px system-ui, -apple-system, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("DN", c, c + badge * 0.02);
+  return canvas.toDataURL("image/png");
 }
 
 // ---- QR renderer -----------------------------------------------------------
@@ -67,15 +150,18 @@ export function QrCode({
   value,
   size = 240,
   className,
+  style,
 }: {
   value: string;
   size?: number;
   className?: string;
+  style?: QrStyle;
 }) {
-  // A single piece of state keyed to the value it was generated for, so we never
-  // need a synchronous reset setState inside the effect.
+  // A single piece of state keyed to the value+style it was generated for, so we
+  // never need a synchronous reset setState inside the effect.
+  const styleKey = `${style?.dark ?? ""}|${style?.logo ? "logo" : ""}`;
   const [gen, setGen] = useState<{
-    forValue: string;
+    forKey: string;
     url: string | null;
     error: boolean;
   } | null>(null);
@@ -84,27 +170,22 @@ export function QrCode({
     let active = true;
     // Dynamically import the QR library so it never weighs down the initial
     // bundle — only the QR screen pays for it.
-    import("qrcode")
-      .then((mod) =>
-        mod.toDataURL(value, {
-          errorCorrectionLevel: "M",
-          margin: 1,
-          width: size * 2,
-          color: { dark: "#0b1220", light: "#ffffff" },
-        }),
-      )
+    generateQrDataUrl(value, size * 2, style)
       .then((url) => {
-        if (active) setGen({ forValue: value, url, error: false });
+        if (active) setGen({ forKey: `${value}|${styleKey}`, url, error: false });
       })
       .catch(() => {
-        if (active) setGen({ forValue: value, url: null, error: true });
+        if (active)
+          setGen({ forKey: `${value}|${styleKey}`, url: null, error: true });
       });
     return () => {
       active = false;
     };
-  }, [value, size]);
+    // styleKey captures the style object's meaningful fields.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, size, styleKey]);
 
-  const ready = gen !== null && gen.forValue === value;
+  const ready = gen !== null && gen.forKey === `${value}|${styleKey}`;
   const dataUrl = ready ? gen.url : null;
   const error = ready && gen.error;
 

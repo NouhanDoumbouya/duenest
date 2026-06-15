@@ -7,13 +7,16 @@ import {
   ArrowLeft,
   Ban,
   Check,
+  ChevronDown,
   Copy,
+  ExternalLink,
   Eye,
   EyeOff,
   FileText,
   History,
-  Link2,
+  CalendarPlus,
   Loader2,
+  MessageSquareText,
   ShieldCheck,
   Sparkles,
   UserCheck,
@@ -30,6 +33,7 @@ import { formatFileSize } from "@/lib/document-files";
 import {
   approveQuickShareClaim,
   denyQuickShareClaim,
+  extendQuickShare,
   getQuickShare,
   getQuickShareActivity,
   revokeQuickShare,
@@ -38,13 +42,51 @@ import {
   CountdownPill,
   PermissionChips,
   QrCode,
+  QR_COLOR_PRESETS,
 } from "@/components/quick-share/shared";
+import {
+  ShareDistributionActions,
+  ShareMessageEditor,
+} from "@/components/quick-share/share-actions";
+import { packageMethods, type SharePackage } from "@/lib/safesend";
 import { cn } from "@/lib/utils";
 import type {
   QuickShareActivity,
   QuickShareClaimSummary,
+  QuickShareMethod,
+  QuickSharePermission,
   QuickShareSession,
 } from "@/types/quick-share";
+
+const PERMISSION_LABEL: Record<QuickSharePermission, string> = {
+  view_only: "View only",
+  download_allowed: "Allow download",
+  save_copy_allowed: "Allow save copy",
+};
+
+/** Map a legacy single share_method to the package that surfaces it + the link. */
+function methodToPackage(method: QuickShareMethod): SharePackage {
+  if (method === "code") return "all";
+  if (method === "link") return "qr_link";
+  return "qr_link";
+}
+
+/** ISO timestamp `ms` milliseconds from now (kept out of the render path). */
+function futureIso(ms: number): string {
+  return new Date(Date.now() + ms).toISOString();
+}
+
+/** Humanize the time remaining until expiry for share messages. */
+function humanizeExpiry(expiresAt: string): string {
+  const ms = new Date(expiresAt).getTime() - Date.now();
+  if (ms <= 0) return "now";
+  const minutes = Math.round(ms / 60000);
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${hours} hour${hours === 1 ? "" : "s"}`;
+  const days = Math.round(hours / 24);
+  return `${days} day${days === 1 ? "" : "s"}`;
+}
 
 export default function QuickShareDetailPage() {
   const params = useParams<{ id: string }>();
@@ -58,12 +100,23 @@ export default function QuickShareDetailPage() {
   const [plainCode, setPlainCode] = useState<string | null>(null);
   const [confirmRevoke, setConfirmRevoke] = useState(false);
   const [revoking, setRevoking] = useState(false);
+  const [extending, setExtending] = useState<number | null>(null);
   const [claimBusy, setClaimBusy] = useState<number | null>(null);
+  const [pkg, setPkg] = useState<SharePackage | null>(null);
+  const [showMessage, setShowMessage] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const [qrColor, setQrColor] = useState<string>(QR_COLOR_PRESETS[0].dark);
+  const [qrLogo, setQrLogo] = useState(true);
 
   const claimUrl =
     session && typeof window !== "undefined"
       ? `${window.location.origin}${session.claim_path}`
       : "";
+
+  const flash = useCallback((message: string) => {
+    setToast(message);
+    setTimeout(() => setToast(null), 2400);
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -86,13 +139,14 @@ export default function QuickShareDetailPage() {
     let active = true;
     try {
       const code = sessionStorage.getItem(`qs-code-${sessionId}`);
-      if (code) {
-        sessionStorage.removeItem(`qs-code-${sessionId}`);
-        // Defer to a microtask so we never setState synchronously in the effect.
-        Promise.resolve().then(() => {
-          if (active) setPlainCode(code);
-        });
-      }
+      const storedPkg = sessionStorage.getItem(`qs-package-${sessionId}`);
+      if (code) sessionStorage.removeItem(`qs-code-${sessionId}`);
+      // Defer to a microtask so we never setState synchronously in the effect.
+      Promise.resolve().then(() => {
+        if (!active) return;
+        if (code) setPlainCode(code);
+        if (storedPkg) setPkg(storedPkg as SharePackage);
+      });
     } catch {
       /* ignore */
     }
@@ -140,12 +194,28 @@ export default function QuickShareDetailPage() {
     }
   }
 
+  async function handleExtend(ms: number) {
+    setExtending(ms);
+    try {
+      const updated = await extendQuickShare(sessionId, futureIso(ms));
+      setSession(updated);
+      flash("Access extended.");
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : "Could not extend access.",
+      );
+    } finally {
+      setExtending(null);
+    }
+  }
+
   async function handleRevoke() {
     setRevoking(true);
     try {
       const updated = await revokeQuickShare(sessionId);
       setSession(updated);
       setConfirmRevoke(false);
+      flash("Access is now closed.");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not revoke.");
     } finally {
@@ -191,10 +261,24 @@ export default function QuickShareDetailPage() {
   const pendingClaims = session.claims.filter(
     (c) => c.approval === "pending",
   );
+  // Legacy shares created before the package selector default to surfacing all
+  // delivery methods. Derive lead-method from share_method when no package set.
+  const methods = packageMethods(
+    pkg ?? methodToPackage(session.share_method),
+  );
+  const permLabel = PERMISSION_LABEL[session.permission];
+  const expiryLabel = humanizeExpiry(session.expires_at);
+  const qrStyle = { dark: qrColor, logo: qrLogo };
 
   return (
     <PageContainer width="narrow">
       <BackLink />
+
+      {toast && (
+        <div className="fixed top-4 left-1/2 z-50 -translate-x-1/2 rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background shadow-floating">
+          {toast}
+        </div>
+      )}
 
       {error && <InlineAlert tone="danger">{error}</InlineAlert>}
 
@@ -213,6 +297,12 @@ export default function QuickShareDetailPage() {
           <h1 className="mt-4 font-heading text-xl font-semibold">
             {session.title || "Quick Share"}
           </h1>
+
+          {session.recipient_label && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              For: {session.recipient_label}
+            </p>
+          )}
 
           {!inactive && (
             <p className="mt-1 text-xs text-muted-foreground">
@@ -240,9 +330,45 @@ export default function QuickShareDetailPage() {
                 </span>
               </div>
             ) : (
-              <QrCode value={claimUrl} size={240} />
+              <QrCode value={claimUrl} size={240} style={qrStyle} />
             )}
           </div>
+
+          {!inactive && (
+            <div className="mt-4 flex flex-col items-center gap-2">
+              <div className="flex items-center gap-2" role="group" aria-label="QR color">
+                {QR_COLOR_PRESETS.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setQrColor(c.dark)}
+                    aria-label={`${c.label} QR`}
+                    aria-pressed={qrColor === c.dark}
+                    className={cn(
+                      "size-6 rounded-full border-2 transition-transform hover:scale-110",
+                      qrColor === c.dark ? "border-foreground" : "border-transparent",
+                    )}
+                    style={{ backgroundColor: c.dark }}
+                  />
+                ))}
+                <span aria-hidden className="mx-1 h-5 w-px bg-border" />
+                <button
+                  type="button"
+                  onClick={() => setQrLogo((v) => !v)}
+                  role="switch"
+                  aria-checked={qrLogo}
+                  className={cn(
+                    "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                    qrLogo
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border bg-card text-muted-foreground hover:bg-muted",
+                  )}
+                >
+                  DueNest badge
+                </button>
+              </div>
+            </div>
+          )}
 
           {!inactive && (
             <div className="mt-4">
@@ -264,55 +390,148 @@ export default function QuickShareDetailPage() {
             watermark={session.watermark_enabled}
           />
 
-          {!inactive && (
-            <div className="mt-6 grid w-full grid-cols-1 gap-2">
-              <Button
-                variant={session.share_method === "link" ? "default" : "outline"}
-                onClick={() => copy(claimUrl, "link")}
-                className="w-full"
-              >
-                {copied === "link" ? (
-                  <Check className="size-4 text-brand-success" />
-                ) : (
-                  <Link2 className="size-4" />
-                )}
-                {copied === "link" ? "Copied" : "Copy secure link"}
-              </Button>
-
-              <div className="flex flex-col items-center gap-1 text-xs text-muted-foreground">
-                <div
-                  className={cn(
-                    "flex items-center justify-center gap-2",
-                    session.share_method === "code" &&
-                      "rounded-lg border border-primary/40 bg-primary/5 px-3 py-2",
-                  )}
+          {!inactive && methods.code && (
+            <div className="mt-6 flex flex-col items-center gap-1 text-xs text-muted-foreground">
+              <div className="flex items-center justify-center gap-2 rounded-lg border border-primary/40 bg-primary/5 px-3 py-2">
+                <span>DueNest code:</span>
+                <button
+                  type="button"
+                  onClick={() => copy(session.dn_code, "code")}
+                  className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 font-mono text-sm font-medium text-foreground transition-colors hover:bg-muted/70"
                 >
-                  <span>DueNest code:</span>
-                  <button
-                    type="button"
-                    onClick={() => copy(session.dn_code, "code")}
-                    className={cn(
-                      "inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 font-mono font-medium text-foreground transition-colors hover:bg-muted/70",
-                      session.share_method === "code" && "text-sm",
-                    )}
-                  >
-                    {session.dn_code}
-                    {copied === "code" ? (
-                      <Check className="size-3 text-brand-success" />
-                    ) : (
-                      <Copy className="size-3" />
-                    )}
-                  </button>
-                </div>
-                <p className="text-center">
-                  No camera? The recipient can enter this code under{" "}
-                  <span className="font-medium">Receive a code</span>.
-                </p>
+                  {session.dn_code}
+                  {copied === "code" ? (
+                    <Check className="size-3 text-brand-success" />
+                  ) : (
+                    <Copy className="size-3" />
+                  )}
+                </button>
               </div>
+              <p className="text-center">
+                No camera? The recipient can enter this code under{" "}
+                <span className="font-medium">Receive a code</span>.
+              </p>
             </div>
           )}
         </div>
       </section>
+
+      {/* Extend / re-open (never for a revoked share) */}
+      {!session.is_revoked && (
+        <div
+          className={cn(
+            "rounded-2xl border p-4 shadow-card",
+            session.is_expired
+              ? "border-brand-amber/30 bg-brand-amber/5"
+              : "border-border bg-card",
+          )}
+        >
+          <div className="flex items-center gap-2">
+            <CalendarPlus
+              className={cn(
+                "size-4",
+                session.is_expired ? "text-brand-amber" : "text-muted-foreground",
+              )}
+            />
+            <p className="text-sm font-semibold">
+              {session.is_expired ? "Re-open this share" : "Extend access"}
+            </p>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {session.is_expired
+              ? "Give the recipient more time by moving the expiry into the future."
+              : "Add more time before this share expires. You can still revoke anytime."}
+          </p>
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            {(
+              [
+                ["1 hour", 60 * 60 * 1000],
+                ["24 hours", 24 * 60 * 60 * 1000],
+                ["7 days", 7 * 24 * 60 * 60 * 1000],
+              ] as const
+            ).map(([label, ms]) => (
+              <Button
+                key={label}
+                variant="outline"
+                size="sm"
+                onClick={() => handleExtend(ms)}
+                disabled={extending !== null}
+              >
+                {extending === ms ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  `+${label}`
+                )}
+              </Button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Distribution — app sharing, copy, downloads */}
+      {!inactive && (
+        <div className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-card sm:p-5">
+          <div>
+            <p className="text-sm font-semibold">Share it</p>
+            <p className="text-xs text-muted-foreground">
+              Send secure access, never the raw file. The recipient opens it on
+              DueNest, and you can revoke anytime.
+            </p>
+          </div>
+
+          <ShareDistributionActions
+            shareUrl={claimUrl}
+            link={methods.link ? claimUrl : undefined}
+            code={methods.code ? session.dn_code : undefined}
+            title={session.title || undefined}
+            purpose={session.purpose || undefined}
+            recipient={session.recipient_label || undefined}
+            permissionLabel={permLabel}
+            expiryLabel={expiryLabel}
+            itemSummary={`${session.file_count} file${session.file_count === 1 ? "" : "s"}`}
+            qrStyle={qrStyle}
+            onFlash={flash}
+          />
+
+          <button
+            type="button"
+            onClick={() => setShowMessage((v) => !v)}
+            className="flex w-full items-center justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium transition-colors hover:bg-muted/50"
+            aria-expanded={showMessage}
+          >
+            <span className="flex items-center gap-2">
+              <MessageSquareText className="size-4 text-muted-foreground" />
+              Edit share message
+            </span>
+            <ChevronDown
+              className={cn(
+                "size-4 text-muted-foreground transition-transform",
+                showMessage && "rotate-180",
+              )}
+            />
+          </button>
+          {showMessage && (
+            <ShareMessageEditor
+              link={methods.link ? claimUrl : undefined}
+              code={methods.code ? session.dn_code : undefined}
+              permissionLabel={permLabel}
+              expiryLabel={expiryLabel}
+              title={session.title || undefined}
+              onFlash={flash}
+            />
+          )}
+
+          <a
+            href={session.claim_path}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ExternalLink className="size-4" />
+            Preview recipient view
+          </a>
+        </div>
+      )}
 
       {/* Access code reveal (only right after creation) */}
       {plainCode && (
