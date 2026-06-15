@@ -148,6 +148,29 @@ export interface FileInboxStatus {
   description: string;
 }
 
+/** Rank for "most urgent first" sorting: lower = more urgent. Returns a tuple
+ * of [bucket, tiebreak] so we sort by bucket then by soonest within it. */
+function documentRiskRank(doc: DocumentRecord): [number, number] {
+  if (doc.is_expired) return [0, doc.days_until_expiry ?? 0];
+  if (doc.days_until_expiry !== null && doc.days_until_expiry <= 1)
+    return [1, doc.days_until_expiry];
+  if (doc.is_expiring_soon || doc.is_renewal_due)
+    return [2, doc.days_until_expiry ?? 9999];
+  if (doc.missing_file) return [3, 0];
+  if (doc.missing_expiry_date) return [4, 0];
+  return [5, 0];
+}
+
+/** Pure, stable "most urgent first" sort across a document list. */
+export function sortDocumentsByRisk(docs: DocumentRecord[]): DocumentRecord[] {
+  return [...docs].sort((a, b) => {
+    const [ba, ta] = documentRiskRank(a);
+    const [bb, tb] = documentRiskRank(b);
+    if (ba !== bb) return ba - bb;
+    return ta - tb;
+  });
+}
+
 /** Calm, reassuring copy for the Trash page. */
 export function getTrashWarningCopy(): string {
   return "Trash protects you from accidental deletion. Restore an item to put it back, or permanently delete it to remove it for good.";
