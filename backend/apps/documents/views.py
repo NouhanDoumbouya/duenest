@@ -321,6 +321,9 @@ class DocumentViewSet(viewsets.ModelViewSet):
         in_bundle = self._bool_param("in_bundle")
         if in_bundle is not None:
             queryset = queryset.filter(in_bundle_anno=in_bundle)
+        pinned = self._bool_param("pinned")
+        if pinned is not None:
+            queryset = queryset.filter(is_pinned=pinned)
 
         ordering = params.get("ordering", "-created_at")
         allowed = {
@@ -335,7 +338,8 @@ class DocumentViewSet(viewsets.ModelViewSet):
         }
         if ordering not in allowed:
             ordering = "-created_at"
-        return queryset.order_by(ordering)
+        # Pinned documents always float to the top, regardless of sort.
+        return queryset.order_by("-is_pinned", ordering)
 
     def _bool_param(self, name):
         value = self.request.query_params.get(name)

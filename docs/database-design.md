@@ -391,6 +391,7 @@ Implemented `Document` fields:
 | `notes` | TextField | No | User notes |
 | `status` | CharField | Yes | `active`, `expired`, `renewal_due`, `archived` (default `active`) |
 | `lifecycle_status` | CharField | Yes | Owner-managed process stage: `draft`, `collected`, `submitted`, `under_review`, `approved`, `rejected`, `renewed`, `archived` (default `collected`). Separate from `computed_status`. |
+| `is_pinned` | BooleanField | Yes | Owner pin; pinned documents sort first (default `false`) |
 | `last_safe_action_date` | DateField | No | Manual override for the last-safe-action date. When blank it is computed from renewal/expiry. |
 | `custom_fields` | JSONField | No | Flat object of type-specific string fields (e.g. passport number). Validated server-side. |
 | `tags` | ManyToMany(DocumentTag) | No | Owner's private tags. |

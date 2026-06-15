@@ -733,6 +733,9 @@ a bundle requirement), and `in_emergency` (included in an emergency access pack)
 The documents list can filter on these: `?shared=true` and
 `?in_bundle=true|false` (e.g. `in_bundle=false` for "not in a bundle").
 
+Documents have a writable `is_pinned` flag (set via `PATCH /documents/:id/`);
+pinned documents always sort first, and `?pinned=true` filters to them.
+
 ### Authentication
 
 Required (`Authorization: Bearer <access_token>`).
