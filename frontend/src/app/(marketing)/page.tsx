@@ -38,6 +38,7 @@ import {
   VaultMockup,
 } from "@/components/marketing/mockups";
 import { LiveCountdown } from "@/components/marketing/live-countdown";
+import { TiltCard } from "@/components/marketing/tilt-card";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -172,7 +173,10 @@ function Hero() {
           <div className="mt-9 flex flex-col gap-3 sm:flex-row">
             <Link
               href="/waitlist"
-              className={cn(buttonVariants({ size: "lg" }), "h-12 px-7 text-base")}
+              className={cn(
+                buttonVariants({ size: "lg" }),
+                "cta-sheen h-12 px-7 text-base",
+              )}
             >
               Join the beta
               <ArrowRight className="size-4" />
@@ -208,8 +212,10 @@ function Hero() {
             className="pointer-events-none absolute -inset-8 -z-10 rounded-[2.5rem] bg-gradient-to-tr from-primary/12 via-brand-teal/10 to-transparent blur-3xl"
           />
           <div className="relative mx-auto max-w-md">
-            <FixFirstCard />
-            <span className="absolute -top-3 -right-2 hidden items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground shadow-card sm:inline-flex">
+            <TiltCard>
+              <FixFirstCard />
+            </TiltCard>
+            <span className="absolute -top-3 -right-2 z-10 hidden items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground shadow-card sm:inline-flex">
               <span className="pulse-soft flex size-1.5 rounded-full bg-brand-success" />
               Updates as things change
             </span>
@@ -354,6 +360,12 @@ function LifeRadar() {
             <div
               aria-hidden
               className="pointer-events-none absolute -inset-6 -z-10 rounded-[2rem] bg-gradient-to-tr from-brand-teal/10 via-primary/10 to-transparent blur-2xl"
+            />
+            {/* Signature motion: an "always watching" radar sweep behind the
+                dashboard, peeking past its edges. */}
+            <div
+              aria-hidden
+              className="radar-sweep pointer-events-none absolute -inset-[14%] -z-10 opacity-70"
             />
             <LifeRadarMockup />
           </ScrollReveal>
@@ -918,7 +930,7 @@ function FinalCta() {
               href="/waitlist"
               className={cn(
                 buttonVariants({ size: "lg" }),
-                "h-12 bg-white px-7 text-base text-brand-navy shadow-sm hover:bg-white/90",
+                "cta-sheen h-12 bg-white px-7 text-base text-brand-navy shadow-sm hover:bg-white/90",
               )}
             >
               Join the beta
