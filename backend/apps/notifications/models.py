@@ -143,3 +143,50 @@ class Notification(models.Model):
     @property
     def is_unread(self) -> bool:
         return self.read_at is None and self.status != self.Status.DISMISSED
+
+
+class NotificationDeliveryRun(models.Model):
+    """
+    A record of one `process_due_notifications` execution, for founder/admin
+    delivery-health visibility (last successful run, failure rate, recent runs).
+    Stores aggregate counts only — never user data or notification contents.
+    """
+
+    class Status(models.TextChoices):
+        SUCCESS = "success", "Success"
+        PARTIAL = "partial", "Partial (some failures)"
+        FAILED = "failed", "Failed"
+
+    class Trigger(models.TextChoices):
+        SCHEDULED = "scheduled", "Scheduled"
+        MANUAL = "manual", "Manual"
+
+    started_at = models.DateTimeField()
+    finished_at = models.DateTimeField()
+    duration_ms = models.PositiveIntegerField(default=0)
+    status = models.CharField(
+        max_length=12, choices=Status.choices, default=Status.SUCCESS
+    )
+    trigger = models.CharField(
+        max_length=12, choices=Trigger.choices, default=Trigger.SCHEDULED
+    )
+    evaluated = models.PositiveIntegerField(default=0)
+    created = models.PositiveIntegerField(default=0)
+    existing = models.PositiveIntegerField(default=0)
+    in_app_delivered = models.PositiveIntegerField(default=0)
+    emails_sent = models.PositiveIntegerField(default=0)
+    emails_skipped = models.PositiveIntegerField(default=0)
+    emails_failed = models.PositiveIntegerField(default=0)
+    skipped_preferences = models.PositiveIntegerField(default=0)
+    error = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-started_at"]
+        indexes = [
+            models.Index(fields=["-started_at"]),
+            models.Index(fields=["status", "-started_at"]),
+        ]
+
+    def __str__(self):
+        return f"DeliveryRun {self.started_at:%Y-%m-%d %H:%M} ({self.status})"

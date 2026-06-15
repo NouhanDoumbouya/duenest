@@ -7,6 +7,7 @@ import sys
 
 from decouple import Csv, config
 
+from apps.notifications.email_config import resolve_email_settings
 from config.storage import build_storages
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -168,22 +169,37 @@ STORAGES = build_storages(lambda key, default="": config(key, default=default))
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Email/reminder delivery. Local development defaults to console output; production
-# can supply SMTP/Postmark/SendGrid/Mailgun SMTP settings without provider-specific
-# code. Do not put secrets in source control.
-EMAIL_BACKEND = config(
-    "EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend"
-)
+# Email/reminder delivery (see docs/EMAIL_REMINDERS.md). Provider-neutral:
+# EMAIL_PROVIDER selects console (dev default), smtp, or a known provider
+# (resend/postmark/sendgrid/mailgun/ses) over SMTP — no paid credentials are
+# needed to run locally. If a provider is selected but not fully configured,
+# EMAIL_CONFIGURED is False and delivery is recorded as not_configured (skipped)
+# rather than crashing or pretending the email was sent.
+_email = resolve_email_settings(lambda key, default="": config(key, default=default))
+EMAIL_PROVIDER = _email["EMAIL_PROVIDER"]
+EMAIL_BACKEND = _email["EMAIL_BACKEND"]
+EMAIL_HOST = _email["EMAIL_HOST"]
+EMAIL_PORT = _email["EMAIL_PORT"]
+EMAIL_HOST_USER = _email["EMAIL_HOST_USER"]
+EMAIL_HOST_PASSWORD = _email["EMAIL_HOST_PASSWORD"]
+EMAIL_USE_TLS = _email["EMAIL_USE_TLS"]
+EMAIL_USE_SSL = _email["EMAIL_USE_SSL"]
+EMAIL_CONFIGURED = _email["EMAIL_CONFIGURED"]
+EMAIL_TIMEOUT = config("EMAIL_TIMEOUT", default=10, cast=int)
+
 DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="DueNest <noreply@localhost>")
 SERVER_EMAIL = config("SERVER_EMAIL", default=DEFAULT_FROM_EMAIL)
-EMAIL_HOST = config("EMAIL_HOST", default="")
-EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
-EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
-EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
-EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
-EMAIL_USE_SSL = config("EMAIL_USE_SSL", default=False, cast=bool)
-EMAIL_TIMEOUT = config("EMAIL_TIMEOUT", default=10, cast=int)
-DUENEST_APP_BASE_URL = config("DUENEST_APP_BASE_URL", default="http://localhost:3000")
+SUPPORT_EMAIL = config("SUPPORT_EMAIL", default="support@duenest.com")
+
+# Public URLs. FRONTEND_APP_URL is the canonical name; DUENEST_APP_BASE_URL is
+# kept as a backward-compatible alias (used in existing email link building).
+DUENEST_APP_BASE_URL = config(
+    "FRONTEND_APP_URL",
+    default=config("DUENEST_APP_BASE_URL", default="http://localhost:3000"),
+)
+FRONTEND_APP_URL = DUENEST_APP_BASE_URL
+BACKEND_PUBLIC_URL = config("BACKEND_PUBLIC_URL", default="http://localhost:8000")
+
 NOTIFICATION_REMINDER_CATCHUP_DAYS = config(
     "NOTIFICATION_REMINDER_CATCHUP_DAYS", default=3, cast=int
 )

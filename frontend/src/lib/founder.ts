@@ -10,6 +10,7 @@ import type {
   CountryActivityResponse,
   FeatureFlag,
   FeatureFlagVisibility,
+  NotificationDeliveryHealth,
   FeatureCompletionItem,
   FeatureCompletionResponse,
   FeatureAdoption,
@@ -62,6 +63,12 @@ export function getFounderAnalytics(params?: {
   range?: FounderRange;
 }): Promise<FounderAnalytics> {
   return apiFetch<FounderAnalytics>(`/founder/analytics/${query(params)}`, {
+    auth: true,
+  });
+}
+
+export function getFounderNotificationHealth(): Promise<NotificationDeliveryHealth> {
+  return apiFetch<NotificationDeliveryHealth>("/founder/notification-health/", {
     auth: true,
   });
 }

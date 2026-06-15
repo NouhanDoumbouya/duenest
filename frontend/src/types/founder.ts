@@ -552,3 +552,42 @@ export interface FeatureFlag {
   maintenance_message: string;
   updated_at: string;
 }
+
+export interface DeliveryRunSummary {
+  started_at: string;
+  finished_at: string;
+  duration_ms: number;
+  status: "success" | "partial" | "failed";
+  trigger: "scheduled" | "manual";
+  evaluated: number;
+  created: number;
+  in_app_delivered: number;
+  emails_sent: number;
+  emails_skipped: number;
+  emails_failed: number;
+  skipped_preferences: number;
+  error: string;
+}
+
+export interface NotificationDeliveryHealth {
+  email: { provider: string; configured: boolean; from_email: string };
+  today: {
+    generated: number;
+    in_app_delivered: number;
+    emails_sent: number;
+    emails_skipped: number;
+    emails_failed: number;
+  };
+  pending_undelivered: number;
+  last_run: DeliveryRunSummary | null;
+  last_successful_run: DeliveryRunSummary | null;
+  recent_runs: DeliveryRunSummary[];
+  recent_failures: {
+    type: string;
+    created_at: string;
+    email_attempts: number;
+    email_last_error: string;
+  }[];
+  email_failure_rate_7d: number;
+  emails_attempted_7d: number;
+}
