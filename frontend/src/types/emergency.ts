@@ -77,6 +77,7 @@ export interface CreateEmergencyPackRequest {
   access_code_required?: boolean;
   access_duration_minutes?: number | null;
   allow_downloads?: boolean;
+  metadata?: Record<string, unknown>;
   /** Write-only; required when access_code_required is true. */
   access_code?: string;
 }

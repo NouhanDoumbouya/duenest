@@ -225,7 +225,7 @@ export function formatUnlockCountdown(
 ): string {
   if (!unlockAtISO) return "";
   const target = new Date(unlockAtISO).getTime();
-  let diffMs = target - now.getTime();
+  const diffMs = target - now.getTime();
   if (diffMs <= 0) return "now";
   const totalMinutes = Math.floor(diffMs / 60000);
   const days = Math.floor(totalMinutes / (60 * 24));

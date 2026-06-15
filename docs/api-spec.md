@@ -973,6 +973,41 @@ they behave like document files.
 | `POST`   | `/api/v1/files/:file_id/create-document/` | Create a new document from the inbox file |
 | `GET`    | `/api/v1/files/check-duplicate/?filename=` | Whether the user already has a non-trashed file with this name (owner-scoped), to warn before duplicate uploads |
 
+### Document Scanner API
+
+The in-browser scanner (`/dashboard/scanner`) captures a document, flattens and
+enhances it, builds a PDF client-side, and uploads it here. The scanned PDF
+becomes a normal owner-scoped **inbox file** through the existing encrypted
+storage pipeline; OCR text (best effort) is stored as a `DocumentExtraction`.
+
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| `POST` | `/api/v1/scanner/upload-scanned-document/` | Upload a scanned PDF (or imported image). Multipart field `file`. |
+
+Authenticated (owner). Rate-limited per user (DRF throttle scope `scanner_upload`,
+`30/min`) and counts against the file plan limit. Validates size
+(`SCANNER_MAX_UPLOAD_MB`), MIME (`SCANNER_ALLOWED_MIME_TYPES`), and PDF structure;
+optional ClamAV malware scan (`CLAMD_ENABLED`); lossless `pypdf` compression.
+
+Success (`201`):
+
+```json
+{
+  "status": "success",
+  "document_id": 123,
+  "file_uuid": "…",
+  "preview_url": "<secure preview route>",
+  "download_url": "<secure download route>",
+  "ocr_text_stored": true,
+  "size_bytes": 84211
+}
+```
+
+Raw storage paths are never returned. Errors return `{"error": "…"}` with status
+`400` (invalid/malware), `413` (too large), `415` (unsupported type), `422`
+(OCR required and failed), `429` (rate limited), or `503` (malware scan
+unavailable, fail-closed). See `docs/DOCUMENT_SCANNER.md` for the full design.
+
 `create-document/` accepts optional `title`, `document_type`, `notes`,
 `expiry_date`, `issue_date`, `category` (a system or the caller's own category
 id — others are ignored), `country`, and `reference_number`, so metadata can be

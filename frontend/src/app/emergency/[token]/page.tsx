@@ -1,28 +1,34 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import {
+  Clock,
   Download,
   Eye,
   EyeOff,
   FileText,
   Loader2,
   LockKeyhole,
+  MapPin,
   ShieldCheck,
 } from "lucide-react";
 
 import { Logo } from "@/components/layout/logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { ApiError } from "@/lib/api";
 import { formatDate } from "@/lib/documents";
 import {
+  createUnlockRequest,
   downloadEmergencyItem,
   getEmergencyItemPreviewBlob,
   getPublicEmergencyPack,
-  verifyEmergencyAccessCode,
+  getUnlockRequestStatus,
 } from "@/lib/emergency";
+import { formatUnlockCountdown } from "@/lib/emergency-protocol";
 import type {
   PublicEmergencyItem,
   PublicEmergencyPack,
@@ -33,16 +39,14 @@ interface ViewerError {
   message: string;
 }
 
-/** Map a backend error into a calm, recipient-friendly message. */
 function errorFromApi(err: unknown): ViewerError {
   if (err instanceof ApiError && err.data && typeof err.data === "object") {
     const data = err.data as Record<string, unknown>;
     const state = typeof data.state === "string" ? data.state : undefined;
     if (state === "invalid") {
       return {
-        title: "This emergency link is invalid or no longer available.",
-        message:
-          "Check the link, or ask the person who shared it to send a new one.",
+        title: "This emergency access link is invalid or no longer exists.",
+        message: "Check the link, or ask the person who shared it for a new one.",
       };
     }
     if (state === "unavailable") {
@@ -64,21 +68,13 @@ function errorFromApi(err: unknown): ViewerError {
   };
 }
 
-function isRequiresCode(err: unknown): boolean {
-  return (
-    err instanceof ApiError &&
-    err.status === 403 &&
-    !!err.data &&
-    typeof err.data === "object" &&
-    (err.data as Record<string, unknown>).state === "requires_code"
-  );
-}
-
 function formatDocType(value: string): string {
   if (!value) return "Document";
-  return value
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (char) => char.toUpperCase());
+  return value.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function storageKey(token: string): string {
+  return `dn-emergency-req-${token}`;
 }
 
 export default function EmergencyViewerPage() {
@@ -86,78 +82,69 @@ export default function EmergencyViewerPage() {
   const token = params.token;
 
   const [pack, setPack] = useState<PublicEmergencyPack | null>(null);
-  const [requiresCode, setRequiresCode] = useState(false);
   const [error, setError] = useState<ViewerError | null>(null);
-  // The access code is kept in memory only (never persisted) and re-sent as a
-  // header for preview/download. The backend remains the source of truth.
+  const [loading, setLoading] = useState(true);
+  // Request token (for owner-approval / delayed packs), kept in memory + session.
+  // Restored from sessionStorage at first render so a refresh keeps status.
+  const [requestToken, setRequestToken] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return window.sessionStorage.getItem(storageKey(token));
+  });
+  // Access code stays in memory only; re-sent for preview/download.
   const [accessCode, setAccessCode] = useState<string>("");
-  const [loadKey, setLoadKey] = useState("");
 
-  const [codeInput, setCodeInput] = useState("");
-  const [codeError, setCodeError] = useState<string | null>(null);
-  const [verifying, setVerifying] = useState(false);
-
-  // Derive loading from a key comparison instead of toggling a boolean inside
-  // the effect (which would trigger cascading renders).
-  const key = `${token}:${accessCode}`;
-  const loading = loadKey !== key;
+  // Pure fetch (no setState) so effects only call setState inside .then/.catch,
+  // satisfying the "no synchronous setState in effects" rule.
+  const fetchPack = useCallback((): Promise<PublicEmergencyPack> => {
+    return requestToken
+      ? getUnlockRequestStatus(token, requestToken)
+      : getPublicEmergencyPack(token, accessCode || undefined);
+  }, [token, requestToken, accessCode]);
 
   useEffect(() => {
     let active = true;
-    const code = accessCode || undefined;
-    getPublicEmergencyPack(token, code)
+    fetchPack()
       .then((result) => {
         if (!active) return;
         setPack(result);
-        setRequiresCode(false);
         setError(null);
-        setLoadKey(`${token}:${accessCode}`);
       })
       .catch((err) => {
         if (!active) return;
-        if (isRequiresCode(err)) {
-          setPack(null);
-          setRequiresCode(true);
-          setError(null);
-        } else {
-          setPack(null);
-          setRequiresCode(false);
-          setError(errorFromApi(err));
-        }
-        setLoadKey(`${token}:${accessCode}`);
+        setPack(null);
+        setError(errorFromApi(err));
+      })
+      .finally(() => {
+        if (active) setLoading(false);
       });
     return () => {
       active = false;
     };
-  }, [token, accessCode]);
+  }, [fetchPack]);
 
-  async function handleVerify(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const code = codeInput.trim();
-    if (!code) {
-      setCodeError("Enter the emergency access code shared by the owner.");
-      return;
+  // Poll while waiting for approval or a delayed countdown.
+  const status = pack?.request?.status;
+  useEffect(() => {
+    if (!requestToken) return;
+    if (status !== "pending" && status !== "countdown") return;
+    const interval = setInterval(() => {
+      fetchPack()
+        .then((result) => setPack(result))
+        .catch(() => {});
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [requestToken, status, fetchPack]);
+
+  function onRequestCreated(newToken: string) {
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem(storageKey(token), newToken);
     }
-    setVerifying(true);
-    setCodeError(null);
-    try {
-      await verifyEmergencyAccessCode(token, code);
-      // Applying the code retriggers the load effect with the X-Access-Code header.
-      setAccessCode(code);
-    } catch (err) {
-      setCodeError(
-        err instanceof ApiError
-          ? err.message
-          : "That code does not match. Check it and try again.",
-      );
-    } finally {
-      setVerifying(false);
-    }
+    setRequestToken(newToken);
   }
 
   return (
     <main className="min-h-screen bg-background">
-      <div className="mx-auto flex min-h-screen w-full max-w-3xl flex-col px-4 py-6 sm:px-6">
+      <div className="mx-auto flex min-h-screen w-full max-w-2xl flex-col px-4 py-6 sm:px-6">
         <header className="flex items-center justify-between gap-3">
           <Logo href="/" size="md" />
           <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground shadow-card">
@@ -167,36 +154,23 @@ export default function EmergencyViewerPage() {
         </header>
 
         <section className="flex flex-1 flex-col py-8">
-          {loading ? (
-            <CenteredCard
-              icon={<Loader2 className="size-6 animate-spin" />}
-              title="Opening emergency access"
-              message="Checking the link and what was shared with you…"
-            />
-          ) : requiresCode ? (
-            <CodeGate
-              codeInput={codeInput}
-              setCodeInput={setCodeInput}
-              codeError={codeError}
-              verifying={verifying}
-              onSubmit={handleVerify}
-            />
-          ) : error ? (
-            <CenteredCard
-              icon={<EyeOff className="size-6" />}
-              title={error.title}
-              message={error.message}
-            />
-          ) : pack ? (
-            <PackView pack={pack} token={token} accessCode={accessCode} />
-          ) : null}
+          <ViewerBody
+            token={token}
+            pack={pack}
+            error={error}
+            loading={loading}
+            requestToken={requestToken}
+            accessCode={accessCode}
+            setAccessCode={setAccessCode}
+            onRequestCreated={onRequestCreated}
+          />
         </section>
 
         <footer className="border-t border-border pt-4 text-center text-xs text-muted-foreground">
           <p className="inline-flex items-center gap-1.5">
             <ShieldCheck className="size-3.5" />
-            Powered by DueNest — only the items the owner selected are shared
-            here.
+            Emergency access is controlled by the owner. Only selected documents
+            are shown.
           </p>
         </footer>
       </div>
@@ -204,14 +178,242 @@ export default function EmergencyViewerPage() {
   );
 }
 
+function ViewerBody({
+  token,
+  pack,
+  error,
+  loading,
+  requestToken,
+  accessCode,
+  setAccessCode,
+  onRequestCreated,
+}: {
+  token: string;
+  pack: PublicEmergencyPack | null;
+  error: ViewerError | null;
+  loading: boolean;
+  requestToken: string | null;
+  accessCode: string;
+  setAccessCode: (v: string) => void;
+  onRequestCreated: (token: string) => void;
+}) {
+  if (loading) {
+    return (
+      <CenteredCard
+        icon={<Loader2 className="size-6 animate-spin" />}
+        title="Opening emergency access"
+        message="Checking the link and what was shared with you…"
+      />
+    );
+  }
+  if (error) {
+    return (
+      <CenteredCard icon={<EyeOff className="size-6" />} title={error.title} message={error.message} />
+    );
+  }
+  if (!pack) return null;
+
+  // Already open: show the documents.
+  if (pack.access_state === "open") {
+    return <PackView pack={pack} token={token} accessCode={accessCode} requestToken={requestToken ?? undefined} />;
+  }
+
+  // Request-gated packs: show the request flow based on status.
+  const status = pack.request?.status;
+  if (requestToken && status) {
+    if (status === "pending") {
+      return (
+        <CenteredCard
+          icon={<Clock className="size-6" />}
+          title="Waiting for owner approval"
+          message="Your request was sent and the owner has been notified. This page will update automatically."
+        />
+      );
+    }
+    if (status === "countdown") {
+      return (
+        <CenteredCard
+          icon={<Clock className="size-6" />}
+          title={`Access will unlock ${formatUnlockCountdown(pack.request?.unlock_at ?? null)}`}
+          message="Access unlocks automatically after the delay unless the owner denies the request."
+        />
+      );
+    }
+    if (status === "denied") {
+      return (
+        <CenteredCard
+          icon={<EyeOff className="size-6" />}
+          title="Access was not approved."
+          message="The owner did not approve this request. Contact them directly if you still need help."
+        />
+      );
+    }
+    if (status === "revoked" || status === "expired") {
+      return (
+        <CenteredCard
+          icon={<EyeOff className="size-6" />}
+          title="Emergency access was closed by the owner."
+          message="This request is no longer active. Ask the owner for a new link if you still need access."
+        />
+      );
+    }
+  }
+
+  // No active request yet — show the request form.
+  return (
+    <RequestForm
+      token={token}
+      pack={pack}
+      accessCode={accessCode}
+      setAccessCode={setAccessCode}
+      onRequestCreated={onRequestCreated}
+    />
+  );
+}
+
+function RequestForm({
+  token,
+  pack,
+  accessCode,
+  setAccessCode,
+  onRequestCreated,
+}: {
+  token: string;
+  pack: PublicEmergencyPack;
+  accessCode: string;
+  setAccessCode: (v: string) => void;
+  onRequestCreated: (token: string) => void;
+}) {
+  const [name, setName] = useState("");
+  const [relationship, setRelationship] = useState("");
+  const [reason, setReason] = useState("");
+  const [contactInfo, setContactInfo] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!name.trim()) {
+      setFormError("Enter your name.");
+      return;
+    }
+    setSubmitting(true);
+    setFormError(null);
+    try {
+      const result = await createUnlockRequest(token, {
+        requester_name: name.trim(),
+        relationship: relationship.trim(),
+        reason: reason.trim(),
+        contact_info: contactInfo.trim(),
+        ...(pack.access_code_required ? { access_code: accessCode.trim() } : {}),
+      });
+      if (result.request_token) {
+        onRequestCreated(result.request_token);
+      }
+    } catch (err) {
+      if (
+        err instanceof ApiError &&
+        (err.data as Record<string, unknown>)?.state === "wrong_code"
+      ) {
+        setFormError("Code does not match. Check the card or contact the owner.");
+      } else {
+        setFormError(
+          err instanceof ApiError ? err.message : "Could not send the request.",
+        );
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="mx-auto w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-floating sm:p-8">
+      <span className="mx-auto flex size-12 items-center justify-center rounded-xl bg-accent text-accent-foreground">
+        <LockKeyhole className="size-6" />
+      </span>
+      <h1 className="mt-5 text-center font-heading text-2xl font-semibold">
+        Emergency Access Request
+      </h1>
+      <p className="mt-2 text-center text-sm leading-relaxed text-muted-foreground">
+        This page can request access to selected emergency documents only. It
+        does not open the full vault.
+      </p>
+
+      <form onSubmit={handleSubmit} className="mt-6 space-y-3 text-left">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="r-name">Your name</Label>
+          <Input id="r-name" value={name} onChange={(e) => setName(e.target.value)} required />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="r-rel">Relationship</Label>
+          <Input
+            id="r-rel"
+            value={relationship}
+            onChange={(e) => setRelationship(e.target.value)}
+            placeholder="e.g. Sister, friend"
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="r-reason">Reason for request</Label>
+          <Textarea
+            id="r-reason"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Briefly, why you need access"
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="r-contact">Contact info (optional)</Label>
+          <Input
+            id="r-contact"
+            value={contactInfo}
+            onChange={(e) => setContactInfo(e.target.value)}
+            placeholder="Phone or email"
+          />
+        </div>
+        {pack.access_code_required && (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="r-code">Access code</Label>
+            <Input
+              id="r-code"
+              value={accessCode}
+              onChange={(e) => setAccessCode(e.target.value)}
+              placeholder="From the emergency card"
+            />
+          </div>
+        )}
+
+        {formError && (
+          <p className="text-sm text-destructive" role="alert">
+            {formError}
+          </p>
+        )}
+
+        <p className="rounded-lg bg-accent/40 px-3 py-2 text-xs text-accent-foreground">
+          {pack.unlock_mode === "delayed"
+            ? "Access will unlock after a delay unless the owner denies the request."
+            : "Access opens only if the owner approves your request."}
+        </p>
+
+        <Button type="submit" className="w-full" disabled={submitting}>
+          {submitting ? <Loader2 className="size-4 animate-spin" /> : null}
+          Request emergency access
+        </Button>
+      </form>
+    </div>
+  );
+}
+
 function PackView({
   pack,
   token,
   accessCode,
+  requestToken,
 }: {
   pack: PublicEmergencyPack;
   token: string;
   accessCode?: string;
+  requestToken?: string;
 }) {
   return (
     <div className="space-y-6">
@@ -236,6 +438,24 @@ function PackView({
         vault remains private.
       </div>
 
+      {pack.location && (
+        <div className="rounded-xl border border-border bg-card px-4 py-3 shadow-card">
+          <p className="flex items-center gap-2 text-sm font-medium">
+            <MapPin className="size-4 text-muted-foreground" />
+            Last known location
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {pack.location.label || "Shared by the owner"}
+            {pack.location.precision === "approximate" && " (approximate)"}
+          </p>
+          {pack.location.updated_at && (
+            <p className="text-xs text-muted-foreground">
+              Updated {formatDate(pack.location.updated_at)}
+            </p>
+          )}
+        </div>
+      )}
+
       {pack.items.length === 0 ? (
         <CenteredCard
           icon={<FileText className="size-6" />}
@@ -250,6 +470,8 @@ function PackView({
               item={item}
               token={token}
               accessCode={accessCode}
+              requestToken={requestToken}
+              allowDownloads={pack.allow_downloads}
             />
           ))}
         </ul>
@@ -262,23 +484,27 @@ function EmergencyItemCard({
   item,
   token,
   accessCode,
+  requestToken,
+  allowDownloads,
 }: {
   item: PublicEmergencyItem;
   token: string;
   accessCode?: string;
+  requestToken?: string;
+  allowDownloads: boolean;
 }) {
   const [downloading, setDownloading] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const previewRef = useRef<string | null>(null);
 
-  // Clean up object URLs when the preview closes or the component unmounts.
   useEffect(() => {
     return () => {
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      if (previewRef.current) URL.revokeObjectURL(previewRef.current);
     };
-  }, [previewUrl]);
+  }, []);
 
   async function handleDownload() {
     setDownloading(true);
@@ -287,8 +513,9 @@ function EmergencyItemCard({
       await downloadEmergencyItem(
         token,
         item.id,
-        item.file_name ?? `${item.title}`,
+        item.file_name ?? item.title,
         accessCode,
+        requestToken,
       );
     } catch (err) {
       setActionError(
@@ -309,8 +536,15 @@ function EmergencyItemCard({
     setPreviewLoading(true);
     setActionError(null);
     try {
-      const blob = await getEmergencyItemPreviewBlob(token, item.id, accessCode);
-      setPreviewUrl(URL.createObjectURL(blob));
+      const blob = await getEmergencyItemPreviewBlob(
+        token,
+        item.id,
+        accessCode,
+        requestToken,
+      );
+      const url = URL.createObjectURL(blob);
+      previewRef.current = url;
+      setPreviewUrl(url);
     } catch (err) {
       setActionError(
         err instanceof ApiError ? err.message : "Could not preview this item.",
@@ -360,19 +594,16 @@ function EmergencyItemCard({
                 {previewOpen ? "Hide" : "Preview"}
               </Button>
             )}
-            <Button
-              type="button"
-              size="sm"
-              onClick={handleDownload}
-              disabled={downloading}
-            >
-              {downloading ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Download className="size-4" />
-              )}
-              Download
-            </Button>
+            {allowDownloads && (
+              <Button type="button" size="sm" onClick={handleDownload} disabled={downloading}>
+                {downloading ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Download className="size-4" />
+                )}
+                Download
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -396,57 +627,6 @@ function EmergencyItemCard({
   );
 }
 
-function CodeGate({
-  codeInput,
-  setCodeInput,
-  codeError,
-  verifying,
-  onSubmit,
-}: {
-  codeInput: string;
-  setCodeInput: (value: string) => void;
-  codeError: string | null;
-  verifying: boolean;
-  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
-}) {
-  return (
-    <div className="mx-auto w-full max-w-md rounded-2xl border border-border bg-card p-6 text-center shadow-floating sm:p-8">
-      <span className="mx-auto flex size-12 items-center justify-center rounded-xl bg-accent text-accent-foreground">
-        <LockKeyhole className="size-6" />
-      </span>
-      <h1 className="mt-5 font-heading text-2xl font-semibold">
-        This emergency access is protected
-      </h1>
-      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-        Enter the emergency access code shared by the owner to view the selected
-        emergency information. The code is not saved in your browser.
-      </p>
-      <form onSubmit={onSubmit} className="mt-6 space-y-3 text-left">
-        <Input
-          value={codeInput}
-          onChange={(event) => setCodeInput(event.target.value)}
-          placeholder="Access code"
-          aria-label="Emergency access code"
-          autoFocus
-        />
-        {codeError && (
-          <p className="text-sm text-destructive" role="alert">
-            {codeError}
-          </p>
-        )}
-        <Button type="submit" className="w-full" disabled={verifying}>
-          {verifying ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <LockKeyhole className="size-4" />
-          )}
-          {verifying ? "Checking access code…" : "Unlock emergency access"}
-        </Button>
-      </form>
-    </div>
-  );
-}
-
 function CenteredCard({
   icon,
   title,
@@ -462,9 +642,7 @@ function CenteredCard({
         {icon}
       </span>
       <h1 className="mt-5 font-heading text-xl font-semibold">{title}</h1>
-      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-        {message}
-      </p>
+      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{message}</p>
     </div>
   );
 }
