@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   CheckSquare,
   Download,
@@ -16,7 +17,7 @@ import {
 } from "lucide-react";
 
 import { DocumentFileViewer } from "@/components/documents/document-file-viewer";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
@@ -41,12 +42,26 @@ import { cn } from "@/lib/utils";
 import type { DocumentFile } from "@/types/document-files";
 import type { DocumentRecord } from "@/types/documents";
 
+// Common document types for the post-upload "what is this?" prompt.
+const TYPE_SUGGESTIONS = [
+  "Passport",
+  "Visa",
+  "ID",
+  "Insurance",
+  "Certificate",
+  "Contract",
+];
+
 export default function FileInboxPage() {
   const [files, setFiles] = useState<DocumentFile[] | null>(null);
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [lastCreated, setLastCreated] = useState<{
+    id: number;
+    title: string;
+  } | null>(null);
   const [uploading, setUploading] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [busyFileId, setBusyFileId] = useState<number | null>(null);
@@ -156,7 +171,8 @@ export default function FileInboxPage() {
       });
       setFiles((current) => (current ?? []).filter((item) => item.id !== file.id));
       setDocuments((current) => [result.document, ...current]);
-      setNotice("Document created from inbox file.");
+      setNotice(null);
+      setLastCreated({ id: result.document.id, title: result.document.title });
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message : "Could not create document.",
@@ -308,6 +324,38 @@ export default function FileInboxPage() {
       {notice && (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
           {notice}
+        </div>
+      )}
+
+      {lastCreated && (
+        <div className="flex flex-col gap-3 rounded-lg border border-brand-success/30 bg-brand-success/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm">
+            <span className="font-semibold">Document added.</span> Add an expiry
+            date so DueNest can protect you.
+          </p>
+          <div className="flex shrink-0 items-center gap-2">
+            <Link
+              href={`/dashboard/documents/${lastCreated.id}/edit`}
+              className={cn(buttonVariants({ size: "sm" }))}
+            >
+              Add expiry date
+            </Link>
+            <Link
+              href={`/dashboard/documents/${lastCreated.id}`}
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+            >
+              Open
+            </Link>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setLastCreated(null)}
+              aria-label="Dismiss"
+            >
+              <X className="size-4" />
+            </Button>
+          </div>
         </div>
       )}
 
@@ -487,6 +535,37 @@ export default function FileInboxPage() {
                         }))
                       }
                     />
+                    <div>
+                      <p className="mb-1.5 text-xs font-medium text-muted-foreground">
+                        What is this?
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {TYPE_SUGGESTIONS.map((suggestion) => {
+                          const active = newDocType[file.id] === suggestion;
+                          return (
+                            <button
+                              key={suggestion}
+                              type="button"
+                              onClick={() =>
+                                setNewDocType((current) => ({
+                                  ...current,
+                                  [file.id]: suggestion,
+                                }))
+                              }
+                              aria-pressed={active}
+                              className={cn(
+                                "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
+                                active
+                                  ? "border-primary bg-primary/10 text-primary"
+                                  : "border-border text-muted-foreground hover:text-foreground",
+                              )}
+                            >
+                              {suggestion}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                     <Input
                       value={newDocType[file.id] ?? ""}
                       placeholder="Document type"
