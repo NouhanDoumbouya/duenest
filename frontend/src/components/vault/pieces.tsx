@@ -121,7 +121,14 @@ export function CategoryCard({
       className="group flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-3 transition-colors hover:border-primary/40 hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
     >
       <span className="flex min-w-0 items-center gap-2.5">
-        <span className="flex size-8 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+        <span
+          className="flex size-8 items-center justify-center rounded-lg bg-accent text-accent-foreground"
+          style={
+            category.color
+              ? { backgroundColor: `${category.color}1a`, color: category.color }
+              : undefined
+          }
+        >
           <FolderOpen className="size-4" aria-hidden />
         </span>
         <span className="min-w-0">

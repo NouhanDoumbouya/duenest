@@ -53,6 +53,9 @@ class DocumentCategory(models.Model):
     name = models.CharField(max_length=100)
     slug = models.SlugField(max_length=120, blank=True)
     description = models.TextField(blank=True)
+    # Optional lucide icon name + hex/CSS colour token the UI can render.
+    icon = models.CharField(max_length=60, blank=True)
+    color = models.CharField(max_length=40, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -852,6 +852,8 @@ class DocumentCategoryListTests(APITestCase):
                 "name",
                 "slug",
                 "description",
+                "icon",
+                "color",
                 "is_system",
                 "created_at",
                 "updated_at",

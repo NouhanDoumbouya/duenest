@@ -57,10 +57,32 @@ export function listDocumentCategories(): Promise<DocumentCategory[]> {
 export function createDocumentCategory(payload: {
   name: string;
   description?: string;
+  icon?: string;
+  color?: string;
 }): Promise<DocumentCategory> {
   return apiFetch<DocumentCategory>("/document-categories/", {
     method: "POST",
     body: payload,
+    auth: true,
+  });
+}
+
+/** Rename / restyle one of the user's own categories. */
+export function updateDocumentCategory(
+  id: number,
+  payload: { name?: string; description?: string; icon?: string; color?: string },
+): Promise<DocumentCategory> {
+  return apiFetch<DocumentCategory>(`/document-categories/${id}/`, {
+    method: "PATCH",
+    body: payload,
+    auth: true,
+  });
+}
+
+/** Delete one of the user's own categories (documents keep, category cleared). */
+export function deleteDocumentCategory(id: number): Promise<void> {
+  return apiFetch<void>(`/document-categories/${id}/`, {
+    method: "DELETE",
     auth: true,
   });
 }
