@@ -286,3 +286,82 @@ class FounderBillingPermissionTests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertIn("mrr_estimate_minor", resp.data)
         self.assertIn("estimate_note", resp.data)
+
+
+@override_settings(BILLING_PROVIDER="manual", BILLING_TEST_MODE=True)
+class BillingImprovementTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="imp", email="imp@example.com", password="StrongPassword123!DN"
+        )
+        self.pro = Plan.objects.get(key="pro")
+        self.pro.monthly_provider_price_id = "price_pro_m"
+        self.pro.yearly_provider_price_id = "price_pro_y"
+        self.pro.save()
+
+    def _post_event(self, event):
+        return self.client.post(
+            "/api/v1/billing/webhook/stripe/",
+            data=json.dumps(event),
+            content_type="application/json",
+        )
+
+    def test_webhook_resolves_plan_and_terms_from_price_id(self):
+        event = {
+            "id": "evt_price",
+            "type": "customer.subscription.created",
+            "data": {"object": {
+                "object": "subscription",
+                "id": "sub_price",
+                "customer": "cus_price",
+                "status": "active",
+                "metadata": {"user_id": str(self.user.id)},
+                "items": {"data": [{"price": {
+                    "id": "price_pro_m",
+                    "unit_amount": 599,
+                    "recurring": {"interval": "month"},
+                }}]},
+            }},
+        }
+        resp = self._post_event(event)
+        self.assertEqual(resp.data["status"], "processed")
+        sub = UserSubscription.objects.get(provider_subscription_id="sub_price")
+        self.assertEqual(sub.plan.key, "pro")  # resolved from price id, not Free
+        self.assertEqual(sub.billing_interval, "month")
+        self.assertEqual(sub.amount, 599)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.plan, "pro_placeholder")
+
+    def test_sync_command_expires_manual_grant_and_fixes_drift(self):
+        from django.core.management import call_command
+
+        ManualAccessGrant.objects.create(
+            user=self.user, plan=self.pro,
+            grant_status=UserSubscription.Status.MANUAL_PRO,
+            ends_at=timezone.now() - timezone.timedelta(hours=1),
+        )
+        # Simulate stale denormalized state (tier left as Pro after grant ended).
+        self.user.plan = "pro_placeholder"
+        self.user.save(update_fields=["plan"])
+
+        call_command("sync_billing_access")
+
+        grant = ManualAccessGrant.objects.get(user=self.user)
+        self.assertFalse(grant.is_active)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.plan, "free")
+
+    def test_sync_command_expires_grace_period(self):
+        from django.core.management import call_command
+
+        sub = UserSubscription.objects.create(
+            user=self.user, plan=self.pro, provider="manual",
+            provider_subscription_id="sub_grace",
+            status=UserSubscription.Status.GRACE_PERIOD,
+            grace_period_until=timezone.now() - timezone.timedelta(hours=1),
+        )
+        call_command("sync_billing_access")
+        sub.refresh_from_db()
+        self.assertEqual(sub.status, "unpaid")
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.plan, "free")

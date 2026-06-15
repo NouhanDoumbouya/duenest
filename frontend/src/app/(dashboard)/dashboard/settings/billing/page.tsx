@@ -24,15 +24,17 @@ import { PlanUsageCard } from "@/components/dashboard/plan-usage-card";
 import { UpgradeModal } from "@/components/billing/upgrade-modal";
 import { ApiError } from "@/lib/api";
 import {
+  asArray,
   cancelSubscription,
   formatMoney,
   getBillingStatus,
+  getInvoices,
   openBillingPortal,
   resumeSubscription,
 } from "@/lib/billing";
 import { formatDate } from "@/lib/documents";
 import { cn } from "@/lib/utils";
-import type { BillingStatus } from "@/types/billing";
+import type { BillingStatus, InvoiceRecord } from "@/types/billing";
 
 export default function BillingSettingsPage() {
   const [status, setStatus] = useState<BillingStatus | null>(null);
@@ -40,6 +42,7 @@ export default function BillingSettingsPage() {
   const [busy, setBusy] = useState(false);
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
 
   const load = useCallback(() => {
     getBillingStatus()
@@ -47,6 +50,9 @@ export default function BillingSettingsPage() {
       .catch((err) =>
         setError(err instanceof ApiError ? err.message : "Unable to load billing."),
       );
+    getInvoices()
+      .then((d) => setInvoices(asArray(d)))
+      .catch(() => setInvoices([]));
   }, []);
 
   useEffect(() => {
@@ -246,6 +252,50 @@ export default function BillingSettingsPage() {
 
           {/* Usage meters */}
           <PlanUsageCard />
+
+          {/* Invoice history */}
+          {invoices.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Billing history</CardTitle>
+                <CardDescription>Your recent invoices.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ul className="divide-y divide-border/60 text-sm">
+                  {invoices.map((inv) => (
+                    <li
+                      key={inv.provider_invoice_id}
+                      className="flex items-center justify-between gap-3 py-2"
+                    >
+                      <span className="text-muted-foreground">
+                        {inv.paid_at
+                          ? formatDate(inv.paid_at)
+                          : formatDate(inv.created_at)}
+                      </span>
+                      <span className="font-medium">
+                        {formatMoney(inv.amount_paid || inv.amount_due, inv.currency)}
+                      </span>
+                      <span className="capitalize text-muted-foreground">
+                        {inv.status || "—"}
+                      </span>
+                      {inv.hosted_invoice_url ? (
+                        <a
+                          href={inv.hosted_invoice_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline"
+                        >
+                          View
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          )}
         </>
       )}
 

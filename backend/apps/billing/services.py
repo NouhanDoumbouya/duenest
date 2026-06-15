@@ -259,6 +259,30 @@ def _user_subscription_for(obj, record):
     return user, sub, sub_id
 
 
+def _plan_terms_from_obj(obj):
+    """
+    Resolve (plan, interval, amount) from a subscription object's price ID by
+    matching it against the configured provider price IDs on each Plan. Returns
+    (None, None, None) when no price is present or it doesn't match a plan.
+    """
+    from django.db.models import Q
+
+    items = (obj.get("items") or {}).get("data") or []
+    price = items[0].get("price") if items and isinstance(items[0], dict) else None
+    if not price:
+        return None, None, None
+    price_id = price.get("id")
+    interval = (price.get("recurring") or {}).get("interval")
+    amount = price.get("unit_amount")
+    plan = None
+    if price_id:
+        plan = Plan.objects.filter(
+            Q(monthly_provider_price_id=price_id)
+            | Q(yearly_provider_price_id=price_id)
+        ).first()
+    return plan, interval, amount
+
+
 def _upsert_subscription_from_event(obj, record):
     user, sub, sub_id = _user_subscription_for(obj, record)
     if user is None:
@@ -266,7 +290,14 @@ def _upsert_subscription_from_event(obj, record):
         record.save(update_fields=["status"])
         return
     status = _STRIPE_STATUS_MAP.get(obj.get("status", ""), UserSubscription.Status.ACTIVE)
-    plan = entitlements.get_user_plan(user) or Plan.objects.filter(key="pro").first()
+    # Resolve the plan from the subscription's price ID (authoritative), not from
+    # the user's current plan — a brand-new payer would otherwise resolve to Free.
+    plan, interval, amount = _plan_terms_from_obj(obj)
+    if plan is None:
+        plan = (
+            (sub.plan if sub else None)
+            or Plan.objects.filter(key="pro").first()
+        )
     defaults = dict(
         plan=plan,
         provider=record.provider,
@@ -275,6 +306,10 @@ def _upsert_subscription_from_event(obj, record):
         status=status,
         cancel_at_period_end=bool(obj.get("cancel_at_period_end")),
     )
+    if interval:
+        defaults["billing_interval"] = interval
+    if amount is not None:
+        defaults["amount"] = amount
     end_ts = obj.get("current_period_end")
     if end_ts:
         defaults["current_period_end"] = timezone.datetime.fromtimestamp(
