@@ -241,6 +241,12 @@ class DocumentViewSet(viewsets.ModelViewSet):
             revoked_at__isnull=True,
             expires_at__gt=timezone.now(),
         )
+        in_bundle = DocumentBundleRequirement.objects.filter(
+            linked_document=OuterRef("pk")
+        )
+        in_emergency = EmergencyAccessPackItem.objects.filter(
+            document=OuterRef("pk")
+        )
         queryset = (
             Document.objects.filter(owner=self.request.user)
             .select_related("category")
@@ -252,6 +258,8 @@ class DocumentViewSet(viewsets.ModelViewSet):
                     distinct=True,
                 ),
                 is_shared_ext=Exists(active_share),
+                in_bundle_anno=Exists(in_bundle),
+                in_emergency_anno=Exists(in_emergency),
             )
         )
         # Non-list actions (retrieve/update/destroy/restore/permanent-delete)

@@ -8,8 +8,10 @@ import {
   CheckCircle2,
   Edit3,
   FileUp,
+  LifeBuoy,
   Loader2,
   MoreHorizontal,
+  Package,
   Share2,
   Trash2,
   UploadCloud,
@@ -177,6 +179,24 @@ export function DocumentCard({
                 >
                   <Share2 className="size-3" aria-hidden />
                   Shared
+                </span>
+              )}
+              {doc.in_bundle && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[0.68rem] font-medium text-muted-foreground"
+                  title="This document is used in a bundle"
+                >
+                  <Package className="size-3" aria-hidden />
+                  In bundle
+                </span>
+              )}
+              {doc.in_emergency && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-[0.68rem] font-medium text-destructive"
+                  title="This document is used in emergency access"
+                >
+                  <LifeBuoy className="size-3" aria-hidden />
+                  Emergency
                 </span>
               )}
             </div>
