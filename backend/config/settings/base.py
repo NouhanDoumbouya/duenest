@@ -298,6 +298,8 @@ REST_FRAMEWORK = {
         "feedback": _throttle_rate("20/hour"),
         # Client UI analytics events (anti-flood; high enough for normal use).
         "client_events": _throttle_rate("120/min"),
+        # Document scanner uploads (per authenticated user) — anti spam/abuse.
+        "scanner_upload": _throttle_rate("30/min"),
     },
 }
 
@@ -327,6 +329,42 @@ LOGGING = {
         "level": config("DJANGO_LOG_LEVEL", default="INFO"),
     },
 }
+
+# ---------------------------------------------------------------------------
+# Document scanner (camera capture -> PDF upload). See docs/DOCUMENT_SCANNER.md.
+#
+# Scanned PDFs flow through the SAME encrypted DocumentFile pipeline as normal
+# uploads; these settings only gate the dedicated scanner upload entrypoint
+# (validation limits, optional malware scanning, optional OCR).
+# ---------------------------------------------------------------------------
+SCANNER_MAX_UPLOAD_MB = config("SCANNER_MAX_UPLOAD_MB", default=15, cast=int)
+
+# MIME types accepted by the scanner endpoint. The scanner produces PDFs in the
+# browser; images are allowed as a fallback for direct import.
+SCANNER_ALLOWED_MIME_TYPES = [
+    t.strip()
+    for t in config(
+        "SCANNER_ALLOWED_MIME_TYPES",
+        default="application/pdf,image/jpeg,image/png",
+    ).split(",")
+    if t.strip()
+]
+
+# OCR runs synchronously after storage and is best-effort: failures never block
+# the upload unless SCANNER_OCR_REQUIRED is true. Heavy/large files are skipped.
+SCANNER_OCR_ENABLED = config("SCANNER_OCR_ENABLED", default=True, cast=bool)
+SCANNER_OCR_REQUIRED = config("SCANNER_OCR_REQUIRED", default=False, cast=bool)
+SCANNER_OCR_TIMEOUT_SECONDS = config(
+    "SCANNER_OCR_TIMEOUT_SECONDS", default=20, cast=int
+)
+SCANNER_OCR_MAX_PAGES = config("SCANNER_OCR_MAX_PAGES", default=10, cast=int)
+
+# ClamAV malware scanning via the `clamd` client. Disabled by default for local
+# dev; when enabled, CLAMD_FAIL_CLOSED decides whether a scanner/daemon error
+# rejects the upload (recommended in production) or allows it through.
+CLAMD_ENABLED = config("CLAMD_ENABLED", default=False, cast=bool)
+CLAMD_SOCKET_PATH = config("CLAMD_SOCKET_PATH", default="/var/run/clamav/clamd.ctl")
+CLAMD_FAIL_CLOSED = config("CLAMD_FAIL_CLOSED", default=True, cast=bool)
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(

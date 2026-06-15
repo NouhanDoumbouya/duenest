@@ -30,6 +30,7 @@ import {
   Package,
   QrCode,
   RefreshCw,
+  ScanLine,
   Settings,
   ShieldAlert,
   ShieldCheck,
@@ -92,6 +93,12 @@ export const NAV_SECTIONS: NavSection[] = [
         featureKey: "file_inbox",
         description:
           "Upload files quickly, then link them to documents, checklists, bundles, or shares.",
+      },
+      {
+        label: "Scan",
+        href: "/dashboard/scanner",
+        description:
+          "Capture a document with your camera, auto-detect edges, and save a clean PDF.",
       },
       {
         label: "Categories",
@@ -250,6 +257,7 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
             icon: Inbox,
             featureKey: "file_inbox",
           },
+          { label: "Scan", href: "/dashboard/scanner", icon: ScanLine },
           {
             label: "Categories",
             href: "/dashboard/documents?view=categories",
