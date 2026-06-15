@@ -9,10 +9,15 @@ import {
   Edit3,
   FileCheck2,
   FileText,
+  Info,
   Loader2,
+  Lock,
+  Paperclip,
   RefreshCw,
   Share2,
+  ShieldCheck,
   UploadCloud,
+  type LucideIcon,
 } from "lucide-react";
 
 import { ConfidencePill } from "@/components/documents/confidence-indicator";
@@ -35,6 +40,7 @@ import { ApiError } from "@/lib/api";
 import { formatDate, getDocument } from "@/lib/documents";
 import { tagColorClass } from "@/lib/tags";
 import { cn } from "@/lib/utils";
+import { isSensitiveDocument } from "@/lib/vault";
 import type { DocumentRecord } from "@/types/documents";
 
 type TabKey = "overview" | "files" | "renewal" | "proof" | "sharing" | "activity";
@@ -326,6 +332,23 @@ export default function DocumentWorkspacePage() {
                     ))}
                   </div>
                 )}
+
+                {/* At-a-glance status: sensitivity, sharing, completeness, privacy. */}
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {isSensitiveDocument(doc) && (
+                    <GlanceChip icon={Lock} label="Sensitive" tone="slate" />
+                  )}
+                  {doc.is_shared_externally && (
+                    <GlanceChip icon={Share2} label="Shared" tone="blue" />
+                  )}
+                  {doc.missing_file && (
+                    <GlanceChip icon={Paperclip} label="No file attached" tone="amber" />
+                  )}
+                  {doc.missing_expiry_date && (
+                    <GlanceChip icon={Info} label="No expiry date" tone="amber" />
+                  )}
+                  <GlanceChip icon={ShieldCheck} label="Private by default" tone="green" />
+                </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
@@ -365,5 +388,33 @@ export default function DocumentWorkspacePage() {
         </>
       )}
     </PageContainer>
+  );
+}
+
+function GlanceChip({
+  icon: Icon,
+  label,
+  tone,
+}: {
+  icon: LucideIcon;
+  label: string;
+  tone: "slate" | "blue" | "amber" | "green";
+}) {
+  const cls = {
+    slate: "bg-muted text-muted-foreground",
+    blue: "bg-primary/10 text-primary",
+    amber: "bg-brand-amber/10 text-brand-amber",
+    green: "bg-brand-success/10 text-brand-success",
+  }[tone];
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.68rem] font-medium",
+        cls,
+      )}
+    >
+      <Icon className="size-3" aria-hidden />
+      {label}
+    </span>
   );
 }
