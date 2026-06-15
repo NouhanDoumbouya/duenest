@@ -95,3 +95,91 @@ Failed sends:
 - do not log email bodies or provider response details.
 
 The service stops retrying a notification after three email attempts.
+
+## Provider-neutral configuration (beta)
+
+Email is now configured with provider-neutral env vars (`EMAIL_PROVIDER` + a few
+keys). Legacy `EMAIL_*` names still work. See `apps/notifications/email_config.py`.
+
+`EMAIL_PROVIDER` options:
+
+- `console` (default) — prints to console; **no credentials needed** for local dev.
+- `smtp` — generic SMTP via `SMTP_HOST/SMTP_PORT/SMTP_USERNAME/SMTP_PASSWORD/SMTP_USE_TLS`.
+- `resend` — host `smtp.resend.com`, user `resend`, password `RESEND_API_KEY`.
+- `postmark` — host `smtp.postmarkapp.com`, server token via `POSTMARK_SERVER_TOKEN`.
+- `sendgrid` — host `smtp.sendgrid.net`, user `apikey`, password `SENDGRID_API_KEY`.
+- `mailgun` — host `smtp.mailgun.org`, `MAILGUN_DOMAIN` + SMTP password (`SMTP_PASSWORD` or `MAILGUN_API_KEY`).
+- `ses` — host derived from `AWS_SES_REGION`; uses **SES SMTP credentials** in `SMTP_USERNAME/SMTP_PASSWORD` (not IAM keys).
+
+**Honest skip:** if a provider is selected but not fully configured,
+`EMAIL_CONFIGURED` is False, in-app delivery still happens, and email is recorded
+as `email_last_error="not_configured"` (counted as *skipped*, not *failed*, not
+sent). It will deliver once a provider is configured — `email_attempts` is not
+consumed.
+
+## Scheduled job (production)
+
+There is no Celery/Redis worker. Run the management command on a schedule
+(cron / platform scheduled job), e.g. every 15 minutes:
+
+```cron
+*/15 * * * * cd /app/backend && python manage.py process_due_notifications >> /var/log/duenest-reminders.log 2>&1
+```
+
+Platform examples:
+- **Render:** add a Cron Job service running `python manage.py process_due_notifications`.
+- **Railway:** add a cron schedule for the same command.
+- **systemd timer / Kubernetes CronJob:** same command.
+
+Behaviour for schedulers:
+- Idempotent — safe to run repeatedly (unique `dedupe_key` prevents duplicates).
+- Per-candidate errors are isolated; one bad record never aborts the run.
+- Exit code is non-zero **only on catastrophic failure**, so transient per-email
+  failures don't spam scheduler alerting.
+- Each real (non-dry) run records a `NotificationDeliveryRun` row.
+
+Flags: `--dry-run`, `--limit N`, `--user-id ID`, `--type TYPE`, `--now ISO`,
+`--manual` (tags the run as manual in history).
+
+## Founder delivery-health metrics
+
+`GET /api/v1/founder/notification-health/` (founder/admin only) returns:
+email provider + configured flag, today's generated / in-app / sent / skipped /
+failed counts, pending-undelivered count, last run, last successful run, recent
+runs, recent failure samples (type + timestamp + error code only — no PII), and
+the 7-day email failure rate.
+
+## Domain authentication checklist (before claiming email readiness)
+
+- [ ] Verified sending domain at the provider
+- [ ] SPF record published
+- [ ] DKIM signing enabled + DNS records published
+- [ ] DMARC policy published
+- [ ] Branded `DEFAULT_FROM_EMAIL` on the authenticated domain
+- [ ] Provider monitoring/dashboards enabled
+- [ ] Bounce/complaint handling (future step — see below)
+- [ ] Scheduler monitoring + alerting on repeated failures
+
+## Testing checklist
+
+1. Create a document with an expiry date ~7 days out (generates a reminder).
+2. Create a subscription with `next_billing_date` ~7 days out.
+3. `python manage.py process_due_notifications --dry-run` → review counts, nothing sent.
+4. `python manage.py process_due_notifications` → notifications created + delivered.
+5. Verify the in-app notification appears (`/api/v1/notifications/` or the bell).
+6. Verify email behaviour: console prints in dev; with a provider, a real email
+   arrives; with a provider selected but no credentials, it's recorded *skipped*.
+7. Check `GET /api/v1/founder/notification-health/` as a founder for the run + counts.
+
+## Future work (deferred this sprint)
+
+- **Daily digest batching.** `NotificationPreference.reminder_digest_enabled`
+  exists but per-user digest grouping is not implemented yet. Future: a daily
+  digest that groups expiring documents, renewing subscriptions, trial/cancellation
+  deadlines, and important unread notifications into one email; skip empty digests.
+- **Provider bounce/complaint webhooks.** No webhook endpoint yet. Future:
+  a provider-event endpoint (signature-verified) that marks bounced/complained
+  recipients and suppresses further sends. Until then, monitor via the provider
+  dashboard.
+- **Background worker (Celery/Redis).** Not needed for beta; the cron-driven
+  command is sufficient. Revisit if volume grows or near-real-time sends are required.

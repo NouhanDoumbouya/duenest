@@ -26,6 +26,7 @@ from .views import (
     FounderLaunchReadinessDetailView,
     FounderLaunchReadinessListView,
     FounderMeView,
+    FounderNotificationHealthView,
     FounderPrivateBetaMetricsView,
     FounderSecurityEventListView,
     FounderSecurityOverviewView,
@@ -48,6 +49,11 @@ urlpatterns = [
     path("founder/me/", FounderMeView.as_view(), name="founder-me"),
     path("founder/dashboard/", FounderDashboardView.as_view(), name="founder-dashboard"),
     path("founder/analytics/", FounderAnalyticsView.as_view(), name="founder-analytics"),
+    path(
+        "founder/notification-health/",
+        FounderNotificationHealthView.as_view(),
+        name="founder-notification-health",
+    ),
     path(
         "founder/private-beta/",
         FounderPrivateBetaMetricsView.as_view(),

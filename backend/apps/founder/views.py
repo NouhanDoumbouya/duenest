@@ -237,6 +237,18 @@ class FounderPrivateBetaMetricsView(APIView):
         return Response(build_private_beta_metrics())
 
 
+class FounderNotificationHealthView(APIView):
+    """Delivery health for reminders/notifications (founder/admin only)."""
+
+    permission_classes = [IsFounderUser]
+
+    def get(self, request):
+        from apps.notifications.services import build_delivery_health
+
+        log_founder_action(request=request, action="founder_viewed_notification_health")
+        return Response(build_delivery_health())
+
+
 class FounderWaitlistListView(generics.ListAPIView):
     permission_classes = [IsFounderUser]
     serializer_class = FounderWaitlistEntrySerializer

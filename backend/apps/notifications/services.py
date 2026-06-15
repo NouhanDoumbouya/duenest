@@ -12,9 +12,25 @@ from django.db import IntegrityError, transaction
 from django.template.loader import render_to_string
 from django.utils import timezone
 
-from .models import Notification, NotificationPreference
+from .models import Notification, NotificationDeliveryRun, NotificationPreference
 
 logger = logging.getLogger("duenest.notifications")
+
+
+@dataclass
+class DeliveryResult:
+    """Per-notification outcome of a delivery attempt (for run metrics)."""
+
+    changed: bool = False
+    in_app_delivered: bool = False
+    email_sent: bool = False
+    email_skipped: bool = False  # email enabled but provider not configured
+    email_failed: bool = False
+
+    def __bool__(self) -> bool:
+        # Backwards-compatible: callers historically treated the return value as
+        # "something changed / was delivered".
+        return self.changed
 
 SENSITIVE_METADATA_KEYS = {
     "access_code",
@@ -299,16 +315,22 @@ def send_notification_email(notification: Notification) -> None:
     message.send(fail_silently=False)
 
 
-def deliver_notification(notification: Notification, *, now=None) -> bool:
+def is_email_configured() -> bool:
+    """Whether a usable email provider is configured (console counts in dev)."""
+    return bool(getattr(settings, "EMAIL_CONFIGURED", True))
+
+
+def deliver_notification(notification: Notification, *, now=None) -> DeliveryResult:
     now = now or timezone.now()
+    result = DeliveryResult()
     prefs = get_preferences(notification.user)
     if not _preference_allows(prefs, notification.type):
-        return False
+        return result
 
-    changed = False
     if prefs.in_app_enabled and notification.delivered_in_app_at is None:
         notification.delivered_in_app_at = now
-        changed = True
+        result.in_app_delivered = True
+        result.changed = True
 
     should_email = (
         prefs.email_enabled
@@ -322,17 +344,27 @@ def deliver_notification(notification: Notification, *, now=None) -> bool:
         should_email = should_email and prefs.security_alerts_enabled
 
     email_failed = False
-    if should_email:
+    if should_email and not is_email_configured():
+        # Honest skip: never pretend an email was sent when no provider is
+        # configured. Does not consume an attempt or mark the record failed —
+        # it will be delivered once a provider is configured.
+        if notification.email_last_error != "not_configured":
+            notification.email_last_error = "not_configured"
+            result.changed = True
+        result.email_skipped = True
+    elif should_email:
         notification.email_attempts += 1
         try:
             send_notification_email(notification)
             notification.delivered_email_at = now
             notification.email_last_error = ""
-            changed = True
+            result.email_sent = True
+            result.changed = True
         except Exception:  # noqa: BLE001 - safe status only, no body/details
             notification.email_last_error = "send_failed"
             email_failed = True
-            changed = True
+            result.email_failed = True
+            result.changed = True
             logger.warning(
                 "notification_email_failed notification_id=%s user_id=%s type=%s",
                 notification.id,
@@ -347,9 +379,9 @@ def deliver_notification(notification: Notification, *, now=None) -> bool:
         notification.status = (
             Notification.Status.FAILED if email_failed else Notification.Status.DELIVERED
         )
-        changed = True
+        result.changed = True
 
-    if changed:
+    if result.changed:
         notification.save(
             update_fields=[
                 "delivered_in_app_at",
@@ -360,7 +392,7 @@ def deliver_notification(notification: Notification, *, now=None) -> bool:
                 "updated_at",
             ]
         )
-    return changed
+    return result
 
 
 def _document_candidates(user, today: date, tzinfo: ZoneInfo):
@@ -1032,8 +1064,19 @@ def process_due_notifications(
     limit: int = 100,
     user_id: int | None = None,
     type_filter: str = "",
+    record_run: bool = True,
+    trigger: str = NotificationDeliveryRun.Trigger.SCHEDULED,
 ) -> dict:
-    now = now or timezone.now()
+    """
+    Idempotently create and deliver due notifications.
+
+    Safe to run repeatedly (a unique ``dedupe_key`` prevents duplicate
+    notifications/emails). Per-candidate errors are isolated so one bad record
+    never aborts the whole run. A ``NotificationDeliveryRun`` row is recorded for
+    real (non-dry) runs so founders can see delivery health.
+    """
+    started_at = timezone.now()
+    now = now or started_at
     if timezone.is_naive(now):
         now = timezone.make_aware(now, timezone.get_current_timezone())
     limit = max(1, int(limit or 100))
@@ -1047,33 +1090,197 @@ def process_due_notifications(
         "created": 0,
         "existing": 0,
         "delivered": 0,
+        "in_app_delivered": 0,
+        "emails_sent": 0,
+        "emails_skipped": 0,
+        "emails_failed": 0,
         "skipped_preferences": 0,
+        "errors": 0,
         "dry_run": dry_run,
+        "email_configured": is_email_configured(),
     }
+    run_error = ""
 
-    for user in users:
-        prefs = get_preferences(user)
-        for candidate in iter_due_candidates(user, now):
-            if type_filter and candidate.type != type_filter:
-                continue
-            if summary["evaluated"] >= limit:
-                return summary
-            summary["evaluated"] += 1
-            if not _preference_allows(prefs, candidate.type):
-                summary["skipped_preferences"] += 1
-                continue
-            if dry_run:
-                continue
-            notification, created = create_notification(candidate)
-            summary["created" if created else "existing"] += 1
-            if deliver_notification(notification, now=now):
-                summary["delivered"] += 1
+    try:
+        for user in users:
+            prefs = get_preferences(user)
+            for candidate in iter_due_candidates(user, now):
+                if type_filter and candidate.type != type_filter:
+                    continue
+                if summary["evaluated"] >= limit:
+                    raise _LimitReached
+                summary["evaluated"] += 1
+                if not _preference_allows(prefs, candidate.type):
+                    summary["skipped_preferences"] += 1
+                    continue
+                if dry_run:
+                    continue
+                try:
+                    notification, created = create_notification(candidate)
+                    summary["created" if created else "existing"] += 1
+                    result = deliver_notification(notification, now=now)
+                    if result.changed:
+                        summary["delivered"] += 1
+                    summary["in_app_delivered"] += int(result.in_app_delivered)
+                    summary["emails_sent"] += int(result.email_sent)
+                    summary["emails_skipped"] += int(result.email_skipped)
+                    summary["emails_failed"] += int(result.email_failed)
+                except Exception:  # noqa: BLE001 - isolate one bad candidate
+                    summary["errors"] += 1
+                    logger.warning(
+                        "notification_candidate_failed type=%s user_id=%s",
+                        candidate.type,
+                        getattr(user, "id", None),
+                    )
+    except _LimitReached:
+        pass
+    except Exception as exc:  # noqa: BLE001 - catastrophic; record and re-raise after logging
+        run_error = type(exc).__name__
+        logger.exception("notifications_run_failed")
+
+    finished_at = timezone.now()
+    duration_ms = int((finished_at - started_at).total_seconds() * 1000)
+    summary["duration_ms"] = duration_ms
+    summary["started_at"] = started_at.isoformat()
+    summary["finished_at"] = finished_at.isoformat()
+
+    if run_error:
+        status = NotificationDeliveryRun.Status.FAILED
+    elif summary["emails_failed"] or summary["errors"]:
+        status = NotificationDeliveryRun.Status.PARTIAL
+    else:
+        status = NotificationDeliveryRun.Status.SUCCESS
+    summary["status"] = status
+
+    if record_run and not dry_run:
+        try:
+            NotificationDeliveryRun.objects.create(
+                started_at=started_at,
+                finished_at=finished_at,
+                duration_ms=duration_ms,
+                status=status,
+                trigger=trigger,
+                evaluated=summary["evaluated"],
+                created=summary["created"],
+                existing=summary["existing"],
+                in_app_delivered=summary["in_app_delivered"],
+                emails_sent=summary["emails_sent"],
+                emails_skipped=summary["emails_skipped"],
+                emails_failed=summary["emails_failed"],
+                skipped_preferences=summary["skipped_preferences"],
+                error=run_error,
+            )
+        except Exception:  # noqa: BLE001 - never let metrics recording break a run
+            logger.warning("notification_run_record_failed")
+
     logger.info(
-        "notifications_processed evaluated=%s created=%s existing=%s delivered=%s dry_run=%s",
+        "notifications_processed evaluated=%s created=%s existing=%s delivered=%s "
+        "emails_sent=%s emails_skipped=%s emails_failed=%s errors=%s status=%s "
+        "duration_ms=%s dry_run=%s",
         summary["evaluated"],
         summary["created"],
         summary["existing"],
         summary["delivered"],
+        summary["emails_sent"],
+        summary["emails_skipped"],
+        summary["emails_failed"],
+        summary["errors"],
+        status,
+        duration_ms,
         dry_run,
     )
     return summary
+
+
+class _LimitReached(Exception):
+    """Internal sentinel to stop processing once the evaluation limit is hit."""
+
+
+def _serialize_run(run: NotificationDeliveryRun) -> dict:
+    return {
+        "started_at": run.started_at.isoformat(),
+        "finished_at": run.finished_at.isoformat(),
+        "duration_ms": run.duration_ms,
+        "status": run.status,
+        "trigger": run.trigger,
+        "evaluated": run.evaluated,
+        "created": run.created,
+        "in_app_delivered": run.in_app_delivered,
+        "emails_sent": run.emails_sent,
+        "emails_skipped": run.emails_skipped,
+        "emails_failed": run.emails_failed,
+        "skipped_preferences": run.skipped_preferences,
+        "error": run.error,
+    }
+
+
+def build_delivery_health() -> dict:
+    """
+    Aggregate notification delivery health for the founder console. Returns counts
+    and run history only — never notification contents, titles, or user PII.
+    """
+    now = timezone.now()
+    today = timezone.localdate()
+    window_start = now - timedelta(days=7)
+
+    notes = Notification.objects.all()
+
+    sent_7d = notes.filter(delivered_email_at__gte=window_start).count()
+    failed_7d = notes.filter(
+        created_at__gte=window_start,
+        email_last_error="send_failed",
+        delivered_email_at__isnull=True,
+    ).count()
+    attempted_7d = sent_7d + failed_7d
+    failure_rate = round(failed_7d / attempted_7d, 4) if attempted_7d else 0.0
+
+    today_qs = notes.filter(created_at__date=today)
+    today_counts = {
+        "generated": today_qs.count(),
+        "in_app_delivered": notes.filter(delivered_in_app_at__date=today).count(),
+        "emails_sent": notes.filter(delivered_email_at__date=today).count(),
+        "emails_skipped": today_qs.filter(
+            email_last_error="not_configured", delivered_email_at__isnull=True
+        ).count(),
+        "emails_failed": today_qs.filter(
+            email_last_error="send_failed", delivered_email_at__isnull=True
+        ).count(),
+    }
+
+    runs = NotificationDeliveryRun.objects.all()
+    last_run = runs.first()
+    last_successful = runs.filter(
+        status=NotificationDeliveryRun.Status.SUCCESS
+    ).first()
+
+    recent_failures = [
+        {
+            "type": n.type,
+            "created_at": n.created_at.isoformat(),
+            "email_attempts": n.email_attempts,
+            "email_last_error": n.email_last_error,
+        }
+        for n in notes.filter(
+            email_last_error="send_failed", delivered_email_at__isnull=True
+        ).order_by("-updated_at")[:10]
+    ]
+
+    return {
+        "email": {
+            "provider": getattr(settings, "EMAIL_PROVIDER", "console"),
+            "configured": is_email_configured(),
+            "from_email": getattr(settings, "DEFAULT_FROM_EMAIL", ""),
+        },
+        "today": today_counts,
+        "pending_undelivered": notes.filter(
+            status=Notification.Status.PENDING
+        ).count(),
+        "last_run": _serialize_run(last_run) if last_run else None,
+        "last_successful_run": (
+            _serialize_run(last_successful) if last_successful else None
+        ),
+        "recent_runs": [_serialize_run(r) for r in runs[:10]],
+        "recent_failures": recent_failures,
+        "email_failure_rate_7d": failure_rate,
+        "emails_attempted_7d": attempted_7d,
+    }
