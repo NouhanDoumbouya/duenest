@@ -601,3 +601,171 @@ class FounderAuditLog(models.Model):
 
     def __str__(self):
         return f"{self.action} at {self.created_at:%Y-%m-%d %H:%M}"
+
+
+class MarketingCampaign(models.Model):
+    """Founder-managed growth campaign tracked via UTM parameters + events."""
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        SCHEDULED = "scheduled", "Scheduled"
+        ACTIVE = "active", "Active"
+        PAUSED = "paused", "Paused"
+        COMPLETED = "completed", "Completed"
+        ARCHIVED = "archived", "Archived"
+
+    name = models.CharField(max_length=160)
+    slug = models.SlugField(max_length=180, unique=True)
+    description = models.TextField(blank=True)
+    channel = models.CharField(max_length=80, blank=True)
+    source = models.CharField(max_length=80, blank=True)
+    medium = models.CharField(max_length=80, blank=True)
+    # The utm_campaign value used for attribution (defaults to slug).
+    campaign = models.CharField(max_length=120, blank=True)
+    content = models.CharField(max_length=120, blank=True)
+    target_audience = models.CharField(max_length=120, blank=True)
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.DRAFT
+    )
+    start_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
+    budget_amount = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True
+    )
+    currency = models.CharField(max_length=8, blank=True, default="USD")
+    goal = models.CharField(max_length=200, blank=True)
+    cta = models.CharField(max_length=160, blank=True)
+    landing_url = models.URLField(blank=True)
+    generated_url = models.URLField(blank=True, max_length=600)
+    tags = models.JSONField(default=list, blank=True)
+    notes = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="growth_campaigns_created",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="growth_campaigns_updated",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["status", "created_at"]),
+            models.Index(fields=["campaign"]),
+        ]
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def attribution_key(self) -> str:
+        """The utm_campaign value used to attribute events to this campaign."""
+        return (self.campaign or self.slug or "").lower()
+
+
+class CampaignLink(models.Model):
+    """A saved UTM link belonging to a campaign. Metrics are computed live."""
+
+    campaign = models.ForeignKey(
+        MarketingCampaign,
+        on_delete=models.CASCADE,
+        related_name="links",
+    )
+    label = models.CharField(max_length=160, blank=True)
+    base_url = models.URLField(max_length=600)
+    full_url = models.URLField(max_length=600)
+    source = models.CharField(max_length=80, blank=True)
+    medium = models.CharField(max_length=80, blank=True)
+    content = models.CharField(max_length=120, blank=True)
+    term = models.CharField(max_length=120, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="growth_campaign_links",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return self.label or self.full_url
+
+
+class GrowthAction(models.Model):
+    """A recommended or manual founder growth action (the Action Center)."""
+
+    class Priority(models.TextChoices):
+        CRITICAL = "critical", "Critical"
+        HIGH = "high", "High"
+        MEDIUM = "medium", "Medium"
+        LOW = "low", "Low"
+
+    class Status(models.TextChoices):
+        OPEN = "open", "Open"
+        IN_PROGRESS = "in_progress", "In progress"
+        DONE = "done", "Done"
+        SNOOZED = "snoozed", "Snoozed"
+        DISMISSED = "dismissed", "Dismissed"
+
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    reason = models.TextField(blank=True)
+    action_type = models.CharField(max_length=60, blank=True)
+    priority = models.CharField(
+        max_length=12, choices=Priority.choices, default=Priority.MEDIUM
+    )
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.OPEN
+    )
+    related_metric = models.CharField(max_length=120, blank=True)
+    campaign = models.ForeignKey(
+        MarketingCampaign,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="growth_actions",
+    )
+    due_at = models.DateTimeField(null=True, blank=True)
+    snoozed_until = models.DateTimeField(null=True, blank=True)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="growth_actions_owned",
+    )
+    action_url = models.CharField(max_length=300, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    # Stable key for auto-generated actions so we don't create duplicates.
+    rule_key = models.CharField(max_length=120, blank=True, db_index=True)
+    created_automatically = models.BooleanField(default=False)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="growth_actions_created",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["status", "priority"]),
+        ]
+
+    def __str__(self):
+        return self.title
