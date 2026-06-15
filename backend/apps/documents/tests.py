@@ -415,6 +415,60 @@ class DocumentFileAPITests(APITestCase):
         self.assertEqual(inbox_file.document.title, "Application Pack")
         self.assertEqual(response.data["document"]["title"], "Application Pack")
 
+    def test_create_document_from_inbox_captures_metadata(self):
+        from apps.documents.models import DocumentCategory
+
+        category = DocumentCategory.objects.create(owner=self.alice, name="Travel")
+        inbox_file = DocumentFile.objects.create(
+            uploaded_by=self.alice,
+            file=make_pdf("passport.pdf"),
+            original_filename="passport.pdf",
+            content_type="application/pdf",
+            file_size=10,
+        )
+        self.client.force_authenticate(self.alice)
+        response = self.client.post(
+            f"{inbox_file_detail_url(inbox_file.id)}create-document/",
+            {
+                "title": "Passport",
+                "expiry_date": "2030-01-01",
+                "category": category.id,
+                "reference_number": "X123",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        doc = Document.objects.get(id=response.data["document"]["id"])
+        self.assertEqual(str(doc.expiry_date), "2030-01-01")
+        self.assertEqual(doc.category_id, category.id)
+        self.assertEqual(doc.reference_number, "X123")
+
+    def test_create_document_from_inbox_ignores_foreign_category(self):
+        from django.contrib.auth import get_user_model
+
+        from apps.documents.models import DocumentCategory
+
+        bob = get_user_model().objects.create_user(
+            username="bob_inbox", email="bobinbox@example.com", password="StrongPass123!Inbox"
+        )
+        bob_category = DocumentCategory.objects.create(owner=bob, name="Bob Only")
+        inbox_file = DocumentFile.objects.create(
+            uploaded_by=self.alice,
+            file=make_pdf("doc.pdf"),
+            original_filename="doc.pdf",
+            content_type="application/pdf",
+            file_size=10,
+        )
+        self.client.force_authenticate(self.alice)
+        response = self.client.post(
+            f"{inbox_file_detail_url(inbox_file.id)}create-document/",
+            {"title": "Doc", "category": bob_category.id},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        doc = Document.objects.get(id=response.data["document"]["id"])
+        self.assertIsNone(doc.category_id)  # another user's category is ignored
+
     def test_user_can_trash_restore_and_permanently_delete_inbox_file(self):
         inbox_file = DocumentFile.objects.create(
             uploaded_by=self.alice,
