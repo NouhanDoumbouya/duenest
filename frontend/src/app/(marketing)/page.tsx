@@ -122,8 +122,9 @@ export default function LandingPage() {
       <SiteHeader />
       <main className="flex-1">
         <Hero />
-        <Connected />
         <Pain />
+        <HowItWorks />
+        <Connected />
         <LifeRadar />
         <Vault />
         <SafeSend />
@@ -165,9 +166,9 @@ function Hero() {
           </h1>
 
           <p className="mt-6 max-w-md text-lg leading-relaxed text-pretty text-muted-foreground">
-            Scan and organize important documents, track renewals, prepare
-            application bundles, share securely, and set up emergency access —
-            before life asks for them.
+            DueNest keeps your important documents, renewals, and deadlines in
+            one calm place — and quietly watches them, so an expiry or a missed
+            date never catches you off guard.
           </p>
 
           <div className="mt-9 flex flex-col gap-3 sm:flex-row">
@@ -182,7 +183,7 @@ function Hero() {
               <ArrowRight className="size-4" />
             </Link>
             <Link
-              href="/#life-radar"
+              href="/#how-it-works"
               className={cn(
                 buttonVariants({ variant: "outline", size: "lg" }),
                 "h-12 px-7 text-base",
@@ -201,7 +202,8 @@ function Hero() {
             <span>Revoke anytime</span>
           </p>
           <p className="mt-3 text-sm text-muted-foreground">
-            Built for students, travelers, families, and busy professionals.
+            Made for anyone who can&apos;t afford to miss a passport, a visa, or
+            a deadline.
           </p>
         </div>
 
@@ -220,6 +222,70 @@ function Hero() {
               Updates as things change
             </span>
           </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ---- How it works (3 steps) ------------------------------------------------
+
+function HowItWorks() {
+  const steps = [
+    {
+      icon: ScanLine,
+      title: "Add it once",
+      body: "Scan or upload a document — DueNest captures the key dates and details for you.",
+    },
+    {
+      icon: Radar,
+      title: "DueNest watches",
+      body: "Rule-based checks track every expiry, renewal, and deadline quietly in the background.",
+    },
+    {
+      icon: ShieldCheck,
+      title: "You stay ready",
+      body: "Get a heads-up before anything's due, share securely, and keep emergency access prepared.",
+    },
+  ];
+  return (
+    <section id="how-it-works" className="scroll-mt-20">
+      <div className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:py-24">
+        <ScrollReveal>
+          <SectionHeader
+            eyebrow="How it works"
+            title="Three steps to never being caught off guard."
+            description="No setup marathon. Add what matters once, and DueNest keeps it ready for the moment you need it."
+          />
+        </ScrollReveal>
+        <div className="mt-12 grid gap-5 sm:grid-cols-3">
+          {steps.map((step, i) => {
+            const Icon = step.icon;
+            return (
+              <ScrollReveal
+                key={step.title}
+                delay={i * 90}
+                className="flex h-full flex-col gap-4 rounded-2xl border border-border bg-card p-6 shadow-card"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="flex size-11 items-center justify-center rounded-xl bg-brand-navy text-brand-teal">
+                    <Icon className="size-5" />
+                  </span>
+                  <span className="font-heading text-2xl font-semibold tabular-nums text-muted-foreground/30">
+                    {i + 1}
+                  </span>
+                </div>
+                <div>
+                  <h3 className="font-heading text-lg font-semibold">
+                    {step.title}
+                  </h3>
+                  <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+                    {step.body}
+                  </p>
+                </div>
+              </ScrollReveal>
+            );
+          })}
         </div>
       </div>
     </section>
@@ -937,7 +1003,7 @@ function FinalCta() {
               <ArrowRight className="size-4" />
             </Link>
             <Link
-              href="/#life-radar"
+              href="/#how-it-works"
               className={cn(
                 buttonVariants({ variant: "outline", size: "lg" }),
                 "h-12 border-white/25 bg-transparent px-7 text-base text-white hover:bg-white/10 hover:text-white",
@@ -945,6 +1011,18 @@ function FinalCta() {
             >
               See how it works
             </Link>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm text-white/75">
+            {[
+              "Free during the private beta",
+              "No credit card",
+              "Private by default — export anytime",
+            ].map((item) => (
+              <span key={item} className="inline-flex items-center gap-1.5">
+                <Check className="size-4 text-brand-teal" />
+                {item}
+              </span>
+            ))}
           </div>
           <p className="text-xs text-white/50">
             Private beta · rolls out gradually to selected users.
