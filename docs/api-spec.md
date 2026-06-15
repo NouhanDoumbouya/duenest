@@ -962,6 +962,11 @@ they behave like document files.
 | `POST`   | `/api/v1/files/:file_id/attach-document/` | Attach inbox file to an existing owned document |
 | `POST`   | `/api/v1/files/:file_id/create-document/` | Create a new document from the inbox file |
 
+`create-document/` accepts optional `title`, `document_type`, `notes`,
+`expiry_date`, `issue_date`, `category` (a system or the caller's own category
+id — others are ignored), `country`, and `reference_number`, so metadata can be
+captured during the post-upload flow.
+
 ### Upload Request
 
 `multipart/form-data` with a single `file` field:
