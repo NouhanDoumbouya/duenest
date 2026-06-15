@@ -82,3 +82,22 @@ class DocumentUsageIndicatorTests(APITestCase):
         self.assertEqual(shared.data["count"], 0)
         unshared = self.client.get("/api/v1/documents/?shared=false")
         self.assertGreaterEqual(unshared.data["count"], 1)
+
+    def test_pin_toggle_filter_and_ordering(self):
+        Document.objects.create(owner=self.alice, title="Aardvark")  # sorts first by title
+        pinned = Document.objects.create(owner=self.alice, title="Zebra")
+        # Pin via PATCH.
+        patch = self.client.patch(
+            f"/api/v1/documents/{pinned.id}/", {"is_pinned": True}, format="json"
+        )
+        self.assertEqual(patch.status_code, status.HTTP_200_OK)
+        self.assertTrue(patch.data["is_pinned"])
+
+        # ?pinned=true returns only the pinned doc.
+        only_pinned = self.client.get("/api/v1/documents/?pinned=true")
+        titles = [d["title"] for d in only_pinned.data["results"]]
+        self.assertEqual(titles, ["Zebra"])
+
+        # Pinned floats to the top even when sorting by title ascending.
+        ordered = self.client.get("/api/v1/documents/?ordering=title")
+        self.assertEqual(ordered.data["results"][0]["title"], "Zebra")

@@ -101,6 +101,7 @@ export interface DocumentRecord {
   is_shared_externally: boolean;
   in_bundle: boolean;
   in_emergency: boolean;
+  is_pinned: boolean;
   // Physical document location — "where is the original?" details.
   physical_location_label: string;
   physical_location_details: string;
@@ -145,6 +146,7 @@ export interface CreateDocumentRequest {
   status?: DocumentStatus;
   category?: number | null;
   lifecycle_status?: DocumentLifecycleStatus;
+  is_pinned?: boolean;
   custom_fields?: Record<string, string>;
   tag_ids?: number[];
   last_safe_action_override?: string | null;
@@ -195,6 +197,7 @@ export interface DocumentListParams {
   needs_attention?: boolean;
   shared?: boolean;
   in_bundle?: boolean;
+  pinned?: boolean;
   expiry_from?: string;
   expiry_to?: string;
   expiring_within_days?: number;

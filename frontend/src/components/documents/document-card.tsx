@@ -13,6 +13,7 @@ import {
   MoreHorizontal,
   Package,
   Share2,
+  Star,
   Trash2,
   UploadCloud,
   type LucideIcon,
@@ -30,7 +31,7 @@ import {
   uploadDocumentFile,
   validateFile,
 } from "@/lib/document-files";
-import { formatDate } from "@/lib/documents";
+import { formatDate, updateDocument } from "@/lib/documents";
 import { tagColorClass } from "@/lib/tags";
 import { cn } from "@/lib/utils";
 import type { DocumentRecord } from "@/types/documents";
@@ -102,6 +103,21 @@ export function DocumentCard({
   const [uploading, setUploading] = useState(false);
   const [status, setStatus] = useState<{ ok: boolean; msg: string } | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [pinned, setPinned] = useState(doc.is_pinned);
+  const [pinning, setPinning] = useState(false);
+
+  async function togglePin() {
+    const next = !pinned;
+    setPinned(next); // optimistic
+    setPinning(true);
+    try {
+      await updateDocument(doc.id, { is_pinned: next });
+    } catch {
+      setPinned(!next); // revert on failure
+    } finally {
+      setPinning(false);
+    }
+  }
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -272,6 +288,22 @@ export function DocumentCard({
               disabled={uploading}
               className="hidden"
             />
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={togglePin}
+              disabled={pinning}
+              aria-label={pinned ? `Unpin ${doc.title}` : `Pin ${doc.title}`}
+              aria-pressed={pinned}
+              title={pinned ? "Unpin" : "Pin to top"}
+            >
+              <Star
+                className={cn(
+                  "size-4",
+                  pinned ? "fill-brand-amber text-brand-amber" : "text-muted-foreground",
+                )}
+              />
+            </Button>
             <Button
               variant="ghost"
               size="icon"

@@ -194,6 +194,7 @@ class DocumentSerializer(serializers.ModelSerializer):
             "notes",
             "status",
             "lifecycle_status",
+            "is_pinned",
             "custom_fields",
             "physical_location_label",
             "physical_location_details",

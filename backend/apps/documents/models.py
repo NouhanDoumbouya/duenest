@@ -176,6 +176,8 @@ class Document(models.Model):
         choices=Lifecycle.choices,
         default=Lifecycle.COLLECTED,
     )
+    # Owner can pin important documents to surface them first.
+    is_pinned = models.BooleanField(default=False)
 
     # Optional manual override for the "last safe action" date. When blank, the
     # date is computed from renewal/expiry (see services.compute_last_safe_action).

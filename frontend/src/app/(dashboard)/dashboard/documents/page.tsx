@@ -50,6 +50,7 @@ type QuickFilter =
   | "missing_expiry_date"
   | "shared"
   | "not_in_bundle"
+  | "pinned"
   | "archived";
 
 const QUICK_FILTERS: { value: QuickFilter; label: string }[] = [
@@ -59,6 +60,7 @@ const QUICK_FILTERS: { value: QuickFilter; label: string }[] = [
   { value: "expired", label: "Expired" },
   { value: "missing_file", label: "Missing file" },
   { value: "missing_expiry_date", label: "Missing expiry date" },
+  { value: "pinned", label: "Pinned" },
   { value: "shared", label: "Shared" },
   { value: "not_in_bundle", label: "Not in bundle" },
   { value: "archived", label: "Archived" },
@@ -125,6 +127,7 @@ function buildListParams({
   if (quickFilter === "expired") params.computed_status = "expired";
   if (quickFilter === "missing_file") params.missing_file = true;
   if (quickFilter === "missing_expiry_date") params.missing_expiry_date = true;
+  if (quickFilter === "pinned") params.pinned = true;
   if (quickFilter === "shared") params.shared = true;
   if (quickFilter === "not_in_bundle") params.in_bundle = false;
   if (quickFilter === "archived") params.computed_status = "archived";
