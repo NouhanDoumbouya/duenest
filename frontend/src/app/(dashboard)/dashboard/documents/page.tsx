@@ -94,6 +94,12 @@ const STATUS_ALIASES: Record<string, QuickFilter> = {
   needs_attention: "needs_attention",
 };
 
+/** Read a single query param from the current URL (client-only; "" on server). */
+function readParam(name: string): string {
+  if (typeof window === "undefined") return "";
+  return new URLSearchParams(window.location.search).get(name) ?? "";
+}
+
 function initialQuickFilter(): QuickFilter {
   if (typeof window === "undefined") return "all";
   const params = new URLSearchParams(window.location.search);
@@ -101,8 +107,27 @@ function initialQuickFilter(): QuickFilter {
   const quick = params.get("quick");
   if (isQuickFilter(quick)) return quick;
   const status = params.get("status");
-  if (status && STATUS_ALIASES[status]) return STATUS_ALIASES[status];
+  if (status) {
+    if (STATUS_ALIASES[status]) return STATUS_ALIASES[status];
+    if (isQuickFilter(status)) return status;
+  }
   return "all";
+}
+
+function isOrdering(value: string): value is DocumentOrdering {
+  return ORDER_OPTIONS.some((option) => option.value === value);
+}
+
+function initialOrdering(): DocumentOrdering {
+  const raw = readParam("ordering");
+  return isOrdering(raw) ? raw : "-created_at";
+}
+
+/** Parse a positive-integer id from a query param, or "" when absent/invalid. */
+function initialId(name: string): number | "" {
+  const raw = readParam(name);
+  const n = Number(raw);
+  return raw && Number.isInteger(n) && n > 0 ? n : "";
 }
 
 /** A selected category: a category id, "none" (uncategorized), or "" (all). */
@@ -110,8 +135,7 @@ type CategorySelection = number | "none" | "";
 
 /** Read the initial category filter from the `?category=` query param. */
 function initialCategory(): CategorySelection {
-  if (typeof window === "undefined") return "";
-  const raw = new URLSearchParams(window.location.search).get("category");
+  const raw = readParam("category");
   if (!raw) return "";
   if (raw === "none" || raw === "uncategorized") return "none";
   const n = Number(raw);
@@ -166,19 +190,21 @@ function buildListParams({
 }
 
 function DocumentsPageInner() {
-  const [search, setSearch] = useState("");
+  // All filter state is seeded from the URL query string so links are shareable
+  // and a refresh restores exactly what the user was looking at.
+  const [search, setSearch] = useState(() => readParam("q"));
   const [quickFilter, setQuickFilter] =
     useState<QuickFilter>(initialQuickFilter);
-  const [documentType, setDocumentType] = useState("");
-  const [country, setCountry] = useState("");
-  const [issuer, setIssuer] = useState("");
-  const [expiryFrom, setExpiryFrom] = useState("");
-  const [expiryTo, setExpiryTo] = useState("");
-  const [tag, setTag] = useState<number | "">("");
+  const [documentType, setDocumentType] = useState(() => readParam("type"));
+  const [country, setCountry] = useState(() => readParam("country"));
+  const [issuer, setIssuer] = useState(() => readParam("issuer"));
+  const [expiryFrom, setExpiryFrom] = useState(() => readParam("expiry_from"));
+  const [expiryTo, setExpiryTo] = useState(() => readParam("expiry_to"));
+  const [tag, setTag] = useState<number | "">(() => initialId("tag"));
   const [tags, setTags] = useState<DocumentTag[]>([]);
   const [category, setCategory] = useState<CategorySelection>(initialCategory);
   const [categories, setCategories] = useState<DocumentCategory[]>([]);
-  const [ordering, setOrdering] = useState<DocumentOrdering>("-created_at");
+  const [ordering, setOrdering] = useState<DocumentOrdering>(initialOrdering);
   // Grid/list toggle, remembered locally (item 176/197). Lazy init reads the
   // saved choice on the client; this inner component renders under Suspense so
   // there is no SSR/hydration mismatch.
@@ -271,15 +297,24 @@ function DocumentsPageInner() {
     };
   }, []);
 
-  // Keep the `?category=` query param in sync so the filter is shareable and
-  // survives a refresh. Other params (status, search, etc.) are preserved, and
-  // any stale `?view=categories` from the old Categories page is normalized away.
+  // Keep the URL query string in sync with the active filters so the view is
+  // shareable and survives a refresh. The canonical param set is rebuilt from
+  // state, which also normalizes legacy params (e.g. a stale `?view=categories`
+  // from the old Categories page) away. replaceState avoids polluting history.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    params.delete("view");
-    if (category === "") params.delete("category");
-    else params.set("category", String(category));
+    const params = new URLSearchParams();
+    if (search.trim()) params.set("q", search.trim());
+    if (quickFilter !== "all") params.set("status", quickFilter);
+    if (documentType.trim()) params.set("type", documentType.trim());
+    if (country.trim()) params.set("country", country.trim());
+    if (issuer.trim()) params.set("issuer", issuer.trim());
+    if (expiryFrom) params.set("expiry_from", expiryFrom);
+    if (expiryTo) params.set("expiry_to", expiryTo);
+    if (tag !== "") params.set("tag", String(tag));
+    if (category !== "") params.set("category", String(category));
+    if (ordering !== "-created_at") params.set("ordering", ordering);
+
     const qs = params.toString();
     const next = qs
       ? `${window.location.pathname}?${qs}`
@@ -288,7 +323,18 @@ function DocumentsPageInner() {
     if (next !== current) {
       window.history.replaceState(null, "", next);
     }
-  }, [category]);
+  }, [
+    search,
+    quickFilter,
+    documentType,
+    country,
+    issuer,
+    expiryFrom,
+    expiryTo,
+    tag,
+    category,
+    ordering,
+  ]);
 
   async function handleConfirmDelete() {
     if (!pendingDelete) return;
