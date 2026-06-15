@@ -2,6 +2,7 @@ from django.urls import path
 
 from .views import (
     ClientErrorLogCreateView,
+    ClientEventCreateView,
     FeedbackCreateView,
     FounderActivationFunnelView,
     FounderAnalyticsView,
@@ -46,6 +47,7 @@ urlpatterns = [
     path("invites/validate/", InviteValidateView.as_view(), name="invite-validate"),
     path("feedback/", FeedbackCreateView.as_view(), name="feedback-create"),
     path("errors/client/", ClientErrorLogCreateView.as_view(), name="client-error-log"),
+    path("events/client/", ClientEventCreateView.as_view(), name="client-event"),
     path("founder/me/", FounderMeView.as_view(), name="founder-me"),
     path("founder/dashboard/", FounderDashboardView.as_view(), name="founder-dashboard"),
     path("founder/analytics/", FounderAnalyticsView.as_view(), name="founder-analytics"),

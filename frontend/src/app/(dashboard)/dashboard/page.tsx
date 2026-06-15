@@ -56,6 +56,7 @@ import {
   getNextDeadline,
   type EmergencyReadiness,
 } from "@/lib/life-radar";
+import { trackEvent } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
 import type { CalendarEvent, CalendarSummary } from "@/types/calendar";
 import type { DocumentRecord } from "@/types/documents";
@@ -155,6 +156,7 @@ export default function DashboardPage() {
       ]);
     } catch {
       if (mountedRef.current) setState(EMPTY_STATE);
+      trackEvent("dashboard_load_failed", { metadata: { reason: "batch" } });
       return;
     }
     if (!mountedRef.current) return;
@@ -204,11 +206,16 @@ export default function DashboardPage() {
           calSummary.status === "rejected" || calEvents.status === "rejected",
       },
     });
+
+    if (documentsError) {
+      trackEvent("dashboard_load_failed", { metadata: { section: "documents" } });
+    }
   }, []);
 
   useEffect(() => {
     mountedRef.current = true;
     void load();
+    trackEvent("dashboard_viewed");
     return () => {
       mountedRef.current = false;
     };
@@ -372,6 +379,11 @@ export default function DashboardPage() {
           readinessScore={readinessScore}
           lastChecked="just now"
           clear={radar.fixFirst.length === 0}
+          onForgottenClick={() =>
+            trackEvent("forgetting_check_used", {
+              metadata: { source: "hero" },
+            })
+          }
         />
       )}
 

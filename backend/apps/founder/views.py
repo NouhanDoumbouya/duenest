@@ -4,7 +4,7 @@ from django.shortcuts import get_object_or_404
 from django.db.models import Count, Exists, OuterRef, Q
 from django.utils import timezone
 from rest_framework import generics, status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
@@ -211,6 +211,52 @@ class ClientErrorLogCreateView(generics.CreateAPIView):
             object_id=error.id,
             metadata={"severity": error.severity, "source": error.source},
         )
+
+
+# Only these client-submitted UI event types are accepted; anything else is
+# rejected so the endpoint can't be used to write arbitrary events.
+CLIENT_EVENT_TYPES = frozenset(
+    {
+        ProductEvent.EventType.DASHBOARD_VIEWED,
+        ProductEvent.EventType.VAULT_VIEWED,
+        ProductEvent.EventType.VAULT_CARD_CLICKED,
+        ProductEvent.EventType.QUICK_ACTION_USED,
+        ProductEvent.EventType.EMPTY_STATE_CTA_USED,
+        ProductEvent.EventType.FORGETTING_CHECK_USED,
+        ProductEvent.EventType.DASHBOARD_LOAD_FAILED,
+    }
+)
+
+
+class ClientEventCreateView(APIView):
+    """
+    Privacy-safe ingest for a small allowlist of client UI interaction events
+    (dashboard/vault). Authenticated, rate-limited, and the metadata is
+    sanitized — never store document titles or other sensitive content here.
+    Powers founder product analytics; not visible to end users.
+    """
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "client_events"
+
+    def post(self, request):
+        event_type = (request.data.get("event_type") or "").strip()
+        if event_type not in CLIENT_EVENT_TYPES:
+            return Response(
+                {"detail": "Unsupported event type."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        track_product_event(
+            event_type=event_type,
+            user=request.user,
+            request=request,
+            source=ProductEvent.Source.FRONTEND,
+            object_type=str(request.data.get("object_type") or "")[:80],
+            object_id=str(request.data.get("object_id") or "")[:80],
+            metadata=sanitize_metadata(request.data.get("metadata", {})),
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class FounderDashboardView(APIView):

@@ -58,6 +58,14 @@ class ProductEvent(models.Model):
             "Private beta signup completed",
         )
         ORGANIZATION_CREATED = "organization_created", "Organization created"
+        # Client-recorded UI interaction events (see ClientEventCreateView).
+        DASHBOARD_VIEWED = "dashboard_viewed", "Dashboard viewed"
+        VAULT_VIEWED = "vault_viewed", "Vault viewed"
+        VAULT_CARD_CLICKED = "vault_card_clicked", "Vault card clicked"
+        QUICK_ACTION_USED = "quick_action_used", "Quick action used"
+        EMPTY_STATE_CTA_USED = "empty_state_cta_used", "Empty-state CTA used"
+        FORGETTING_CHECK_USED = "forgetting_check_used", "What am I forgetting used"
+        DASHBOARD_LOAD_FAILED = "dashboard_load_failed", "Dashboard load failed"
 
     class Source(models.TextChoices):
         BACKEND = "backend", "Backend"
