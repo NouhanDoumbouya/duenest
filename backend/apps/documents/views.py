@@ -772,11 +772,12 @@ def _create_document_file(*, uploaded, user, document=None):
     return instance
 
 
-class DocumentCategoryListView(generics.ListAPIView):
+class DocumentCategoryListView(generics.ListCreateAPIView):
     """
-    Read-only list of the shared document category vocabulary. Categories are a
-    controlled, app-wide vocabulary (not user-owned), so this is safe to expose
-    to any authenticated user — it powers the documents category filter.
+    List the categories available to the current user — the shared system
+    vocabulary (owner is null) plus the user's own private categories — and let
+    them create a new private category (POST). A user only ever sees system
+    categories and their own; never another user's.
     """
 
     permission_classes = [IsAuthenticated]
@@ -784,7 +785,13 @@ class DocumentCategoryListView(generics.ListAPIView):
     pagination_class = None
 
     def get_queryset(self):
-        return DocumentCategory.objects.all()
+        return DocumentCategory.objects.filter(
+            Q(owner__isnull=True) | Q(owner=self.request.user)
+        )
+
+    def perform_create(self, serializer):
+        # New categories are always private to the creating user.
+        serializer.save(owner=self.request.user)
 
 
 class FileInboxListCreateView(generics.ListCreateAPIView):
