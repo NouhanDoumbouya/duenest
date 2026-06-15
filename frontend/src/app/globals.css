@@ -193,6 +193,22 @@
     animation: duenest-fade-up 180ms ease-out both;
   }
 
+  /* Scroll-reveal: hidden until JS adds .is-visible when the element scrolls
+     into view. Honors reduced-motion (shown instantly, no transform). */
+  .reveal {
+    opacity: 0;
+    transform: translateY(18px);
+    transition:
+      opacity 600ms ease-out,
+      transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
+    transition-delay: var(--reveal-delay, 0ms);
+    will-change: opacity, transform;
+  }
+  .reveal.is-visible {
+    opacity: 1;
+    transform: none;
+  }
+
   /* Quick Share QR entrance — a calm, fast fade + slight scale (180–260ms). */
   .quick-share-qr-in {
     animation: quick-share-qr-pop 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -264,5 +280,12 @@
 
   .quick-share-qr-in {
     animation: none;
+  }
+
+  /* Reveal content immediately, with no movement, when motion is reduced. */
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
   }
 }

@@ -19,6 +19,7 @@ import {
 import { SiteHeader } from "@/components/layout/site-header";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SectionHeader } from "@/components/marketing/section";
+import { ScrollReveal } from "@/components/marketing/scroll-reveal";
 import {
   EmergencyMockup,
   LifeRadarMockup,
@@ -146,7 +147,7 @@ function TrustStrip() {
   ];
   return (
     <section className="border-y border-border bg-card/60">
-      <div className="mx-auto flex w-full max-w-6xl flex-col items-center gap-5 px-4 py-8 sm:px-6">
+      <ScrollReveal className="mx-auto flex w-full max-w-6xl flex-col items-center gap-5 px-4 py-8 sm:px-6">
         <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
           One connected system for personal readiness
         </p>
@@ -160,7 +161,7 @@ function TrustStrip() {
             </span>
           ))}
         </div>
-      </div>
+      </ScrollReveal>
     </section>
   );
 }
@@ -185,13 +186,15 @@ function Pain() {
   return (
     <section className="scroll-mt-20">
       <div className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:py-24">
-        <SectionHeader
-          eyebrow="The problem"
-          title="Life admin gets messy fast."
-          description="Important documents are usually remembered only when something goes wrong. DueNest brings them into one calm place — before a deadline becomes an emergency."
-        />
+        <ScrollReveal>
+          <SectionHeader
+            eyebrow="The problem"
+            title="Life admin gets messy fast."
+            description="Important documents are usually remembered only when something goes wrong. DueNest brings them into one calm place — before a deadline becomes an emergency."
+          />
+        </ScrollReveal>
         <div className="mx-auto mt-12 grid max-w-4xl gap-5 md:grid-cols-2">
-          <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
+          <ScrollReveal className="rounded-2xl border border-border bg-card p-6 shadow-card">
             <p className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
               <span className="flex size-6 items-center justify-center rounded-full bg-destructive/10 text-destructive">
                 <X className="size-3.5" />
@@ -209,8 +212,11 @@ function Pain() {
                 </li>
               ))}
             </ul>
-          </div>
-          <div className="rounded-2xl border border-primary/20 bg-primary/5 p-6 shadow-card">
+          </ScrollReveal>
+          <ScrollReveal
+            delay={100}
+            className="rounded-2xl border border-primary/20 bg-primary/5 p-6 shadow-card"
+          >
             <p className="flex items-center gap-2 text-sm font-semibold">
               <span className="flex size-6 items-center justify-center rounded-full bg-brand-success/15 text-brand-success">
                 <Check className="size-3.5" />
@@ -225,7 +231,7 @@ function Pain() {
                 </li>
               ))}
             </ul>
-          </div>
+          </ScrollReveal>
         </div>
       </div>
     </section>
@@ -262,7 +268,9 @@ function ProductSection({
       )}
     >
       <div className="mx-auto grid w-full max-w-6xl items-center gap-10 px-4 py-20 sm:px-6 lg:grid-cols-2 lg:gap-14 lg:py-24">
-        <div className={cn("max-w-lg", reverse && "lg:order-2 lg:justify-self-end")}>
+        <ScrollReveal
+          className={cn("max-w-lg", reverse && "lg:order-2 lg:justify-self-end")}
+        >
           <p className="text-sm font-semibold text-primary">{eyebrow}</p>
           <h2 className="mt-2 font-heading text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
             {title}
@@ -276,8 +284,10 @@ function ProductSection({
               </li>
             ))}
           </ul>
-        </div>
-        <div className={cn(reverse && "lg:order-1")}>{visual}</div>
+        </ScrollReveal>
+        <ScrollReveal delay={120} className={cn(reverse && "lg:order-1")}>
+          {visual}
+        </ScrollReveal>
       </div>
     </section>
   );
@@ -297,17 +307,21 @@ function LifeRadar() {
   return (
     <section id="life-radar" className="scroll-mt-20">
       <div className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:py-24">
-        <SectionHeader
-          eyebrow="Life Radar"
-          title="Know what needs attention before it becomes a problem."
-          description="Life Radar checks your documents, renewals, subscriptions, shares, bundles, and emergency setup, then tells you what to fix first — rule-based, calm, and always on."
-        />
+        <ScrollReveal>
+          <SectionHeader
+            eyebrow="Life Radar"
+            title="Know what needs attention before it becomes a problem."
+            description="Life Radar checks your documents, renewals, subscriptions, shares, bundles, and emergency setup, then tells you what to fix first — rule-based, calm, and always on."
+          />
+        </ScrollReveal>
         <div className="mt-12 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {signals.map((s) => {
+          {signals.map((s, i) => {
             const Icon = s.icon;
             return (
-              <div
+              <ScrollReveal
+                as="div"
                 key={s.label}
+                delay={(i % 3) * 70}
                 className="surface-hover flex items-start gap-3 rounded-2xl border border-border bg-card p-5 shadow-card"
               >
                 <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-navy text-brand-teal">
@@ -317,7 +331,7 @@ function LifeRadar() {
                   <p className="text-sm font-semibold">{s.label}</p>
                   <p className="mt-0.5 text-sm text-muted-foreground">{s.meta}</p>
                 </div>
-              </div>
+              </ScrollReveal>
             );
           })}
         </div>
@@ -459,17 +473,20 @@ function Security() {
   return (
     <section id="security" className="scroll-mt-20">
       <div className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:py-24">
-        <SectionHeader
-          eyebrow="Trust & security"
-          title="Built for sensitive life documents."
-          description="DueNest is designed around controlled access. You choose what to share, how long access lasts, and when to revoke it."
-        />
+        <ScrollReveal>
+          <SectionHeader
+            eyebrow="Trust & security"
+            title="Built for sensitive life documents."
+            description="DueNest is designed around controlled access. You choose what to share, how long access lasts, and when to revoke it."
+          />
+        </ScrollReveal>
         <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {pillars.map((p) => {
+          {pillars.map((p, i) => {
             const Icon = p.icon;
             return (
-              <div
+              <ScrollReveal
                 key={p.title}
+                delay={(i % 3) * 70}
                 className="rounded-2xl border border-border bg-card p-5 shadow-card"
               >
                 <span className="flex size-10 items-center justify-center rounded-xl bg-accent text-accent-foreground">
@@ -479,7 +496,7 @@ function Security() {
                 <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
                   {p.description}
                 </p>
-              </div>
+              </ScrollReveal>
             );
           })}
         </div>
@@ -535,21 +552,24 @@ function UseCases() {
   return (
     <section id="use-cases" className="scroll-mt-20 border-y border-border bg-card/60">
       <div className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:py-24">
-        <SectionHeader
-          eyebrow="Use cases"
-          title="Built for the people juggling important documents."
-        />
+        <ScrollReveal>
+          <SectionHeader
+            eyebrow="Use cases"
+            title="Built for the people juggling important documents."
+          />
+        </ScrollReveal>
         <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {cases.map((c) => (
-            <div
+          {cases.map((c, i) => (
+            <ScrollReveal
               key={c.title}
+              delay={(i % 3) * 70}
               className="surface-hover flex h-full flex-col gap-2 rounded-2xl border border-border bg-card p-6 shadow-card"
             >
               <h3 className="font-heading text-base font-semibold">{c.title}</h3>
               <p className="text-sm leading-relaxed text-muted-foreground">
                 {c.description}
               </p>
-            </div>
+            </ScrollReveal>
           ))}
         </div>
       </div>
@@ -562,7 +582,7 @@ function UseCases() {
 function FinalCta() {
   return (
     <section className="px-4 py-20 sm:px-6 lg:py-24">
-      <div className="relative mx-auto w-full max-w-6xl overflow-hidden rounded-3xl bg-brand-navy px-6 py-16 text-center text-white shadow-floating sm:px-12">
+      <ScrollReveal className="relative mx-auto block w-full max-w-6xl overflow-hidden rounded-3xl bg-brand-navy px-6 py-16 text-center text-white shadow-floating sm:px-12">
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 [background:radial-gradient(50%_60%_at_50%_0%,rgba(20,184,166,0.28),transparent_60%),radial-gradient(45%_55%_at_100%_100%,rgba(37,99,235,0.38),transparent_60%)]"
@@ -600,7 +620,7 @@ function FinalCta() {
             Private beta · rolls out gradually to selected users.
           </p>
         </div>
-      </div>
+      </ScrollReveal>
     </section>
   );
 }
