@@ -529,7 +529,7 @@ export default function VaultPage() {
                 title="Categories"
                 action={
                   <Link
-                    href="/dashboard/documents?view=categories"
+                    href="/dashboard/documents"
                     className="text-sm font-medium text-primary hover:underline"
                   >
                     Browse

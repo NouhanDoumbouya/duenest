@@ -2,8 +2,8 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import {
+  ChevronDown,
   FileText,
   Filter,
   LayoutGrid,
@@ -80,12 +80,80 @@ function isQuickFilter(value: string | null): value is QuickFilter {
   return QUICK_FILTERS.some((filter) => filter.value === value);
 }
 
+/** Inbound `?status=` aliases (e.g. from links) mapped to internal quick filters. */
+const STATUS_ALIASES: Record<string, QuickFilter> = {
+  expiring: "expiring_soon",
+  expiring_soon: "expiring_soon",
+  "expiring-soon": "expiring_soon",
+  expired: "expired",
+  "missing-file": "missing_file",
+  missing_file: "missing_file",
+  "missing-expiry": "missing_expiry_date",
+  missing_expiry: "missing_expiry_date",
+  missing_expiry_date: "missing_expiry_date",
+  "needs-attention": "needs_attention",
+  needs_attention: "needs_attention",
+};
+
+/**
+ * Debounce a rapidly-changing value (e.g. a text input) so dependent work —
+ * here, the documents fetch and URL sync — only runs after typing settles.
+ */
+function useDebouncedValue<T>(value: T, delay = 300): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+  return debounced;
+}
+
+/** Read a single query param from the current URL (client-only; "" on server). */
+function readParam(name: string): string {
+  if (typeof window === "undefined") return "";
+  return new URLSearchParams(window.location.search).get(name) ?? "";
+}
+
 function initialQuickFilter(): QuickFilter {
   if (typeof window === "undefined") return "all";
   const params = new URLSearchParams(window.location.search);
   if (params.get("attention") === "1") return "needs_attention";
   const quick = params.get("quick");
-  return isQuickFilter(quick) ? quick : "all";
+  if (isQuickFilter(quick)) return quick;
+  const status = params.get("status");
+  if (status) {
+    if (STATUS_ALIASES[status]) return STATUS_ALIASES[status];
+    if (isQuickFilter(status)) return status;
+  }
+  return "all";
+}
+
+function isOrdering(value: string): value is DocumentOrdering {
+  return ORDER_OPTIONS.some((option) => option.value === value);
+}
+
+function initialOrdering(): DocumentOrdering {
+  const raw = readParam("ordering");
+  return isOrdering(raw) ? raw : "-created_at";
+}
+
+/** Parse a positive-integer id from a query param, or "" when absent/invalid. */
+function initialId(name: string): number | "" {
+  const raw = readParam(name);
+  const n = Number(raw);
+  return raw && Number.isInteger(n) && n > 0 ? n : "";
+}
+
+/** A selected category: a category id, "none" (uncategorized), or "" (all). */
+type CategorySelection = number | "none" | "";
+
+/** Read the initial category filter from the `?category=` query param. */
+function initialCategory(): CategorySelection {
+  const raw = readParam("category");
+  if (!raw) return "";
+  if (raw === "none" || raw === "uncategorized") return "none";
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : "";
 }
 
 function buildListParams({
@@ -108,7 +176,7 @@ function buildListParams({
   expiryFrom: string;
   expiryTo: string;
   tag: number | "";
-  category: number | "";
+  category: CategorySelection;
   ordering: DocumentOrdering;
 }): DocumentListParams {
   const params: DocumentListParams = { ordering };
@@ -136,21 +204,32 @@ function buildListParams({
 }
 
 function DocumentsPageInner() {
-  const searchParams = useSearchParams();
-  const browseByCategory = searchParams.get("view") === "categories";
-  const [search, setSearch] = useState("");
+  // All filter state is seeded from the URL query string so links are shareable
+  // and a refresh restores exactly what the user was looking at.
+  const [search, setSearch] = useState(() => readParam("q"));
   const [quickFilter, setQuickFilter] =
     useState<QuickFilter>(initialQuickFilter);
-  const [documentType, setDocumentType] = useState("");
-  const [country, setCountry] = useState("");
-  const [issuer, setIssuer] = useState("");
-  const [expiryFrom, setExpiryFrom] = useState("");
-  const [expiryTo, setExpiryTo] = useState("");
-  const [tag, setTag] = useState<number | "">("");
+  const [documentType, setDocumentType] = useState(() => readParam("type"));
+  const [country, setCountry] = useState(() => readParam("country"));
+  const [issuer, setIssuer] = useState(() => readParam("issuer"));
+  const [expiryFrom, setExpiryFrom] = useState(() => readParam("expiry_from"));
+  const [expiryTo, setExpiryTo] = useState(() => readParam("expiry_to"));
+  const [tag, setTag] = useState<number | "">(() => initialId("tag"));
   const [tags, setTags] = useState<DocumentTag[]>([]);
-  const [category, setCategory] = useState<number | "">("");
+  const [category, setCategory] = useState<CategorySelection>(initialCategory);
   const [categories, setCategories] = useState<DocumentCategory[]>([]);
-  const [ordering, setOrdering] = useState<DocumentOrdering>("-created_at");
+  const [ordering, setOrdering] = useState<DocumentOrdering>(initialOrdering);
+
+  // Free-text inputs are debounced so we don't fetch (or rewrite the URL) on
+  // every keystroke. Discrete controls (chips, selects, dates) apply instantly.
+  const debouncedSearch = useDebouncedValue(search);
+  const debouncedType = useDebouncedValue(documentType);
+  const debouncedCountry = useDebouncedValue(country);
+  const debouncedIssuer = useDebouncedValue(issuer);
+
+  // Advanced filters collapse on small screens to keep the controls calm; they
+  // are always visible from `lg` up regardless of this toggle.
+  const [showAdvanced, setShowAdvanced] = useState(false);
   // Grid/list toggle, remembered locally (item 176/197). Lazy init reads the
   // saved choice on the client; this inner component renders under Suspense so
   // there is no SSR/hydration mismatch.
@@ -174,6 +253,11 @@ function DocumentsPageInner() {
   const [total, setTotal] = useState(0);
   const [loadedQueryKey, setLoadedQueryKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Pagination: the list accumulates pages via "Load more". `hasNext` mirrors
+  // the DRF `next` link; `loadingMore` guards the append request.
+  const [page, setPage] = useState(1);
+  const [hasNext, setHasNext] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const [pendingDelete, setPendingDelete] = useState<DocumentRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -181,11 +265,11 @@ function DocumentsPageInner() {
   const listParams = useMemo(
     () =>
       buildListParams({
-        search,
+        search: debouncedSearch,
         quickFilter,
-        documentType,
-        country,
-        issuer,
+        documentType: debouncedType,
+        country: debouncedCountry,
+        issuer: debouncedIssuer,
         expiryFrom,
         expiryTo,
         tag,
@@ -193,11 +277,11 @@ function DocumentsPageInner() {
         ordering,
       }),
     [
-      search,
+      debouncedSearch,
       quickFilter,
-      documentType,
-      country,
-      issuer,
+      debouncedType,
+      debouncedCountry,
+      debouncedIssuer,
       expiryFrom,
       expiryTo,
       tag,
@@ -207,13 +291,16 @@ function DocumentsPageInner() {
   );
   const queryKey = useMemo(() => JSON.stringify(listParams), [listParams]);
 
+  // Filters changed: reset to page 1 and load a fresh result set.
   useEffect(() => {
     let active = true;
-    getDocuments(listParams)
-      .then((page) => {
+    getDocuments({ ...listParams, page: 1 })
+      .then((result) => {
         if (!active) return;
-        setDocuments(page.results);
-        setTotal(page.count);
+        setDocuments(result.results);
+        setTotal(result.count);
+        setHasNext(Boolean(result.next));
+        setPage(1);
         setError(null);
         setLoadedQueryKey(queryKey);
       })
@@ -223,12 +310,33 @@ function DocumentsPageInner() {
           err instanceof ApiError ? err.message : "Unable to load documents.",
         );
         setDocuments([]);
+        setHasNext(false);
         setLoadedQueryKey(queryKey);
       });
     return () => {
       active = false;
     };
   }, [listParams, queryKey]);
+
+  async function loadMore() {
+    const nextPage = page + 1;
+    setLoadingMore(true);
+    setError(null);
+    try {
+      const result = await getDocuments({ ...listParams, page: nextPage });
+      setDocuments((prev) => [...(prev ?? []), ...result.results]);
+      setHasNext(Boolean(result.next));
+      setPage(nextPage);
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : "Unable to load more documents.",
+      );
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   useEffect(() => {
     let active = true;
@@ -242,6 +350,45 @@ function DocumentsPageInner() {
       active = false;
     };
   }, []);
+
+  // Keep the URL query string in sync with the active filters so the view is
+  // shareable and survives a refresh. The canonical param set is rebuilt from
+  // state, which also normalizes legacy params (e.g. a stale `?view=categories`
+  // from the old Categories page) away. replaceState avoids polluting history.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams();
+    if (debouncedSearch.trim()) params.set("q", debouncedSearch.trim());
+    if (quickFilter !== "all") params.set("status", quickFilter);
+    if (debouncedType.trim()) params.set("type", debouncedType.trim());
+    if (debouncedCountry.trim()) params.set("country", debouncedCountry.trim());
+    if (debouncedIssuer.trim()) params.set("issuer", debouncedIssuer.trim());
+    if (expiryFrom) params.set("expiry_from", expiryFrom);
+    if (expiryTo) params.set("expiry_to", expiryTo);
+    if (tag !== "") params.set("tag", String(tag));
+    if (category !== "") params.set("category", String(category));
+    if (ordering !== "-created_at") params.set("ordering", ordering);
+
+    const qs = params.toString();
+    const next = qs
+      ? `${window.location.pathname}?${qs}`
+      : window.location.pathname;
+    const current = `${window.location.pathname}${window.location.search}`;
+    if (next !== current) {
+      window.history.replaceState(null, "", next);
+    }
+  }, [
+    debouncedSearch,
+    quickFilter,
+    debouncedType,
+    debouncedCountry,
+    debouncedIssuer,
+    expiryFrom,
+    expiryTo,
+    tag,
+    category,
+    ordering,
+  ]);
 
   async function handleConfirmDelete() {
     if (!pendingDelete) return;
@@ -293,6 +440,77 @@ function DocumentsPageInner() {
     tag !== "" ||
     category !== "" ||
     ordering !== "-created_at";
+  const categoryActive = category !== "";
+  const selectedCategoryName =
+    category === "none"
+      ? "Uncategorized"
+      : (categories.find((c) => c.id === category)?.name ?? null);
+
+  // Removable summary of every active filter, so users can see and drop each one
+  // individually without hunting through the controls (and without expanding the
+  // advanced section on mobile).
+  const activeChips: { key: string; label: string; onClear: () => void }[] = [];
+  if (search.trim())
+    activeChips.push({
+      key: "q",
+      label: `Search: "${search.trim()}"`,
+      onClear: () => setSearch(""),
+    });
+  if (quickFilter !== "all")
+    activeChips.push({
+      key: "status",
+      label: `Status: ${QUICK_FILTERS.find((f) => f.value === quickFilter)?.label ?? quickFilter}`,
+      onClear: () => setQuickFilter("all"),
+    });
+  if (category !== "")
+    activeChips.push({
+      key: "category",
+      label: `Category: ${selectedCategoryName ?? "Selected"}`,
+      onClear: () => setCategory(""),
+    });
+  if (documentType.trim())
+    activeChips.push({
+      key: "type",
+      label: `Type: ${documentType.trim()}`,
+      onClear: () => setDocumentType(""),
+    });
+  if (country.trim())
+    activeChips.push({
+      key: "country",
+      label: `Country: ${country.trim()}`,
+      onClear: () => setCountry(""),
+    });
+  if (issuer.trim())
+    activeChips.push({
+      key: "issuer",
+      label: `Issuer: ${issuer.trim()}`,
+      onClear: () => setIssuer(""),
+    });
+  if (tag !== "")
+    activeChips.push({
+      key: "tag",
+      label: `Tag: ${tags.find((t) => t.id === tag)?.name ?? tag}`,
+      onClear: () => setTag(""),
+    });
+  if (expiryFrom)
+    activeChips.push({
+      key: "expiry_from",
+      label: `From: ${expiryFrom}`,
+      onClear: () => setExpiryFrom(""),
+    });
+  if (expiryTo)
+    activeChips.push({
+      key: "expiry_to",
+      label: `To: ${expiryTo}`,
+      onClear: () => setExpiryTo(""),
+    });
+  if (ordering !== "-created_at")
+    activeChips.push({
+      key: "ordering",
+      label: `Sort: ${ORDER_OPTIONS.find((o) => o.value === ordering)?.label ?? ordering}`,
+      onClear: () => setOrdering("-created_at"),
+    });
+
   const initialLoading = documents === null;
   const refreshing = documents !== null && loadedQueryKey !== queryKey;
   const docs = documents ?? [];
@@ -318,48 +536,6 @@ function DocumentsPageInner() {
         }
       />
 
-      {browseByCategory && (
-        <Card>
-          <CardContent className="space-y-3">
-            <div>
-              <p className="text-sm font-medium">Browse by category</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Categories help you organize meaningful records — pick one to
-                filter your documents.
-              </p>
-            </div>
-            {categories.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No categories yet. Categories appear here as you organize your
-                documents.
-              </p>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={category === "" ? "default" : "outline"}
-                  onClick={() => setCategory("")}
-                >
-                  All categories
-                </Button>
-                {categories.map((c) => (
-                  <Button
-                    key={c.id}
-                    type="button"
-                    size="sm"
-                    variant={category === c.id ? "default" : "outline"}
-                    onClick={() => setCategory(c.id)}
-                  >
-                    {c.name}
-                  </Button>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
       <Card>
         <CardContent className="space-y-5">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -383,19 +559,71 @@ function DocumentsPageInner() {
             )}
           </div>
 
-          <div className="flex flex-wrap gap-2" aria-label="Document quick filters">
+          <div
+            className="flex flex-wrap gap-2"
+            role="group"
+            aria-label="Filter by status"
+          >
             {QUICK_FILTERS.map((filter) => (
               <Button
                 key={filter.value}
                 type="button"
                 size="sm"
                 variant={quickFilter === filter.value ? "default" : "outline"}
+                aria-pressed={quickFilter === filter.value}
                 onClick={() => setQuickFilter(filter.value)}
               >
                 {filter.label}
               </Button>
             ))}
           </div>
+
+          {(categories.length > 0 || categoryActive) && (
+            <div className="space-y-2">
+              <p
+                className="text-xs font-medium tracking-wide text-muted-foreground uppercase"
+                id="category-filter-label"
+              >
+                Browse by category
+              </p>
+              <div
+                className="flex flex-wrap gap-2"
+                role="group"
+                aria-labelledby="category-filter-label"
+              >
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={category === "" ? "default" : "outline"}
+                  aria-pressed={category === ""}
+                  onClick={() => setCategory("")}
+                >
+                  All categories
+                </Button>
+                {categories.map((c) => (
+                  <Button
+                    key={c.id}
+                    type="button"
+                    size="sm"
+                    variant={category === c.id ? "default" : "outline"}
+                    aria-pressed={category === c.id}
+                    onClick={() => setCategory(c.id)}
+                  >
+                    {c.name}
+                  </Button>
+                ))}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={category === "none" ? "default" : "outline"}
+                  aria-pressed={category === "none"}
+                  onClick={() => setCategory("none")}
+                >
+                  Uncategorized
+                </Button>
+              </div>
+            </div>
+          )}
 
           <div className="grid gap-3 lg:grid-cols-[1.4fr_1fr_1fr]">
             <label className="relative block">
@@ -430,7 +658,31 @@ function DocumentsPageInner() {
             </label>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_1fr_1.1fr_auto]">
+          <button
+            type="button"
+            onClick={() => setShowAdvanced((v) => !v)}
+            aria-expanded={showAdvanced}
+            aria-controls="advanced-filters"
+            className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 rounded-md lg:hidden"
+          >
+            <Filter className="size-4" aria-hidden />
+            Advanced filters
+            <ChevronDown
+              className={cn(
+                "size-4 transition-transform",
+                showAdvanced && "rotate-180",
+              )}
+              aria-hidden
+            />
+          </button>
+
+          <div
+            id="advanced-filters"
+            className={cn(
+              "gap-3 sm:grid-cols-2 lg:grid lg:grid-cols-[1fr_1fr_1fr_1.1fr_auto]",
+              showAdvanced ? "grid" : "hidden",
+            )}
+          >
             <label className="block">
               <span className="sr-only">Country</span>
               <Input
@@ -439,26 +691,6 @@ function DocumentsPageInner() {
                 onChange={(event) => setCountry(event.target.value)}
                 placeholder="Country"
               />
-            </label>
-            <label className="block">
-              <span className="sr-only">Filter by category</span>
-              <select
-                className="h-10 w-full rounded-lg border border-input bg-card px-3 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                value={category}
-                onChange={(event) =>
-                  setCategory(
-                    event.target.value === "" ? "" : Number(event.target.value),
-                  )
-                }
-                disabled={categories.length === 0}
-              >
-                <option value="">All categories</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
             </label>
             <label className="block">
               <span className="sr-only">Filter by tag</span>
@@ -526,6 +758,35 @@ function DocumentsPageInner() {
         </CardContent>
       </Card>
 
+      {activeChips.length > 0 && (
+        <div
+          className="flex flex-wrap items-center gap-2"
+          role="group"
+          aria-label="Active filters"
+        >
+          <span className="text-sm text-muted-foreground">Filters:</span>
+          {activeChips.map((chip) => (
+            <button
+              key={chip.key}
+              type="button"
+              onClick={chip.onClear}
+              aria-label={`Remove filter: ${chip.label}`}
+              className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 py-1 pr-1.5 pl-2.5 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            >
+              {chip.label}
+              <X className="size-3.5 text-muted-foreground" aria-hidden />
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="rounded-md px-2 py-1 text-xs font-medium text-muted-foreground underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          >
+            Clear all
+          </button>
+        </div>
+      )}
+
       {error && (
         <p
           className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive"
@@ -547,21 +808,40 @@ function DocumentsPageInner() {
             <EmptyState
               icon={filtersActive ? Filter : FileText}
               title={
-                filtersActive
-                  ? "No documents match these filters"
-                  : "Start your document vault"
+                categoryActive
+                  ? selectedCategoryName
+                    ? `No documents in ${selectedCategoryName}`
+                    : "No documents found in this category"
+                  : filtersActive
+                    ? "No documents match these filters"
+                    : "Start your document vault"
               }
               description={
-                filtersActive
-                  ? "Try clearing filters or adjusting your search."
-                  : "Track passports, visas, licences, certificates, and important records around the dates that matter."
+                categoryActive
+                  ? "Try another category, clear filters, or add a document."
+                  : filtersActive
+                    ? "Try clearing filters or adjusting your search."
+                    : "Track passports, visas, licences, certificates, and important records around the dates that matter."
               }
               action={
                 filtersActive ? (
-                  <Button type="button" size="lg" onClick={clearFilters}>
-                    <X className="size-4" />
-                    Clear filters
-                  </Button>
+                  <div className="flex flex-wrap items-center justify-center gap-3">
+                    <Button type="button" size="lg" onClick={clearFilters}>
+                      <X className="size-4" />
+                      Clear filters
+                    </Button>
+                    {categoryActive && (
+                      <Link
+                        href="/dashboard/documents/new"
+                        className={cn(
+                          buttonVariants({ size: "lg", variant: "outline" }),
+                        )}
+                      >
+                        <Plus className="size-4" />
+                        Add document
+                      </Link>
+                    )}
+                  </div>
                 ) : (
                   <Link
                     href="/dashboard/documents/new"
@@ -648,10 +928,25 @@ function DocumentsPageInner() {
               />
             ))}
           </div>
-          {total > docs.length && (
-            <p className="text-center text-sm text-muted-foreground">
-              Showing the first {docs.length} of {total} matching documents.
-            </p>
+          {hasNext && (
+            <div className="flex justify-center pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                onClick={loadMore}
+                disabled={loadingMore}
+              >
+                {loadingMore ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" />
+                    Loading
+                  </>
+                ) : (
+                  <>Load more ({total - docs.length} remaining)</>
+                )}
+              </Button>
+            </div>
           )}
         </>
       )}
