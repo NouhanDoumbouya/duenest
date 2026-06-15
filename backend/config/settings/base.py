@@ -7,6 +7,8 @@ import sys
 
 from decouple import Csv, config
 
+from config.storage import build_storages
+
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 SECRET_KEY = config("DJANGO_SECRET_KEY", 
@@ -150,10 +152,19 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 # Local development media (uploaded document files). Files are served only
 # through authenticated, ownership-checked API endpoints — never as public
 # static media — so private documents are not exposed by URL.
-# TODO(production): switch to a private object-storage backend (e.g.
-# S3-compatible) with signed, time-limited access instead of local disk.
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+
+# ---------------------------------------------------------------------------
+# Object storage (provider-neutral; see docs/DEPLOYMENT.md).
+#
+# Defaults to local filesystem so dev/tests need no configuration and no extra
+# dependencies. Set STORAGE_BACKEND=s3 (plus the other STORAGE_* vars) to use
+# any S3-compatible provider — Cloudflare R2, Railway buckets, AWS S3, etc.
+# Uploaded files are app-encrypted before reaching storage and streamed back
+# through authenticated views; object-storage URLs are never used for delivery.
+# ---------------------------------------------------------------------------
+STORAGES = build_storages(lambda key, default="": config(key, default=default))
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

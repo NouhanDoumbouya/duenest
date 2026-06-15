@@ -10,6 +10,19 @@ DEBUG = False
 key_provider.validate_configuration()
 
 # ---------------------------------------------------------------------------
+# Static files (WhiteNoise) — serve hashed, compressed static assets from the
+# app process without a separate web server. Media (uploaded documents) is NOT
+# served this way; it stays in object storage behind authenticated endpoints.
+# ---------------------------------------------------------------------------
+MIDDLEWARE = list(MIDDLEWARE)  # noqa: F405
+_security_index = MIDDLEWARE.index("django.middleware.security.SecurityMiddleware")
+MIDDLEWARE.insert(_security_index + 1, "whitenoise.middleware.WhiteNoiseMiddleware")
+
+STORAGES["staticfiles"] = {  # noqa: F405
+    "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+}
+
+# ---------------------------------------------------------------------------
 # Transport security (terminated at the proxy/load balancer; SecurityMiddleware
 # honours X-Forwarded-Proto). All values are env-driven so they can be tuned per
 # environment without code changes.
