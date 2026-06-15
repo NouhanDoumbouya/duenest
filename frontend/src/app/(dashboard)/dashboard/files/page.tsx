@@ -2,18 +2,22 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  CheckSquare,
   Download,
   Eye,
   FileText,
   FolderInput,
   Loader2,
   Plus,
+  Square,
   Trash2,
   Upload,
+  X,
 } from "lucide-react";
 
 import { DocumentFileViewer } from "@/components/documents/document-file-viewer";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,6 +37,7 @@ import {
   validateFile,
 } from "@/lib/document-files";
 import { getDocuments } from "@/lib/documents";
+import { cn } from "@/lib/utils";
 import type { DocumentFile } from "@/types/document-files";
 import type { DocumentRecord } from "@/types/documents";
 
@@ -43,12 +48,16 @@ export default function FileInboxPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const [busyFileId, setBusyFileId] = useState<number | null>(null);
   const [previewFile, setPreviewFile] = useState<DocumentFile | null>(null);
   const [selectedDocument, setSelectedDocument] = useState<Record<number, string>>({});
   const [newDocTitle, setNewDocTitle] = useState<Record<number, string>>({});
   const [newDocType, setNewDocType] = useState<Record<number, string>>({});
   const [newDocNotes, setNewDocNotes] = useState<Record<number, string>>({});
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [confirmBulk, setConfirmBulk] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -80,24 +89,38 @@ export default function FileInboxPage() {
   );
 
   async function handleUpload(fileList: FileList | null) {
-    const file = fileList?.[0];
-    if (!file) return;
-    const validationError = validateFile(file);
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
+    const list = fileList ? Array.from(fileList) : [];
+    if (list.length === 0) return;
     setUploading(true);
     setError(null);
     setNotice(null);
-    try {
-      const uploaded = await uploadInboxFile(file);
-      setFiles((current) => [uploaded, ...(current ?? [])]);
-      setNotice("File uploaded to File Inbox.");
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not upload file.");
-    } finally {
-      setUploading(false);
+    let uploaded = 0;
+    const failures: string[] = [];
+    // Upload sequentially so failures are isolated and the list updates as each
+    // file lands. (Per-file % progress would need XHR upload events — TODO.)
+    for (const file of list) {
+      const validationError = validateFile(file);
+      if (validationError) {
+        failures.push(file.name);
+        continue;
+      }
+      try {
+        const result = await uploadInboxFile(file);
+        setFiles((current) => [result, ...(current ?? [])]);
+        uploaded += 1;
+      } catch {
+        failures.push(file.name);
+      }
+    }
+    setUploading(false);
+    if (uploaded > 0) {
+      setNotice(`${uploaded} file${uploaded === 1 ? "" : "s"} uploaded to File Inbox.`);
+    }
+    if (failures.length > 0) {
+      const shown = failures.slice(0, 3).join(", ");
+      setError(
+        `Could not upload: ${shown}${failures.length > 3 ? `, and ${failures.length - 3} more` : ""}. Check the file type and size (PDF, image, or Word up to 10 MB).`,
+      );
     }
   }
 
@@ -170,39 +193,102 @@ export default function FileInboxPage() {
     }
   }
 
+  function toggleSelect(id: number) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function clearSelection() {
+    setSelected(new Set());
+  }
+
+  function selectAll() {
+    setSelected(new Set((files ?? []).map((f) => f.id)));
+  }
+
+  async function handleBulkTrash() {
+    setBulkBusy(true);
+    setError(null);
+    setNotice(null);
+    const ids = Array.from(selected);
+    let done = 0;
+    for (const id of ids) {
+      try {
+        await deleteInboxFile(id);
+        done += 1;
+        setFiles((current) => (current ?? []).filter((item) => item.id !== id));
+      } catch {
+        // Skip the failed one and keep going; report the successes.
+      }
+    }
+    setBulkBusy(false);
+    setConfirmBulk(false);
+    clearSelection();
+    setNotice(`${done} file${done === 1 ? "" : "s"} moved to trash.`);
+    if (done < ids.length) {
+      setError(`${ids.length - done} file(s) could not be moved. Try again.`);
+    }
+  }
+
+  const allSelected =
+    files !== null && files.length > 0 && selected.size === files.length;
+
   return (
     <PageContainer>
       <PageHeader
         eyebrow="Workspace"
-        title="File Inbox"
-        description="Upload important files first, then attach them to the right document or create a new document from them."
+        title="Files waiting to be organized"
+        description="Turn uploads into complete documents — attach them to the right document or create a new one."
       />
 
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
-        <div className="rounded-lg border border-border bg-card p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="font-heading text-base font-semibold">Direct upload</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                PDF, image, Word files up to 10 MB.
-              </p>
-            </div>
-            <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
-              {uploading ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Upload className="size-4" />
-              )}
-              Upload file
-              <input
-                type="file"
-                className="hidden"
-                accept="image/*,application/pdf,.doc,.docx"
-                disabled={uploading}
-                onChange={(event) => handleUpload(event.target.files)}
-              />
-            </label>
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            if (!dragging) setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragging(false);
+            void handleUpload(e.dataTransfer.files);
+          }}
+          className={cn(
+            "flex flex-col items-center gap-3 rounded-lg border-2 border-dashed bg-card p-6 text-center transition-colors",
+            dragging ? "border-primary bg-primary/5" : "border-border",
+          )}
+        >
+          <span className="flex size-11 items-center justify-center rounded-full bg-accent text-accent-foreground">
+            {uploading ? (
+              <Loader2 className="size-5 animate-spin" aria-hidden />
+            ) : (
+              <Upload className="size-5" aria-hidden />
+            )}
+          </span>
+          <div>
+            <h2 className="font-heading text-base font-semibold">
+              {dragging ? "Drop files to upload" : "Drag & drop files here"}
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              PDF, image, or Word files up to 10 MB. You can add several at once.
+            </p>
           </div>
+          <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-within:ring-2 focus-within:ring-ring/50">
+            <Upload className="size-4" aria-hidden />
+            {uploading ? "Uploading…" : "Choose files"}
+            <input
+              type="file"
+              multiple
+              className="sr-only"
+              accept="image/*,application/pdf,.doc,.docx"
+              disabled={uploading}
+              onChange={(event) => handleUpload(event.target.files)}
+            />
+          </label>
         </div>
 
         <div className="rounded-lg border border-border bg-card p-4">
@@ -222,6 +308,44 @@ export default function FileInboxPage() {
       {notice && (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
           {notice}
+        </div>
+      )}
+
+      {files && files.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2 text-sm">
+          <button
+            type="button"
+            onClick={allSelected ? clearSelection : selectAll}
+            className="inline-flex items-center gap-2 rounded-md px-1.5 py-1 font-medium hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+            aria-pressed={allSelected}
+          >
+            {allSelected ? (
+              <CheckSquare className="size-4 text-primary" aria-hidden />
+            ) : (
+              <Square className="size-4" aria-hidden />
+            )}
+            Select all
+          </button>
+          {selected.size > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">{selected.size} selected</span>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                onClick={() => setConfirmBulk(true)}
+                disabled={bulkBusy}
+              >
+                <Trash2 className="size-4" />
+                Move to trash
+              </Button>
+              <Button type="button" size="sm" variant="outline" onClick={clearSelection}>
+                <X className="size-4" />
+                Clear
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
@@ -257,6 +381,13 @@ export default function FileInboxPage() {
               <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]">
                 <div className="min-w-0">
                   <div className="flex min-w-0 items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(file.id)}
+                      onChange={() => toggleSelect(file.id)}
+                      aria-label={`Select ${file.original_filename}`}
+                      className="mt-2.5 size-4 shrink-0 cursor-pointer accent-primary"
+                    />
                     <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
                       <FileText className="size-5" />
                     </span>
@@ -395,11 +526,21 @@ export default function FileInboxPage() {
         <div className="rounded-lg border border-dashed border-border bg-card">
           <EmptyState
             icon={Upload}
-            title="No inbox files"
-            description="Upload a file here when you are not ready to choose a document yet."
+            title="No loose files. Everything is organized."
+            description="Upload a file here when you're not ready to choose a document yet, and it'll wait for you."
           />
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmBulk}
+        title="Move selected files to trash?"
+        description={`${selected.size} file${selected.size === 1 ? "" : "s"} will be moved to trash. You can restore them later from Trash.`}
+        confirmLabel="Move to trash"
+        loading={bulkBusy}
+        onConfirm={handleBulkTrash}
+        onCancel={() => setConfirmBulk(false)}
+      />
 
       <DocumentFileViewer
         file={previewFile}

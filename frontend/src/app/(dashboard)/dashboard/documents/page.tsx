@@ -6,6 +6,8 @@ import { useSearchParams } from "next/navigation";
 import {
   FileText,
   Filter,
+  LayoutGrid,
+  List,
   Loader2,
   Plus,
   Search,
@@ -139,6 +141,21 @@ function DocumentsPageInner() {
   const [category, setCategory] = useState<number | "">("");
   const [categories, setCategories] = useState<DocumentCategory[]>([]);
   const [ordering, setOrdering] = useState<DocumentOrdering>("-created_at");
+  // Grid/list toggle, remembered locally (item 176/197). Lazy init reads the
+  // saved choice on the client; this inner component renders under Suspense so
+  // there is no SSR/hydration mismatch.
+  const [view, setView] = useState<"list" | "grid">(() => {
+    if (typeof window === "undefined") return "list";
+    return window.localStorage.getItem("duenest.documentsView") === "grid"
+      ? "grid"
+      : "list";
+  });
+  function changeView(next: "list" | "grid") {
+    setView(next);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("duenest.documentsView", next);
+    }
+  }
 
   const [documents, setDocuments] = useState<DocumentRecord[] | null>(null);
   const [total, setTotal] = useState(0);
@@ -548,8 +565,48 @@ function DocumentsPageInner() {
               Showing {docs.length} of {total}{" "}
               {filtersActive ? "matching documents" : "documents"}
             </p>
+            <div
+              className="inline-flex items-center rounded-lg border border-border p-0.5"
+              role="group"
+              aria-label="Document view"
+            >
+              <button
+                type="button"
+                onClick={() => changeView("list")}
+                aria-pressed={view === "list"}
+                aria-label="List view"
+                className={cn(
+                  "flex size-7 items-center justify-center rounded-md transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
+                  view === "list"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <List className="size-4" aria-hidden />
+              </button>
+              <button
+                type="button"
+                onClick={() => changeView("grid")}
+                aria-pressed={view === "grid"}
+                aria-label="Grid view"
+                className={cn(
+                  "flex size-7 items-center justify-center rounded-md transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
+                  view === "grid"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <LayoutGrid className="size-4" aria-hidden />
+              </button>
+            </div>
           </div>
-          <div className="flex flex-col gap-4">
+          <div
+            className={cn(
+              view === "grid"
+                ? "grid gap-4 lg:grid-cols-2"
+                : "flex flex-col gap-4",
+            )}
+          >
             {docs.map((doc) => (
               <DocumentCard
                 key={doc.id}
