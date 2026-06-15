@@ -1,11 +1,42 @@
 // Centralized navigation model for the dashboard.
 //
-// The sidebar (dashboard-shell) and the contextual sub-nav (section-tabs) both
-// read from here so grouping, labels, and active state never drift apart.
+// Two structures live here, both navigation/IA only (no route or backend
+// changes):
 //
-// This file is intentionally about *navigation/IA only*. It does not change any
-// route, page, or backend model. Grouped "sections" (Vault, Planning, Sharing)
-// are conceptual homes whose tabs link to the existing, still-working routes.
+// 1. SIDEBAR_GROUPS — the primary, premium sidebar. Major areas (Vault,
+//    Planning) are collapsible parents whose children link directly to existing
+//    routes, so users reach Documents/File Inbox/etc. in one click.
+// 2. NAV_SECTIONS — metadata for the collapsible parents' *overview* pages
+//    (Vault, Planning), which render quick-access cards. The sidebar is curated
+//    for fewer clicks; the overview pages stay comprehensive.
+//
+// All hrefs point at routes that already exist and keep working.
+
+import type { LucideIcon } from "lucide-react";
+import {
+  BellRing,
+  Building2,
+  CalendarClock,
+  CalendarDays,
+  Clock,
+  CreditCard,
+  DoorClosed,
+  FileText,
+  FolderTree,
+  Inbox,
+  LayoutDashboard,
+  LifeBuoy,
+  MessageSquare,
+  Package,
+  QrCode,
+  RefreshCw,
+  Settings,
+  ShieldAlert,
+  ShieldCheck,
+  Trash2,
+  Vault,
+  Wrench,
+} from "lucide-react";
 
 /** A single tab inside a grouped section's sub-nav. */
 export interface SectionTab {
@@ -23,7 +54,7 @@ export interface SectionTab {
 /** A grouped area of the product that owns several existing routes. */
 export interface NavSection {
   /** Stable key, also used as the sidebar item identifier. */
-  key: "vault" | "planning" | "sharing";
+  key: "vault" | "planning";
   /** Sidebar label. */
   label: string;
   /** The section overview route the sidebar item points at. */
@@ -116,55 +147,15 @@ export const NAV_SECTIONS: NavSection[] = [
         description: "What to handle first, and what happened over time.",
       },
     ],
+    // Notifications stays reachable via the bell and the Planning overview, but
+    // it isn't a sidebar child, so it's omitted here to avoid expanding Planning
+    // with no child highlighted.
     memberPrefixes: [
       "/dashboard/planning",
       "/dashboard/attention",
       "/dashboard/reminders",
-      "/dashboard/notifications",
       "/dashboard/calendar",
       "/dashboard/timeline",
-    ],
-  },
-  {
-    key: "sharing",
-    label: "Sharing",
-    basePath: "/dashboard/sharing",
-    description:
-      "Send selected documents, manage shared access, and review items shared with you.",
-    tabs: [
-      { label: "Overview", href: "/dashboard/sharing" },
-      {
-        label: "Send",
-        href: "/dashboard/quick-share/new",
-        featureKey: "quick_share",
-        description:
-          "Create secure links, QR shares, or DueNest codes for selected documents.",
-      },
-      {
-        label: "Shared by me",
-        href: "/dashboard/quick-share",
-        featureKey: "quick_share",
-        description: "Manage the access you've sent and revoke it anytime.",
-      },
-      {
-        label: "Shared with me",
-        href: "/dashboard/shared-with-me",
-        featureKey: "shared_with_me",
-        description: "View access others have granted to you.",
-      },
-      {
-        label: "Secure rooms",
-        href: "/dashboard/share-rooms",
-        featureKey: "secure_rooms",
-        description:
-          "Create structured temporary spaces for sensitive document exchange.",
-      },
-    ],
-    memberPrefixes: [
-      "/dashboard/sharing",
-      "/dashboard/quick-share",
-      "/dashboard/shared-with-me",
-      "/dashboard/share-rooms",
     ],
   },
 ];
@@ -196,40 +187,176 @@ export function isSectionActive(pathname: string, key: NavSection["key"]) {
   return getSectionForPath(pathname)?.key === key;
 }
 
+// --- Sidebar tree (primary navigation) ---
+
+/** A direct link in the sidebar (top-level item or a collapsible child). */
+export interface SidebarLeaf {
+  label: string;
+  href: string;
+  /** Icon for top-level items. Children render without icons (lighter weight). */
+  icon?: LucideIcon;
+  /** Feature flag key; the item is hidden when the feature is disabled. */
+  featureKey?: string;
+  /** Active only on an exact path match (used for "… Overview" children). */
+  exact?: boolean;
+}
+
+/** A collapsible parent: its label/icon navigate to an overview, chevron toggles. */
+export interface SidebarParent {
+  label: string;
+  href: string;
+  icon: LucideIcon;
+  /** Links it to a NAV_SECTIONS entry for active/expansion across child routes. */
+  sectionKey: NavSection["key"];
+  children: SidebarLeaf[];
+}
+
+export type SidebarItem = SidebarLeaf | SidebarParent;
+
+export interface SidebarGroup {
+  heading: string;
+  items: SidebarItem[];
+}
+
+export function isSidebarParent(item: SidebarItem): item is SidebarParent {
+  return "children" in item;
+}
+
+export const SIDEBAR_GROUPS: SidebarGroup[] = [
+  {
+    heading: "Main",
+    items: [
+      {
+        label: "Overview",
+        href: "/dashboard",
+        icon: LayoutDashboard,
+        exact: true,
+      },
+    ],
+  },
+  {
+    heading: "Life admin",
+    items: [
+      {
+        label: "Vault",
+        href: "/dashboard/vault",
+        icon: Vault,
+        sectionKey: "vault",
+        children: [
+          { label: "Documents", href: "/dashboard/documents", icon: FileText },
+          {
+            label: "File Inbox",
+            href: "/dashboard/files",
+            icon: Inbox,
+            featureKey: "file_inbox",
+          },
+          {
+            label: "Categories",
+            href: "/dashboard/documents?view=categories",
+            icon: FolderTree,
+          },
+          { label: "Trash", href: "/dashboard/trash", icon: Trash2 },
+        ],
+      },
+      {
+        label: "Planning",
+        href: "/dashboard/planning",
+        icon: CalendarClock,
+        sectionKey: "planning",
+        children: [
+          { label: "Attention", href: "/dashboard/attention", icon: ShieldAlert },
+          { label: "Reminders", href: "/dashboard/reminders", icon: BellRing },
+          { label: "Calendar", href: "/dashboard/calendar", icon: CalendarDays },
+          { label: "Timeline", href: "/dashboard/timeline", icon: Clock },
+        ],
+      },
+      {
+        label: "Subscriptions",
+        href: "/dashboard/subscriptions",
+        icon: RefreshCw,
+        featureKey: "subscriptions",
+      },
+    ],
+  },
+  {
+    heading: "Prepare & share",
+    items: [
+      { label: "Bundles", href: "/dashboard/bundles", icon: Package, featureKey: "bundles" },
+      {
+        label: "Quick Share",
+        href: "/dashboard/quick-share",
+        icon: QrCode,
+        featureKey: "quick_share",
+      },
+      {
+        label: "Shared with me",
+        href: "/dashboard/shared-with-me",
+        icon: Inbox,
+        featureKey: "shared_with_me",
+      },
+      {
+        label: "Secure rooms",
+        href: "/dashboard/share-rooms",
+        icon: DoorClosed,
+        featureKey: "secure_rooms",
+      },
+      {
+        label: "Emergency access",
+        href: "/dashboard/emergency",
+        icon: LifeBuoy,
+        featureKey: "emergency_access",
+      },
+    ],
+  },
+  {
+    heading: "Workspaces",
+    items: [
+      {
+        label: "Organizations",
+        href: "/dashboard/organizations",
+        icon: Building2,
+        featureKey: "organizations",
+      },
+    ],
+  },
+  {
+    heading: "Account",
+    items: [
+      { label: "Trust & security", href: "/dashboard/trust", icon: ShieldCheck },
+      { label: "Plan & usage", href: "/dashboard/settings/plan", icon: CreditCard },
+      { label: "Data & privacy", href: "/dashboard/settings/data", icon: Settings },
+      { label: "Feedback", href: "/dashboard/feedback", icon: MessageSquare, featureKey: "feedback" },
+    ],
+  },
+];
+
+/** Founder-only entry, rendered as its own group when the viewer has access. */
+export const FOUNDER_SIDEBAR_ITEM: SidebarLeaf = {
+  label: "Founder Console",
+  href: "/founder",
+  icon: Wrench,
+};
+
 /**
- * Pick the active tab for the current location using longest-prefix matching,
- * with a special case for query-driven tabs like Categories (?view=categories).
- *
- * Returns the href of the active tab, or null if none match.
+ * Whether a sidebar leaf is active for the current location. Handles exact
+ * matches, query-driven items (Categories → ?view=categories), and prefix
+ * matches for detail routes (e.g. /dashboard/documents/123 keeps Documents on).
  */
-export function activeTabHref(
-  section: NavSection,
+export function isLeafActive(
   pathname: string,
   view: string | null,
-): string | null {
-  // Query-driven tabs win when their view matches exactly.
-  for (const tab of section.tabs) {
-    const tabView = tabViewParam(tab.href);
-    if (tabView && tabView === view && pathOf(tab.href) === pathname) {
-      return tab.href;
-    }
-  }
+  leaf: SidebarLeaf,
+): boolean {
+  const leafPath = pathOf(leaf.href);
+  const leafView = tabViewParam(leaf.href);
 
-  // Otherwise, longest matching path prefix wins. Skip query tabs (handled
-  // above) and skip any plain tab matching the same path when a view is set
-  // (so /documents?view=categories doesn't also light the Documents tab).
-  let best: string | null = null;
-  let bestLen = -1;
-  for (const tab of section.tabs) {
-    if (tabViewParam(tab.href)) continue;
-    const tabPath = pathOf(tab.href);
-    const matches = pathname === tabPath || pathname.startsWith(`${tabPath}/`);
-    if (!matches) continue;
-    if (view && tabPath === pathname) continue;
-    if (tabPath.length > bestLen) {
-      best = tab.href;
-      bestLen = tabPath.length;
-    }
-  }
-  return best;
+  if (leafView) return pathname === leafPath && view === leafView;
+  if (leaf.exact) return pathname === leafPath;
+
+  const matches = pathname === leafPath || pathname.startsWith(`${leafPath}/`);
+  if (!matches) return false;
+  // Don't activate a plain item when a sibling's view param owns the same path
+  // (so Documents isn't active on /dashboard/documents?view=categories).
+  if (view && leafPath === pathname) return false;
+  return true;
 }
