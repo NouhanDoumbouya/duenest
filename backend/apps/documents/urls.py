@@ -72,6 +72,7 @@ from .views import (
     FileInboxCreateDocumentView,
     FileInboxDetailView,
     FileInboxDownloadView,
+    FileInboxDuplicateCheckView,
     FileInboxListCreateView,
     FileInboxPermanentDeleteView,
     FileInboxPreviewView,
@@ -122,6 +123,11 @@ urlpatterns = [
         name="document-category-detail",
     ),
     path("files/", FileInboxListCreateView.as_view(), name="file-inbox"),
+    path(
+        "files/check-duplicate/",
+        FileInboxDuplicateCheckView.as_view(),
+        name="file-inbox-check-duplicate",
+    ),
     path("files/trash/", FileInboxTrashListView.as_view(), name="file-inbox-trash"),
     path("files/<int:pk>/", FileInboxDetailView.as_view(), name="file-inbox-detail"),
     path(

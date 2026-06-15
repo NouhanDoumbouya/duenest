@@ -29,6 +29,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ApiError } from "@/lib/api";
 import {
   attachInboxFileToDocument,
+  checkInboxDuplicate,
   createDocumentFromInboxFile,
   deleteInboxFile,
   downloadDocumentFile,
@@ -125,6 +126,15 @@ export default function FileInboxPage() {
     setUploading(true);
     setError(null);
     setNotice(null);
+    // Warn (non-blocking) about accidental duplicates before uploading copies.
+    const dupChecks = await Promise.all(
+      list.map((file) =>
+        checkInboxDuplicate(file.name).catch(() => ({ exists: false, count: 0 })),
+      ),
+    );
+    const duplicateNames = list
+      .filter((_, i) => dupChecks[i].exists)
+      .map((file) => file.name);
     // Seed a progress row per file, then upload sequentially with real % events.
     const seeded: UploadProgress[] = list.map((file, i) => ({
       id: `${Date.now()}-${i}`,
@@ -168,7 +178,13 @@ export default function FileInboxPage() {
     }
     setUploading(false);
     if (uploaded > 0) {
-      setNotice(`${uploaded} file${uploaded === 1 ? "" : "s"} uploaded to File Inbox.`);
+      const dupNote =
+        duplicateNames.length > 0
+          ? ` Note: you already had ${duplicateNames.length === 1 ? "a file" : "files"} named ${duplicateNames.slice(0, 3).join(", ")} — kept as a copy.`
+          : "";
+      setNotice(
+        `${uploaded} file${uploaded === 1 ? "" : "s"} uploaded to File Inbox.${dupNote}`,
+      );
     }
     if (failures.length > 0) {
       const shown = failures.slice(0, 3).join(", ");
