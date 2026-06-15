@@ -829,7 +829,7 @@ stress**.
 16. Application/renewal bundles                     (done)
 17. File/document activity timeline and audit log   (backend foundation done)
 18. Version history                                (backend foundation done)
-19. Emergency access pack                           (backend foundation done)
+19. Emergency access pack / Emergency Protocol      (done — unlock rules, trusted contacts, locked QR + printable card, off-by-default location, activity log)
 20. Export and backup features                      (backend metadata export done)
 21. Document onboarding + trust launch polish       (done)
 ```
@@ -1259,11 +1259,14 @@ Delivered:
   one-time/limited claims, access-code gating, view-only/save-copy enforcement,
   cross-account isolation, and sender approval. Frontend lint + build clean.
 
-Deferred (documented honestly): dedicated Emergency QR card UI (existing
-Emergency Access Packs already cover emergency sharing; the `emergency_qr` mode
-exists at the model level), organization-collection QR integration, in-browser
-camera scanner (native camera + copy-link/fallback-code provided), advanced
-founder metrics, and QR print/download for long-lived cards.
+The Emergency Protocol now ships a dedicated emergency QR + printable card UI
+(wallet/passport/A6/A5/full-sheet formats, privacy options, print + PNG export),
+locked unlock rules (owner approval / delayed unlock), trusted contacts, an
+off-by-default emergency location, and a full activity log.
+
+Deferred (documented honestly): organization-collection QR integration, advanced
+founder metrics, and SMS/email delivery of emergency setup notices (in-app
+notifications are implemented).
 
 ## Quick Share 2.0 (in progress)
 
