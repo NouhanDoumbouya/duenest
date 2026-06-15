@@ -13,6 +13,7 @@ import {
   LifeBuoy,
   Lock,
   Package,
+  Plus,
   Radar,
   ScanLine,
   Search,
@@ -47,9 +48,76 @@ export const metadata: Metadata = {
   alternates: { canonical: "/" },
 };
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://duenest.app";
+
+// Shared by the FAQ section and the FAQPage structured data below, so the two
+// can never drift apart.
+const FAQ_ITEMS: { q: string; a: string }[] = [
+  {
+    q: "Is DueNest free?",
+    a: "DueNest is free during its private beta. Paid Pro and Organization plans are previewed on the pricing page, but pricing isn't final yet.",
+  },
+  {
+    q: "Is my data private?",
+    a: "Yes. Nothing is shared until you choose to, and files are encrypted at rest. A share or emergency access exposes only the items you pick — never your whole vault.",
+  },
+  {
+    q: "Does DueNest read my documents?",
+    a: "Only to help you. DueNest can optionally pull key fields and dates from a file so you type less, and always asks you to confirm before saving. We never sell your data.",
+  },
+  {
+    q: "Can I export or delete my data?",
+    a: "Anytime. You can request a full export of your documents, and manage or permanently delete your data from Data & privacy in your settings.",
+  },
+  {
+    q: "How does sharing work?",
+    a: "You send access — a QR, a secure link, or a code — not the original file. Require an access code, set an expiry, watermark the preview, and revoke access whenever you want.",
+  },
+  {
+    q: "How do reminders work?",
+    a: "DueNest tracks expiry dates and renewal rules, surfaces what needs attention first, and shows it on a calendar and timeline. Rule-based checks — no AI guesswork.",
+  },
+  {
+    q: "What happens after the beta?",
+    a: "We'll email you before anything changes. Organizing and tracking your documents is built to stay useful, and we'll be clear about any plan limits ahead of time.",
+  },
+];
+
+const STRUCTURED_DATA = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      name: "DueNest",
+      url: SITE_URL,
+      logo: `${SITE_URL}/og.png`,
+    },
+    {
+      "@type": "SoftwareApplication",
+      name: "DueNest",
+      applicationCategory: "BusinessApplication",
+      operatingSystem: "Web",
+      url: SITE_URL,
+      offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+    },
+    {
+      "@type": "FAQPage",
+      mainEntity: FAQ_ITEMS.map((item) => ({
+        "@type": "Question",
+        name: item.q,
+        acceptedAnswer: { "@type": "Answer", text: item.a },
+      })),
+    },
+  ],
+};
+
 export default function LandingPage() {
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(STRUCTURED_DATA) }}
+      />
       <SiteHeader />
       <main className="flex-1">
         <Hero />
@@ -63,6 +131,7 @@ export default function LandingPage() {
         <Capabilities />
         <Security />
         <UseCases />
+        <Faq />
         <FinalCta />
       </main>
       <SiteFooter />
@@ -105,7 +174,7 @@ function Hero() {
               href="/waitlist"
               className={cn(buttonVariants({ size: "lg" }), "h-12 px-7 text-base")}
             >
-              Start free
+              Join the beta
               <ArrowRight className="size-4" />
             </Link>
             <Link
@@ -783,6 +852,49 @@ function UseCases() {
   );
 }
 
+// ---- FAQ -------------------------------------------------------------------
+
+function Faq() {
+  return (
+    <section id="faq" className="scroll-mt-20 border-t border-border bg-card/50">
+      <div className="mx-auto w-full max-w-3xl px-4 py-20 sm:px-6 lg:py-24">
+        <ScrollReveal>
+          <SectionHeader
+            eyebrow="Questions & answers"
+            title="Everything you might be wondering."
+            description="Straight answers on privacy, pricing, sharing, and what happens during the beta."
+          />
+        </ScrollReveal>
+        <ScrollReveal
+          delay={80}
+          className="mt-10 divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card shadow-card"
+        >
+          {FAQ_ITEMS.map((item) => (
+            <details key={item.q} className="group">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
+                {item.q}
+                <Plus
+                  className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-45"
+                  aria-hidden
+                />
+              </summary>
+              <p className="px-5 pb-5 text-sm leading-relaxed text-muted-foreground">
+                {item.a}
+              </p>
+            </details>
+          ))}
+        </ScrollReveal>
+        <p className="mx-auto mt-8 max-w-xl text-center text-sm leading-relaxed text-muted-foreground">
+          A note on the beta: DueNest is still being shaped with early users. You
+          can export or delete your data anytime, and we&apos;ll always be clear
+          about what changes before it does.{" "}
+          <span className="font-medium text-foreground">— The DueNest team</span>
+        </p>
+      </div>
+    </section>
+  );
+}
+
 // ---- Final CTA -------------------------------------------------------------
 
 function FinalCta() {
@@ -809,7 +921,7 @@ function FinalCta() {
                 "h-12 bg-white px-7 text-base text-brand-navy shadow-sm hover:bg-white/90",
               )}
             >
-              Start free
+              Join the beta
               <ArrowRight className="size-4" />
             </Link>
             <Link
