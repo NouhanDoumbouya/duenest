@@ -1,5 +1,14 @@
 from django.urls import path
 
+from .growth_api import (
+    FounderGrowthActionDetailView,
+    FounderGrowthActionListCreateView,
+    FounderGrowthCampaignDetailView,
+    FounderGrowthCampaignListCreateView,
+    FounderGrowthFunnelView,
+    FounderGrowthOverviewView,
+    FounderGrowthUtmBuilderView,
+)
 from .views import (
     ClientErrorLogCreateView,
     ClientEventCreateView,
@@ -171,5 +180,41 @@ urlpatterns = [
         "founder/country-activity/",
         FounderCountryActivityView.as_view(),
         name="founder-country-activity",
+    ),
+    # --- Growth Command Center (founder-only) ---
+    path(
+        "founder/growth/overview/",
+        FounderGrowthOverviewView.as_view(),
+        name="founder-growth-overview",
+    ),
+    path(
+        "founder/growth/funnel/",
+        FounderGrowthFunnelView.as_view(),
+        name="founder-growth-funnel",
+    ),
+    path(
+        "founder/growth/campaigns/",
+        FounderGrowthCampaignListCreateView.as_view(),
+        name="founder-growth-campaigns",
+    ),
+    path(
+        "founder/growth/campaigns/<int:pk>/",
+        FounderGrowthCampaignDetailView.as_view(),
+        name="founder-growth-campaign-detail",
+    ),
+    path(
+        "founder/growth/utm-builder/",
+        FounderGrowthUtmBuilderView.as_view(),
+        name="founder-growth-utm-builder",
+    ),
+    path(
+        "founder/growth/actions/",
+        FounderGrowthActionListCreateView.as_view(),
+        name="founder-growth-actions",
+    ),
+    path(
+        "founder/growth/actions/<int:pk>/",
+        FounderGrowthActionDetailView.as_view(),
+        name="founder-growth-action-detail",
     ),
 ]
