@@ -171,6 +171,24 @@ export function sortDocumentsByRisk(docs: DocumentRecord[]): DocumentRecord[] {
   });
 }
 
+/**
+ * If a document is shared / in a bundle / used in emergency access, return a
+ * heads-up string to show before moving it to trash. Returns null when there's
+ * nothing sensitive about deleting it.
+ */
+export function getDeleteWarning(doc: DocumentRecord): string | null {
+  const reasons: string[] = [];
+  if (doc.is_shared_externally) reasons.push("currently shared externally");
+  if (doc.in_emergency) reasons.push("used in emergency access");
+  if (doc.in_bundle) reasons.push("part of a bundle");
+  if (reasons.length === 0) return null;
+  const list =
+    reasons.length === 1
+      ? reasons[0]
+      : `${reasons.slice(0, -1).join(", ")} and ${reasons[reasons.length - 1]}`;
+  return `Heads up: this document is ${list}. Moving it to trash may affect those.`;
+}
+
 /** Calm, reassuring copy for the Trash page. */
 export function getTrashWarningCopy(): string {
   return "Trash protects you from accidental deletion. Restore an item to put it back, or permanently delete it to remove it for good.";

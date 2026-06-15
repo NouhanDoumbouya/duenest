@@ -1,6 +1,7 @@
 "use client";
 
-import { ArrowRight, Sparkles } from "lucide-react";
+import { useState } from "react";
+import { ArrowRight, Eye, EyeOff, Sparkles } from "lucide-react";
 
 import { ConfidenceBreakdown } from "@/components/documents/confidence-indicator";
 import { SectionCard } from "@/components/ui/section-card";
@@ -59,6 +60,36 @@ function Fact({ label, value }: { label: string; value: string }) {
     <div>
       <dt className="text-xs text-muted-foreground">{label}</dt>
       <dd className="mt-0.5 text-sm font-medium">{value || "—"}</dd>
+    </div>
+  );
+}
+
+/** A Fact whose value is hidden by default behind a reveal toggle (for
+ * sensitive identifiers like reference / document numbers). */
+function SensitiveFact({ label, value }: { label: string; value: string }) {
+  const [revealed, setRevealed] = useState(false);
+  if (!value) return <Fact label={label} value="" />;
+  return (
+    <div>
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="mt-0.5 flex items-center gap-1.5 text-sm font-medium">
+        <span className={revealed ? "" : "tracking-[0.2em]"}>
+          {revealed ? value : "••••••"}
+        </span>
+        <button
+          type="button"
+          onClick={() => setRevealed((v) => !v)}
+          aria-label={revealed ? `Hide ${label}` : `Reveal ${label}`}
+          aria-pressed={revealed}
+          className="rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+        >
+          {revealed ? (
+            <EyeOff className="size-3.5" aria-hidden />
+          ) : (
+            <Eye className="size-3.5" aria-hidden />
+          )}
+        </button>
+      </dd>
     </div>
   );
 }
@@ -122,7 +153,7 @@ export function OverviewTab({
           <Fact label="Stage" value={LIFECYCLE_STATUS_LABELS[doc.lifecycle_status]} />
           <Fact label="Issuer" value={doc.issuer} />
           <Fact label="Country" value={doc.country} />
-          <Fact label="Reference" value={doc.reference_number ?? ""} />
+          <SensitiveFact label="Reference" value={doc.reference_number ?? ""} />
           <Fact label="Issued" value={doc.issue_date ? formatDate(doc.issue_date) : ""} />
           <Fact label="Expires" value={doc.expiry_date ? formatDate(doc.expiry_date) : ""} />
           <Fact label="Renewal" value={doc.renewal_date ? formatDate(doc.renewal_date) : ""} />
