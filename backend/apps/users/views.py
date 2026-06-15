@@ -7,11 +7,18 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from apps.documents.serializers import DocumentExportRequestSerializer
 
+from .cookie_auth import (
+    clear_auth_cookies,
+    ensure_csrf_cookie,
+    get_refresh_from_cookie,
+    set_auth_cookies,
+)
 from .google import GoogleAuthError, verify_google_id_token
 from .serializers import (
     AccountDeletionRequestCreateSerializer,
@@ -110,7 +117,13 @@ class LoginView(TokenObtainPairView):
             object_id=user.id,
             metadata={"method": "password"},
         )
-        return Response(serializer.validated_data, status=status.HTTP_200_OK)
+        # Tokens are returned in the body (backward compatible) AND set as
+        # HttpOnly cookies — the cookie path is primary for the browser SPA.
+        data = serializer.validated_data
+        response = Response(data, status=status.HTTP_200_OK)
+        set_auth_cookies(response, access=data.get("access"), refresh=data.get("refresh"))
+        ensure_csrf_cookie(request, response)
+        return response
 
 
 class CurrentUserView(APIView):
@@ -119,6 +132,68 @@ class CurrentUserView(APIView):
     def get(self, request):
         serializer = UserSerializer(request.user)
         return Response(serializer.data)
+
+
+class CookieTokenRefreshView(TokenRefreshView):
+    """
+    Refresh access using the refresh-token cookie (falling back to the request
+    body). Rotates tokens (SimpleJWT ROTATE_REFRESH_TOKENS + blacklist) and sets
+    the new tokens as cookies. Tokens are still returned in the body for
+    backward-compatible header clients.
+    """
+
+    def post(self, request, *args, **kwargs):
+        data = request.data.copy() if hasattr(request.data, "copy") else dict(request.data)
+        if not data.get("refresh"):
+            cookie_refresh = get_refresh_from_cookie(request)
+            if cookie_refresh:
+                data["refresh"] = cookie_refresh
+
+        serializer = self.get_serializer(data=data)
+        try:
+            serializer.is_valid(raise_exception=True)
+        except TokenError as exc:
+            raise InvalidToken(exc.args[0]) from exc
+
+        tokens = serializer.validated_data
+        response = Response(tokens, status=status.HTTP_200_OK)
+        set_auth_cookies(
+            response, access=tokens.get("access"), refresh=tokens.get("refresh")
+        )
+        ensure_csrf_cookie(request, response)
+        return response
+
+
+class LogoutView(APIView):
+    """
+    Log out: blacklist the refresh token (cookie or body) where possible and
+    clear the auth cookies. Always succeeds from the client's perspective so
+    logout feels immediate even if the token is already expired/invalid.
+    """
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        raw_refresh = get_refresh_from_cookie(request) or request.data.get("refresh")
+        if raw_refresh:
+            try:
+                RefreshToken(raw_refresh).blacklist()
+            except TokenError:
+                pass  # already expired/blacklisted — nothing to do
+        response = Response(status=status.HTTP_205_RESET_CONTENT)
+        clear_auth_cookies(response)
+        return response
+
+
+class CsrfTokenView(APIView):
+    """Set/refresh the CSRF cookie so the SPA can send X-CSRFToken on writes."""
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        response = Response({"detail": "ok"})
+        ensure_csrf_cookie(request, response)
+        return response
 
 
 def _truthy(value):
@@ -224,14 +299,19 @@ class GoogleAuthView(APIView):
         )
 
         refresh = RefreshToken.for_user(user)
-        return Response(
+        access = str(refresh.access_token)
+        refresh_str = str(refresh)
+        response = Response(
             {
-                "refresh": str(refresh),
-                "access": str(refresh.access_token),
+                "refresh": refresh_str,
+                "access": access,
                 "user": UserSerializer(user).data,
             },
             status=status.HTTP_200_OK,
         )
+        set_auth_cookies(response, access=access, refresh=refresh_str)
+        ensure_csrf_cookie(request, response)
+        return response
 
     def _get_or_create_user(self, claims, google_id, email, *, invite_code="", request=None):
         first_name = claims.get("given_name", "")

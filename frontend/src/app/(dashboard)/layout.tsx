@@ -2,9 +2,10 @@
 
 // Shared chrome + auth gate for every /dashboard route.
 //
-// TODO: Add middleware/server-side route protection when auth cookies are
-// implemented. For now this is client-side protection: we check the access
-// token on mount, redirect to /login if missing, and verify it via /users/me/.
+// The hard gate is server-side Next middleware (src/middleware.ts), which keeps
+// logged-out users out before this renders. Here we additionally resolve the
+// current user from the cookie session via /users/me/ (the API client refreshes
+// once on 401); if that fails we log out and redirect to /login.
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
@@ -13,7 +14,7 @@ import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { DashboardUserProvider } from "@/components/dashboard/user-context";
 import { FeatureFlagsProvider } from "@/components/features/feature-flags-provider";
 import { LogoMark } from "@/components/layout/logo";
-import { getAccessToken, getCurrentUser, logout } from "@/lib/auth";
+import { getCurrentUser, logout } from "@/lib/auth";
 import type { User } from "@/types/auth";
 
 function FullScreenLoader() {
@@ -35,11 +36,6 @@ export default function DashboardLayout({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!getAccessToken()) {
-      router.replace("/login");
-      return;
-    }
-
     let active = true;
     getCurrentUser()
       .then((me) => {
@@ -50,7 +46,7 @@ export default function DashboardLayout({
       })
       .catch(() => {
         if (active) {
-          logout();
+          void logout();
           router.replace("/login");
         }
       });

@@ -199,7 +199,10 @@ export async function exportSubscriptionsCsv(): Promise<void> {
 
   let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}/subscriptions/export/`, { headers });
+    response = await fetch(`${API_BASE_URL}/subscriptions/export/`, {
+      headers,
+      credentials: "include",
+    });
   } catch {
     throw new ApiError("Unable to reach the server. Please try again.", 0, null);
   }

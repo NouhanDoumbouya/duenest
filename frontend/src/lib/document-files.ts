@@ -61,7 +61,10 @@ export async function fetchBlob(
 
   let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, { headers });
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      headers,
+      credentials: "include",
+    });
   } catch {
     throw new ApiError("Unable to reach the server. Please try again.", 0, null);
   }

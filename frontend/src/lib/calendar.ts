@@ -42,7 +42,7 @@ export async function downloadCalendarIcs(
   if (token) headers.set("Authorization", `Bearer ${token}`);
   const response = await fetch(
     `${API_BASE_URL}/calendar/export.ics${buildQuery(filters)}`,
-    { headers },
+    { headers, credentials: "include" },
   );
   if (!response.ok) throw new Error("Could not export the calendar.");
   const blob = await response.blob();
