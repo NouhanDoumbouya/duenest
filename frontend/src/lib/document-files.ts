@@ -3,8 +3,60 @@
 // use an authenticated blob fetch (the download endpoint needs the Bearer
 // token, so a plain <a href> would not work).
 
-import { API_BASE_URL, ApiError, apiFetch } from "./api";
+import { API_BASE_URL, ApiError, apiFetch, readCookie } from "./api";
 import { getAccessToken } from "./auth";
+
+const CSRF_COOKIE_NAME =
+  process.env.NEXT_PUBLIC_CSRF_COOKIE_NAME ?? "duenest_csrftoken";
+
+/**
+ * Upload a file to the File Inbox with progress events. Mirrors apiFetch's
+ * cookie auth (credentials + X-CSRFToken) but uses XMLHttpRequest so we can
+ * report real per-file upload progress (fetch has no upload progress events).
+ */
+export function uploadInboxFileWithProgress(
+  file: File,
+  onProgress?: (percent: number) => void,
+): Promise<DocumentFile> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${API_BASE_URL}/files/`);
+    xhr.withCredentials = true; // send the HttpOnly auth cookies
+    xhr.setRequestHeader("Accept", "application/json");
+    const csrf = readCookie(CSRF_COOKIE_NAME);
+    if (csrf) xhr.setRequestHeader("X-CSRFToken", csrf);
+    // Do NOT set Content-Type — the browser adds the multipart boundary.
+
+    xhr.upload.onprogress = (event) => {
+      if (onProgress && event.lengthComputable) {
+        onProgress(Math.round((event.loaded / event.total) * 100));
+      }
+    };
+    xhr.onload = () => {
+      let data: unknown = null;
+      try {
+        data = JSON.parse(xhr.responseText);
+      } catch {
+        data = null;
+      }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(data as DocumentFile);
+      } else {
+        const message =
+          data && typeof data === "object" && "detail" in data
+            ? String((data as Record<string, unknown>).detail)
+            : "Could not upload file.";
+        reject(new ApiError(message, xhr.status, data));
+      }
+    };
+    xhr.onerror = () =>
+      reject(new ApiError("Unable to reach the server. Please try again.", 0, null));
+
+    const formData = new FormData();
+    formData.append("file", file);
+    xhr.send(formData);
+  });
+}
 import type {
   CreateShareLinkPayload,
   CreatedDocumentFileShareLink,

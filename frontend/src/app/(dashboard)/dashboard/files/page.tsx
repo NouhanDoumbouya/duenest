@@ -34,13 +34,20 @@ import {
   downloadDocumentFile,
   formatFileSize,
   getFileInbox,
-  uploadInboxFile,
+  uploadInboxFileWithProgress,
   validateFile,
 } from "@/lib/document-files";
 import { getDocuments } from "@/lib/documents";
 import { cn } from "@/lib/utils";
 import type { DocumentFile } from "@/types/document-files";
 import type { DocumentRecord } from "@/types/documents";
+
+interface UploadProgress {
+  id: string;
+  name: string;
+  percent: number;
+  status: "uploading" | "done" | "failed";
+}
 
 // Common document types for the post-upload "what is this?" prompt.
 const TYPE_SUGGESTIONS = [
@@ -64,6 +71,7 @@ export default function FileInboxPage() {
   } | null>(null);
   const [uploading, setUploading] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [uploads, setUploads] = useState<UploadProgress[]>([]);
   const [busyFileId, setBusyFileId] = useState<number | null>(null);
   const [previewFile, setPreviewFile] = useState<DocumentFile | null>(null);
   const [selectedDocument, setSelectedDocument] = useState<Record<number, string>>({});
@@ -109,22 +117,45 @@ export default function FileInboxPage() {
     setUploading(true);
     setError(null);
     setNotice(null);
+    // Seed a progress row per file, then upload sequentially with real % events.
+    const seeded: UploadProgress[] = list.map((file, i) => ({
+      id: `${Date.now()}-${i}`,
+      name: file.name,
+      percent: 0,
+      status: "uploading",
+    }));
+    setUploads(seeded);
     let uploaded = 0;
     const failures: string[] = [];
-    // Upload sequentially so failures are isolated and the list updates as each
-    // file lands. (Per-file % progress would need XHR upload events — TODO.)
-    for (const file of list) {
+    for (let i = 0; i < list.length; i += 1) {
+      const file = list[i];
+      const rowId = seeded[i].id;
       const validationError = validateFile(file);
       if (validationError) {
         failures.push(file.name);
+        setUploads((rows) =>
+          rows.map((r) => (r.id === rowId ? { ...r, status: "failed" } : r)),
+        );
         continue;
       }
       try {
-        const result = await uploadInboxFile(file);
+        const result = await uploadInboxFileWithProgress(file, (percent) =>
+          setUploads((rows) =>
+            rows.map((r) => (r.id === rowId ? { ...r, percent } : r)),
+          ),
+        );
         setFiles((current) => [result, ...(current ?? [])]);
         uploaded += 1;
+        setUploads((rows) =>
+          rows.map((r) =>
+            r.id === rowId ? { ...r, percent: 100, status: "done" } : r,
+          ),
+        );
       } catch {
         failures.push(file.name);
+        setUploads((rows) =>
+          rows.map((r) => (r.id === rowId ? { ...r, status: "failed" } : r)),
+        );
       }
     }
     setUploading(false);
@@ -137,6 +168,10 @@ export default function FileInboxPage() {
         `Could not upload: ${shown}${failures.length > 3 ? `, and ${failures.length - 3} more` : ""}. Check the file type and size (PDF, image, or Word up to 10 MB).`,
       );
     }
+    // Clear finished rows shortly after, leaving any failures visible.
+    setTimeout(() => {
+      setUploads((rows) => rows.filter((r) => r.status === "failed"));
+    }, 2500);
   }
 
   async function handleAttach(file: DocumentFile) {
@@ -315,6 +350,50 @@ export default function FileInboxPage() {
           </p>
         </div>
       </section>
+
+      {uploads.length > 0 && (
+        <section className="space-y-2" aria-label="Upload progress">
+          {uploads.map((row) => (
+            <div
+              key={row.id}
+              className="rounded-lg border border-border bg-card p-3"
+            >
+              <div className="flex items-center justify-between gap-2 text-sm">
+                <span className="min-w-0 truncate font-medium">{row.name}</span>
+                <span
+                  className={cn(
+                    "shrink-0 text-xs font-medium",
+                    row.status === "failed"
+                      ? "text-destructive"
+                      : row.status === "done"
+                        ? "text-brand-success"
+                        : "text-muted-foreground",
+                  )}
+                >
+                  {row.status === "failed"
+                    ? "Failed"
+                    : row.status === "done"
+                      ? "Uploaded"
+                      : `${row.percent}%`}
+                </span>
+              </div>
+              <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-all",
+                    row.status === "failed"
+                      ? "bg-destructive"
+                      : row.status === "done"
+                        ? "bg-brand-success"
+                        : "bg-primary",
+                  )}
+                  style={{ width: `${row.status === "failed" ? 100 : row.percent}%` }}
+                />
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
 
       {error && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
