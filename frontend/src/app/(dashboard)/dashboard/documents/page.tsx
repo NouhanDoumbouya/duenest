@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
+  ChevronDown,
   FileText,
   Filter,
   LayoutGrid,
@@ -93,6 +94,19 @@ const STATUS_ALIASES: Record<string, QuickFilter> = {
   "needs-attention": "needs_attention",
   needs_attention: "needs_attention",
 };
+
+/**
+ * Debounce a rapidly-changing value (e.g. a text input) so dependent work —
+ * here, the documents fetch and URL sync — only runs after typing settles.
+ */
+function useDebouncedValue<T>(value: T, delay = 300): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+  return debounced;
+}
 
 /** Read a single query param from the current URL (client-only; "" on server). */
 function readParam(name: string): string {
@@ -205,6 +219,17 @@ function DocumentsPageInner() {
   const [category, setCategory] = useState<CategorySelection>(initialCategory);
   const [categories, setCategories] = useState<DocumentCategory[]>([]);
   const [ordering, setOrdering] = useState<DocumentOrdering>(initialOrdering);
+
+  // Free-text inputs are debounced so we don't fetch (or rewrite the URL) on
+  // every keystroke. Discrete controls (chips, selects, dates) apply instantly.
+  const debouncedSearch = useDebouncedValue(search);
+  const debouncedType = useDebouncedValue(documentType);
+  const debouncedCountry = useDebouncedValue(country);
+  const debouncedIssuer = useDebouncedValue(issuer);
+
+  // Advanced filters collapse on small screens to keep the controls calm; they
+  // are always visible from `lg` up regardless of this toggle.
+  const [showAdvanced, setShowAdvanced] = useState(false);
   // Grid/list toggle, remembered locally (item 176/197). Lazy init reads the
   // saved choice on the client; this inner component renders under Suspense so
   // there is no SSR/hydration mismatch.
@@ -228,6 +253,11 @@ function DocumentsPageInner() {
   const [total, setTotal] = useState(0);
   const [loadedQueryKey, setLoadedQueryKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Pagination: the list accumulates pages via "Load more". `hasNext` mirrors
+  // the DRF `next` link; `loadingMore` guards the append request.
+  const [page, setPage] = useState(1);
+  const [hasNext, setHasNext] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const [pendingDelete, setPendingDelete] = useState<DocumentRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -235,11 +265,11 @@ function DocumentsPageInner() {
   const listParams = useMemo(
     () =>
       buildListParams({
-        search,
+        search: debouncedSearch,
         quickFilter,
-        documentType,
-        country,
-        issuer,
+        documentType: debouncedType,
+        country: debouncedCountry,
+        issuer: debouncedIssuer,
         expiryFrom,
         expiryTo,
         tag,
@@ -247,11 +277,11 @@ function DocumentsPageInner() {
         ordering,
       }),
     [
-      search,
+      debouncedSearch,
       quickFilter,
-      documentType,
-      country,
-      issuer,
+      debouncedType,
+      debouncedCountry,
+      debouncedIssuer,
       expiryFrom,
       expiryTo,
       tag,
@@ -261,13 +291,16 @@ function DocumentsPageInner() {
   );
   const queryKey = useMemo(() => JSON.stringify(listParams), [listParams]);
 
+  // Filters changed: reset to page 1 and load a fresh result set.
   useEffect(() => {
     let active = true;
-    getDocuments(listParams)
-      .then((page) => {
+    getDocuments({ ...listParams, page: 1 })
+      .then((result) => {
         if (!active) return;
-        setDocuments(page.results);
-        setTotal(page.count);
+        setDocuments(result.results);
+        setTotal(result.count);
+        setHasNext(Boolean(result.next));
+        setPage(1);
         setError(null);
         setLoadedQueryKey(queryKey);
       })
@@ -277,12 +310,33 @@ function DocumentsPageInner() {
           err instanceof ApiError ? err.message : "Unable to load documents.",
         );
         setDocuments([]);
+        setHasNext(false);
         setLoadedQueryKey(queryKey);
       });
     return () => {
       active = false;
     };
   }, [listParams, queryKey]);
+
+  async function loadMore() {
+    const nextPage = page + 1;
+    setLoadingMore(true);
+    setError(null);
+    try {
+      const result = await getDocuments({ ...listParams, page: nextPage });
+      setDocuments((prev) => [...(prev ?? []), ...result.results]);
+      setHasNext(Boolean(result.next));
+      setPage(nextPage);
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : "Unable to load more documents.",
+      );
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   useEffect(() => {
     let active = true;
@@ -304,11 +358,11 @@ function DocumentsPageInner() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams();
-    if (search.trim()) params.set("q", search.trim());
+    if (debouncedSearch.trim()) params.set("q", debouncedSearch.trim());
     if (quickFilter !== "all") params.set("status", quickFilter);
-    if (documentType.trim()) params.set("type", documentType.trim());
-    if (country.trim()) params.set("country", country.trim());
-    if (issuer.trim()) params.set("issuer", issuer.trim());
+    if (debouncedType.trim()) params.set("type", debouncedType.trim());
+    if (debouncedCountry.trim()) params.set("country", debouncedCountry.trim());
+    if (debouncedIssuer.trim()) params.set("issuer", debouncedIssuer.trim());
     if (expiryFrom) params.set("expiry_from", expiryFrom);
     if (expiryTo) params.set("expiry_to", expiryTo);
     if (tag !== "") params.set("tag", String(tag));
@@ -324,11 +378,11 @@ function DocumentsPageInner() {
       window.history.replaceState(null, "", next);
     }
   }, [
-    search,
+    debouncedSearch,
     quickFilter,
-    documentType,
-    country,
-    issuer,
+    debouncedType,
+    debouncedCountry,
+    debouncedIssuer,
     expiryFrom,
     expiryTo,
     tag,
@@ -391,6 +445,72 @@ function DocumentsPageInner() {
     category === "none"
       ? "Uncategorized"
       : (categories.find((c) => c.id === category)?.name ?? null);
+
+  // Removable summary of every active filter, so users can see and drop each one
+  // individually without hunting through the controls (and without expanding the
+  // advanced section on mobile).
+  const activeChips: { key: string; label: string; onClear: () => void }[] = [];
+  if (search.trim())
+    activeChips.push({
+      key: "q",
+      label: `Search: "${search.trim()}"`,
+      onClear: () => setSearch(""),
+    });
+  if (quickFilter !== "all")
+    activeChips.push({
+      key: "status",
+      label: `Status: ${QUICK_FILTERS.find((f) => f.value === quickFilter)?.label ?? quickFilter}`,
+      onClear: () => setQuickFilter("all"),
+    });
+  if (category !== "")
+    activeChips.push({
+      key: "category",
+      label: `Category: ${selectedCategoryName ?? "Selected"}`,
+      onClear: () => setCategory(""),
+    });
+  if (documentType.trim())
+    activeChips.push({
+      key: "type",
+      label: `Type: ${documentType.trim()}`,
+      onClear: () => setDocumentType(""),
+    });
+  if (country.trim())
+    activeChips.push({
+      key: "country",
+      label: `Country: ${country.trim()}`,
+      onClear: () => setCountry(""),
+    });
+  if (issuer.trim())
+    activeChips.push({
+      key: "issuer",
+      label: `Issuer: ${issuer.trim()}`,
+      onClear: () => setIssuer(""),
+    });
+  if (tag !== "")
+    activeChips.push({
+      key: "tag",
+      label: `Tag: ${tags.find((t) => t.id === tag)?.name ?? tag}`,
+      onClear: () => setTag(""),
+    });
+  if (expiryFrom)
+    activeChips.push({
+      key: "expiry_from",
+      label: `From: ${expiryFrom}`,
+      onClear: () => setExpiryFrom(""),
+    });
+  if (expiryTo)
+    activeChips.push({
+      key: "expiry_to",
+      label: `To: ${expiryTo}`,
+      onClear: () => setExpiryTo(""),
+    });
+  if (ordering !== "-created_at")
+    activeChips.push({
+      key: "ordering",
+      label: `Sort: ${ORDER_OPTIONS.find((o) => o.value === ordering)?.label ?? ordering}`,
+      onClear: () => setOrdering("-created_at"),
+    });
+
   const initialLoading = documents === null;
   const refreshing = documents !== null && loadedQueryKey !== queryKey;
   const docs = documents ?? [];
@@ -458,7 +578,7 @@ function DocumentsPageInner() {
             ))}
           </div>
 
-          {categories.length > 0 && (
+          {(categories.length > 0 || categoryActive) && (
             <div className="space-y-2">
               <p
                 className="text-xs font-medium tracking-wide text-muted-foreground uppercase"
@@ -538,7 +658,31 @@ function DocumentsPageInner() {
             </label>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_1.1fr_auto]">
+          <button
+            type="button"
+            onClick={() => setShowAdvanced((v) => !v)}
+            aria-expanded={showAdvanced}
+            aria-controls="advanced-filters"
+            className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 rounded-md lg:hidden"
+          >
+            <Filter className="size-4" aria-hidden />
+            Advanced filters
+            <ChevronDown
+              className={cn(
+                "size-4 transition-transform",
+                showAdvanced && "rotate-180",
+              )}
+              aria-hidden
+            />
+          </button>
+
+          <div
+            id="advanced-filters"
+            className={cn(
+              "gap-3 sm:grid-cols-2 lg:grid lg:grid-cols-[1fr_1fr_1fr_1.1fr_auto]",
+              showAdvanced ? "grid" : "hidden",
+            )}
+          >
             <label className="block">
               <span className="sr-only">Country</span>
               <Input
@@ -613,6 +757,35 @@ function DocumentsPageInner() {
           </div>
         </CardContent>
       </Card>
+
+      {activeChips.length > 0 && (
+        <div
+          className="flex flex-wrap items-center gap-2"
+          role="group"
+          aria-label="Active filters"
+        >
+          <span className="text-sm text-muted-foreground">Filters:</span>
+          {activeChips.map((chip) => (
+            <button
+              key={chip.key}
+              type="button"
+              onClick={chip.onClear}
+              aria-label={`Remove filter: ${chip.label}`}
+              className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 py-1 pr-1.5 pl-2.5 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            >
+              {chip.label}
+              <X className="size-3.5 text-muted-foreground" aria-hidden />
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="rounded-md px-2 py-1 text-xs font-medium text-muted-foreground underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          >
+            Clear all
+          </button>
+        </div>
+      )}
 
       {error && (
         <p
@@ -755,10 +928,25 @@ function DocumentsPageInner() {
               />
             ))}
           </div>
-          {total > docs.length && (
-            <p className="text-center text-sm text-muted-foreground">
-              Showing the first {docs.length} of {total} matching documents.
-            </p>
+          {hasNext && (
+            <div className="flex justify-center pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                onClick={loadMore}
+                disabled={loadingMore}
+              >
+                {loadingMore ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" />
+                    Loading
+                  </>
+                ) : (
+                  <>Load more ({total - docs.length} remaining)</>
+                )}
+              </Button>
+            </div>
           )}
         </>
       )}

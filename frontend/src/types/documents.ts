@@ -208,6 +208,8 @@ export interface DocumentListParams {
   /** Override the page size (capped server-side). Useful for count-only or
    * small-preview requests so a full page of heavy objects isn't serialized. */
   page_size?: number;
+  /** 1-based page number for paginated listing (default 1). */
+  page?: number;
 }
 
 export interface AttentionNeededResponse {
