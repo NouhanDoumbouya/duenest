@@ -294,6 +294,8 @@ REST_FRAMEWORK = {
         "emergency_code": _throttle_rate("10/min"),
         "room_code": _throttle_rate("10/min"),
         "feedback": _throttle_rate("20/hour"),
+        # Client UI analytics events (anti-flood; high enough for normal use).
+        "client_events": _throttle_rate("120/min"),
     },
 }
 

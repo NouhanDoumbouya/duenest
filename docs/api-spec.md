@@ -2963,9 +2963,33 @@ Public/user-facing operational endpoints:
 ```txt
 POST /api/v1/feedback/
 POST /api/v1/errors/client/
+POST /api/v1/events/client/
 POST /api/v1/waitlist/
 POST /api/v1/invites/validate/
 ```
+
+`POST /api/v1/events/client/` records a small allowlist of UI interaction
+events for product analytics. It is **authenticated** (returns `401` when the
+caller is not logged in) and rate limited (`client_events` throttle scope). The
+body is:
+
+```json
+{
+  "event_type": "dashboard_viewed",
+  "object_type": "document",
+  "object_id": "optional-id",
+  "metadata": { "card": "needs_attention" }
+}
+```
+
+`event_type` must be one of the client allowlist
+(`dashboard_viewed`, `vault_viewed`, `vault_card_clicked`, `quick_action_used`,
+`empty_state_cta_used`, `forgetting_check_used`, `dashboard_load_failed`);
+any other value returns `400`. Events are stored as `ProductEvent` rows with
+`event_source = "frontend"`. `metadata` is sanitized server-side and must never
+carry document titles, access codes, tokens, or other sensitive content. On
+success the endpoint returns `204 No Content`. Clients send these
+fire-and-forget; analytics failures never affect the UI.
 
 Founder endpoints:
 

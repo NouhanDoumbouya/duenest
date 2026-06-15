@@ -45,6 +45,7 @@ import {
   getVaultStatusSentence,
   type VaultHealth,
 } from "@/lib/vault";
+import { trackEvent } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
 import type { DocumentFile } from "@/types/document-files";
 import type { DocumentCategory, DocumentRecord } from "@/types/documents";
@@ -168,6 +169,7 @@ export default function VaultPage() {
   useEffect(() => {
     mountedRef.current = true;
     void load();
+    trackEvent("vault_viewed");
     return () => {
       mountedRef.current = false;
     };
