@@ -170,6 +170,15 @@ export function DocumentCard({
                 score={doc.confidence_score}
                 label={doc.confidence_label}
               />
+              {doc.is_shared_externally && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[0.68rem] font-medium text-primary"
+                  title="This document has an active external share"
+                >
+                  <Share2 className="size-3" aria-hidden />
+                  Shared
+                </span>
+              )}
             </div>
 
             {meta && (
