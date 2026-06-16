@@ -19,6 +19,18 @@ const ACCESS_COOKIE =
 const REFRESH_COOKIE =
   process.env.NEXT_PUBLIC_REFRESH_COOKIE_NAME ?? "duenest_refresh";
 
+// Split-domain (cross-origin) deployment: when the API base URL is an absolute
+// cross-origin URL (e.g. Vercel frontend + Railway backend), the auth lives in
+// a Bearer token in the browser's localStorage, NOT in a cookie this middleware
+// can read. Cookies set by the backend domain are invisible here, so the cookie
+// gate below would wrongly redirect every authenticated /dashboard hit back to
+// /login. In that mode we skip the server gate entirely and let the client
+// dashboard layout (Bearer token + /users/me/) enforce auth. Same-origin
+// deployments keep the server cookie gate.
+const SPLIT_DOMAIN_AUTH = /^https?:\/\//i.test(
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "",
+);
+
 function hasSession(request: NextRequest): boolean {
   return (
     request.cookies.has(ACCESS_COOKIE) || request.cookies.has(REFRESH_COOKIE)
@@ -26,6 +38,12 @@ function hasSession(request: NextRequest): boolean {
 }
 
 export function proxy(request: NextRequest) {
+  // Cross-origin/Bearer deployment: the cookie gate cannot see the session, so
+  // do not block — the client layout protects authenticated routes.
+  if (SPLIT_DOMAIN_AUTH) {
+    return NextResponse.next();
+  }
+
   const { pathname } = request.nextUrl;
   const authed = hasSession(request);
 

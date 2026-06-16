@@ -14,8 +14,13 @@
 // Trade-off: Bearer tokens in localStorage are readable by JS (XSS exposure),
 // which is why it is enabled ONLY for the cross-origin deployment. Never logged.
 
-const ACCESS_KEY = "duenest.access_token";
-const REFRESH_KEY = "duenest.refresh_token";
+// Single source of truth for the Bearer-token localStorage keys. Every reader
+// and writer in the app imports these — never hardcode the strings elsewhere.
+export const ACCESS_TOKEN_KEY = "duenest_access_token";
+export const REFRESH_TOKEN_KEY = "duenest_refresh_token";
+
+const ACCESS_KEY = ACCESS_TOKEN_KEY;
+const REFRESH_KEY = REFRESH_TOKEN_KEY;
 
 /**
  * True when the API base URL is an absolute, cross-origin URL — i.e. the
