@@ -1,6 +1,9 @@
 backend/.venv/
 backend/.env
 backend/db.sqlite3
+# collectstatic output (regenerated at build time; never commit)
+backend/staticfiles/
+staticfiles/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

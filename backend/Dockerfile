@@ -26,8 +26,17 @@ COPY . .
 # Collect static at build time. Production settings fail closed without an
 # encryption KEK, so a THROWAWAY key is supplied for this build step only —
 # collectstatic never encrypts data, and this key is not baked into the image.
+#
+# BUILD-ONLY billing override: collectstatic loads the billing app, whose
+# SEC-004 safety check otherwise rejects the default manual provider. These vars
+# exist ONLY for this build step (BillingConfig also skips the check during
+# collectstatic); they never reach the running container and must NOT be used as
+# runtime billing config. Runtime billing is set via Railway env (see
+# docs/deployment/railway-backend-staging.md).
 RUN DJANGO_SECRET_KEY=build-only \
     DJANGO_SECURE_SSL_REDIRECT=False \
+    BILLING_PROVIDER=manual \
+    BILLING_ALLOW_MANUAL_PROVIDER=true \
     DUENEST_ACTIVE_KEK_VERSION=v1 \
     DUENEST_KEK_V1_B64="$(python -c 'import base64;print(base64.b64encode(bytes(32)).decode())')" \
     python manage.py collectstatic --noinput
