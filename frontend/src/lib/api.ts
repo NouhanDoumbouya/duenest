@@ -127,9 +127,24 @@ export async function apiFetch<T>(
             ? (body as FormData)
             : JSON.stringify(body),
     });
-  } catch {
-    // Network-level failure (server down, CORS, offline).
-    throw new ApiError("Unable to reach the server. Please try again.", 0, null);
+  } catch (cause) {
+    // fetch() only rejects for network-level failures — the backend is
+    // unreachable, the request was blocked by CORS, or the device is offline.
+    // There is NO HTTP status here (the browser never let us read a response).
+    // Log safe diagnostics in development only: never the body, tokens, cookies,
+    // or credentials.
+    if (process.env.NODE_ENV !== "production") {
+      console.warn(
+        `[api] ${method} ${API_BASE_URL}${path} failed before a response ` +
+          `(likely CORS misconfig, offline, or backend down):`,
+        cause instanceof Error ? cause.message : cause,
+      );
+    }
+    throw new ApiError(
+      "Unable to reach the server. Check your connection and try again.",
+      0,
+      null,
+    );
   }
 
   // On 401, attempt a single token refresh and replay the request once. Skip
