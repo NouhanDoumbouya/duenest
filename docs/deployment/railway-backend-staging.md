@@ -305,12 +305,25 @@ django.db.utils.ProgrammingError: relation
 "quick_share_quicksharesession_dn_code_0d6d36ab_like" already exists
 ```
 
-That `..._like` object is the Postgres `varchar_pattern_ops` index Django
-auto-creates for an indexed text column. The migration itself
-(`quick_share.0002_quicksharesession_dn_code`) is **correct** and applies cleanly
-to a fresh database — the error is purely the leftover half-applied state from
-the restart loop. (That loop is fixed by this change: the web container no longer
-migrates.)
+That `..._like` object is the Postgres `varchar_pattern_ops` index Django creates
+for an indexed text column. **This was a genuine migration bug on Postgres** (not
+just a half-applied artifact): `dn_code` was declared with **both** `unique=True`
+**and** `db_index=True`, so `quick_share.0002` tried to create that `_like` index
+**twice** (once for `unique`, once for `db_index`) with the same name. It is now
+**fixed** — the redundant `db_index=True` was removed, so a fresh database
+migrates cleanly. (SQLite did not surface it because SQLite has no
+`varchar_pattern_ops` `_like` indexes.)
+
+**On the fixed code, just re-run the migration** — `0002` is atomic, so the
+failed apply rolled back fully (quick_share is still at `0001`, with no leftover
+`dn_code` column/index):
+
+```bash
+python manage.py migrate --noinput
+```
+
+If anything was somehow left behind (a stray `dn_code` column or `_like` index),
+reset the DB (below) or drop the leftover and re-migrate.
 
 ### Recommended fix: reset the staging database (no real data)
 

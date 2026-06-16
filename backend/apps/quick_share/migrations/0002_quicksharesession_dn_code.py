@@ -27,21 +27,25 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        # 1) Add the column without the unique constraint and a blank default so
-        #    existing rows are addressable before we generate per-row codes.
+        # 1) Add the column without an index or the unique constraint, with a
+        #    blank default so existing rows are addressable before we generate
+        #    per-row codes. No db_index here — uniqueness (step 3) supplies the
+        #    index; adding db_index too makes Postgres build the varchar_pattern_ops
+        #    "_like" index twice with the same name -> "already exists".
         migrations.AddField(
             model_name='quicksharesession',
             name='dn_code',
-            field=models.CharField(blank=True, db_index=True, default='', max_length=20),
+            field=models.CharField(blank=True, default='', max_length=20),
         ),
         # 2) Backfill a unique code for every existing session.
         migrations.RunPython(backfill_dn_codes, migrations.RunPython.noop),
-        # 3) Enforce uniqueness and the callable default for new rows.
+        # 3) Enforce uniqueness and the callable default for new rows. unique=True
+        #    creates the index (and a single "_like" index); db_index is omitted
+        #    on purpose to avoid the duplicate "_like" index.
         migrations.AlterField(
             model_name='quicksharesession',
             name='dn_code',
             field=models.CharField(
-                db_index=True,
                 default=apps.quick_share.models.generate_dn_code,
                 max_length=20,
                 unique=True,
