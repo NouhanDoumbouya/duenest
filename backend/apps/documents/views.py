@@ -100,6 +100,7 @@ from apps.users import plans as user_plans
 
 from .plan_usage import compute_plan_usage, enforce_plan_limit
 from apps.core.security.encryption import DecryptionError
+from apps.core.security import public_access
 from .file_encryption import encrypt_uploaded_file, read_plaintext
 from .services import (
     APPLICABLE_EXTRACTION_FIELDS,
@@ -1154,8 +1155,8 @@ class _FileScopedMixin:
 
 
 def _generate_access_code() -> str:
-    """A 6-digit numeric access code."""
-    return f"{secrets.randbelow(1_000_000):06d}"
+    """A strong, ambiguity-safe alphanumeric access code (SEC-001)."""
+    return public_access.generate_strong_access_code()
 
 
 class DocumentFileShareLinkListCreateView(_FileScopedMixin, APIView):
@@ -1464,31 +1465,61 @@ def _has_verified_grant(link, request) -> bool:
     return share_grant_is_valid(link.token, grant)
 
 
-def _check_access_code(link, request):
-    """
-    Return an error Response if a required access code is missing/wrong, else
-    None.
+def _public_code_denied_response(result, *, requires_detail):
+    """Build the safe 403/429 response for a failed public access-code check.
 
-    Access is granted when EITHER a valid short-lived grant is presented (issued
-    by the verify-code endpoint) OR the raw code is supplied in the
-    ``X-Access-Code`` header. The code is never read from the URL.
+    Never reveals whether the underlying resource exists beyond the link itself.
     """
-    if not link.access_code_required:
-        return None
-    if _has_verified_grant(link, request):
-        return None
-    code = request.headers.get("X-Access-Code", "").strip()
-    if not code:
+    if result.state == "locked":
+        resp = Response(
+            {"detail": public_access.locked_detail(), "state": "locked"},
+            status=status.HTTP_429_TOO_MANY_REQUESTS,
+        )
+        if result.retry_after:
+            resp["Retry-After"] = str(int(result.retry_after))
+        return resp
+    if result.state == "requires_code":
         return Response(
             {
-                "detail": "This file is protected. Enter the access code "
-                "provided by the sender.",
+                "detail": requires_detail,
                 "state": "requires_code",
                 "access_code_required": True,
             },
             status=status.HTTP_403_FORBIDDEN,
         )
-    if not check_password(code, link.access_code_hash):
+    return Response(
+        {
+            "detail": "That code does not match. Check the code and try again.",
+            "state": "wrong_code",
+        },
+        status=status.HTTP_403_FORBIDDEN,
+    )
+
+
+def _check_access_code(link, request):
+    """
+    Return an error Response if a required access code is missing/wrong/locked,
+    else None.
+
+    Access is granted when EITHER a valid short-lived grant is presented (issued
+    by the verify-code endpoint) OR the raw code is supplied in the
+    ``X-Access-Code`` header. The code is never read from the URL. Repeated wrong
+    codes lock this link for everyone (SEC-001).
+    """
+    if not link.access_code_required:
+        return None
+    if _has_verified_grant(link, request):
+        return None
+    result = public_access.check_public_access_code(
+        kind="share",
+        identifier=link.token,
+        supplied_code=request.headers.get("X-Access-Code", ""),
+        access_code_hash=link.access_code_hash,
+        required=True,
+    )
+    if result.ok:
+        return None
+    if result.is_wrong_code:
         log_activity(
             file=link.file,
             action=DocumentFileActivity.Action.SHARE_CODE_FAILED,
@@ -1507,14 +1538,11 @@ def _check_access_code(link, request):
                 "label": "Wrong share access code attempt",
             },
         )
-        return Response(
-            {
-                "detail": "That code does not match. Check the code and try again.",
-                "state": "wrong_code",
-            },
-            status=status.HTTP_403_FORBIDDEN,
-        )
-    return None
+    return _public_code_denied_response(
+        result,
+        requires_detail="This file is protected. Enter the access code "
+        "provided by the sender.",
+    )
 
 
 _LIMIT_REACHED_DETAIL = (
@@ -1581,6 +1609,8 @@ def _consume_share_download(link, request):
 
 class PublicSharedFileMetadataView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "public_access_code"
 
     def get(self, request, token):
         link, err = _resolve_share_link(token, request=request)
@@ -1629,8 +1659,14 @@ class PublicSharedFileVerifyCodeView(APIView):
         if not link.access_code_required:
             return Response({"detail": "Access code verified."})
 
-        code = str(request.data.get("access_code", "")).strip()
-        if code and check_password(code, link.access_code_hash):
+        result = public_access.check_public_access_code(
+            kind="share",
+            identifier=link.token,
+            supplied_code=request.data.get("access_code", ""),
+            access_code_hash=link.access_code_hash,
+            required=True,
+        )
+        if result.ok:
             log_activity(
                 file=link.file,
                 action=DocumentFileActivity.Action.SHARE_CODE_VERIFIED,
@@ -1647,6 +1683,15 @@ class PublicSharedFileVerifyCodeView(APIView):
                     "grant_expires_in": SHARE_GRANT_MAX_AGE,
                 }
             )
+
+        if result.state == "locked":
+            resp = Response(
+                {"detail": public_access.locked_detail(), "state": "locked"},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+            if result.retry_after:
+                resp["Retry-After"] = str(int(result.retry_after))
+            return resp
 
         log_activity(
             file=link.file,
@@ -1674,6 +1719,8 @@ class PublicSharedFileVerifyCodeView(APIView):
 
 class PublicSharedFilePreviewView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "public_access_code"
 
     def get(self, request, token):
         link, err = _resolve_share_link(token, request=request)
@@ -1708,6 +1755,8 @@ class PublicSharedFilePreviewView(APIView):
 
 class PublicSharedFileDownloadView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "public_access_code"
 
     def get(self, request, token):
         link, err = _resolve_share_link(token, request=request)
@@ -3429,22 +3478,26 @@ def _resolve_emergency_pack(token):
 def _check_pack_access_code(pack, request):
     if not pack.access_code_required:
         return None
-    code = request.headers.get("X-Access-Code", "").strip()
-    if not code:
-        return Response(
-            {
-                "detail": "This emergency pack is protected. Enter the access code.",
-                "state": "requires_code",
-                "access_code_required": True,
-            },
-            status=status.HTTP_403_FORBIDDEN,
+    result = public_access.check_public_access_code(
+        kind="emergency",
+        identifier=pack.token,
+        supplied_code=request.headers.get("X-Access-Code", ""),
+        access_code_hash=pack.access_code_hash,
+        required=True,
+    )
+    if result.ok:
+        return None
+    if result.is_wrong_code:
+        log_emergency_event(
+            pack=pack,
+            event_type=EmergencyActivityEvent.EventType.WRONG_CODE,
+            actor_label="Shared viewer",
+            description="Wrong access code at emergency pack.",
         )
-    if not check_password(code, pack.access_code_hash):
-        return Response(
-            {"detail": "That code does not match.", "state": "wrong_code"},
-            status=status.HTTP_403_FORBIDDEN,
-        )
-    return None
+    return _public_code_denied_response(
+        result,
+        requires_detail="This emergency pack is protected. Enter the access code.",
+    )
 
 
 def _resolve_open_unlock_request(pack, request):
@@ -3511,6 +3564,8 @@ def _public_pack_payload(pack, *, include_items, unlock_request=None):
 
 class PublicEmergencyPackMetadataView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "public_access_code"
 
     def get(self, request, token):
         require_feature_enabled("emergency_public_viewer")
@@ -3565,25 +3620,33 @@ class PublicEmergencyUnlockRequestCreateView(APIView):
 
         # Access code (if required) is verified at request time.
         if pack.access_code_required:
-            code = str(request.data.get("access_code", "")).strip()
-            if not code or not check_password(code, pack.access_code_hash):
-                log_emergency_event(
-                    pack=pack,
-                    event_type=EmergencyActivityEvent.EventType.WRONG_CODE,
-                    actor_label="Shared viewer",
-                    description="Wrong access code at emergency request.",
-                )
-                notify_pack_owner(
-                    pack=pack,
-                    notification_type="security_alert",
-                    title="Wrong emergency code attempt",
-                    message=f"Someone entered a wrong code for “{pack.title}”.",
-                    severity="security",
-                    dedupe_suffix=timezone.now().strftime("%Y%m%d%H%M"),
-                )
-                return Response(
-                    {"detail": "That code does not match.", "state": "wrong_code"},
-                    status=status.HTTP_403_FORBIDDEN,
+            result = public_access.check_public_access_code(
+                kind="emergency",
+                identifier=pack.token,
+                supplied_code=request.data.get("access_code", ""),
+                access_code_hash=pack.access_code_hash,
+                required=True,
+            )
+            if not result.ok:
+                if result.is_wrong_code:
+                    log_emergency_event(
+                        pack=pack,
+                        event_type=EmergencyActivityEvent.EventType.WRONG_CODE,
+                        actor_label="Shared viewer",
+                        description="Wrong access code at emergency request.",
+                    )
+                    notify_pack_owner(
+                        pack=pack,
+                        notification_type="security_alert",
+                        title="Wrong emergency code attempt",
+                        message=f"Someone entered a wrong code for “{pack.title}”.",
+                        severity="security",
+                        dedupe_suffix=timezone.now().strftime("%Y%m%d%H%M"),
+                    )
+                return _public_code_denied_response(
+                    result,
+                    requires_detail="This emergency pack is protected. "
+                    "Enter the access code.",
                 )
 
         serializer = PublicUnlockRequestCreateSerializer(data=request.data)
@@ -3685,9 +3748,23 @@ class PublicEmergencyPackVerifyCodeView(APIView):
             return err
         if not pack.access_code_required:
             return Response({"detail": "Access code verified."})
-        code = str(request.data.get("access_code", "")).strip()
-        if code and check_password(code, pack.access_code_hash):
+        result = public_access.check_public_access_code(
+            kind="emergency",
+            identifier=pack.token,
+            supplied_code=request.data.get("access_code", ""),
+            access_code_hash=pack.access_code_hash,
+            required=True,
+        )
+        if result.ok:
             return Response({"detail": "Access code verified."})
+        if result.state == "locked":
+            resp = Response(
+                {"detail": public_access.locked_detail(), "state": "locked"},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+            if result.retry_after:
+                resp["Retry-After"] = str(int(result.retry_after))
+            return resp
         return Response(
             {"detail": "Invalid access code.", "state": "wrong_code"},
             status=status.HTTP_400_BAD_REQUEST,
@@ -3696,6 +3773,8 @@ class PublicEmergencyPackVerifyCodeView(APIView):
 
 class _PublicEmergencyItemMixin(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "public_access_code"
 
     def resolve(self, request, token, item_id):
         pack, err = _resolve_emergency_pack(token)
@@ -4320,32 +4399,27 @@ def _check_room_code(room, request):
     )
     if share_grant_is_valid(room.token, grant):
         return None
-    code = request.headers.get("X-Access-Code", "").strip()
-    if not code:
-        return Response(
-            {
-                "detail": "This room is protected. Enter the access code "
-                "provided by the sender.",
-                "state": "requires_code",
-                "access_code_required": True,
-            },
-            status=status.HTTP_403_FORBIDDEN,
-        )
-    if not check_password(code, room.access_code_hash):
+    result = public_access.check_public_access_code(
+        kind="room",
+        identifier=room.token,
+        supplied_code=request.headers.get("X-Access-Code", ""),
+        access_code_hash=room.access_code_hash,
+        required=True,
+    )
+    if result.ok:
+        return None
+    if result.is_wrong_code:
         log_room_activity(
             room=room,
             action=RoomActivity.Action.ROOM_CODE_FAILED,
             actor_type=RoomActivity.ActorType.SHARED_VIEWER,
             request=request,
         )
-        return Response(
-            {
-                "detail": "That code does not match. Check the code and try again.",
-                "state": "wrong_code",
-            },
-            status=status.HTTP_403_FORBIDDEN,
-        )
-    return None
+    return _public_code_denied_response(
+        result,
+        requires_detail="This room is protected. Enter the access code "
+        "provided by the sender.",
+    )
 
 
 def _check_room_usable(room, request):
@@ -4408,6 +4482,8 @@ def _resolve_room_file(room, file_id):
 
 class PublicShareRoomMetadataView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "public_access_code"
 
     def get(self, request, token):
         room, err = _resolve_room(token, request=request)
@@ -4444,8 +4520,14 @@ class PublicShareRoomVerifyCodeView(APIView):
             return err
         if not room.access_code_required:
             return Response({"detail": "Access code verified."})
-        code = str(request.data.get("access_code", "")).strip()
-        if code and check_password(code, room.access_code_hash):
+        result = public_access.check_public_access_code(
+            kind="room",
+            identifier=room.token,
+            supplied_code=request.data.get("access_code", ""),
+            access_code_hash=room.access_code_hash,
+            required=True,
+        )
+        if result.ok:
             log_room_activity(
                 room=room,
                 action=RoomActivity.Action.ROOM_CODE_VERIFIED,
@@ -4459,6 +4541,14 @@ class PublicShareRoomVerifyCodeView(APIView):
                     "grant_expires_in": SHARE_GRANT_MAX_AGE,
                 }
             )
+        if result.state == "locked":
+            resp = Response(
+                {"detail": public_access.locked_detail(), "state": "locked"},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+            if result.retry_after:
+                resp["Retry-After"] = str(int(result.retry_after))
+            return resp
         log_room_activity(
             room=room,
             action=RoomActivity.Action.ROOM_CODE_FAILED,
@@ -4473,6 +4563,8 @@ class PublicShareRoomVerifyCodeView(APIView):
 
 class _PublicRoomFileMixin(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "public_access_code"
 
     def resolve(self, request, token, file_id):
         room, err = _resolve_room(token, request=request)
@@ -4551,6 +4643,8 @@ class PublicShareRoomFileDownloadView(_PublicRoomFileMixin):
 
 class PublicShareRoomZipView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "public_access_code"
 
     def get(self, request, token):
         room, err = _resolve_room(token, request=request)

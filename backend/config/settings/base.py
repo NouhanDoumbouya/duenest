@@ -336,8 +336,44 @@ REST_FRAMEWORK = {
         "client_events": _throttle_rate("120/min"),
         # Document scanner uploads (per authenticated user) — anti spam/abuse.
         "scanner_upload": _throttle_rate("30/min"),
+        # Public access-code-bearing routes (metadata/preview/download/item).
+        # Generous enough for legitimate multi-file viewing; the real brute-force
+        # control is the per-resource lockout (apps.core.security.public_access).
+        "public_access_code": _throttle_rate("60/min"),
+        # Public organization document-request uploads (anti abuse / DoS).
+        "public_document_upload": _throttle_rate("10/hour"),
     },
 }
+
+# ---------------------------------------------------------------------------
+# Public access-code hardening (SEC-001). Repeated wrong codes for a single
+# share link / emergency pack / secure room lock THAT resource (for everyone,
+# not just one IP). Tunable per environment; state is cache-backed.
+# ---------------------------------------------------------------------------
+PUBLIC_ACCESS_CODE_MAX_ATTEMPTS = config(
+    "PUBLIC_ACCESS_CODE_MAX_ATTEMPTS", default=8, cast=int
+)
+PUBLIC_ACCESS_CODE_LOCKOUT_MINUTES = config(
+    "PUBLIC_ACCESS_CODE_LOCKOUT_MINUTES", default=15, cast=int
+)
+PUBLIC_ACCESS_CODE_BACKOFF_ENABLED = config(
+    "PUBLIC_ACCESS_CODE_BACKOFF_ENABLED", default=True, cast=bool
+)
+# Minimum length enforced for owner-supplied access codes (generated codes are
+# always stronger). Legacy codes are never re-validated, so they keep working.
+PUBLIC_ACCESS_CODE_MIN_LENGTH = config(
+    "PUBLIC_ACCESS_CODE_MIN_LENGTH", default=6, cast=int
+)
+
+# ---------------------------------------------------------------------------
+# Public organization document-request uploads (SEC-003).
+# ---------------------------------------------------------------------------
+PUBLIC_DOCUMENT_REQUEST_MAX_SUBMISSIONS = config(
+    "PUBLIC_DOCUMENT_REQUEST_MAX_SUBMISSIONS", default=20, cast=int
+)
+PUBLIC_DOCUMENT_REQUEST_MAX_TOTAL_MB = config(
+    "PUBLIC_DOCUMENT_REQUEST_MAX_TOTAL_MB", default=50, cast=int
+)
 
 # Logging with a redaction filter so an accidental log of a token/code/key/
 # header is scrubbed before it is written. Code should still avoid logging

@@ -8,7 +8,23 @@ from rest_framework import serializers
 from rest_framework.reverse import reverse
 
 from apps.core.security.encryption import encrypt_field_value
+from apps.core.security import public_access
 from .constants import ALLOWED_CONTENT_TYPES, ALLOWED_EXTENSIONS, MAX_FILE_SIZE
+
+
+def _validate_owner_access_code(value):
+    """Reject weak owner-supplied access codes at creation (SEC-001).
+
+    Empty is allowed (a strong code is generated server-side). Legacy stored
+    codes are never re-validated, so existing shares keep working.
+    """
+    code = (value or "").strip()
+    if not code:
+        return value
+    ok, message = public_access.validate_access_code_strength(code)
+    if not ok:
+        raise serializers.ValidationError(message)
+    return value
 from .models import (
     Document,
     DocumentActivity,
@@ -545,6 +561,9 @@ class ShareLinkCreateSerializer(serializers.Serializer):
         if value <= timezone.now():
             raise serializers.ValidationError("Expiry must be in the future.")
         return value
+
+    def validate_access_code(self, value):
+        return _validate_owner_access_code(value)
 
     def validate(self, attrs):
         limit_type = attrs.get("access_limit_type")
@@ -1542,6 +1561,9 @@ class EmergencyAccessPackSerializer(serializers.ModelSerializer):
             return None
         return f"/emergency/{obj.token}/"
 
+    def validate_access_code(self, value):
+        return _validate_owner_access_code(value)
+
     def validate(self, attrs):
         access_required = attrs.get(
             "access_code_required",
@@ -2154,6 +2176,9 @@ class ShareRoomCreateUpdateSerializer(serializers.ModelSerializer):
         if value is not None and value <= timezone.now():
             raise serializers.ValidationError("Expiry must be in the future.")
         return value
+
+    def validate_access_code(self, value):
+        return _validate_owner_access_code(value)
 
     def validate(self, attrs):
         limit_type = attrs.get("access_limit_type")

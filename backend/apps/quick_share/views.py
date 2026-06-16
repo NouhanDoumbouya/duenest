@@ -13,8 +13,6 @@ Every file access re-validates the session state, the access code, the claim
 
 from __future__ import annotations
 
-import secrets
-
 from django.contrib.auth.hashers import check_password, make_password
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
@@ -26,6 +24,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
+from apps.core.security import public_access
 from apps.features.flags import require_feature_enabled
 from apps.documents.models import Document, DocumentBundle, DocumentFile
 from apps.documents.plan_usage import enforce_plan_limit
@@ -105,7 +104,10 @@ class QuickShareSessionListCreateView(APIView):
 
         access_code_hash = ""
         if access_code_required:
-            plain_code = (plain_code or "").strip() or f"{secrets.randbelow(1_000_000):06d}"
+            plain_code = (
+                (plain_code or "").strip()
+                or public_access.generate_strong_access_code()
+            )
             access_code_hash = make_password(plain_code)
         else:
             plain_code = ""
@@ -306,11 +308,38 @@ def _share_grant_header(request) -> str:
 
 
 def _check_access_code(session, request, *, log=True):
-    """Return None when access is permitted, else an error Response."""
+    """Return None when access is permitted, else an error Response.
+
+    Repeated wrong codes lock this share for everyone (SEC-001), so the
+    code cannot be brute-forced through the metadata/preview/download routes.
+    """
     if not session.access_code_required:
         return None
-    code = request.headers.get("X-Access-Code", "").strip()
-    if not code:
+    result = public_access.check_public_access_code(
+        kind="quick_share",
+        identifier=session.token,
+        supplied_code=request.headers.get("X-Access-Code", ""),
+        access_code_hash=session.access_code_hash,
+        required=True,
+    )
+    if result.ok:
+        return None
+    if result.is_wrong_code and log:
+        log_activity(
+            session=session,
+            action=QuickShareActivity.Action.ACCESS_CODE_FAILED,
+            actor_type=QuickShareActivity.ActorType.RECEIVER,
+            summary="Access code attempt failed.",
+        )
+    if result.state == "locked":
+        resp = Response(
+            {"detail": public_access.locked_detail(), "state": "locked"},
+            status=status.HTTP_429_TOO_MANY_REQUESTS,
+        )
+        if result.retry_after:
+            resp["Retry-After"] = str(int(result.retry_after))
+        return resp
+    if result.state == "requires_code":
         return Response(
             {
                 "detail": "This Quick Share is protected. Enter the access code "
@@ -320,22 +349,13 @@ def _check_access_code(session, request, *, log=True):
             },
             status=status.HTTP_403_FORBIDDEN,
         )
-    if not check_password(code, session.access_code_hash):
-        if log:
-            log_activity(
-                session=session,
-                action=QuickShareActivity.Action.ACCESS_CODE_FAILED,
-                actor_type=QuickShareActivity.ActorType.RECEIVER,
-                summary="Access code attempt failed.",
-            )
-        return Response(
-            {
-                "detail": "That code does not match. Check the code and try again.",
-                "state": "wrong_code",
-            },
-            status=status.HTTP_403_FORBIDDEN,
-        )
-    return None
+    return Response(
+        {
+            "detail": "That code does not match. Check the code and try again.",
+            "state": "wrong_code",
+        },
+        status=status.HTTP_403_FORBIDDEN,
+    )
 
 
 class QuickShareReceiveCodeView(APIView):
@@ -388,6 +408,8 @@ class QuickShareReceiveCodeView(APIView):
 
 class QuickShareClaimMetadataView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "public_access_code"
 
     def get(self, request, token):
         require_feature_enabled("quick_share_public_viewer")
@@ -439,14 +461,29 @@ class QuickShareVerifyCodeView(APIView):
             return _state_response(state)
         if not session.access_code_required:
             return Response({"ok": True})
-        code = (request.data.get("access_code") or "").strip()
-        if not code or not check_password(code, session.access_code_hash):
-            log_activity(
-                session=session,
-                action=QuickShareActivity.Action.ACCESS_CODE_FAILED,
-                actor_type=QuickShareActivity.ActorType.RECEIVER,
-                summary="Access code attempt failed.",
-            )
+        result = public_access.check_public_access_code(
+            kind="quick_share",
+            identifier=session.token,
+            supplied_code=request.data.get("access_code", ""),
+            access_code_hash=session.access_code_hash,
+            required=True,
+        )
+        if not result.ok:
+            if result.state == "locked":
+                resp = Response(
+                    {"detail": public_access.locked_detail(), "state": "locked"},
+                    status=status.HTTP_429_TOO_MANY_REQUESTS,
+                )
+                if result.retry_after:
+                    resp["Retry-After"] = str(int(result.retry_after))
+                return resp
+            if result.is_wrong_code:
+                log_activity(
+                    session=session,
+                    action=QuickShareActivity.Action.ACCESS_CODE_FAILED,
+                    actor_type=QuickShareActivity.ActorType.RECEIVER,
+                    summary="Access code attempt failed.",
+                )
             return Response(
                 {
                     "detail": "That code does not match. Check the code and try again.",
@@ -549,6 +586,8 @@ class QuickShareRequestExtensionView(APIView):
 
 class _ClaimFileAccessMixin(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "public_access_code"
 
     def authorize(self, request, token, file_id):
         """Return (session, file, error_response). error is None when allowed."""
