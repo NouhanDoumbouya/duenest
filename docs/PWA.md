@@ -82,14 +82,49 @@ Bump the `VERSION` constant in `sw.js` to ship a new worker + roll caches.
 
 ## 6. How the install prompt works
 
-- Shown only on value routes (`/dashboard`, `/onboarding`), after an ~8s delay,
-  and never on the landing page.
-- Android/Chrome: uses the captured `beforeinstallprompt` event → native install.
-- iOS/iPadOS: shows **Share → Add to Home Screen** guidance (iOS has no
-  programmatic install).
-- Dismissal is remembered locally for 30 days (a non-identifying timestamp in
-  `localStorage`; no sensitive data).
-- It never requests notification permission at the same time.
+A mobile-first, dismissible bottom banner orchestrated by `PwaProvider`
+(`frontend/src/components/pwa/pwa-provider.tsx`) and rendered by `InstallPrompt`
+(`install-prompt.tsx`).
+
+**Where it shows (allow-list):**
+
+- Public/marketing + auth routes (exact match): `/`, `/pricing`, `/login`,
+  `/register`.
+- App areas (prefix match): `/dashboard`, `/onboarding`.
+
+**Where it is suppressed:**
+
+- Sensitive app flows (override the allow-list): `/dashboard/scanner` (active
+  capture), `/dashboard/settings/billing` (checkout/payment).
+- Public token viewers — `/emergency/[token]`, `/quick-share/[token]` (SafeSend),
+  `/share/*`, `/rooms/*`, etc. — are simply not in the allow-list, so the prompt
+  never appears while someone is entering an access code.
+- **Desktop**: the banner is mobile-only (`matchMedia('(max-width: 768px)')`),
+  even though desktop Chrome also fires `beforeinstallprompt`.
+
+**When it shows:**
+
+- Not on first paint — an ~8s delay after landing on an allowed route.
+- Only if the app is **not** already installed/standalone and the user has not
+  dismissed it recently.
+- Android/Chrome: only once a `beforeinstallprompt` event has been captured.
+- iOS/iPadOS: shown as guidance (there is no `beforeinstallprompt` on iOS).
+
+**Behavior:**
+
+- Android/Chrome: tapping **Install** calls the captured event's `prompt()` and
+  awaits `userChoice`; the `appinstalled` event also hides it permanently.
+- iOS/iPadOS: shows the **Tap Share → Add to Home Screen → Add** steps with a
+  single **Got it** button (no programmatic install is possible).
+- Dismissal ("Maybe later" / "Got it" / ✕) is remembered locally for 30 days (a
+  non-identifying timestamp in `localStorage`; no sensitive data).
+- It never requests notification permission at the same time, never pushes page
+  content (fixed overlay with safe-area bottom padding), and yields to nothing
+  critical (it sits above content and is always dismissible).
+
+> Not every browser supports `beforeinstallprompt` (it is Chromium-only). On
+> browsers without it and without iOS guidance applicability, no install UI is
+> shown rather than a broken affordance.
 
 ## 7. iOS install notes
 
@@ -146,9 +181,44 @@ Unsafe (never):
 - [ ] SW does **not** cache `/api/*`, preview/download, emergency/share routes
 - [ ] Update banner appears for a new worker; Refresh applies it
 - [ ] Install prompt dismiss is remembered
+- [ ] Install prompt does **not** appear on `/dashboard/scanner` or while entering
+      a code on `/emergency/[token]` / `/quick-share/[token]`
+- [ ] Install prompt does **not** appear on desktop widths
 - [ ] Offline banner appears/disappears with connectivity
 - [ ] Dashboard loads online; scanner still works (OpenCV cache + queue flush)
 - [ ] `npm run lint` and `npm run build` pass
+
+### Testing the install prompt by platform
+
+**Chrome on Android (native install):**
+
+1. Deploy (or `next start` over HTTPS) — the SW only registers in production.
+2. Open the site in Chrome on Android; visit an allowed route (e.g. `/` or
+   `/dashboard`) and wait ~8s.
+3. The DueNest install banner appears with **Install** / **Maybe later**.
+4. Tap **Install** → the native Chrome install sheet appears → confirm.
+5. The app opens standalone; the banner no longer appears (`appinstalled` +
+   standalone detection).
+6. DevTools → Application → Manifest also shows installability and an **Install**
+   affordance for desktop testing.
+
+**iOS / iPadOS Safari (manual Add to Home Screen):**
+
+1. Open the site in Safari (not an in-app/Chrome iOS webview).
+2. On an allowed route the banner shows **Tap Share → Add to Home Screen → Add**
+   with a **Got it** button (iOS has no `beforeinstallprompt`).
+3. Use Safari's **Share → Add to Home Screen → Add** to install.
+4. Launch from the home screen → opens standalone; the banner no longer shows.
+
+**Clearing an installed PWA to retest:**
+
+- Android: long-press the DueNest icon → Uninstall (or Chrome → Site settings →
+  remove). Then Chrome → DevTools → Application → Clear storage to reset the
+  dismissal timestamp.
+- iOS: long-press the home-screen icon → Remove App.
+- Re-arm the in-app banner without uninstalling by clearing the
+  `duenest:pwa-install-dismissed-at` key in `localStorage` (or Application →
+  Clear storage) and reloading on an allowed route.
 
 ## 12. Deployment notes
 

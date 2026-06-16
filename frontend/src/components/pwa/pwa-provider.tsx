@@ -8,6 +8,7 @@ import {
   dismissInstall,
   isInstallDismissed,
   isIos,
+  isMobileViewport,
   isStandalone,
   supportsServiceWorker,
 } from "@/lib/pwa";
@@ -16,15 +17,36 @@ import { OfflineBanner } from "./offline-banner";
 import { UpdateBanner } from "./update-banner";
 
 const SW_URL = "/sw.js";
-// Only show the install prompt once the user has reached value (the app shell).
-const INSTALL_ROUTES = ["/dashboard", "/onboarding"];
 const INSTALL_DELAY_MS = 8000;
+
+// Public marketing/auth routes that welcome the prompt. Exact match only — a
+// "/" prefix would match every route in the app.
+const INSTALL_EXACT_ROUTES = ["/", "/pricing", "/login", "/register"];
+// App areas (and their sub-routes) that welcome the prompt.
+const INSTALL_PREFIX_ROUTES = ["/dashboard", "/onboarding"];
+// Sensitive flows we never interrupt with an install banner — these override
+// the allow-list above. Public token viewers (e.g. /emergency/[token],
+// /quick-share/[token], /share/*) aren't in the allow-list at all, so they're
+// already excluded and don't need listing here.
+const SUPPRESS_PREFIX_ROUTES = [
+  "/dashboard/scanner", // active document capture
+  "/dashboard/settings/billing", // checkout / payment flow
+];
+
+/** Whether the install prompt is allowed to appear on a given route. */
+function isInstallRoute(pathname: string | null): boolean {
+  if (!pathname) return false;
+  if (SUPPRESS_PREFIX_ROUTES.some((r) => pathname.startsWith(r))) return false;
+  if (INSTALL_EXACT_ROUTES.includes(pathname)) return true;
+  return INSTALL_PREFIX_ROUTES.some((r) => pathname.startsWith(r));
+}
 
 /**
  * App-wide PWA orchestrator: registers the single unified service worker (prod
  * only), surfaces an "Update available" banner on a user-initiated refresh,
  * tracks offline state, and shows a polite, dismissible install prompt on
- * value routes. It renders {children} unchanged so it can wrap the app root.
+ * allowed routes (mobile only). It renders {children} unchanged so it can wrap
+ * the app root.
  */
 export function PwaProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -123,19 +145,21 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // ---- Decide whether to show the install prompt (politely, on value routes).
-  // Rendering is gated on `onValueRoute` below, so leaving the route hides it
+  // ---- Decide whether to show the install prompt (politely, on allowed routes).
+  // Rendering is gated on `onInstallRoute` below, so leaving the route hides it
   // without a synchronous setState here.
-  const onValueRoute = INSTALL_ROUTES.some((r) => pathname?.startsWith(r));
+  const onInstallRoute = isInstallRoute(pathname);
   useEffect(() => {
-    if (!onValueRoute) return;
+    if (!onInstallRoute) return;
     if (isStandalone() || isInstallDismissed()) return;
+    // Mobile-first banner — desktop (even installable Chrome) is left alone.
+    if (!isMobileViewport()) return;
     // Android needs a captured prompt; iOS shows manual guidance.
     const eligible = Boolean(installEvent) || isIos();
     if (!eligible) return;
     const t = setTimeout(() => setShowInstall(true), INSTALL_DELAY_MS);
     return () => clearTimeout(t);
-  }, [onValueRoute, installEvent, pathname]);
+  }, [onInstallRoute, installEvent, pathname]);
 
   const handleUpdate = useCallback(() => {
     updating.current = true;
@@ -170,7 +194,7 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
     <>
       {children}
       <OfflineBanner online={online} />
-      {showInstall && onValueRoute ? (
+      {showInstall && onInstallRoute ? (
         <InstallPrompt
           mode={installEvent ? "android" : "ios"}
           onInstall={handleInstall}
@@ -178,7 +202,7 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
         />
       ) : null}
       <UpdateBanner
-        visible={updateReady && !(showInstall && onValueRoute)}
+        visible={updateReady && !(showInstall && onInstallRoute)}
         onUpdate={handleUpdate}
         onDismiss={() => setUpdateReady(false)}
       />

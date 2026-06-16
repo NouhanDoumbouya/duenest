@@ -1,12 +1,13 @@
 "use client";
 
-import { Share, Plus, X, Download } from "lucide-react";
+import { Share, Plus, X, Download, Check } from "lucide-react";
 
 /**
- * Polite, dismissible install prompt. Shown only after the user has reached
- * value (dashboard), never aggressively, and never alongside a push-permission
- * request. Android/Chrome uses the captured beforeinstallprompt; iOS shows
- * Share → Add to Home Screen guidance.
+ * Polite, dismissible install prompt — a mobile-first bottom banner. Shown on
+ * allowed routes (marketing/auth + app shell), after a delay, never aggressively
+ * and never alongside a push-permission request. Android/Chrome uses the
+ * captured beforeinstallprompt (Install); iOS shows Share → Add to Home Screen
+ * guidance (Got it). Routing/eligibility is decided by the PwaProvider.
  */
 export function InstallPrompt({
   mode,
@@ -20,7 +21,9 @@ export function InstallPrompt({
   return (
     <div
       role="dialog"
-      aria-label="Install DueNest"
+      aria-label={
+        mode === "ios" ? "Add DueNest to your Home Screen" : "Install DueNest"
+      }
       className="fixed inset-x-0 bottom-0 z-[65] mx-auto w-full max-w-md p-3"
       style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
     >
@@ -35,7 +38,11 @@ export function InstallPrompt({
             className="size-10 shrink-0 rounded-xl"
           />
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold">Install DueNest</p>
+            <p className="text-sm font-semibold">
+              {mode === "ios"
+                ? "Add DueNest to your Home Screen"
+                : "Install DueNest"}
+            </p>
             <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
               Open DueNest faster from your home screen and keep your life-admin
               dashboard one tap away.
@@ -52,19 +59,19 @@ export function InstallPrompt({
         </div>
 
         {mode === "ios" ? (
-          <div className="mt-3 rounded-xl bg-muted/60 p-3 text-xs text-muted-foreground">
-            <p className="font-medium text-foreground">Add to Home Screen</p>
-            <ol className="mt-1.5 space-y-1">
-              <li className="flex items-center gap-2">
-                <Share className="size-3.5 shrink-0" aria-hidden /> Tap the Share
-                button in Safari
-              </li>
-              <li className="flex items-center gap-2">
-                <Plus className="size-3.5 shrink-0" aria-hidden /> Choose “Add to
-                Home Screen”
-              </li>
-            </ol>
-          </div>
+          <ol className="mt-3 space-y-1.5 rounded-xl bg-muted/60 p-3 text-xs text-muted-foreground">
+            <li className="flex items-center gap-2">
+              <Share className="size-3.5 shrink-0" aria-hidden /> 1. Tap the Share
+              button.
+            </li>
+            <li className="flex items-center gap-2">
+              <Plus className="size-3.5 shrink-0" aria-hidden /> 2. Choose “Add to
+              Home Screen”.
+            </li>
+            <li className="flex items-center gap-2">
+              <Check className="size-3.5 shrink-0" aria-hidden /> 3. Tap Add.
+            </li>
+          </ol>
         ) : null}
 
         <p className="mt-3 text-[11px] text-muted-foreground">
@@ -72,23 +79,33 @@ export function InstallPrompt({
         </p>
 
         <div className="mt-3 flex items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={onDismiss}
-            className="inline-flex h-9 items-center rounded-lg px-3 text-xs font-medium text-muted-foreground transition hover:bg-muted"
-          >
-            Maybe later
-          </button>
-          {mode === "android" ? (
+          {mode === "ios" ? (
             <button
               type="button"
-              onClick={onInstall}
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-4 text-xs font-medium text-primary-foreground transition hover:opacity-90"
+              onClick={onDismiss}
+              className="inline-flex h-9 items-center rounded-lg bg-primary px-4 text-xs font-medium text-primary-foreground transition hover:opacity-90"
             >
-              <Download className="size-3.5" aria-hidden />
-              Install
+              Got it
             </button>
-          ) : null}
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={onDismiss}
+                className="inline-flex h-9 items-center rounded-lg px-3 text-xs font-medium text-muted-foreground transition hover:bg-muted"
+              >
+                Maybe later
+              </button>
+              <button
+                type="button"
+                onClick={onInstall}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-4 text-xs font-medium text-primary-foreground transition hover:opacity-90"
+              >
+                <Download className="size-3.5" aria-hidden />
+                Install
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

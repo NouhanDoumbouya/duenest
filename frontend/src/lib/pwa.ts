@@ -39,6 +39,16 @@ export function supportsServiceWorker(): boolean {
   return isBrowser() && "serviceWorker" in navigator;
 }
 
+/**
+ * Coarse "mobile / small screen" check. The install prompt is a mobile-first
+ * banner, so we don't surface it on desktop — even though desktop Chrome also
+ * fires `beforeinstallprompt`.
+ */
+export function isMobileViewport(): boolean {
+  if (!isBrowser()) return false;
+  return window.matchMedia?.("(max-width: 768px)")?.matches ?? false;
+}
+
 export function supportsNotifications(): boolean {
   return isBrowser() && "Notification" in window;
 }
