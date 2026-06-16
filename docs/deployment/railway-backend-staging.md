@@ -235,18 +235,57 @@ NEXT_PUBLIC_ENV=staging
 ```
 
 (The current staging frontend is `https://duenest-mu.vercel.app`.) Then redeploy
-the frontend. Make sure the backend's `DJANGO_CORS_ALLOWED_ORIGINS` and
-`DJANGO_CSRF_TRUSTED_ORIGINS` include the exact Vercel origin (scheme + host, no
-trailing slash) — e.g. `https://duenest-mu.vercel.app`. **Never** put
-`DATABASE_URL`, `DJANGO_SECRET_KEY`, Stripe secret keys, R2 secrets, or
-`DUENEST_KEK_*` in Vercel.
+the frontend. **Never** put `DATABASE_URL`, `DJANGO_SECRET_KEY`, Stripe secret
+keys, R2 secrets, or `DUENEST_KEK_*` in Vercel.
 
-> Cookie-based auth note: the app is designed for same-site cookies. A
-> Vercel-frontend ↔ Railway-backend split is **cross-site**. For authenticated
-> cookie flows across origins you will additionally need `AUTH_COOKIE_SAMESITE=None`
-> + `AUTH_COOKIE_SECURE=True` and matching CSRF settings (see `docs/AUTH.md`).
-> Health/CORS/public endpoints work without this; full cross-site auth testing
-> may need that follow-up.
+### Cross-site browser auth (Vercel ↔ Railway) — REQUIRED for browser login
+
+The browser enforces CORS and SameSite cookies (a terminal `curl` does not — that
+is why login can work in a shell but fail in the browser with "Unable to reach
+the server"). For browser login to work across the Vercel↔Railway split, set on
+the **backend** (Railway) service:
+
+```env
+# CORS / CSRF — the EXACT Vercel origin (scheme + host, NO trailing slash, NO path)
+DJANGO_CORS_ALLOWED_ORIGINS=https://duenest-mu.vercel.app
+DJANGO_CSRF_TRUSTED_ORIGINS=https://duenest-mu.vercel.app
+DJANGO_CORS_ALLOW_CREDENTIALS=True
+
+# Cross-site cookies: required so the browser stores/sends the auth + CSRF
+# cookies across different registrable domains (vercel.app vs railway.app).
+DJANGO_COOKIE_SAMESITE=None        # production forces Secure=True automatically
+```
+
+The settings now also accept the un-prefixed `CORS_ALLOWED_ORIGINS` /
+`CSRF_TRUSTED_ORIGINS` and derive from `FRONTEND_URL`, and trailing slashes are
+stripped — but the `DJANGO_`-prefixed names above are canonical.
+
+**Verify the backend actually returns the CORS header** (the real test — `curl`
+the *actual* POST, not just OPTIONS):
+
+```bash
+curl -s -D - -o /dev/null -X POST \
+  https://<service>.up.railway.app/api/v1/auth/login/ \
+  -H "Origin: https://duenest-mu.vercel.app" \
+  -H "Content-Type: application/json" -d '{"username":"x","password":"y"}' \
+  | grep -i "access-control-allow-"
+# MUST show:
+#   access-control-allow-origin: https://duenest-mu.vercel.app
+#   access-control-allow-credentials: true
+```
+
+If those two headers are missing, the origin is not allow-listed (wrong/blank
+env var, or a trailing slash) — the browser will block the credentialed request
+even though the server returns 200.
+
+> **Known cross-site limitation (writes).** Login + read (GET) requests work with
+> `SameSite=None` cookies. But the SPA reads the CSRF cookie via `document.cookie`
+> to send `X-CSRFToken` on unsafe writes (POST/PATCH/DELETE) — and a browser on
+> `vercel.app` cannot read a cookie set for `railway.app`, so cross-site **writes**
+> will fail CSRF. Safari/Brave also block third-party (`SameSite=None`) cookies
+> entirely. The robust long-term fix is a **same-site deployment**
+> (`app.duenest.com` + `api.duenest.com`, `AUTH_COOKIE_DOMAIN=.duenest.com`).
+> Until then, this split is fine for login + read-only smoke testing.
 
 ## 12. Treat the environment as staging
 

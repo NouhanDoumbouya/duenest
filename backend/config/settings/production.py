@@ -45,12 +45,23 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = config(
 )
 SECURE_HSTS_PRELOAD = config("DJANGO_HSTS_PRELOAD", default=False, cast=bool)
 
-# Cookies
+# Cookies — Secure + HttpOnly always on in production.
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SAMESITE = "Lax"
-CSRF_COOKIE_SAMESITE = "Lax"
+AUTH_COOKIE_SECURE = True
+
+# Cross-site cookie support. When the frontend (e.g. Vercel) and backend (e.g.
+# Railway) are on DIFFERENT registrable domains, the auth/CSRF cookies must be
+# SameSite=None (and Secure) for the browser to send them on cross-site XHR.
+# Default "Lax" for a same-site deployment; set DJANGO_COOKIE_SAMESITE=None for
+# the split Vercel/Railway staging. SameSite=None REQUIRES Secure (forced above).
+_COOKIE_SAMESITE = (config("DJANGO_COOKIE_SAMESITE", default="Lax") or "Lax").strip()
+if _COOKIE_SAMESITE.lower() == "none":
+    _COOKIE_SAMESITE = "None"  # Django/browsers require the exact capitalization
+SESSION_COOKIE_SAMESITE = _COOKIE_SAMESITE
+CSRF_COOKIE_SAMESITE = _COOKIE_SAMESITE
+AUTH_COOKIE_SAMESITE = _COOKIE_SAMESITE
 
 # Content / framing / referrer
 SECURE_CONTENT_TYPE_NOSNIFF = True
@@ -58,22 +69,44 @@ SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 X_FRAME_OPTIONS = "DENY"
 
 # CORS / CSRF — explicit allowlists in production (never allow-all).
-# Cookie auth requires credentialed CORS (defaults to True now); origins must be
-# an explicit allowlist (never "*") — enforced by never enabling allow-all.
+# Cookie auth requires credentialed CORS; origins must be an explicit allowlist
+# (never "*"). To be forgiving of env-var naming, origins are read from several
+# keys AND derived from FRONTEND_URL, with trailing slashes stripped (an origin
+# must be scheme+host with no path/slash or django-cors-headers won't match it).
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = config(
     "DJANGO_CORS_ALLOW_CREDENTIALS", default=True, cast=bool
 )
-CORS_ALLOWED_ORIGINS = config(
-    "DJANGO_CORS_ALLOWED_ORIGINS", default="", cast=Csv()
-)
-CSRF_TRUSTED_ORIGINS = config(
-    "DJANGO_CSRF_TRUSTED_ORIGINS", default="", cast=Csv()
-)
 
-# Auth cookies must be Secure in production regardless of the base default.
-AUTH_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
+
+def _clean_origin(value):
+    return (value or "").strip().rstrip("/")
+
+
+def _collect_origins(*env_keys):
+    """Merge origins from several possible env var names (de-duped, slash-stripped)."""
+    out, seen = [], set()
+    for key in env_keys:
+        for raw in config(key, default="", cast=Csv()):
+            origin = _clean_origin(raw)
+            if origin and origin not in seen:
+                seen.add(origin)
+                out.append(origin)
+    # Also accept a single FRONTEND_URL / DJANGO_FRONTEND_URL as an origin.
+    for key in ("FRONTEND_URL", "DJANGO_FRONTEND_URL", "FRONTEND_APP_URL"):
+        origin = _clean_origin(config(key, default=""))
+        if origin and origin not in seen:
+            seen.add(origin)
+            out.append(origin)
+    return out
+
+
+CORS_ALLOWED_ORIGINS = _collect_origins(
+    "DJANGO_CORS_ALLOWED_ORIGINS", "CORS_ALLOWED_ORIGINS"
+)
+CSRF_TRUSTED_ORIGINS = _collect_origins(
+    "DJANGO_CSRF_TRUSTED_ORIGINS", "CSRF_TRUSTED_ORIGINS"
+)
 
 # Content-Security-Policy applied by apps.core.middleware.SecurityHeadersMiddleware.
 # Connect-src must include the API + any storage/analytics origins; tune via env.
