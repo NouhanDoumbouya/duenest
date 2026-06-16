@@ -47,6 +47,10 @@ USER appuser
 
 EXPOSE 8000
 
-# Migrate at startup (real env present), then serve. For multi-instance
-# deployments prefer running migrations as a separate release step instead.
-CMD ["sh", "-c", "python manage.py migrate --noinput && exec gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers ${WEB_CONCURRENCY:-3} --timeout 60 --access-logfile - --error-logfile -"]
+# Web process ONLY — never run migrations here. Auto-migrating on every
+# container start makes a crash-restart loop repeatedly retry the same migration,
+# which can leave a half-applied schema (e.g. a duplicate Postgres pattern-ops
+# index). Run migrations once, separately, via scripts/run_migrations.sh / the
+# Railway console / a one-off release step — see
+# docs/deployment/railway-backend-staging.md.
+CMD ["sh", "-c", "exec gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers ${WEB_CONCURRENCY:-2} --timeout ${WEB_TIMEOUT:-120} --access-logfile - --error-logfile -"]
