@@ -341,6 +341,8 @@ REST_FRAMEWORK = {
         "billing_promo": _throttle_rate("20/min"),
         # Client UI analytics events (anti-flood; high enough for normal use).
         "client_events": _throttle_rate("120/min"),
+        # Anonymous client error-log submissions (anti log-flooding) — SEC-008.
+        "client_error": _throttle_rate("30/min"),
         # Document scanner uploads (per authenticated user) — anti spam/abuse.
         "scanner_upload": _throttle_rate("30/min"),
         # Public access-code-bearing routes (metadata/preview/download/item).

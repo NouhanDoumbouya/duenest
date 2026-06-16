@@ -192,10 +192,13 @@ class FeedbackCreateView(generics.CreateAPIView):
 
 
 class ClientErrorLogCreateView(generics.CreateAPIView):
-    """Frontend/client error logging endpoint."""
+    """Frontend/client error logging endpoint (anonymous, so rate-limited and
+    payload-bounded — SEC-008)."""
 
     permission_classes = [AllowAny]
     serializer_class = ClientErrorCreateSerializer
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "client_error"
 
     def perform_create(self, serializer):
         user = self.request.user if self.request.user.is_authenticated else None
