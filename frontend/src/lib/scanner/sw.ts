@@ -3,17 +3,24 @@ interface SyncManagerLike {
 }
 
 /**
- * Register the scanner service worker. Returns the registration, or null when
- * service workers are unsupported. Failures are swallowed — the scanner works
- * fully without a service worker (OpenCV just re-downloads, queue flushes on the
+ * Register the DueNest service worker so the scanner's OpenCV cache + Background
+ * Sync flush keep working. Returns the registration, or null when service
+ * workers are unsupported. Failures are swallowed — the scanner works fully
+ * without a service worker (OpenCV just re-downloads, queue flushes on the
  * 'online' event instead of via Background Sync).
+ *
+ * Note: as of the PWA Lite Foundation, the scanner logic lives in the SINGLE
+ * unified worker at `/sw.js` (a browser allows one registration per scope, so a
+ * second worker at "/" would replace this one). Registering the same script+scope
+ * here is idempotent with the app-wide PWA registration. The legacy
+ * `/scanner-sw.js` is retained for reference but no longer registered.
  */
 export async function registerScannerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
   if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
     return null;
   }
   try {
-    return await navigator.serviceWorker.register("/scanner-sw.js", { scope: "/" });
+    return await navigator.serviceWorker.register("/sw.js", { scope: "/" });
   } catch {
     return null;
   }

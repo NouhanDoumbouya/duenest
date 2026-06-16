@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { PwaStatusCard } from "@/components/pwa/pwa-status-card";
 import { ApiError } from "@/lib/api";
 import { formatDate } from "@/lib/documents";
 import {
@@ -210,6 +211,8 @@ export default function DataSettingsPage() {
       </div>
 
       <StatusMessage error={error} message={message} />
+
+      <PwaStatusCard />
 
       {!summary ? (
         <div className="grid gap-4 md:grid-cols-2">
