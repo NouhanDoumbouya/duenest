@@ -19,6 +19,10 @@ _DEV_EXTRA_ORIGINS = config("DJANGO_DEV_EXTRA_ORIGINS", default="", cast=Csv()) 
 # Manual billing (no real payments) is fine for local development.
 BILLING_ALLOW_MANUAL_PROVIDER = True
 
+# Local convenience: any staff account can use founder tools (production uses the
+# FOUNDER_EMAILS allowlist instead — SEC-009).
+FOUNDER_ALLOW_ALL_STAFF = True
+
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",

@@ -25,6 +25,15 @@ GOOGLE_OAUTH_CLIENT_ID = config("GOOGLE_OAUTH_CLIENT_ID", default="")
 # Existing users can still log in when private beta mode is enabled.
 PRIVATE_BETA_ENABLED = config("PRIVATE_BETA_ENABLED", default=False, cast=bool)
 
+# ---- Founder/admin console access (SEC-009) --------------------------------
+# Founder tools (CRM, analytics, bulk export, manual billing grants) are NOT
+# granted to every staff account. Superusers always qualify; other staff must be
+# on this explicit allowlist. FOUNDER_ALLOW_ALL_STAFF is a dev-only convenience.
+FOUNDER_EMAILS = config("FOUNDER_EMAILS", default="", cast=Csv())
+FOUNDER_ALLOW_ALL_STAFF = config(
+    "FOUNDER_ALLOW_ALL_STAFF", default=False, cast=bool
+)
+
 # ---- Billing (DueNest's own monetization) ----------------------------------
 # Provider-aware. "manual" works fully offline for local dev/tests; "stripe"
 # uses the Stripe API and requires the keys below. Secrets never reach the

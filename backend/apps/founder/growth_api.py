@@ -456,11 +456,14 @@ class FounderGrowthExportView(APIView):
     permission_classes = [IsFounderUser]
 
     def get(self, request):
+        from .audit import log_founder_action
+
         export_type = request.query_params.get("type", "campaigns")
         if export_type == "referrals":
             content, filename = referrals_csv(), "referrals.csv"
         else:
             content, filename = campaigns_csv(), "campaigns.csv"
+        log_founder_action(request, "growth_export", export_type=export_type)
         response = HttpResponse(content, content_type="text/csv")
         response["Content-Disposition"] = f'attachment; filename="duenest-{filename}"'
         return response

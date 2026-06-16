@@ -8,6 +8,10 @@ DEBUG = False
 # Tests exercise the manual billing provider (no Stripe credentials available).
 BILLING_ALLOW_MANUAL_PROVIDER = True
 
+# Existing founder tests grant access by is_staff; keep that here and assert the
+# production allowlist behaviour explicitly via override_settings in SEC-009 tests.
+FOUNDER_ALLOW_ALL_STAFF = True
+
 PASSWORD_HASHERS = [
     "django.contrib.auth.hashers.MD5PasswordHasher",
 ]
