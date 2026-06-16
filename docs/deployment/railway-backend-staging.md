@@ -11,12 +11,43 @@ call. The frontend stays on Vercel; only the backend deploys here.
 
 ---
 
-## 0. Builder: Docker
+## 0. Builder + start command
 
 DueNest deploys via the **Dockerfile** at `backend/Dockerfile` (Python 3.12-slim;
 it installs `tesseract-ocr` + `poppler-utils` for OCR and `libpq5` for Postgres —
-Nixpacks would not install these). `backend/railway.json` pins the Docker builder,
-the start command, and the health check path. **Do not** switch to Nixpacks.
+Nixpacks would not install these). `backend/railway.json` pins the Docker builder
+and the health check path. **Do not** switch to Nixpacks.
+
+**Startup is controlled by the Dockerfile `CMD` — there is intentionally NO
+`startCommand` in `railway.json`.** The CMD is:
+
+```dockerfile
+CMD ["sh", "-c", "gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers 2 --timeout 120"]
+```
+
+It runs through `sh -c`, so `${PORT:-8000}` is expanded by a real shell, the
+worker count is hardcoded (`2`), and it does **not** run migrations.
+
+> **Do NOT put a `startCommand` with `${WEB_CONCURRENCY:-2}` (or any
+> `${VAR:-default}`) in `railway.json` or the Railway UI.** Railway expands a
+> `startCommand` with its own engine that does **not** support the bash
+> default-value syntax, so Gunicorn receives the literal string and crashes:
+> `gunicorn: error: argument -w/--workers: invalid int value: '${WEB_CONCURRENCY:-2}'`.
+
+### Railway UI "Custom Start Command"
+
+Leave it **empty** so the Dockerfile `CMD` is used (recommended). If you must set
+one, use a literal worker count and the plain `$PORT` variable:
+
+```bash
+gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+```
+
+Never use `--workers ${WEB_CONCURRENCY:-2}` in the Railway UI / `railway.json`
+start command — Railway will not expand the `:-default` part. (You may
+re-introduce `${WEB_CONCURRENCY:-2}` later **only** inside a `sh -c "..."` wrapper
+that is guaranteed to run through a shell, and after testing.) Do not include
+`migrate` in the start command.
 
 ## 1. Create the Railway project
 
@@ -123,7 +154,7 @@ See `backend/.env.example` for the full annotated list.
 
 Railway deploys automatically on push to the connected branch. The build runs
 `collectstatic` (build-safe — see "Root cause" below); the container then starts
-**Gunicorn only** (`backend/railway.json` → start command). It does **not** run
+**Gunicorn only**, via the Dockerfile `CMD` (see §0). It does **not** run
 migrations — see the next section for why and how.
 
 ## 7. Running migrations on Railway
@@ -152,9 +183,9 @@ sh scripts/run_migrations.sh
 railway run python manage.py migrate --noinput
 ```
 
-**C. Temporary one-off release** — set the **Custom Start Command** to
-`python manage.py migrate --noinput`, deploy once, watch it complete, then revert
-the start command back to the Gunicorn default (in `railway.json`).
+**C. Temporary one-off release** — set the Railway UI **Custom Start Command** to
+`python manage.py migrate --noinput`, deploy once, watch it complete, then
+**clear** the Custom Start Command again so the Dockerfile `CMD` (Gunicorn) runs.
 
 **D. Dedicated migration service/job** — a second Railway service from the same
 repo whose start command is `python manage.py migrate --noinput` (run on demand).
