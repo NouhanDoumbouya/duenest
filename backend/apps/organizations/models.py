@@ -315,6 +315,11 @@ class OrganizationDocumentFile(models.Model):
     original_filename = models.CharField(max_length=255)
     content_type = models.CharField(max_length=120, blank=True)
     file_size = models.PositiveIntegerField(default=0)
+    # Encryption-at-rest (SEC-002). file_uuid binds the ciphertext AAD; new
+    # uploads store an encrypted envelope and set is_encrypted=True. Legacy rows
+    # stay False until migrated by the encrypt_legacy_org_files command.
+    file_uuid = models.UUIDField(default=uuid.uuid4, editable=False)
+    is_encrypted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -527,6 +532,9 @@ class DocumentRequestSubmission(models.Model):
     original_filename = models.CharField(max_length=255, blank=True)
     content_type = models.CharField(max_length=120, blank=True)
     file_size = models.PositiveIntegerField(default=0)
+    # Encryption-at-rest (SEC-002); see OrganizationDocumentFile.
+    file_uuid = models.UUIDField(default=uuid.uuid4, editable=False)
+    is_encrypted = models.BooleanField(default=False)
     notes = models.TextField(blank=True)
     status = models.CharField(
         max_length=24, choices=Status.choices, default=Status.SUBMITTED

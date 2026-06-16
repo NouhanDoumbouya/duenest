@@ -218,3 +218,64 @@ def decrypt_field_value(token: bytes, *, model: str, field: str, record_id) -> s
         aad=aad,
     )
     return plaintext.decode("utf-8")
+
+
+# ---- Self-describing blob envelope (encrypted file content) ----------------
+#
+# Used to store an encrypted *file* as a single opaque blob (the FileField holds
+# the whole envelope) — no extra DB columns needed beyond an ``is_encrypted``
+# flag and a UUID for AAD binding. Same wire layout as the field token, with a
+# distinct magic so the two are never confused.
+
+_BLOB_MAGIC = b"DNEB1"
+
+
+def seal_blob(plaintext: bytes, *, aad: bytes) -> bytes:
+    """Seal arbitrary bytes into a self-describing encrypted envelope."""
+    payload = encrypt_bytes(plaintext, aad)
+    kek_v = payload.kek_version.encode("utf-8")
+    if len(kek_v) > 255 or len(payload.wrapped_dek) > 65535:
+        raise EncryptionError("Blob encryption metadata too large.")
+    return b"".join(
+        [
+            _BLOB_MAGIC,
+            bytes([len(kek_v)]),
+            kek_v,
+            payload.nonce,
+            len(payload.wrapped_dek).to_bytes(2, "big"),
+            payload.wrapped_dek,
+            payload.ciphertext,
+        ]
+    )
+
+
+def is_sealed_blob(token: bytes) -> bool:
+    return bool(token) and token[: len(_BLOB_MAGIC)] == _BLOB_MAGIC
+
+
+def open_blob(token: bytes, *, aad: bytes) -> bytes:
+    """Open a blob produced by :func:`seal_blob`. Fails closed on tamper."""
+    if not is_sealed_blob(token):
+        raise DecryptionError("Unrecognized encrypted blob format.")
+    try:
+        pos = len(_BLOB_MAGIC)
+        kek_len = token[pos]
+        pos += 1
+        kek_version = token[pos : pos + kek_len].decode("utf-8")
+        pos += kek_len
+        nonce = token[pos : pos + NONCE_LENGTH_BYTES]
+        pos += NONCE_LENGTH_BYTES
+        wrapped_len = int.from_bytes(token[pos : pos + 2], "big")
+        pos += 2
+        wrapped_dek = token[pos : pos + wrapped_len]
+        pos += wrapped_len
+        ciphertext = token[pos:]
+    except (IndexError, ValueError) as exc:
+        raise DecryptionError("Malformed encrypted blob.") from exc
+    return decrypt_bytes(
+        ciphertext,
+        nonce=nonce,
+        wrapped_dek=wrapped_dek,
+        kek_version=kek_version,
+        aad=aad,
+    )
