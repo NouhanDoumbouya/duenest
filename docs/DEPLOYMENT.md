@@ -5,6 +5,12 @@ storage) for staging/beta, and how to configure provider-neutral object storage.
 
 The frontend (Next.js) deploys to Vercel and is out of scope here.
 
+> **Scaling & infrastructure modes:** for how DueNest runs in lean vs.
+> scale-ready mode (Redis cache, Celery workers, the scheduler, queues, process
+> types, caching rules, and upgrade triggers), see
+> [scale-ready-lean-foundation.md](deployment/scale-ready-lean-foundation.md).
+> Lean mode needs no Redis/workers; everything scales by environment variables.
+
 ---
 
 ## 1. Architecture recap (read this first)

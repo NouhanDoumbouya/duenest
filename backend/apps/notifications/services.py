@@ -9,6 +9,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.mail import EmailMultiAlternatives
 from django.db import IntegrityError, transaction
+from django.db.models import Count, Q
 from django.template.loader import render_to_string
 from django.utils import timezone
 
@@ -26,6 +27,7 @@ class DeliveryResult:
     email_sent: bool = False
     email_skipped: bool = False  # email enabled but provider not configured
     email_failed: bool = False
+    email_queued: bool = False  # handed to the `email` worker queue (async mode)
 
     def __bool__(self) -> bool:
         # Backwards-compatible: callers historically treated the return value as
@@ -352,7 +354,18 @@ def deliver_notification(notification: Notification, *, now=None) -> DeliveryRes
             notification.email_last_error = "not_configured"
             result.changed = True
         result.email_skipped = True
+    elif should_email and getattr(settings, "ENABLE_BACKGROUND_JOBS", False):
+        # Scale-ready mode: hand the (slow, network-bound) SMTP send to the
+        # `email` queue. The task is self-contained and idempotent — it re-checks
+        # conditions, consumes an attempt, sends, and marks delivery — so it is
+        # safe to retry and never double-sends (guarded by delivered_email_at).
+        from apps.notifications.tasks import send_email
+
+        send_email.delay(notification.id)
+        result.email_queued = True
+        result.changed = True
     elif should_email:
+        # Lean/eager mode (default): send inline, exactly as before.
         notification.email_attempts += 1
         try:
             send_notification_email(notification)
@@ -402,8 +415,16 @@ def _document_candidates(user, today: date, tzinfo: ZoneInfo):
     prefs = get_preferences(user)
     if not prefs.document_reminders_enabled:
         return
-    documents = Document.objects.filter(owner=user, is_trashed=False).exclude(
-        status=Document.Status.ARCHIVED
+    # Annotate the live (non-trashed) file count in the DB so the missing-file
+    # check below is a Python attribute read rather than a per-row
+    # `.files.exists()` query (removes an N+1 in the reminder sweep). Kept as a
+    # queryset because it is also `.exclude(...)`-filtered further down.
+    documents = (
+        Document.objects.filter(owner=user, is_trashed=False)
+        .exclude(status=Document.Status.ARCHIVED)
+        .annotate(
+            live_file_count=Count("files", filter=Q(files__is_trashed=False))
+        )
     )
     rule_doc_ids = set(
         DocumentReminderRule.objects.filter(owner=user, is_enabled=True).values_list(
@@ -481,7 +502,7 @@ def _document_candidates(user, today: date, tzinfo: ZoneInfo):
                 )
 
     for doc in documents:
-        if not doc.files.filter(is_trashed=False).exists():
+        if not doc.live_file_count:
             yield _candidate(
                 user=user,
                 notification_type=Notification.Type.DOCUMENT_MISSING_FILE,

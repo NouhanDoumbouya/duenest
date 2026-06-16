@@ -996,3 +996,30 @@ class UserAttribution(models.Model):
 
     def __str__(self):
         return f"Attribution for user {self.user_id}"
+
+
+class DailyAnalyticsRollup(models.Model):
+    """Pre-aggregated daily product metrics (scale-ready founder analytics).
+
+    Instead of recomputing dashboards from the full ProductEvent table on every
+    request forever, the ``rollup_daily_analytics`` task upserts one row per day
+    with the day's totals. Raw events remain available for drill-down. The task
+    is idempotent (update_or_create on ``date``). No document contents or PII are
+    stored here — only counts.
+    """
+
+    date = models.DateField(unique=True, db_index=True)
+    total_events = models.PositiveIntegerField(default=0)
+    active_users = models.PositiveIntegerField(default=0)
+    new_users = models.PositiveIntegerField(default=0)
+    new_documents = models.PositiveIntegerField(default=0)
+    # {event_type: count} for the day — small, non-sensitive.
+    event_counts = models.JSONField(default=dict, blank=True)
+    computed_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-date"]
+        indexes = [models.Index(fields=["date"])]
+
+    def __str__(self):
+        return f"Analytics rollup {self.date} ({self.total_events} events)"

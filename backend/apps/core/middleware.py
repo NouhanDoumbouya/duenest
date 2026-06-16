@@ -18,7 +18,12 @@ any sensitive content.
 
 from __future__ import annotations
 
+import logging
+import time
+
 from django.conf import settings
+
+logger = logging.getLogger("duenest.performance")
 
 # API path prefixes whose responses carry token-scoped data.
 _PUBLIC_TOKEN_PREFIXES = (
@@ -74,3 +79,42 @@ class SecurityHeadersMiddleware:
             response.setdefault("Cross-Origin-Opener-Policy", "same-origin")
 
         return response
+
+
+class SlowRequestLogMiddleware:
+    """Log requests slower than ``SLOW_REQUEST_MS`` for cheap observability.
+
+    Logs only method, path, status and duration — never query strings, bodies,
+    headers, cookies, or tokens (paths under public-token prefixes are reported
+    as a redacted label so a token never reaches the logs). Disabled when
+    ``SLOW_REQUEST_MS`` <= 0.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+        self.threshold_ms = int(getattr(settings, "SLOW_REQUEST_MS", 0) or 0)
+        self.enabled = self.threshold_ms > 0
+
+    def __call__(self, request):
+        if not self.enabled:
+            return self.get_response(request)
+        start = time.perf_counter()
+        response = self.get_response(request)
+        elapsed_ms = (time.perf_counter() - start) * 1000.0
+        if elapsed_ms >= self.threshold_ms:
+            logger.warning(
+                "slow_request method=%s path=%s status=%s duration_ms=%.0f",
+                request.method,
+                self._safe_path(request.path or ""),
+                getattr(response, "status_code", "?"),
+                elapsed_ms,
+            )
+        return response
+
+    @staticmethod
+    def _safe_path(path: str) -> str:
+        # Token-bearing routes: log the prefix only, never the token segment.
+        for prefix in _PUBLIC_TOKEN_PREFIXES:
+            if path.startswith(prefix):
+                return f"{prefix}<redacted>"
+        return path

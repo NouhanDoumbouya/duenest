@@ -12,6 +12,13 @@ const BACKEND_ORIGIN =
   process.env.BACKEND_ORIGIN ?? "http://127.0.0.1:8000";
 
 const nextConfig: NextConfig = {
+  // Tree-shake large icon packages so only the icons actually used are bundled.
+  // `lucide-react` is already optimized by Next by default; `simple-icons`
+  // exports thousands of brand icons, so listing it here avoids pulling the
+  // whole set into any route that imports a handful of them.
+  experimental: {
+    optimizePackageImports: ["simple-icons"],
+  },
   // DueNest's API requires trailing slashes (Django APPEND_SLASH). Without this,
   // Next 308-redirects "/api/v1/x/" -> "/api/v1/x", which then fights Django's
   // slash handling and the proxied request never resolves. Skipping the redirect

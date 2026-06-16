@@ -2,3 +2,19 @@
 # `release` runs once per deploy before `web` starts taking traffic.
 release: python manage.py migrate --noinput && python manage.py collectstatic --noinput
 web: gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers ${WEB_CONCURRENCY:-3} --timeout 60 --access-logfile - --error-logfile -
+
+# Background processing (SCALE-READY MODE ONLY).
+# These are OPTIONAL and only needed once ENABLE_BACKGROUND_JOBS=true and a
+# REDIS_URL/CELERY_BROKER_URL is configured. In lean mode you can run web alone
+# and either (a) leave tasks running eagerly inline, and/or (b) trigger the
+# scheduled commands from the platform's cron instead of Celery Beat.
+#
+# worker: consumes the named queues. Scale by running more worker dynos or
+#         raising --concurrency. A dedicated OCR worker can be split out with
+#         `-Q scanner` so heavy OCR never starves API-facing queues.
+worker: celery -A config worker -l info -Q critical,email,notifications,push,scanner,files,billing,analytics,default --concurrency ${CELERY_CONCURRENCY:-2}
+
+# beat: the scheduler (due notifications, trash purge, billing sync, analytics
+#       rollups). Run EXACTLY ONE beat process. Skip this and use platform cron
+#       instead if you prefer (see docs/deployment/scale-ready-lean-foundation.md).
+beat: celery -A config beat -l info

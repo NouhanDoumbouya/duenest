@@ -485,11 +485,29 @@ class UploadScannedDocumentView(APIView):
             filename=getattr(uploaded, "name", ""),
         )
 
-        try:
-            ocr_stored = _maybe_run_ocr(request.user, instance, data, content_type)
-        except ScanValidationError as exc:
-            instance.delete()
-            return json_error(exc.message, exc.status_code)
+        # OCR is CPU-heavy. In scale-ready mode (SCANNER_ASYNC_PROCESSING_ENABLED
+        # + ENABLE_BACKGROUND_JOBS) it is pushed to the `scanner` queue so it
+        # never blocks the web worker; the API returns immediately with
+        # ocr_status="queued". In lean mode it runs inline (bounded by
+        # OCR_MAX_PAGES / OCR_TIMEOUT_SECONDS) exactly as before.
+        ocr_stored = False
+        ocr_status = "skipped"
+        if getattr(settings, "SCANNER_ASYNC_PROCESSING_ENABLED", False) and getattr(
+            settings, "ENABLE_BACKGROUND_JOBS", False
+        ):
+            from apps.documents.tasks import run_scanner_ocr
+
+            run_scanner_ocr.delay(instance.pk, request.user.id)
+            ocr_status = "queued"
+        else:
+            try:
+                ocr_stored = _maybe_run_ocr(
+                    request.user, instance, data, content_type
+                )
+            except ScanValidationError as exc:
+                instance.delete()
+                return json_error(exc.message, exc.status_code)
+            ocr_status = "done" if ocr_stored else "skipped"
 
         _log_scan_activity(instance, request)
         billing_entitlements.increment_usage(request.user, "scanner_scans_per_month")
@@ -506,6 +524,7 @@ class UploadScannedDocumentView(APIView):
                     "file-inbox-download", kwargs={"pk": instance.pk}, request=request
                 ),
                 "ocr_text_stored": ocr_stored,
+                "ocr_status": ocr_status,
                 "size_bytes": instance.file_size,
             },
             status=status.HTTP_201_CREATED,
