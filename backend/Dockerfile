@@ -53,4 +53,4 @@ EXPOSE 8000
 # index). Run migrations once, separately, via scripts/run_migrations.sh / the
 # Railway console / a one-off release step — see
 # docs/deployment/railway-backend-staging.md.
-CMD ["sh", "-c", "exec gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers ${WEB_CONCURRENCY:-2} --timeout ${WEB_TIMEOUT:-120} --access-logfile - --error-logfile -"]
+CMD ["sh", "-c", "gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers 2 --timeout 120"]
