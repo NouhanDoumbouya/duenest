@@ -1060,6 +1060,27 @@ def _attention_breakdown() -> list[dict]:
 
 
 def build_founder_analytics(range_key: str | None = None) -> dict:
+    """Founder analytics, served from a short-TTL cache.
+
+    The heavy aggregation (``_build_founder_analytics``) recomputes from raw
+    ProductEvent rows; caching it keeps the founder dashboard fast as the event
+    table grows. This is a GLOBAL aggregate (no per-user/per-org data), so a
+    single global cache key is correct; founder access is still enforced at the
+    view. Refreshed by the ``rollup_daily_analytics`` task and on TTL expiry.
+    """
+    from django.conf import settings
+
+    from apps.core.cache import cached_call, global_key
+
+    ttl = getattr(settings, "CACHE_TTL_FOUNDER_ROLLUP", 600)
+    return cached_call(
+        global_key("founder", "analytics", range_key or "default"),
+        ttl,
+        lambda: _build_founder_analytics(range_key),
+    )
+
+
+def _build_founder_analytics(range_key: str | None = None) -> dict:
     selected_range, range_days = _range_config(range_key)
     since = _range_since(range_days)
     dates = _date_span(since)

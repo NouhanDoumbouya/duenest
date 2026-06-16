@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { Activity, Globe2, MapPin, ShieldCheck, Users } from "lucide-react";
 
@@ -10,10 +11,30 @@ import {
 } from "@/components/founder/founder-ui";
 import { FounderInsightPanel } from "@/components/founder/insight-panel";
 import {
-  WorldChoropleth,
   WORLD_MAP_AVAILABLE,
   type ChoroplethDatum,
 } from "@/components/founder/world-choropleth";
+
+// The choropleth decodes a world-atlas TopoJSON — the heaviest widget in the
+// founder area. Load it client-side only (ssr:false is valid in this Client
+// Component) with a skeleton, so it never runs during SSR and is split out of
+// the route's server-rendered work.
+const WorldChoropleth = dynamic(
+  () =>
+    import("@/components/founder/world-choropleth").then(
+      (m) => m.WorldChoropleth,
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        className="h-[420px] w-full animate-pulse rounded-xl bg-muted/40"
+        role="status"
+        aria-label="Loading the world map"
+      />
+    ),
+  },
+);
 import {
   canonicalCountryName,
   displayCountryLabel,

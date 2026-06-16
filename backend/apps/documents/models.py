@@ -209,6 +209,19 @@ class Document(models.Model):
             models.Index(fields=["owner", "status"]),
             models.Index(fields=["owner", "expiry_date"]),
             models.Index(fields=["owner", "is_trashed"]),
+            # Hot path: the active vault list filters owner + is_trashed and
+            # orders by -is_pinned, -created_at. This composite lets the DB
+            # satisfy the filter + sort from one index (see DocumentViewSet.list).
+            models.Index(
+                fields=["owner", "is_trashed", "-is_pinned", "-created_at"],
+                name="doc_owner_active_listing",
+            ),
+            # Supports the owner + status filter combined with the trash scope
+            # used across list/attention queries.
+            models.Index(
+                fields=["owner", "is_trashed", "status"],
+                name="doc_owner_trashed_status",
+            ),
         ]
 
     def __str__(self):

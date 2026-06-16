@@ -478,3 +478,160 @@ SIMPLE_JWT = {
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
 }
+
+# ===========================================================================
+# Scale-ready lean foundation (see docs/deployment/scale-ready-lean-foundation.md)
+#
+# The app runs in two modes from the SAME codebase, switched purely by env:
+#   * Lean mode (default): no Redis, no workers. Cache is per-process LocMem,
+#     Celery tasks run inline (eager). Everything works locally with zero extra
+#     services — `python manage.py runserver` is enough.
+#   * Scale-ready mode: set REDIS_URL + ENABLE_REDIS_CACHE/ENABLE_BACKGROUND_JOBS
+#     to route cache to Redis and tasks to real workers, with no code changes.
+# ===========================================================================
+
+# Deployment mode marker. local | staging | production. Informational + used by
+# the slow-request logger and health checks; settings module still chooses the
+# hard security posture (development.py vs production.py).
+APP_ENV = config("APP_ENV", default="local")
+
+# Redis is OPTIONAL. CACHE_URL falls back to REDIS_URL; the broker falls back to
+# REDIS_URL too. When neither is set the app stays fully functional in lean mode.
+REDIS_URL = config("REDIS_URL", default="")
+CACHE_URL = config("CACHE_URL", default=REDIS_URL)
+
+# ---- Cache backend (Redis when available, safe LocMem fallback) -----------
+# ENABLE_REDIS_CACHE defaults to True only when a cache URL is actually present,
+# so lean/local installs never need Redis. production.py fails closed if Redis
+# cache is expected but unreachable.
+ENABLE_REDIS_CACHE = config(
+    "ENABLE_REDIS_CACHE", default=bool(CACHE_URL), cast=bool
+)
+# All app cache keys are namespaced with this prefix; combined with per-user /
+# per-org key builders (apps.core.cache) this keeps tenants isolated and lets a
+# shared Redis be used safely. NEVER cache decrypted file bytes or sensitive
+# share/emergency payloads here (see the scale-ready doc's "what not to cache").
+CACHE_KEY_PREFIX = config("CACHE_KEY_PREFIX", default="duenest")
+CACHE_DEFAULT_TIMEOUT = config("CACHE_DEFAULT_TIMEOUT", default=300, cast=int)
+
+if ENABLE_REDIS_CACHE and CACHE_URL:
+    CACHES = {
+        "default": {
+            # Django 4.0+ ships a native Redis backend (needs the `redis` lib).
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": CACHE_URL,
+            "KEY_PREFIX": CACHE_KEY_PREFIX,
+            "TIMEOUT": CACHE_DEFAULT_TIMEOUT,
+        }
+    }
+else:
+    # Lean fallback: per-process memory. Fine for a single web dyno / local dev.
+    # NOTE: LocMem is NOT shared across replicas, so the SEC-001 public-access
+    # lockout and any rate state are per-process until Redis is enabled — this
+    # is acceptable for single-instance lean staging and documented as such.
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": f"{CACHE_KEY_PREFIX}-locmem",
+            "TIMEOUT": CACHE_DEFAULT_TIMEOUT,
+        }
+    }
+
+# Short, conventional TTLs (seconds) for the safe cache targets. Centralised so
+# they are easy to tune per environment and easy to audit.
+CACHE_TTL_PLAN_CATALOG = config("CACHE_TTL_PLAN_CATALOG", default=3600, cast=int)
+CACHE_TTL_FEATURE_FLAGS = config("CACHE_TTL_FEATURE_FLAGS", default=60, cast=int)
+CACHE_TTL_ENTITLEMENTS = config("CACHE_TTL_ENTITLEMENTS", default=60, cast=int)
+CACHE_TTL_DASHBOARD_SUMMARY = config("CACHE_TTL_DASHBOARD_SUMMARY", default=45, cast=int)
+CACHE_TTL_UNREAD_COUNT = config("CACHE_TTL_UNREAD_COUNT", default=30, cast=int)
+CACHE_TTL_FOUNDER_ROLLUP = config("CACHE_TTL_FOUNDER_ROLLUP", default=600, cast=int)
+
+# ---- Background jobs (Celery) ---------------------------------------------
+# ENABLE_BACKGROUND_JOBS gates whether tasks are dispatched to a real worker.
+# When False (lean/local default) Celery runs tasks EAGERLY (inline, in-process)
+# so no broker/worker is required and behaviour is identical to today.
+ENABLE_BACKGROUND_JOBS = config("ENABLE_BACKGROUND_JOBS", default=False, cast=bool)
+ENABLE_CELERY_BEAT = config("ENABLE_CELERY_BEAT", default=False, cast=bool)
+
+CELERY_BROKER_URL = config("CELERY_BROKER_URL", default=REDIS_URL or "memory://")
+CELERY_RESULT_BACKEND = config(
+    "CELERY_RESULT_BACKEND",
+    default=REDIS_URL or "cache+memory://",
+)
+# Eager mode = run inline + propagate errors (so lean mode behaves like a normal
+# synchronous call). Real mode = dispatch to the broker/worker.
+CELERY_TASK_ALWAYS_EAGER = not ENABLE_BACKGROUND_JOBS
+CELERY_TASK_EAGER_PROPAGATES = True
+CELERY_TASK_ACKS_LATE = True
+CELERY_WORKER_PREFETCH_MULTIPLIER = config(
+    "CELERY_WORKER_PREFETCH_MULTIPLIER", default=1, cast=int
+)
+CELERY_TASK_DEFAULT_QUEUE = "default"
+# Named queues let a deployment scale workers per workload (e.g. a dedicated
+# scanner/OCR worker) without touching code. See config/celery.py for routes.
+CELERY_TASK_QUEUES_NAMES = (
+    "critical",
+    "email",
+    "notifications",
+    "push",
+    "scanner",
+    "files",
+    "billing",
+    "analytics",
+    "default",
+)
+CELERY_TASK_TIME_LIMIT = config("CELERY_TASK_TIME_LIMIT", default=300, cast=int)
+CELERY_TASK_SOFT_TIME_LIMIT = config(
+    "CELERY_TASK_SOFT_TIME_LIMIT", default=240, cast=int
+)
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_ENABLE_UTC = True
+
+# ---- Feature toggles for scale-ready subsystems ---------------------------
+ENABLE_FOUNDER_ANALYTICS_ROLLUPS = config(
+    "ENABLE_FOUNDER_ANALYTICS_ROLLUPS", default=False, cast=bool
+)
+# Scanner OCR/compression can be pushed to the `scanner` queue instead of
+# blocking the web worker. Only meaningful when ENABLE_BACKGROUND_JOBS is on.
+SCANNER_ASYNC_PROCESSING_ENABLED = config(
+    "SCANNER_ASYNC_PROCESSING_ENABLED", default=False, cast=bool
+)
+
+# ---- OCR controls (env aliases over the existing SCANNER_OCR_* settings) ---
+# The mission's OCR_* names map onto the scanner OCR knobs the security branch
+# already added, so there is a single source of truth and no divergent caps.
+OCR_ENABLED = config("OCR_ENABLED", default=SCANNER_OCR_ENABLED, cast=bool)
+OCR_MAX_PAGES = config("OCR_MAX_PAGES", default=SCANNER_OCR_MAX_PAGES, cast=int)
+OCR_TIMEOUT_SECONDS = config(
+    "OCR_TIMEOUT_SECONDS", default=SCANNER_OCR_TIMEOUT_SECONDS, cast=int
+)
+# Re-bind the scanner OCR knobs to the unified values so existing call sites
+# (apps/documents/scanner.py) automatically honour the OCR_* env vars too.
+SCANNER_OCR_ENABLED = OCR_ENABLED
+SCANNER_OCR_MAX_PAGES = OCR_MAX_PAGES
+SCANNER_OCR_TIMEOUT_SECONDS = OCR_TIMEOUT_SECONDS
+
+# ---- Observability --------------------------------------------------------
+# Requests slower than this (ms) are logged with timing + path (never body) by
+# apps.core.middleware.SlowRequestLogMiddleware. 0 disables it.
+SLOW_REQUEST_MS = config("SLOW_REQUEST_MS", default=1000, cast=int)
+# Downloads larger than this (bytes) emit a warning so the in-memory decrypt
+# path (see file-delivery design note) is visible before it becomes a problem.
+LARGE_FILE_DOWNLOAD_WARN_BYTES = config(
+    "LARGE_FILE_DOWNLOAD_WARN_BYTES", default=8 * 1024 * 1024, cast=int
+)
+# Sentry is optional and only initialised when a DSN is provided (see
+# config/observability.py, called from settings).
+SENTRY_DSN = config("SENTRY_DSN", default="")
+SENTRY_TRACES_SAMPLE_RATE = config(
+    "SENTRY_TRACES_SAMPLE_RATE", default=0.0, cast=float
+)
+
+# Add the slow-request logger to the middleware chain (cheap; no-op when
+# SLOW_REQUEST_MS <= 0). Placed last so it measures the full inner stack.
+MIDDLEWARE = [*MIDDLEWARE, "apps.core.middleware.SlowRequestLogMiddleware"]
+
+# Initialise Sentry if configured (safe no-op otherwise; never raises).
+from config.observability import init_sentry  # noqa: E402
+
+init_sentry(dsn=SENTRY_DSN, environment=APP_ENV, traces_sample_rate=SENTRY_TRACES_SAMPLE_RATE)

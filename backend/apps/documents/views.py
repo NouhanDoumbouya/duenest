@@ -1,12 +1,25 @@
 import hashlib
 import io
+import logging
 import secrets
+from datetime import timedelta
 
+from django.conf import settings
 from django.contrib.auth.hashers import check_password, make_password
 from django.core import signing
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError
-from django.db.models import Count, Exists, F, OuterRef, Q
+from django.db.models import (
+    Case,
+    CharField,
+    Count,
+    Exists,
+    F,
+    OuterRef,
+    Q,
+    Value,
+    When,
+)
 from django.http import FileResponse, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -109,6 +122,7 @@ from apps.core.security import file_validation
 from .file_encryption import encrypt_uploaded_file, read_plaintext
 from .services import (
     APPLICABLE_EXTRACTION_FIELDS,
+    EXPIRING_SOON_DAYS,
     VERSIONED_FIELDS,
     ExportGenerationError,
     attention_sort_key,
@@ -138,6 +152,8 @@ from .services import (
     reminder_date_for_rule,
     summarize_field_changes,
 )
+
+logger = logging.getLogger("duenest.documents")
 
 
 def _mark_onboarding(request, event: str) -> None:
@@ -209,6 +225,19 @@ def _file_response(instance, *, as_attachment: bool):
                 )
             },
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    # Files are decrypted fully into memory before streaming (bounded by the
+    # upload size cap — see docs/deployment/scale-ready-lean-foundation.md,
+    # "File delivery memory strategy"). Warn when a download is large enough to
+    # matter so the in-memory path is visible before it becomes a problem. Logs
+    # size + id only — never the filename, path, or any content.
+    warn_bytes = getattr(settings, "LARGE_FILE_DOWNLOAD_WARN_BYTES", 8 * 1024 * 1024)
+    if warn_bytes and len(plaintext) >= warn_bytes:
+        logger.warning(
+            "large_file_download file_id=%s size_bytes=%s",
+            getattr(instance, "pk", "?"),
+            len(plaintext),
         )
 
     response = FileResponse(
@@ -362,7 +391,53 @@ class DocumentViewSet(viewsets.ModelViewSet):
             return None
         return value.lower() in {"1", "true", "yes", "on"}
 
-    def _apply_health_filters(self, documents):
+    # Computed-status values that mean "needs attention" (mirrors
+    # services.get_document_health: everything except archived/active).
+    _ATTENTION_STATES = (
+        "expired",
+        "renewal_due",
+        "expiring_soon",
+        "missing_file",
+        "missing_expiry_date",
+    )
+
+    def _annotate_computed_status(self, queryset):
+        """Annotate ``computed_status_db`` matching services.get_document_health.
+
+        Expressing the health status in SQL lets the computed_status /
+        needs_attention filters run in the database, so the list can be
+        paginated with LIMIT/OFFSET instead of loading the whole vault into
+        Python. The priority order here MUST match get_document_health exactly.
+        """
+        today = timezone.localdate()
+        soon = today + timedelta(days=EXPIRING_SOON_DAYS)
+        return queryset.annotate(
+            computed_status_db=Case(
+                When(status=Document.Status.ARCHIVED, then=Value("archived")),
+                When(expiry_date__lt=today, then=Value("expired")),
+                When(
+                    Q(renewal_date__isnull=False) & Q(renewal_date__lte=today),
+                    then=Value("renewal_due"),
+                ),
+                When(
+                    Q(expiry_date__gte=today) & Q(expiry_date__lte=soon),
+                    then=Value("expiring_soon"),
+                ),
+                When(file_count=0, then=Value("missing_file")),
+                When(expiry_date__isnull=True, then=Value("missing_expiry_date")),
+                default=Value("active"),
+                output_field=CharField(),
+            )
+        )
+
+    def _apply_db_health_filters(self, queryset):
+        """Push the health/attention filters into the queryset (DB-level).
+
+        Replaces the old Python pass over a fully-materialized vault. Behaviour
+        is preserved: file presence uses the ``file_count`` annotation, expiry
+        windows use date bounds, and computed_status/needs_attention use the
+        ``computed_status_db`` annotation built above.
+        """
         params = self.request.query_params
         computed_status = params.get("computed_status")
         has_file = self._bool_param("has_file")
@@ -379,40 +454,54 @@ class DocumentViewSet(viewsets.ModelViewSet):
         except ValueError:
             expiring_within_days = None
 
-        filtered = []
-        for document in documents:
-            health = get_document_health(document)
-            if computed_status and health.computed_status != computed_status:
-                continue
-            if has_file is not None and health.has_file != has_file:
-                continue
-            if missing_file is not None and health.missing_file != missing_file:
-                continue
-            if (
-                missing_expiry_date is not None
-                and health.missing_expiry_date != missing_expiry_date
-            ):
-                continue
-            if needs_attention is not None and health.needs_attention != needs_attention:
-                continue
-            if expiring_within_days is not None and (
-                health.days_until_expiry is None
-                or health.days_until_expiry < 0
-                or health.days_until_expiry > expiring_within_days
-            ):
-                continue
-            filtered.append(document)
-        return filtered
+        if has_file is not None:
+            queryset = (
+                queryset.filter(file_count__gt=0)
+                if has_file
+                else queryset.filter(file_count=0)
+            )
+        if missing_file is not None:
+            queryset = (
+                queryset.filter(file_count=0)
+                if missing_file
+                else queryset.filter(file_count__gt=0)
+            )
+        if missing_expiry_date is not None:
+            queryset = queryset.filter(expiry_date__isnull=missing_expiry_date)
+        if expiring_within_days is not None:
+            today = timezone.localdate()
+            queryset = queryset.filter(
+                expiry_date__gte=today,
+                expiry_date__lte=today + timedelta(days=expiring_within_days),
+            )
+
+        if computed_status or needs_attention is not None:
+            queryset = self._annotate_computed_status(queryset)
+            if computed_status:
+                queryset = queryset.filter(computed_status_db=computed_status)
+            if needs_attention is True:
+                queryset = queryset.filter(
+                    computed_status_db__in=self._ATTENTION_STATES
+                )
+            elif needs_attention is False:
+                queryset = queryset.exclude(
+                    computed_status_db__in=self._ATTENTION_STATES
+                )
+        return queryset
 
     def list(self, request, *args, **kwargs):
-        queryset = self.filter_queryset(self.get_queryset())
-        documents = self._apply_health_filters(list(queryset))
-        page = self.paginate_queryset(documents)
+        # Apply health/attention filters at the DB level, then paginate the
+        # QUERYSET directly (LIMIT/OFFSET). The whole vault is never loaded into
+        # memory; the serializer computes health only for the returned page.
+        queryset = self._apply_db_health_filters(
+            self.filter_queryset(self.get_queryset())
+        )
+        page = self.paginate_queryset(queryset)
         if page is not None:
             serializer = self.get_serializer(page, many=True)
             return self.get_paginated_response(serializer.data)
 
-        serializer = self.get_serializer(documents, many=True)
+        serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
     def perform_create(self, serializer):
@@ -512,16 +601,16 @@ class DocumentViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="attention-needed")
     def attention_needed(self, request):
-        documents = list(
+        # Filter to attention items in the DB (mirrors get_document_health), so
+        # only the small attention subset is loaded — not the whole vault. The
+        # final urgency ordering stays in Python (attention_sort_key uses
+        # day-precision health that is clearer expressed there).
+        queryset = self._annotate_computed_status(
             self.get_queryset()
             .filter(is_trashed=False)
             .exclude(status=Document.Status.ARCHIVED)
-        )
-        items = [
-            document
-            for document in documents
-            if get_document_health(document).needs_attention
-        ]
+        ).filter(computed_status_db__in=self._ATTENTION_STATES)
+        items = list(queryset)
         items.sort(key=attention_sort_key)
         serializer = self.get_serializer(items, many=True)
         _track_product_event(
