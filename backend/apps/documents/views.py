@@ -99,8 +99,13 @@ from .serializers import (
 from apps.users import plans as user_plans
 
 from .plan_usage import compute_plan_usage, enforce_plan_limit
+from rest_framework.exceptions import (
+    APIException,
+    ValidationError as DRFValidationError,
+)
 from apps.core.security.encryption import DecryptionError
 from apps.core.security import public_access
+from apps.core.security import file_validation
 from .file_encryption import encrypt_uploaded_file, read_plaintext
 from .services import (
     APPLICABLE_EXTRACTION_FIELDS,
@@ -786,9 +791,29 @@ def _owned_file_queryset(user, *, include_trashed=False, only_inbox=False):
     return qs
 
 
+class UploadScanUnavailable(APIException):
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    default_detail = "Malware scanning is temporarily unavailable. Please try again."
+
+
+def _scan_upload_or_raise(uploaded):
+    """Run malware scanning on an upload (SEC-005). Fails closed in production
+    when ``CLAMD_FAIL_CLOSED``; a clean/disabled scan is a no-op."""
+    uploaded.seek(0)
+    data = uploaded.read()
+    uploaded.seek(0)
+    try:
+        file_validation.scan_file_for_malware(data)
+    except file_validation.MalwareDetected as exc:
+        raise DRFValidationError(exc.message)
+    except file_validation.MalwareScanUnavailable as exc:
+        raise UploadScanUnavailable(exc.message)
+
+
 def _create_document_file(*, uploaded, user, document=None):
     """Create a DocumentFile, encrypting the bytes at rest before they are
     persisted. Never stores plaintext content."""
+    _scan_upload_or_raise(uploaded)
     checksum = _compute_checksum(uploaded)
     instance = DocumentFile(
         document=document,
