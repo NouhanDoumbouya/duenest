@@ -37,6 +37,7 @@ import {
   getQuickShareActivity,
   revokeQuickShare,
 } from "@/lib/quick-share";
+import { takeQuickShareHandoff } from "@/lib/quick-share-handoff";
 import {
   CountdownPill,
   PermissionChips,
@@ -135,20 +136,18 @@ export default function QuickShareDetailPage() {
   }, [sessionId]);
 
   useEffect(() => {
-    // Read the one-time plain access code stashed by the wizard, then clear it.
+    // SEC-011: read the one-time plain access code from the in-memory handoff
+    // (never sessionStorage/localStorage). After a reload it is gone, so the
+    // code is shown only once.
     let active = true;
-    try {
-      const code = sessionStorage.getItem(`qs-code-${sessionId}`);
-      const storedPkg = sessionStorage.getItem(`qs-package-${sessionId}`);
-      if (code) sessionStorage.removeItem(`qs-code-${sessionId}`);
+    const handoff = takeQuickShareHandoff(sessionId);
+    if (handoff) {
       // Defer to a microtask so we never setState synchronously in the effect.
       Promise.resolve().then(() => {
         if (!active) return;
-        if (code) setPlainCode(code);
-        if (storedPkg) setPkg(storedPkg as SharePackage);
+        if (handoff.code) setPlainCode(handoff.code);
+        if (handoff.pkg) setPkg(handoff.pkg as SharePackage);
       });
-    } catch {
-      /* ignore */
     }
     return () => {
       active = false;

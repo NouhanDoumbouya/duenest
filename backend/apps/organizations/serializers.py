@@ -228,6 +228,9 @@ class InviteAcceptSerializer(serializers.ModelSerializer):
 
 
 class OrganizationDocumentFileSerializer(serializers.ModelSerializer):
+    # Scoped, authenticated download route (never a raw storage URL) — SEC-002.
+    download_url = serializers.SerializerMethodField()
+
     class Meta:
         model = OrganizationDocumentFile
         fields = [
@@ -238,34 +241,37 @@ class OrganizationDocumentFileSerializer(serializers.ModelSerializer):
             "content_type",
             "file_size",
             "uploaded_by",
+            "download_url",
             "created_at",
         ]
         read_only_fields = fields
+
+    def get_download_url(self, obj):
+        return (
+            f"/api/v1/organizations/{obj.organization_id}"
+            f"/documents/{obj.document_id}/files/{obj.id}/download/"
+        )
 
 
 class OrganizationFileUploadSerializer(serializers.Serializer):
     file = serializers.FileField(write_only=True)
 
     def validate_file(self, uploaded):
-        if uploaded.size > MAX_FILE_SIZE:
-            max_mb = MAX_FILE_SIZE // (1024 * 1024)
-            raise serializers.ValidationError(
-                f"File is too large. Maximum size is {max_mb} MB."
-            )
+        # Server-side content sniffing + structural validation (SEC-003/SEC-005).
+        # Malware scanning runs at the view layer so a scanner outage can return
+        # a proper 503.
+        from apps.core.security import file_validation
 
-        ext = os.path.splitext(uploaded.name)[1].lower()
-        if ext not in ALLOWED_EXTENSIONS:
-            raise serializers.ValidationError(
-                "Unsupported file extension. Allowed: "
-                + ", ".join(sorted(ALLOWED_EXTENSIONS))
-                + "."
+        try:
+            file_validation.validate_secure_upload(
+                uploaded,
+                allowed_content_types=ALLOWED_CONTENT_TYPES,
+                allowed_extensions=ALLOWED_EXTENSIONS,
+                max_bytes=MAX_FILE_SIZE,
+                scan=False,
             )
-
-        if uploaded.content_type not in ALLOWED_CONTENT_TYPES:
-            raise serializers.ValidationError(
-                "Unsupported file type. Allowed types: PDF, JPEG, PNG, DOC, DOCX."
-            )
-
+        except file_validation.SecureUploadError as exc:
+            raise serializers.ValidationError(exc.message)
         return uploaded
 
 

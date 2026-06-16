@@ -31,6 +31,12 @@ class User(AbstractUser):
     # Optional profile picture URL returned by Google.
     avatar_url = models.URLField(blank=True, default="")
 
+    # Email verification (SEC-007). Google accounts are created already verified
+    # (Google asserts a verified email); password signups start unverified and
+    # confirm via a time-limited emailed token.
+    email_verified = models.BooleanField(default=False)
+    email_verified_at = models.DateTimeField(null=True, blank=True)
+
     # Billing/plan placeholder. There is no real payment integration yet; this
     # only drives the internal usage limits in ``apps.users.plans`` so the free
     # tier can be enforced and an upgrade path can be shown in the UI.

@@ -388,9 +388,35 @@ class ClientErrorCreateSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "created_at"]
 
+    # Payload caps (SEC-008): a public endpoint must not let callers write
+    # unbounded rows. Over-long text is truncated rather than rejected so genuine
+    # client errors are still captured.
+    _MAX_MESSAGE = 2000
+    _MAX_FIELD = 500
+    _MAX_METADATA_BYTES = 4096
+
+    def validate_message(self, value):
+        return (value or "")[: self._MAX_MESSAGE]
+
+    def validate_error_type(self, value):
+        return (value or "")[: self._MAX_FIELD]
+
+    def validate_path(self, value):
+        return (value or "")[: self._MAX_FIELD]
+
     def validate_metadata(self, value):
+        import json
+
         if not isinstance(value, dict):
             raise serializers.ValidationError("Expected an object.")
+        try:
+            encoded = json.dumps(value)
+        except (TypeError, ValueError):
+            raise serializers.ValidationError("Metadata is not serializable.")
+        if len(encoded.encode("utf-8")) > self._MAX_METADATA_BYTES:
+            raise serializers.ValidationError(
+                "Metadata is too large. Keep it under 4 KB."
+            )
         return sanitize_metadata(value)
 
     def validate_source(self, value):

@@ -25,12 +25,28 @@ GOOGLE_OAUTH_CLIENT_ID = config("GOOGLE_OAUTH_CLIENT_ID", default="")
 # Existing users can still log in when private beta mode is enabled.
 PRIVATE_BETA_ENABLED = config("PRIVATE_BETA_ENABLED", default=False, cast=bool)
 
+# ---- Founder/admin console access (SEC-009) --------------------------------
+# Founder tools (CRM, analytics, bulk export, manual billing grants) are NOT
+# granted to every staff account. Superusers always qualify; other staff must be
+# on this explicit allowlist. FOUNDER_ALLOW_ALL_STAFF is a dev-only convenience.
+FOUNDER_EMAILS = config("FOUNDER_EMAILS", default="", cast=Csv())
+FOUNDER_ALLOW_ALL_STAFF = config(
+    "FOUNDER_ALLOW_ALL_STAFF", default=False, cast=bool
+)
+
 # ---- Billing (DueNest's own monetization) ----------------------------------
 # Provider-aware. "manual" works fully offline for local dev/tests; "stripe"
 # uses the Stripe API and requires the keys below. Secrets never reach the
 # frontend — only STRIPE_PUBLISHABLE_KEY is safe to expose.
 BILLING_PROVIDER = config("BILLING_PROVIDER", default="manual")
 BILLING_TEST_MODE = config("BILLING_TEST_MODE", default=True, cast=bool)
+# The manual provider accepts UNSIGNED webhook payloads and activates plans with
+# no real payment — it is a local-dev/test convenience only. It must never be the
+# active provider in production. This flag (default False) gates it; production
+# fails closed unless it is explicitly enabled (which it never should be).
+BILLING_ALLOW_MANUAL_PROVIDER = config(
+    "BILLING_ALLOW_MANUAL_PROVIDER", default=False, cast=bool
+)
 STRIPE_SECRET_KEY = config("STRIPE_SECRET_KEY", default="")
 STRIPE_PUBLISHABLE_KEY = config("STRIPE_PUBLISHABLE_KEY", default="")
 STRIPE_WEBHOOK_SECRET = config("STRIPE_WEBHOOK_SECRET", default="")
@@ -326,6 +342,10 @@ REST_FRAMEWORK = {
         # Auth + public access-code brute-force protection.
         "login": _throttle_rate("10/min"),
         "register": _throttle_rate("10/hour"),
+        # Password reset + email verification (anti enumeration / spam) — SEC-007.
+        "password_reset": _throttle_rate("5/hour"),
+        "password_reset_confirm": _throttle_rate("10/hour"),
+        "email_verification": _throttle_rate("10/hour"),
         "share_file_code": _throttle_rate("10/min"),
         "emergency_code": _throttle_rate("10/min"),
         "room_code": _throttle_rate("10/min"),
@@ -334,10 +354,48 @@ REST_FRAMEWORK = {
         "billing_promo": _throttle_rate("20/min"),
         # Client UI analytics events (anti-flood; high enough for normal use).
         "client_events": _throttle_rate("120/min"),
+        # Anonymous client error-log submissions (anti log-flooding) — SEC-008.
+        "client_error": _throttle_rate("30/min"),
         # Document scanner uploads (per authenticated user) — anti spam/abuse.
         "scanner_upload": _throttle_rate("30/min"),
+        # Public access-code-bearing routes (metadata/preview/download/item).
+        # Generous enough for legitimate multi-file viewing; the real brute-force
+        # control is the per-resource lockout (apps.core.security.public_access).
+        "public_access_code": _throttle_rate("60/min"),
+        # Public organization document-request uploads (anti abuse / DoS).
+        "public_document_upload": _throttle_rate("10/hour"),
     },
 }
+
+# ---------------------------------------------------------------------------
+# Public access-code hardening (SEC-001). Repeated wrong codes for a single
+# share link / emergency pack / secure room lock THAT resource (for everyone,
+# not just one IP). Tunable per environment; state is cache-backed.
+# ---------------------------------------------------------------------------
+PUBLIC_ACCESS_CODE_MAX_ATTEMPTS = config(
+    "PUBLIC_ACCESS_CODE_MAX_ATTEMPTS", default=8, cast=int
+)
+PUBLIC_ACCESS_CODE_LOCKOUT_MINUTES = config(
+    "PUBLIC_ACCESS_CODE_LOCKOUT_MINUTES", default=15, cast=int
+)
+PUBLIC_ACCESS_CODE_BACKOFF_ENABLED = config(
+    "PUBLIC_ACCESS_CODE_BACKOFF_ENABLED", default=True, cast=bool
+)
+# Minimum length enforced for owner-supplied access codes (generated codes are
+# always stronger). Legacy codes are never re-validated, so they keep working.
+PUBLIC_ACCESS_CODE_MIN_LENGTH = config(
+    "PUBLIC_ACCESS_CODE_MIN_LENGTH", default=6, cast=int
+)
+
+# ---------------------------------------------------------------------------
+# Public organization document-request uploads (SEC-003).
+# ---------------------------------------------------------------------------
+PUBLIC_DOCUMENT_REQUEST_MAX_SUBMISSIONS = config(
+    "PUBLIC_DOCUMENT_REQUEST_MAX_SUBMISSIONS", default=20, cast=int
+)
+PUBLIC_DOCUMENT_REQUEST_MAX_TOTAL_MB = config(
+    "PUBLIC_DOCUMENT_REQUEST_MAX_TOTAL_MB", default=50, cast=int
+)
 
 # Logging with a redaction filter so an accidental log of a token/code/key/
 # header is scrubbed before it is written. Code should still avoid logging
@@ -401,6 +459,14 @@ SCANNER_OCR_MAX_PAGES = config("SCANNER_OCR_MAX_PAGES", default=10, cast=int)
 CLAMD_ENABLED = config("CLAMD_ENABLED", default=False, cast=bool)
 CLAMD_SOCKET_PATH = config("CLAMD_SOCKET_PATH", default="/var/run/clamav/clamd.ctl")
 CLAMD_FAIL_CLOSED = config("CLAMD_FAIL_CLOSED", default=True, cast=bool)
+
+# Password reset / email verification token lifetimes (SEC-007). Django's
+# PASSWORD_RESET_TIMEOUT (seconds) bounds the single-use reset token.
+PASSWORD_RESET_TOKEN_HOURS = config("PASSWORD_RESET_TOKEN_HOURS", default=1, cast=int)
+PASSWORD_RESET_TIMEOUT = PASSWORD_RESET_TOKEN_HOURS * 3600
+EMAIL_VERIFICATION_TOKEN_HOURS = config(
+    "EMAIL_VERIFICATION_TOKEN_HOURS", default=48, cast=int
+)
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(

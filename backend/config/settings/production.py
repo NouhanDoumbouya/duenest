@@ -9,6 +9,13 @@ DEBUG = False
 # missing or malformed, so we never silently run without encryption keys.
 key_provider.validate_configuration()
 
+# Billing fails closed in production via apps.billing.apps.BillingConfig.ready()
+# (SEC-004): the unsigned manual provider must never be active here, and Stripe
+# must have its keys. Manual mode stays available only in dev/test.
+BILLING_ALLOW_MANUAL_PROVIDER = config(
+    "BILLING_ALLOW_MANUAL_PROVIDER", default=False, cast=bool
+)
+
 # ---------------------------------------------------------------------------
 # Static files (WhiteNoise) — serve hashed, compressed static assets from the
 # app process without a separate web server. Media (uploaded documents) is NOT

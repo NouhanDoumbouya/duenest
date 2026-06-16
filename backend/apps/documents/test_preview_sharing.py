@@ -395,7 +395,11 @@ class AccessCodeTests(PreviewSharingBaseTest):
              "access_code_required": True},
             format="json",
         )
-        self.assertEqual(len(resp.data["access_code"]), 6)
+        # SEC-001: generated codes are now strong (ambiguity-safe alphanumeric),
+        # no longer the brute-forceable 6-digit numeric space.
+        generated = resp.data["access_code"]
+        self.assertGreaterEqual(len(generated), 8)
+        self.assertFalse(generated.isdigit())
 
     def test_requires_code_before_metadata_and_preview(self):
         _, resp = self.make_coded_link()

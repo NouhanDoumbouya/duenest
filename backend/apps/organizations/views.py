@@ -1,12 +1,30 @@
-from django.db.models import Count, Q
+import io
+
+from django.conf import settings
+from django.db.models import Count, Q, Sum
+from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import (
+    APIException,
+    ValidationError as DRFValidationError,
+)
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
+
+from apps.core.security import file_validation
+from apps.core.security.encryption import DecryptionError
+from .file_encryption import (
+    encrypt_org_document_file,
+    encrypt_submission_file,
+    read_org_document_file,
+    read_submission_file,
+)
 
 from .models import (
     CampaignTargetMember,
@@ -400,15 +418,28 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         serializer = OrganizationFileUploadSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         uploaded = serializer.validated_data["file"]
-        document_file = OrganizationDocumentFile.objects.create(
+        # Malware-scan, then encrypt-at-rest before storage (SEC-002/SEC-003).
+        uploaded.seek(0)
+        plaintext = uploaded.read()
+        uploaded.seek(0)
+        try:
+            file_validation.scan_file_for_malware(plaintext)
+        except file_validation.MalwareDetected as exc:
+            raise DRFValidationError(exc.message)
+        except file_validation.MalwareScanUnavailable as exc:
+            raise _PublicUploadScanUnavailable(exc.message)
+        document_file = OrganizationDocumentFile(
             organization=organization,
             document=document,
             uploaded_by=request.user,
-            file=uploaded,
             original_filename=uploaded.name,
             content_type=uploaded.content_type or "",
-            file_size=uploaded.size,
+            file_size=len(plaintext),
         )
+        encrypt_org_document_file(
+            document_file, plaintext, f"{document_file.file_uuid.hex}.enc"
+        )
+        document_file.save()
         log_activity(
             organization,
             "file_uploaded",
@@ -421,6 +452,86 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         return Response(
             OrganizationDocumentFileSerializer(document_file).data,
             status=status.HTTP_201_CREATED,
+        )
+
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path=r"documents/(?P<document_id>[0-9]+)/files/(?P<file_id>[0-9]+)/download",
+    )
+    def download_document_file(self, request, pk=None, document_id=None, file_id=None):
+        """Stream a decrypted organization document file to an authorized member.
+
+        Membership is required and the file must belong to this organization and
+        document, so a member of one org can never reach another org's files
+        (SEC-002). Decryption happens only after the authorization check.
+        """
+        organization = self.get_organization(pk)
+        require_membership(request.user, organization)
+        document_file = get_object_or_404(
+            OrganizationDocumentFile,
+            pk=file_id,
+            organization=organization,
+            document_id=document_id,
+        )
+        try:
+            plaintext = read_org_document_file(document_file)
+        except (FileNotFoundError, ValueError):
+            return Response(
+                {"detail": "This file is no longer available."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except DecryptionError:
+            return Response(
+                {"detail": "We could not open this file securely."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        return _decrypted_file_response(
+            plaintext,
+            filename=document_file.original_filename,
+            content_type=document_file.content_type,
+        )
+
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path=r"document-requests/(?P<request_id>[0-9]+)/submissions/(?P<submission_id>[0-9]+)/download",
+    )
+    def download_submission_file(self, request, pk=None, request_id=None, submission_id=None):
+        """Stream a decrypted public-request submission to an org reviewer.
+
+        Restricted to admin/editor roles; the submission must belong to this
+        organization (SEC-002). Public submitters cannot retrieve files here.
+        """
+        organization = self.get_organization(pk)
+        require_role(request.user, organization, EDITOR_ROLES)
+        submission = get_object_or_404(
+            DocumentRequestSubmission,
+            pk=submission_id,
+            organization=organization,
+            request_id=request_id,
+        )
+        if not submission.file:
+            return Response(
+                {"detail": "This submission has no file."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        try:
+            plaintext = read_submission_file(submission)
+        except (FileNotFoundError, ValueError):
+            return Response(
+                {"detail": "This file is no longer available."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except DecryptionError:
+            return Response(
+                {"detail": "We could not open this file securely."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        return _decrypted_file_response(
+            plaintext,
+            filename=submission.original_filename,
+            content_type=submission.content_type,
         )
 
     # ---- Document requests ----------------------------------------------
@@ -927,9 +1038,35 @@ class OrganizationInviteTokenView(APIView):
         return Response(OrganizationMembershipSerializer(membership).data)
 
 
+class _PublicUploadScanUnavailable(APIException):
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    default_detail = "Malware scanning is temporarily unavailable. Please try again."
+
+
+def _decrypted_file_response(plaintext: bytes, *, filename: str, content_type: str):
+    """Stream already-authorized, decrypted org file bytes. Never exposes a raw
+    storage path or object-storage URL."""
+    response = FileResponse(
+        io.BytesIO(plaintext), as_attachment=True, filename=filename or "document"
+    )
+    if content_type:
+        response["Content-Type"] = content_type
+    return response
+
+
 class PublicDocumentRequestView(APIView):
     permission_classes = [AllowAny]
     parser_classes = [MultiPartParser, FormParser]
+
+    def get_throttles(self):
+        # Only the unauthenticated upload (POST) is rate-limited (SEC-003);
+        # viewing the request page (GET) is not, so legitimate recipients are
+        # not blocked from loading the page.
+        if self.request.method == "POST":
+            throttle = ScopedRateThrottle()
+            throttle.scope = "public_document_upload"
+            return [throttle]
+        return []
 
     def get(self, request, token):
         request_obj = get_object_or_404(
@@ -947,22 +1084,62 @@ class PublicDocumentRequestView(APIView):
         )
         if not request_obj.public_upload_active:
             return Response({"detail": "This upload link is no longer active."}, status=404)
+
+        # Per-request abuse caps (SEC-003): bound how many submissions and how
+        # much total data a single public link can accumulate.
+        max_submissions = int(
+            getattr(settings, "PUBLIC_DOCUMENT_REQUEST_MAX_SUBMISSIONS", 20)
+        )
+        existing = request_obj.submissions.all()
+        if existing.count() >= max_submissions:
+            return Response(
+                {"detail": "This upload link has reached its submission limit."},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
         uploaded = request.FILES.get("file")
         if uploaded is None:
             return Response({"file": "Upload a file."}, status=status.HTTP_400_BAD_REQUEST)
+
+        max_total_bytes = int(
+            getattr(settings, "PUBLIC_DOCUMENT_REQUEST_MAX_TOTAL_MB", 50)
+        ) * 1024 * 1024
+        used = existing.aggregate(total=Sum("file_size"))["total"] or 0
+        if used + (getattr(uploaded, "size", 0) or 0) > max_total_bytes:
+            return Response(
+                {"detail": "This upload link has reached its total size limit."},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
         upload_serializer = OrganizationFileUploadSerializer(data=request.data)
         upload_serializer.is_valid(raise_exception=True)
         uploaded = upload_serializer.validated_data["file"]
-        submission = DocumentRequestSubmission.objects.create(
+
+        # Malware-scan before storage; fail closed (503) when required but the
+        # engine is unavailable (SEC-003).
+        uploaded.seek(0)
+        _data = uploaded.read()
+        uploaded.seek(0)
+        try:
+            file_validation.scan_file_for_malware(_data)
+        except file_validation.MalwareDetected as exc:
+            raise DRFValidationError(exc.message)
+        except file_validation.MalwareScanUnavailable as exc:
+            raise _PublicUploadScanUnavailable(exc.message)
+
+        # Encrypt-at-rest before storage (SEC-002): the submitter's document
+        # (often an ID/passport) is never written as plaintext.
+        submission = DocumentRequestSubmission(
             organization=request_obj.organization,
             request=request_obj,
             submitted_by_email=request.data.get("email", request_obj.recipient_email),
-            file=uploaded,
             original_filename=getattr(uploaded, "name", ""),
             content_type=getattr(uploaded, "content_type", ""),
-            file_size=getattr(uploaded, "size", 0) or 0,
+            file_size=len(_data),
             notes=request.data.get("notes", ""),
         )
+        encrypt_submission_file(submission, _data, f"{submission.file_uuid.hex}.enc")
+        submission.save()
         request_obj.status = DocumentRequest.Status.SUBMITTED
         request_obj.save(update_fields=["status", "updated_at"])
         log_activity(

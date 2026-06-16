@@ -20,10 +20,14 @@ from .cookie_auth import (
     set_auth_cookies,
 )
 from .google import GoogleAuthError, verify_google_id_token
+from . import account_recovery
 from .serializers import (
     AccountDeletionRequestCreateSerializer,
     AccountDeletionRequestSerializer,
+    EmailVerificationConfirmSerializer,
     GoogleAuthSerializer,
+    PasswordResetConfirmSerializer,
+    PasswordResetRequestSerializer,
     RegisterSerializer,
     UserOnboardingStateSerializer,
     UserSerializer,
@@ -78,6 +82,11 @@ class RegisterView(generics.CreateAPIView):
 
     def perform_create(self, serializer):
         user = serializer.save()
+        # Password signups start unverified; send a verification email (SEC-007).
+        try:
+            account_recovery.send_email_verification(user)
+        except Exception:  # noqa: BLE001 — never block signup on email delivery
+            pass
         # Capture acquisition attribution from the signup payload (UTM params the
         # SPA collected on landing). Best-effort — never breaks signup.
         utm_keys = (
@@ -220,6 +229,93 @@ class CsrfTokenView(APIView):
         return response
 
 
+# ---- Password reset / email verification (SEC-007) -------------------------
+
+_GENERIC_RESET_MESSAGE = (
+    "If an account exists for that email, we've sent password reset instructions."
+)
+
+
+class PasswordResetRequestView(APIView):
+    """Request a password reset email. Always returns a generic success so the
+    endpoint can't be used to enumerate which emails have accounts."""
+
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "password_reset"
+
+    def post(self, request):
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        account_recovery.request_password_reset(serializer.validated_data["email"])
+        _track_product_event(
+            request,
+            "security_event_recorded",
+            metadata={
+                "event_kind": "password_reset_requested",
+                "label": "Password reset requested",
+            },
+        )
+        return Response({"detail": _GENERIC_RESET_MESSAGE})
+
+
+class PasswordResetConfirmView(APIView):
+    """Confirm a password reset with a single-use, time-limited token."""
+
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "password_reset_confirm"
+
+    def post(self, request):
+        serializer = PasswordResetConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        user = account_recovery.confirm_password_reset(
+            data["uid"], data["token"], data["new_password"]
+        )
+        if user is None:
+            return Response(
+                {"detail": "This reset link is invalid or has expired."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response({"detail": "Your password has been reset. You can now sign in."})
+
+
+class EmailVerificationSendView(APIView):
+    """Send (or resend) the current user's email verification link."""
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "email_verification"
+
+    def post(self, request):
+        if request.user.email_verified:
+            return Response({"detail": "Your email is already verified.", "verified": True})
+        account_recovery.send_email_verification(request.user)
+        return Response({"detail": "Verification email sent.", "verified": False})
+
+
+class EmailVerificationConfirmView(APIView):
+    """Confirm an email verification token."""
+
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "email_verification"
+
+    def post(self, request):
+        serializer = EmailVerificationConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = account_recovery.confirm_email_verification(
+            serializer.validated_data["token"]
+        )
+        if user is None:
+            return Response(
+                {"detail": "This verification link is invalid or has expired."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response({"detail": "Your email is verified.", "verified": True})
+
+
 def _truthy(value):
     """Google may send email_verified as a bool or the string 'true'."""
     return value is True or str(value).lower() == "true"
@@ -345,15 +441,21 @@ class GoogleAuthView(APIView):
         # 1) Already linked to this Google account -> just log them in.
         user = User.objects.filter(google_id=google_id).first()
         if user is not None:
+            account_recovery.mark_email_verified(user)
             return user, False
 
-        # 2) An existing password account shares this email -> link it.
+        # 2) An existing password account shares this email -> link it. Google has
+        #    verified this email, so the account is now email-verified (SEC-007).
         user = User.objects.filter(email__iexact=email).first()
         if user is not None:
             user.google_id = google_id
             if not user.avatar_url:
                 user.avatar_url = avatar_url
-            user.save(update_fields=["google_id", "avatar_url"])
+            user.email_verified = True
+            user.email_verified_at = user.email_verified_at or timezone.now()
+            user.save(update_fields=[
+                "google_id", "avatar_url", "email_verified", "email_verified_at",
+            ])
             return user, False
 
         # 3) Brand new user -> create one with an unusable password, since
@@ -375,6 +477,8 @@ class GoogleAuthView(APIView):
                 last_name=last_name,
                 google_id=google_id,
                 avatar_url=avatar_url,
+                email_verified=True,
+                email_verified_at=timezone.now(),
             )
             user.set_unusable_password()
             user.save()

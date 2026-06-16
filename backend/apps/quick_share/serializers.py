@@ -101,6 +101,19 @@ class QuickShareCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError("Expiry must be in the future.")
         return value
 
+    def validate_access_code(self, value):
+        # Reject weak owner-supplied codes at creation (SEC-001). Empty is fine
+        # (a strong code is generated server-side).
+        from apps.core.security import public_access
+
+        code = (value or "").strip()
+        if not code:
+            return value
+        ok, message = public_access.validate_access_code_strength(code)
+        if not ok:
+            raise serializers.ValidationError(message)
+        return value
+
 
 class QuickShareItemSerializer(serializers.Serializer):
     id = serializers.IntegerField()

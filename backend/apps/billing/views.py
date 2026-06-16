@@ -301,7 +301,13 @@ class FounderManualAccessView(generics.ListCreateAPIView):
     )
 
     def perform_create(self, serializer):
+        from apps.founder.audit import log_founder_action
+
         grant = serializer.save(granted_by=self.request.user)
+        log_founder_action(
+            self.request, "manual_access_grant",
+            target_user_id=grant.user_id, plan_id=grant.plan_id,
+        )
         # Keep User.plan in sync immediately.
         entitlements.sync_user_plan(grant.user)
 
@@ -310,11 +316,17 @@ class FounderManualAccessDetailView(APIView):
     permission_classes = [IsFounderUser]
 
     def delete(self, request, grant_id):
+        from apps.founder.audit import log_founder_action
+
         try:
             grant = ManualAccessGrant.objects.get(pk=grant_id)
         except ManualAccessGrant.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
         services.revoke_manual_access(grant)
+        log_founder_action(
+            request, "manual_access_revoke",
+            target_user_id=grant.user_id, grant_id=grant_id,
+        )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
