@@ -100,8 +100,11 @@ class QuickShareSession(models.Model):
     )
     # Short, human-typable code for the "Receive code" flow. Independent of the
     # secret token; safe to read aloud or type. Resolved server-side only.
+    # `unique=True` already creates the index — `db_index=True` would be redundant
+    # and makes Postgres try to build the varchar_pattern_ops "_like" index twice
+    # (once for unique, once for db_index) with the same name -> "already exists".
     dn_code = models.CharField(
-        max_length=20, unique=True, db_index=True, default=generate_dn_code
+        max_length=20, unique=True, default=generate_dn_code
     )
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
