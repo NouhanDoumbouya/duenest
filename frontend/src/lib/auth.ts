@@ -6,6 +6,11 @@
 // (lib/api.ts) sends cookies automatically and handles CSRF + refresh.
 
 import { apiFetch } from "./api";
+import {
+  clearStoredTokens,
+  getStoredAccessToken,
+  storeTokens,
+} from "./auth-tokens";
 import type {
   GoogleAuthRequest,
   GoogleAuthResponse,
@@ -32,9 +37,11 @@ export function cleanupLegacyTokenStorage(): void {
  * returns null. Kept so existing imports compile; gate UI on getCurrentUser
  * instead. Calling it also opportunistically clears legacy localStorage tokens.
  */
-export function getAccessToken(): null {
+export function getAccessToken(): string | null {
   cleanupLegacyTokenStorage();
-  return null;
+  // Cookie mode: always null (tokens are HttpOnly). Cross-origin Bearer mode:
+  // the stored access token (see lib/auth-tokens.ts).
+  return getStoredAccessToken();
 }
 
 // ---- Auth API calls --------------------------------------------------------
@@ -47,6 +54,9 @@ export async function login(
     method: "POST",
     body: credentials,
   });
+  // Cross-origin (Bearer) deployments: persist the returned tokens so subsequent
+  // requests authenticate via the Authorization header. No-op in cookie mode.
+  storeTokens(result);
   cleanupLegacyTokenStorage();
   return result;
 }
@@ -74,6 +84,7 @@ export async function googleLogin(
     method: "POST",
     body: payload,
   });
+  storeTokens(result);
   cleanupLegacyTokenStorage();
   return result;
 }
@@ -167,6 +178,7 @@ export async function logout(): Promise<void> {
   } catch {
     // ignore — cookies will expire and the user is treated as logged out
   } finally {
+    clearStoredTokens();
     cleanupLegacyTokenStorage();
   }
 }

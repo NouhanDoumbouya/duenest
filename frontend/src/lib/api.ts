@@ -8,6 +8,13 @@
 // Default to the SAME-ORIGIN path so the Next rewrite (see next.config.ts)
 // proxies to the backend and auth cookies stay first-party. Override with an
 // absolute URL only for a split-origin setup (then handle CORS/CSRF/cookies).
+import {
+  USE_BEARER_AUTH,
+  getStoredAccessToken,
+  getStoredRefreshToken,
+  storeTokens,
+} from "./auth-tokens";
+
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api/v1";
 
@@ -77,13 +84,30 @@ let refreshInFlight: Promise<boolean> | null = null;
 
 function tryRefresh(): Promise<boolean> {
   if (!refreshInFlight) {
+    // Cookie mode: the refresh cookie is sent automatically (empty body).
+    // Bearer mode (cross-origin): send the stored refresh token in the body and
+    // persist the rotated tokens from the response for subsequent requests.
+    const refreshToken = USE_BEARER_AUTH ? getStoredRefreshToken() : null;
+    const body =
+      USE_BEARER_AUTH && refreshToken
+        ? JSON.stringify({ refresh: refreshToken })
+        : "{}";
     refreshInFlight = fetch(`${API_BASE_URL}/auth/refresh/`, {
       method: "POST",
       headers: withCsrf(new Headers({ "Content-Type": "application/json" })),
       credentials: "include",
-      body: "{}",
+      body,
     })
-      .then((res) => res.ok)
+      .then(async (res) => {
+        if (!res.ok) return false;
+        if (USE_BEARER_AUTH) {
+          const data: unknown = await res.json().catch(() => null);
+          if (data && typeof data === "object") {
+            storeTokens(data as { access?: string; refresh?: string });
+          }
+        }
+        return true;
+      })
       .catch(() => false)
       .finally(() => {
         refreshInFlight = null;
@@ -112,6 +136,15 @@ export async function apiFetch<T>(
     requestHeaders.set("Content-Type", "application/json");
   }
   if (UNSAFE_METHODS.has(method)) withCsrf(requestHeaders);
+  // Bearer mode (cross-origin deployment): attach the stored access token. The
+  // backend's CookieJWTAuthentication prefers the Authorization header over the
+  // cookie and skips CSRF for header auth, so this works cross-site.
+  if (USE_BEARER_AUTH) {
+    const accessToken = getStoredAccessToken();
+    if (accessToken) {
+      requestHeaders.set("Authorization", `Bearer ${accessToken}`);
+    }
+  }
 
   let response: Response;
   try {

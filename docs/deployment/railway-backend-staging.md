@@ -278,14 +278,31 @@ If those two headers are missing, the origin is not allow-listed (wrong/blank
 env var, or a trailing slash) — the browser will block the credentialed request
 even though the server returns 200.
 
-> **Known cross-site limitation (writes).** Login + read (GET) requests work with
-> `SameSite=None` cookies. But the SPA reads the CSRF cookie via `document.cookie`
-> to send `X-CSRFToken` on unsafe writes (POST/PATCH/DELETE) — and a browser on
-> `vercel.app` cannot read a cookie set for `railway.app`, so cross-site **writes**
-> will fail CSRF. Safari/Brave also block third-party (`SameSite=None`) cookies
-> entirely. The robust long-term fix is a **same-site deployment**
-> (`app.duenest.com` + `api.duenest.com`, `AUTH_COOKIE_DOMAIN=.duenest.com`).
-> Until then, this split is fine for login + read-only smoke testing.
+### How the frontend authenticates cross-origin (Bearer tokens)
+
+A browser on `vercel.app` can never see an HttpOnly cookie set for
+`railway.app`, so cookie auth cannot carry a session across the split (and
+Safari/Brave block third-party cookies entirely). When
+`NEXT_PUBLIC_API_BASE_URL` is an **absolute cross-origin URL**, the frontend
+therefore switches to **Bearer-token auth** automatically
+(`frontend/src/lib/auth-tokens.ts`): `/auth/login/` returns the access+refresh
+tokens, the SPA stores them and sends `Authorization: Bearer <access>` on every
+request, and refreshes via the refresh token in the request body. The backend's
+`CookieJWTAuthentication` already prefers the `Authorization` header and skips
+CSRF for header auth, so **login, reads, and writes all work cross-site** — no
+cookie or `DJANGO_COOKIE_SAMESITE` dependency for the SPA.
+
+For a **same-origin** deployment (`NEXT_PUBLIC_API_BASE_URL=/api/v1` proxied
+through Next), the frontend stays on the HttpOnly-cookie model and stores no
+tokens.
+
+> **Security trade-off.** Bearer tokens in `localStorage` are readable by
+> JavaScript (XSS exposure), which is why this is gated to the cross-origin
+> deployment only. The most secure long-term setup is a **same-site deployment**
+> (`app.duenest.com` + `api.duenest.com`, `AUTH_COOKIE_DOMAIN=.duenest.com`),
+> which keeps tokens in HttpOnly cookies. `DJANGO_COOKIE_SAMESITE=None` is still
+> useful (it lets the backend set usable cookies), but the SPA no longer depends
+> on them cross-origin.
 
 ## 12. Treat the environment as staging
 
