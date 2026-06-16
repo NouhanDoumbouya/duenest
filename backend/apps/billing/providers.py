@@ -25,6 +25,55 @@ def get_provider_name() -> str:
     return getattr(settings, "BILLING_PROVIDER", "manual") or "manual"
 
 
+def manual_provider_allowed() -> bool:
+    """Whether the unsigned manual provider may run in this environment.
+
+    Allowed only in DEBUG (local dev) or when explicitly enabled via
+    ``BILLING_ALLOW_MANUAL_PROVIDER`` (dev/test). Production fails closed.
+    """
+    return bool(getattr(settings, "DEBUG", False)) or bool(
+        getattr(settings, "BILLING_ALLOW_MANUAL_PROVIDER", False)
+    )
+
+
+def validate_billing_configuration() -> None:
+    """Fail closed on insecure billing configuration (SEC-004).
+
+    * ``manual`` provider is rejected unless explicitly allowed (never in prod).
+    * ``stripe`` provider requires its secret/publishable/webhook keys so the
+      webhook signature can actually be verified.
+
+    Called at production boot (config/settings/production.py) and defensively by
+    :func:`get_provider`, so a misconfigured deployment cannot silently accept
+    unsigned webhooks or run without a paywall.
+    """
+    name = get_provider_name()
+    if name == "manual":
+        if not manual_provider_allowed():
+            raise BillingError(
+                "BILLING_PROVIDER=manual is not allowed in this environment. "
+                "Set BILLING_PROVIDER=stripe (with its keys) for production."
+            )
+        return
+    if name == "stripe":
+        missing = [
+            key
+            for key in (
+                "STRIPE_SECRET_KEY",
+                "STRIPE_PUBLISHABLE_KEY",
+                "STRIPE_WEBHOOK_SECRET",
+            )
+            if not getattr(settings, key, "")
+        ]
+        if missing:
+            raise BillingError(
+                "Stripe billing is selected but missing required configuration: "
+                + ", ".join(missing)
+            )
+        return
+    raise BillingError(f"Unknown BILLING_PROVIDER: {name!r}.")
+
+
 def _price_id_for(plan, interval: str) -> str:
     return (
         plan.yearly_provider_price_id
@@ -133,4 +182,10 @@ def get_provider():
     name = get_provider_name()
     if name == "stripe":
         return StripeProvider()
+    # Defense in depth: never hand back the unsigned manual provider where it is
+    # not permitted (e.g. a production box misconfigured to BILLING_PROVIDER=manual).
+    if not manual_provider_allowed():
+        raise BillingError(
+            "Manual billing provider is disabled in this environment."
+        )
     return ManualProvider()

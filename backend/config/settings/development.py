@@ -16,6 +16,9 @@ ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
 #   DJANGO_DEV_EXTRA_ORIGINS=http://172.16.114.9:3000
 _DEV_EXTRA_ORIGINS = config("DJANGO_DEV_EXTRA_ORIGINS", default="", cast=Csv())  # noqa: F405
 
+# Manual billing (no real payments) is fine for local development.
+BILLING_ALLOW_MANUAL_PROVIDER = True
+
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",

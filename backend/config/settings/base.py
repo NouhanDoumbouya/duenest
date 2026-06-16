@@ -31,6 +31,13 @@ PRIVATE_BETA_ENABLED = config("PRIVATE_BETA_ENABLED", default=False, cast=bool)
 # frontend — only STRIPE_PUBLISHABLE_KEY is safe to expose.
 BILLING_PROVIDER = config("BILLING_PROVIDER", default="manual")
 BILLING_TEST_MODE = config("BILLING_TEST_MODE", default=True, cast=bool)
+# The manual provider accepts UNSIGNED webhook payloads and activates plans with
+# no real payment — it is a local-dev/test convenience only. It must never be the
+# active provider in production. This flag (default False) gates it; production
+# fails closed unless it is explicitly enabled (which it never should be).
+BILLING_ALLOW_MANUAL_PROVIDER = config(
+    "BILLING_ALLOW_MANUAL_PROVIDER", default=False, cast=bool
+)
 STRIPE_SECRET_KEY = config("STRIPE_SECRET_KEY", default="")
 STRIPE_PUBLISHABLE_KEY = config("STRIPE_PUBLISHABLE_KEY", default="")
 STRIPE_WEBHOOK_SECRET = config("STRIPE_WEBHOOK_SECRET", default="")

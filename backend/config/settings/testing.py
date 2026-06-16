@@ -5,6 +5,9 @@ from .base import *  # noqa: F401,F403
 
 DEBUG = False
 
+# Tests exercise the manual billing provider (no Stripe credentials available).
+BILLING_ALLOW_MANUAL_PROVIDER = True
+
 PASSWORD_HASHERS = [
     "django.contrib.auth.hashers.MD5PasswordHasher",
 ]
