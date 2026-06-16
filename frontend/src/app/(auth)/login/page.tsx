@@ -46,7 +46,8 @@ function LoginForm() {
     try {
       await login({ username, password });
       // Login success → return to the preserved destination, else the dashboard.
-      router.push(nextPath);
+      // `replace` so the login page isn't left in the back-history stack.
+      router.replace(nextPath);
     } catch (err) {
       setError(
         err instanceof ApiError
