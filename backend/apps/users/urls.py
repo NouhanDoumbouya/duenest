@@ -11,6 +11,8 @@ from .views import (
     DemoDocumentDataClearView,
     DemoDocumentDataCreateView,
     DocumentSetupChecklistView,
+    EmailVerificationConfirmView,
+    EmailVerificationSendView,
     GoogleAuthView,
     LoginView,
     LogoutView,
@@ -19,6 +21,8 @@ from .views import (
     OnboardingDismissView,
     OnboardingStateView,
     OnboardingTrustReviewedView,
+    PasswordResetConfirmView,
+    PasswordResetRequestView,
     RegisterView,
     TrustSecuritySummaryView,
 )
@@ -30,6 +34,26 @@ urlpatterns = [
     path("auth/logout/", LogoutView.as_view(), name="auth-logout"),
     path("auth/csrf/", CsrfTokenView.as_view(), name="auth-csrf"),
     path("auth/google/", GoogleAuthView.as_view(), name="auth-google"),
+    path(
+        "auth/password-reset/",
+        PasswordResetRequestView.as_view(),
+        name="auth-password-reset",
+    ),
+    path(
+        "auth/password-reset/confirm/",
+        PasswordResetConfirmView.as_view(),
+        name="auth-password-reset-confirm",
+    ),
+    path(
+        "auth/email/send-verification/",
+        EmailVerificationSendView.as_view(),
+        name="auth-email-send-verification",
+    ),
+    path(
+        "auth/email/verify/",
+        EmailVerificationConfirmView.as_view(),
+        name="auth-email-verify",
+    ),
     path("users/me/", CurrentUserView.as_view(), name="users-me"),
     path("onboarding/state/", OnboardingStateView.as_view(), name="onboarding-state"),
     path(

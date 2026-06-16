@@ -342,6 +342,10 @@ REST_FRAMEWORK = {
         # Auth + public access-code brute-force protection.
         "login": _throttle_rate("10/min"),
         "register": _throttle_rate("10/hour"),
+        # Password reset + email verification (anti enumeration / spam) — SEC-007.
+        "password_reset": _throttle_rate("5/hour"),
+        "password_reset_confirm": _throttle_rate("10/hour"),
+        "email_verification": _throttle_rate("10/hour"),
         "share_file_code": _throttle_rate("10/min"),
         "emergency_code": _throttle_rate("10/min"),
         "room_code": _throttle_rate("10/min"),
@@ -455,6 +459,14 @@ SCANNER_OCR_MAX_PAGES = config("SCANNER_OCR_MAX_PAGES", default=10, cast=int)
 CLAMD_ENABLED = config("CLAMD_ENABLED", default=False, cast=bool)
 CLAMD_SOCKET_PATH = config("CLAMD_SOCKET_PATH", default="/var/run/clamav/clamd.ctl")
 CLAMD_FAIL_CLOSED = config("CLAMD_FAIL_CLOSED", default=True, cast=bool)
+
+# Password reset / email verification token lifetimes (SEC-007). Django's
+# PASSWORD_RESET_TIMEOUT (seconds) bounds the single-use reset token.
+PASSWORD_RESET_TOKEN_HOURS = config("PASSWORD_RESET_TOKEN_HOURS", default=1, cast=int)
+PASSWORD_RESET_TIMEOUT = PASSWORD_RESET_TOKEN_HOURS * 3600
+EMAIL_VERIFICATION_TOKEN_HOURS = config(
+    "EMAIL_VERIFICATION_TOKEN_HOURS", default=48, cast=int
+)
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(

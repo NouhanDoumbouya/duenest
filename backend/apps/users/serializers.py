@@ -13,8 +13,29 @@ User = get_user_model()
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ["id", "username", "email", "first_name", "last_name", "plan"]
-        read_only_fields = ["id", "plan"]
+        fields = [
+            "id", "username", "email", "first_name", "last_name", "plan",
+            "email_verified",
+        ]
+        read_only_fields = ["id", "plan", "email_verified"]
+
+
+class PasswordResetRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    uid = serializers.CharField()
+    token = serializers.CharField()
+    new_password = serializers.CharField(write_only=True)
+
+    def validate_new_password(self, value):
+        validate_password(value)
+        return value
+
+
+class EmailVerificationConfirmSerializer(serializers.Serializer):
+    token = serializers.CharField()
 
 
 class RegisterSerializer(serializers.ModelSerializer):
