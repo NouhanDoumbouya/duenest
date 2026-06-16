@@ -1,7 +1,13 @@
-# Platform process definitions (Railway / Render / Heroku-style).
+# Platform process definitions (Heroku/Render-style; these platforms run the
+# command through a real shell so $PORT expands). NOTE: Railway uses the
+# Dockerfile (see railway.json builder=DOCKERFILE), so it does NOT read this
+# Procfile — the Dockerfile CMD is the source of truth there.
+#
 # `release` runs once per deploy before `web` starts taking traffic.
 release: python manage.py migrate --noinput && python manage.py collectstatic --noinput
-web: gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers ${WEB_CONCURRENCY:-3} --timeout 60 --access-logfile - --error-logfile -
+# Hardcoded worker count: some platform expanders do not support the bash
+# `${VAR:-default}` syntax, which would pass the literal string to gunicorn.
+web: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --access-logfile - --error-logfile -
 
 # Background processing (SCALE-READY MODE ONLY).
 # These are OPTIONAL and only needed once ENABLE_BACKGROUND_JOBS=true and a
