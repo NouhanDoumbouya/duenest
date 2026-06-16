@@ -34,6 +34,7 @@ import { InlineAlert } from "@/components/ui/product-ui";
 import { ApiError } from "@/lib/api";
 import { formatFileSize } from "@/lib/document-files";
 import { createQuickShare } from "@/lib/quick-share";
+import { setQuickShareHandoff } from "@/lib/quick-share-handoff";
 import {
   FilePicker,
   type SelectedBundle,
@@ -246,18 +247,13 @@ export default function NewQuickSharePage() {
         accessCode: accessCodeRequired,
       });
       if (recipient.trim()) addRecentRecipient(recipient.trim());
-      if (session.access_code) {
-        try {
-          sessionStorage.setItem(`qs-code-${session.id}`, session.access_code);
-        } catch {
-          /* ignore storage failures */
-        }
-      }
-      try {
-        sessionStorage.setItem(`qs-package-${session.id}`, pkg);
-      } catch {
-        /* ignore storage failures */
-      }
+      // SEC-011: hand the one-time plain access code to the detail page in
+      // memory only — never persisted to sessionStorage/localStorage.
+      setQuickShareHandoff({
+        id: session.id,
+        code: session.access_code || undefined,
+        pkg,
+      });
       router.push(`/dashboard/quick-share/${session.id}`);
     } catch (err) {
       setError(
