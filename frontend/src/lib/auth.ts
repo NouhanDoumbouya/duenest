@@ -83,6 +83,66 @@ export async function getCurrentUser(): Promise<User> {
   return apiFetch<User>("/users/me/");
 }
 
+// ---- Account recovery: password reset + email verification (SEC-007) -------
+// These match the backend endpoints in apps/users (account_recovery.py).
+
+/**
+ * Request a password reset email. The backend ALWAYS responds with a generic
+ * success message and never reveals whether the email has an account, so the
+ * UI must show the same confirmation regardless of input.
+ */
+export async function requestPasswordReset(
+  email: string,
+): Promise<{ detail: string }> {
+  return apiFetch<{ detail: string }>("/auth/password-reset/", {
+    method: "POST",
+    body: { email },
+  });
+}
+
+/**
+ * Confirm a password reset using the single-use `uid` + `token` from the email
+ * link and a new password. Throws ApiError (400) if the link is invalid/expired
+ * or the password fails the backend's validators.
+ */
+export async function confirmPasswordReset(payload: {
+  uid: string;
+  token: string;
+  new_password: string;
+}): Promise<{ detail: string }> {
+  return apiFetch<{ detail: string }>("/auth/password-reset/confirm/", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+/**
+ * Send (or resend) the signed-in user's email verification link. Requires an
+ * authenticated session. `verified` is true if the email is already verified.
+ */
+export async function sendEmailVerification(): Promise<{
+  detail: string;
+  verified: boolean;
+}> {
+  return apiFetch<{ detail: string; verified: boolean }>(
+    "/auth/email/send-verification/",
+    { method: "POST", body: {} },
+  );
+}
+
+/**
+ * Confirm an email verification `token` from the verification link. Throws
+ * ApiError (400) if the link is invalid/expired.
+ */
+export async function confirmEmailVerification(
+  token: string,
+): Promise<{ detail: string; verified: boolean }> {
+  return apiFetch<{ detail: string; verified: boolean }>("/auth/email/verify/", {
+    method: "POST",
+    body: { token },
+  });
+}
+
 /**
  * Refresh the session using the refresh cookie. Returns true on success. The
  * API client refreshes automatically on 401; this is for explicit callers.
