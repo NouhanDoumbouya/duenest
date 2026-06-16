@@ -122,18 +122,46 @@ See `backend/.env.example` for the full annotated list.
 ## 6. Deploy
 
 Railway deploys automatically on push to the connected branch. The build runs
-`collectstatic` (now build-safe — see "Root cause" below); the container starts
-with `migrate` then Gunicorn (`backend/railway.json` → start command).
+`collectstatic` (build-safe — see "Root cause" below); the container then starts
+**Gunicorn only** (`backend/railway.json` → start command). It does **not** run
+migrations — see the next section for why and how.
 
-## 7. Run migrations
+## 7. Running migrations on Railway
 
-Migrations run automatically at container start (`python manage.py migrate
---noinput` in the start command). To run manually, open the service →
-**Settings → Deploy → run a command**, or use the Railway CLI:
+> **The web container never migrates.** Running `migrate` inside the web start
+> command means every crash/restart re-runs it; a container killed mid-migration
+> (healthcheck timeout, deploy restart, OOM) can leave a **half-applied schema**
+> that the next restart trips over — e.g.
+> `relation "..._dn_code_..._like" already exists`. So migrations are a separate,
+> one-off step you run intentionally.
+
+Run migrations **once** after a deploy that includes schema changes, using any of:
+
+**A. Railway one-off command (preferred)** — service → **Settings → Deploy →
+Custom Start Command**, or the "Run a command" / shell option, run:
 
 ```bash
-railway run python manage.py migrate
+python manage.py migrate --noinput
+# or the helper:
+sh scripts/run_migrations.sh
 ```
+
+**B. Railway CLI** (from your machine, linked to the service/environment):
+
+```bash
+railway run python manage.py migrate --noinput
+```
+
+**C. Temporary one-off release** — set the **Custom Start Command** to
+`python manage.py migrate --noinput`, deploy once, watch it complete, then revert
+the start command back to the Gunicorn default (in `railway.json`).
+
+**D. Dedicated migration service/job** — a second Railway service from the same
+repo whose start command is `python manage.py migrate --noinput` (run on demand).
+
+If the web service is **unhealthy and you cannot open a console**, use option C
+(temporary start command) or option D, or reset the database (see "Fixing a
+partial migration failure" below) if there is no real data.
 
 ## 8. Create a superuser (Railway shell / CLI)
 
@@ -171,13 +199,16 @@ reaches the browser — never put backend secrets here):
 
 ```env
 NEXT_PUBLIC_API_BASE_URL=https://<service>.up.railway.app/api/v1
-NEXT_PUBLIC_APP_URL=https://<your-app>.vercel.app
+NEXT_PUBLIC_APP_URL=https://duenest-mu.vercel.app
 NEXT_PUBLIC_ENV=staging
 ```
 
-Then redeploy the frontend. Make sure the backend's `DJANGO_CORS_ALLOWED_ORIGINS`
-and `DJANGO_CSRF_TRUSTED_ORIGINS` include the exact Vercel origin (scheme + host,
-no trailing slash).
+(The current staging frontend is `https://duenest-mu.vercel.app`.) Then redeploy
+the frontend. Make sure the backend's `DJANGO_CORS_ALLOWED_ORIGINS` and
+`DJANGO_CSRF_TRUSTED_ORIGINS` include the exact Vercel origin (scheme + host, no
+trailing slash) — e.g. `https://duenest-mu.vercel.app`. **Never** put
+`DATABASE_URL`, `DJANGO_SECRET_KEY`, Stripe secret keys, R2 secrets, or
+`DUENEST_KEK_*` in Vercel.
 
 > Cookie-based auth note: the app is designed for same-site cookies. A
 > Vercel-frontend ↔ Railway-backend split is **cross-site**. For authenticated
@@ -233,6 +264,90 @@ Do not stand all of these up for lean staging.
 
 ---
 
+## Fixing a partial migration failure on staging
+
+If a deploy crashed mid-migration (back when migrations ran in the web start
+command), the database may be half-applied. The classic symptom:
+
+```txt
+django.db.utils.ProgrammingError: relation
+"quick_share_quicksharesession_dn_code_0d6d36ab_like" already exists
+```
+
+That `..._like` object is the Postgres `varchar_pattern_ops` index Django
+auto-creates for an indexed text column. The migration itself
+(`quick_share.0002_quicksharesession_dn_code`) is **correct** and applies cleanly
+to a fresh database — the error is purely the leftover half-applied state from
+the restart loop. (That loop is fixed by this change: the web container no longer
+migrates.)
+
+### Recommended fix: reset the staging database (no real data)
+
+Private staging has no real user data, so the simplest, safest fix is a clean DB:
+
+1. Deploy this branch first so the web container no longer auto-migrates.
+2. In Railway, **delete and re-add the PostgreSQL plugin** (or use its
+   "Reset"/"Wipe" if available) to get an empty database.
+3. Confirm the backend's `DATABASE_URL=${{Postgres.DATABASE_URL}}` points at the
+   new database (update if the reference changed).
+4. Run migrations **once**: `python manage.py migrate --noinput` (see §7).
+5. Start/redeploy the web service.
+6. Test `curl https://<service>.up.railway.app/api/v1/health/`.
+
+### Alternative: repair in place (preserve data)
+
+Only if you must keep data. **Inspect first**, then choose A or B. Use the
+Railway Postgres "Connect"/`psql` console:
+
+```sql
+-- 1. Is the migration recorded as applied?
+SELECT app, name, applied FROM django_migrations
+WHERE app = 'quick_share' ORDER BY name;
+
+-- 2. Does the column already exist?
+SELECT column_name FROM information_schema.columns
+WHERE table_name = 'quick_share_quicksharesession' ORDER BY column_name;
+
+-- 3. Which indexes already exist on the table?
+SELECT indexname FROM pg_indexes
+WHERE tablename = 'quick_share_quicksharesession' ORDER BY indexname;
+```
+
+**Option A — migration NOT recorded, only the stray index exists.** Drop just the
+duplicate index and let the migration recreate everything:
+
+```sql
+DROP INDEX IF EXISTS quick_share_quicksharesession_dn_code_0d6d36ab_like;
+```
+
+```bash
+python manage.py migrate --noinput
+```
+
+If the plain `dn_code` index and/or the column also exist (but the migration is
+not recorded), drop those leftovers too before re-running — match what step 3
+showed:
+
+```sql
+-- only if present AND the migration is not recorded:
+DROP INDEX IF EXISTS quick_share_quicksharesession_dn_code_0d6d36ab;
+ALTER TABLE quick_share_quicksharesession DROP COLUMN IF EXISTS dn_code;
+```
+
+**Option B — column AND all expected indexes already exist and match the
+migration exactly, and only the `django_migrations` record is missing.** Then,
+and only then, mark it applied without re-running its DDL:
+
+```bash
+python manage.py migrate quick_share 0002 --fake
+python manage.py migrate --noinput
+```
+
+> **Warnings.** Do not `--fake` blindly — only after the inspection above
+> confirms the schema already matches. Do not drop database objects in real
+> production without a backup. For staging with no real data, the **reset** above
+> is the safest and fastest path.
+
 ## 15. Troubleshooting
 
 **`BILLING_PROVIDER=manual is not allowed in this environment`**
@@ -286,16 +401,23 @@ WhiteNoise serves them; confirm `collectstatic` ran in the build (it does in the
 Dockerfile) and `STATIC_ROOT` resolves (`backend/staticfiles`).
 
 **Migrations not applied**
-The start command runs `migrate --noinput`; or run `railway run python
-manage.py migrate` manually.
+The web container does **not** migrate (by design). Run them once via §7
+(`python manage.py migrate --noinput` through a Railway one-off command, the CLI,
+or `sh scripts/run_migrations.sh`).
+
+**`relation "..._like" already exists` during migrate**
+A half-applied migration from an earlier restart loop. See "Fixing a partial
+migration failure on staging" above — reset the staging DB (no real data) or
+repair in place after inspecting.
 
 ---
 
 ## 16. What must change before real production
 
 - Replace manual billing with Stripe (step 13); remove `BILLING_ALLOW_MANUAL_PROVIDER`.
-- Move migrations to a dedicated release/one-off step if running multiple
-  instances (the single-instance startup migrate is a staging convenience).
+- Keep migrations as a one-off/release step (already the case — the web
+  container never migrates). For zero-downtime, run them before rolling the web
+  service.
 - Configure real object storage (R2/S3) so vault files persist (the local
   filesystem on a Railway container is ephemeral).
 - Configure a real email provider for password reset / verification delivery.
