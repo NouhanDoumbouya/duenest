@@ -2,12 +2,71 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Check, Loader2 } from "lucide-react";
+import { ArrowRight, Check } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { getPlans, formatMoney, annualSavingsPercent } from "@/lib/billing";
 import { cn } from "@/lib/utils";
 import type { BillingInterval, BillingPlan } from "@/types/billing";
+
+/**
+ * Static fallback plans so the public pricing page always renders complete,
+ * polished cards immediately — even on the marketing deployment where the
+ * billing API isn't connected yet. Live API data (below) progressively replaces
+ * these when available. Prices here are indicative; the API is the source of
+ * truth once reachable.
+ */
+const FALLBACK_PLANS: BillingPlan[] = [
+  {
+    key: "free",
+    name: "Free",
+    description: "Everything you need to get organized and stay ready.",
+    tier: "free",
+    is_public: true,
+    is_recommended: false,
+    currency: "usd",
+    monthly_price: 0,
+    yearly_price: 0,
+    trial_days: 0,
+    sort_order: 0,
+    entitlements: [
+      { feature_key: "documents_limit", limit_value: 25, limit_period: "total", is_enabled: true },
+      { feature_key: "storage_mb", limit_value: 100, limit_period: "total", is_enabled: true },
+      { feature_key: "scanner_scans_per_month", limit_value: 10, limit_period: "month", is_enabled: true },
+    ],
+    metadata: {},
+  },
+  {
+    key: "pro",
+    name: "Pro",
+    description: "Full power for documents, scanning, and secure sharing.",
+    tier: "pro",
+    is_public: true,
+    is_recommended: true,
+    currency: "usd",
+    monthly_price: 599,
+    yearly_price: 5900,
+    trial_days: 0,
+    sort_order: 1,
+    entitlements: [],
+    metadata: {},
+  },
+  {
+    key: "organization",
+    name: "Organization",
+    description: "Shared readiness for teams, with admin controls.",
+    tier: "organization",
+    is_public: true,
+    is_recommended: false,
+    currency: "usd",
+    monthly_price: 900,
+    yearly_price: 9000,
+    trial_days: 0,
+    sort_order: 2,
+    entitlements: [],
+    metadata: { coming_soon: true },
+  },
+];
 
 function entitlement(plan: BillingPlan, key: string) {
   return plan.entitlements.find((e) => e.feature_key === key);
@@ -58,39 +117,25 @@ function planCta(plan: BillingPlan): { label: string; href: string } {
 }
 
 export function PricingPlans() {
-  const [plans, setPlans] = useState<BillingPlan[] | null>(null);
-  const [error, setError] = useState(false);
+  // Start from polished static plans so the page is complete on first paint,
+  // then progressively enhance with live API data when it's reachable. A failed
+  // or slow API simply leaves the fallback in place — never a broken/scary state.
+  const [plans, setPlans] = useState<BillingPlan[]>(FALLBACK_PLANS);
   const [interval, setInterval] = useState<BillingInterval>("year");
 
   useEffect(() => {
     let active = true;
     getPlans()
-      .then((data) => active && setPlans(data))
-      .catch(() => active && setError(true));
+      .then((data) => {
+        if (active && Array.isArray(data) && data.length > 0) setPlans(data);
+      })
+      .catch(() => {
+        // Keep the fallback plans; the marketing page stays complete offline.
+      });
     return () => {
       active = false;
     };
   }, []);
-
-  if (error) {
-    return (
-      <p className="mt-10 text-center text-sm text-muted-foreground">
-        Pricing is loading slowly. Please refresh, or{" "}
-        <Link href="/register" className="text-primary hover:underline">
-          start free
-        </Link>
-        .
-      </p>
-    );
-  }
-
-  if (plans === null) {
-    return (
-      <div className="mt-12 flex justify-center py-16 text-muted-foreground">
-        <Loader2 className="size-6 animate-spin" />
-      </div>
-    );
-  }
 
   return (
     <>

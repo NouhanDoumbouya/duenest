@@ -348,7 +348,7 @@ export default function QuickShareClaimPage() {
     (!isAccountMode || metadata.viewer_is_owner || accepted);
 
   return (
-    <main className="min-h-screen bg-background">
+    <main className="min-h-dvh bg-background">
       <FilePreviewDialog preview={preview} onClose={closePreview} />
       {toast && (
         <div className="fixed top-4 left-1/2 z-50 -translate-x-1/2 rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background shadow-floating">
@@ -356,7 +356,7 @@ export default function QuickShareClaimPage() {
         </div>
       )}
 
-      <div className="mx-auto flex min-h-screen w-full max-w-2xl flex-col px-4 py-6 sm:px-6">
+      <div className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col px-4 py-6 sm:px-6">
         <header className="flex items-center justify-between">
           <Logo href="/" size="md" />
           <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground shadow-card">
