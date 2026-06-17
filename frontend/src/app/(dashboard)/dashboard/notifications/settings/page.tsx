@@ -83,6 +83,15 @@ const TOGGLES: Array<{ key: ToggleKey; label: string; helper: string }> = [
   },
 ];
 
+/** The browser's IANA timezone (e.g. "Asia/Kuala_Lumpur"), or "" if unavailable. */
+function detectTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+  } catch {
+    return "";
+  }
+}
+
 function parseLeadDays(value: string): number[] {
   const seen = new Set<number>();
   for (const part of value.split(",")) {
@@ -124,6 +133,9 @@ export default function NotificationSettingsPage() {
   }, []);
 
   const parsedLeadDays = useMemo(() => parseLeadDays(leadDays), [leadDays]);
+  const detectedTimezone = useMemo(() => detectTimezone(), []);
+  const timezoneMismatch =
+    detectedTimezone !== "" && detectedTimezone !== timezone.trim();
 
   function updateToggle(key: ToggleKey, value: boolean) {
     setPrefs((current) => (current ? { ...current, [key]: value } : current));
@@ -264,6 +276,19 @@ export default function NotificationSettingsPage() {
             <span className="block text-xs text-muted-foreground">
               Use an IANA timezone such as UTC, America/New_York, or Asia/Kuala_Lumpur.
             </span>
+            {timezoneMismatch && (
+              <button
+                type="button"
+                onClick={() => {
+                  setTimezone(detectedTimezone);
+                  setSaved(false);
+                }}
+                disabled={prefs === null}
+                className="text-xs font-medium text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none disabled:opacity-50"
+              >
+                Use my timezone ({detectedTimezone})
+              </button>
+            )}
           </label>
         </div>
       </SectionCard>
