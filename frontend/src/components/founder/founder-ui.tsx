@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -97,18 +97,27 @@ export function FounderLineChart({
   data: ChartPoint[];
   color?: string;
 }) {
+  const gradientId = useId();
   const max = Math.max(1, ...data.map((point) => point.count));
   const width = 640;
   const height = 180;
+  const top = 12; // headroom so the peak isn't clipped
+  const baseline = height - 12; // x-axis line
   const points = data.map((point, index) => {
     const x = data.length <= 1 ? width : (index / (data.length - 1)) * width;
-    const y = height - (point.count / max) * (height - 20) - 10;
+    const y = baseline - (point.count / max) * (baseline - top);
     return { ...point, x, y };
   });
-  const path = points
+  const line = points
     .map((point, index) => `${index === 0 ? "M" : "L"}${point.x},${point.y}`)
     .join(" ");
+  // Close the line down to the baseline for a soft area fill.
+  const area =
+    points.length > 0
+      ? `${line} L${points[points.length - 1].x},${baseline} L${points[0].x},${baseline} Z`
+      : "";
   const total = data.reduce((sum, point) => sum + point.count, 0);
+  const last = points[points.length - 1];
 
   return (
     <Card>
@@ -133,44 +142,49 @@ export function FounderLineChart({
               viewBox={`0 0 ${width} ${height}`}
               className="h-48 w-full overflow-visible"
               role="img"
-              aria-label={title}
+              aria-label={`${title}: total ${nf.format(total)}, peak ${nf.format(max)}`}
             >
-              <path
-                d={`M0,${height - 10} L${width},${height - 10}`}
-                stroke="var(--border)"
-                strokeWidth="1"
-              />
-              {[0.25, 0.5, 0.75].map((line) => (
-                <path
-                  key={line}
-                  d={`M0,${height * line} L${width},${height * line}`}
+              <defs>
+                <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={color} stopOpacity="0.22" />
+                  <stop offset="100%" stopColor={color} stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              {/* Calm horizontal guides (no dashed clutter). */}
+              {[top, (top + baseline) / 2, baseline].map((y) => (
+                <line
+                  key={y}
+                  x1="0"
+                  y1={y}
+                  x2={width}
+                  y2={y}
                   stroke="var(--border)"
-                  strokeDasharray="4 6"
                   strokeWidth="1"
+                  opacity={y === baseline ? 0.9 : 0.4}
                 />
               ))}
+              <path d={area} fill={`url(#${gradientId})`} stroke="none" />
               <path
-                d={path}
+                d={line}
                 fill="none"
                 stroke={color}
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                strokeWidth="3"
-                className="drop-shadow-sm"
+                strokeWidth="2.5"
               />
-              {points.map((point) => (
-                <circle
-                  key={point.date}
-                  cx={point.x}
-                  cy={point.y}
-                  r="3"
-                  fill={color}
-                />
-              ))}
+              {/* Emphasise only the latest point instead of a dot on every node. */}
+              {last && (
+                <>
+                  <circle cx={last.x} cy={last.y} r="5" fill="var(--card)" />
+                  <circle cx={last.x} cy={last.y} r="3.5" fill={color} />
+                </>
+              )}
             </svg>
             <div className="mt-2 flex justify-between text-xs text-muted-foreground">
               <span>{data[0]?.date}</span>
-              <span>Peak {nf.format(max)}</span>
+              <span>
+                Total {nf.format(total)} · Peak {nf.format(max)}
+              </span>
               <span>{data[data.length - 1]?.date}</span>
             </div>
           </div>
@@ -209,11 +223,18 @@ export function FounderBarList({
           </div>
         ) : (
           <ul className="space-y-3">
-            {items.map((item) => (
+            {items.map((item, index) => (
               <li key={item.key}>
                 <div className="mb-1 flex items-center justify-between gap-3 text-sm">
-                  <span className="font-medium">{item.label}</span>
-                  <span className="text-muted-foreground">{nf.format(item.count)}</span>
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="w-4 shrink-0 text-right text-xs tabular-nums text-muted-foreground/70">
+                      {index + 1}
+                    </span>
+                    <span className="truncate font-medium">{item.label}</span>
+                  </span>
+                  <span className="shrink-0 font-semibold tabular-nums">
+                    {nf.format(item.count)}
+                  </span>
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-muted">
                   <div
