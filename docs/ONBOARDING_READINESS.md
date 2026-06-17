@@ -68,13 +68,29 @@ inbox file); upload failure (retry / manual fallback); reminder failure (documen
 still saved); no-expiry documents; skip → dashboard; existing users are not
 forced (entry is a dashboard card, not a forced redirect).
 
+## Empty-dashboard quick start
+Brand-new accounts (`BrandNewState` in `dashboard/page.tsx`) show a goal-based
+**"Start with one thing"** — life goals, not feature names — from the pure
+`getQuickStartGoals()` helper (`lib/readiness.ts`, unit-tested): four primary
+cards (track a document, scan, track a subscription, prepare a pack) plus a
+**"More ways to start"** disclosure (share safely, emergency access) so mobile
+never feels crowded, with a calm privacy line. Each card fires the existing
+privacy-safe `empty_state_cta_used` event with a non-sensitive `{ goal }` tag.
+
+## Checklist dismiss
+The dashboard readiness checklist now has a quiet **Hide** control. It sets the
+`readiness_checklist_dismissed` metadata flag via `PATCH /onboarding/state/`
+(optimistic + best-effort) and the dashboard honours it, so the card can be
+dismissed without completing onboarding.
+
 ## Limitations / follow-ups
 - New users are **guided** via the dashboard card, not auto-redirected after
   signup. An auto-redirect was intentionally deferred to avoid redirect-loop /
   auth-timing risk; `getOnboardingRedirect()` exists if we wire it later.
-- The dashboard checklist is data-driven but **dismiss/reopen UI is not wired**
-  yet (`shouldShowReadinessChecklist` + a `readiness_checklist_dismissed`
-  metadata key are ready for it).
+- **Restart/replay** of the readiness flow from Settings is not wired yet — the
+  `/dashboard/readiness-setup` route is reachable, but a discoverable
+  settings/help entry was deferred (the data/settings page is account-deletion
+  focused, so it wasn't a clean/simple fit).
 - The mid-flow document **draft** (name/category/expiry) is not persisted
   server-side; refresh resumes at the document step rather than re-filling fields.
 - Analytics events beyond the existing `onboarding_completed` were not added.

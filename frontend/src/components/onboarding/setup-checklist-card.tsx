@@ -7,6 +7,7 @@ import {
   Circle,
   ListChecks,
   ShieldCheck,
+  X,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -49,9 +50,12 @@ async function handleStepClick(step: SetupChecklistStep) {
 export function SetupChecklistCard({
   checklist,
   compact = false,
+  onDismiss,
 }: {
   checklist: DocumentSetupChecklist;
   compact?: boolean;
+  /** When provided, shows a quiet "Hide" control to dismiss the card. */
+  onDismiss?: () => void;
 }) {
   const nextStep = checklist.steps.find((step) => step.status === "current");
   const complete = checklist.is_complete;
@@ -78,17 +82,30 @@ export function SetupChecklistCard({
                 : "Finish the remaining optional trust and sharing checks."}
           </CardDescription>
         </div>
-        <div className="min-w-36">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Required</span>
-            <span>{checklist.required_percent}%</span>
+        <div className="flex items-start gap-2">
+          <div className="min-w-36">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Required</span>
+              <span>{checklist.required_percent}%</span>
+            </div>
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-brand-teal"
+                style={{ width: `${checklist.required_percent}%` }}
+              />
+            </div>
           </div>
-          <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
-            <div
-              className="h-full rounded-full bg-brand-teal"
-              style={{ width: `${checklist.required_percent}%` }}
-            />
-          </div>
+          {onDismiss && (
+            <button
+              type="button"
+              onClick={onDismiss}
+              aria-label="Hide the readiness checklist"
+              title="Hide"
+              className="-mr-1 -mt-1 shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+            >
+              <X className="size-4" aria-hidden />
+            </button>
+          )}
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
