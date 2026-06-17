@@ -87,10 +87,9 @@ dismissed without completing onboarding.
 - New users are **guided** via the dashboard card, not auto-redirected after
   signup. An auto-redirect was intentionally deferred to avoid redirect-loop /
   auth-timing risk; `getOnboardingRedirect()` exists if we wire it later.
-- **Restart/replay** of the readiness flow from Settings is not wired yet — the
-  `/dashboard/readiness-setup` route is reachable, but a discoverable
-  settings/help entry was deferred (the data/settings page is account-deletion
-  focused, so it wasn't a clean/simple fit).
+- **Restart/replay** is discoverable: a "Guided setup → Replay readiness setup"
+  card on **Settings → Data controls** links to `/dashboard/readiness-setup`
+  (the flow runs regardless of completion state).
 - The mid-flow document **draft** (name/category/expiry) is not persisted
   server-side; refresh resumes at the document step rather than re-filling fields.
 - Analytics events beyond the existing `onboarding_completed` were not added.

@@ -1,11 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import {
   Archive,
   Database,
   Download,
   FileText,
+  ListChecks,
   Loader2,
   RefreshCw,
   ShieldAlert,
@@ -13,7 +15,8 @@ import {
   X,
 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   Card,
   CardContent,
@@ -211,6 +214,29 @@ export default function DataSettingsPage() {
       </div>
 
       <StatusMessage error={error} message={message} />
+
+      <Card>
+        <CardHeader className="gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+              <ListChecks className="size-4" aria-hidden />
+            </span>
+            <div>
+              <CardTitle>Guided setup</CardTitle>
+              <CardDescription className="mt-1">
+                Walk through the readiness setup again to add a document, set an
+                expiry, and turn on a reminder.
+              </CardDescription>
+            </div>
+          </div>
+          <Link
+            href="/dashboard/readiness-setup"
+            className={cn(buttonVariants({ variant: "outline" }), "shrink-0")}
+          >
+            Replay readiness setup
+          </Link>
+        </CardHeader>
+      </Card>
 
       <PwaStatusCard />
 
