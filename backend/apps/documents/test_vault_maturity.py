@@ -260,11 +260,16 @@ class VaultMaturityTests(APITestCase):
         )
         self.assertEqual(no_code.status_code, status.HTTP_400_BAD_REQUEST)
 
+        # This test exercises the INSTANT_CODE flow (a correct code immediately
+        # unlocks items). The API now defaults new packs to the safer DELAYED
+        # unlock mode (which starts an owner-approval/countdown request instead),
+        # so the instant-code mode must be requested explicitly here.
         created = self.client.post(
             "/api/v1/emergency-packs/",
             {
                 "title": "Emergency pack",
                 "access_mode": "share_link",
+                "unlock_mode": "instant_code",
                 "access_code_required": True,
                 "access_code": "246810",
             },
