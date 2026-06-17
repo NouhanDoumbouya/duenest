@@ -137,6 +137,7 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
   const [pages, setPages] = useState<ScanPage[]>([]);
   const [adjust, setAdjust] = useState<Adjustments>(NEUTRAL_ADJUST);
   const [adjustOpen, setAdjustOpen] = useState(false);
+  const [saveOptionsOpen, setSaveOptionsOpen] = useState(false);
   const [exportQuality, setExportQuality] = useState<"standard" | "hd">("standard");
   // Human-readable progress shown during multi-step work (PDF build → upload).
   const [progress, setProgress] = useState<string | null>(null);
@@ -650,6 +651,7 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
     setFilterId(DEFAULT_FILTER);
     setAdjust(NEUTRAL_ADJUST);
     setAdjustOpen(false);
+    setSaveOptionsOpen(false);
     setQuad(null);
   }, []);
 
@@ -1199,52 +1201,76 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
                     ))}
                     <li className="shrink-0">
                       <div className="flex h-20 w-16 items-center justify-center rounded-md bg-teal-500/10 px-1 text-center text-[0.6rem] font-medium text-teal-200 ring-1 ring-teal-400/60">
-                        {editingIndex !== null ? `Editing page ${editingIndex + 1}` : "This page"}
+                        {editingIndex !== null
+                          ? `Editing page ${editingIndex + 1}`
+                          : `Page ${pages.length + 1}`}
                       </div>
                     </li>
                   </ul>
                 </div>
               )}
-              {/* Optional rename — quick save still works if left blank. */}
-              <input
-                type="text"
-                value={docName}
-                onChange={(e) => setDocName(e.target.value)}
-                placeholder="Document name (optional)"
-                aria-label="Document name"
-                enterKeyHint="done"
-                className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-base text-slate-100 placeholder:text-slate-400 focus-visible:border-teal-300 focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none sm:text-sm"
-              />
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs text-slate-400">PDF quality</span>
-                <div
-                  className="inline-flex rounded-full bg-white/5 p-0.5"
-                  role="group"
-                  aria-label="PDF quality"
+              {/* Save options (name + quality) are optional — hidden by default so
+                  a first-time user can just tap Save. */}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setSaveOptionsOpen((v) => !v)}
+                  aria-expanded={saveOptionsOpen}
+                  className="mx-auto flex items-center gap-1.5 text-xs font-medium text-slate-300 hover:text-white focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
                 >
-                  {(["standard", "hd"] as const).map((q) => (
-                    <button
-                      key={q}
-                      type="button"
-                      onClick={() => setExportQuality(q)}
-                      aria-pressed={exportQuality === q}
-                      className={cn(
-                        "rounded-full px-3 py-1 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none",
-                        exportQuality === q
-                          ? "bg-teal-500 text-slate-950"
-                          : "text-slate-200 hover:text-white",
-                      )}
-                    >
-                      {q === "standard" ? "Standard" : "HD"}
-                    </button>
-                  ))}
-                </div>
+                  Save options
+                  {(docName.trim() !== "" || exportQuality !== "standard") && (
+                    <span className="size-1.5 rounded-full bg-teal-300" aria-hidden="true" />
+                  )}
+                  <ChevronDown
+                    className={cn("size-3.5 transition-transform", saveOptionsOpen && "rotate-180")}
+                    aria-hidden="true"
+                  />
+                </button>
+                {saveOptionsOpen && (
+                  <div className="mt-2 space-y-3 rounded-lg bg-white/5 p-3">
+                    <input
+                      type="text"
+                      value={docName}
+                      onChange={(e) => setDocName(e.target.value)}
+                      placeholder="Document name (optional)"
+                      aria-label="Document name"
+                      enterKeyHint="done"
+                      className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-base text-slate-100 placeholder:text-slate-400 focus-visible:border-teal-300 focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none sm:text-sm"
+                    />
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs text-slate-400">PDF quality</span>
+                      <div
+                        className="inline-flex rounded-full bg-white/10 p-0.5"
+                        role="group"
+                        aria-label="PDF quality"
+                      >
+                        {(["standard", "hd"] as const).map((q) => (
+                          <button
+                            key={q}
+                            type="button"
+                            onClick={() => setExportQuality(q)}
+                            aria-pressed={exportQuality === q}
+                            className={cn(
+                              "rounded-full px-3 py-1 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none",
+                              exportQuality === q
+                                ? "bg-teal-500 text-slate-950"
+                                : "text-slate-200 hover:text-white",
+                            )}
+                          >
+                            {q === "standard" ? "Standard" : "HD"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {exportQuality === "hd" && (
+                      <p className="text-right text-[0.68rem] text-slate-400">
+                        HD keeps more detail and may create a larger file.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
-              {exportQuality === "hd" && (
-                <p className="text-right text-[0.68rem] text-slate-400">
-                  HD keeps more detail and may create a larger file.
-                </p>
-              )}
               <div className="grid grid-cols-2 gap-2">
                 <Button variant="outline" onClick={retake} className="border-white/20 bg-white/5 text-slate-100 hover:bg-white/10">
                   <RefreshCw className="size-4" aria-hidden="true" /> Retake
