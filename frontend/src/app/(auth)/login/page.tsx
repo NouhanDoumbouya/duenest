@@ -92,6 +92,9 @@ function LoginForm() {
               id="username"
               name="username"
               autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               required
               className="h-11"
               value={username}

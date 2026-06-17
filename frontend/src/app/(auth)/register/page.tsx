@@ -125,6 +125,9 @@ function RegisterForm() {
                 id="username"
                 name="username"
                 autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 required
                 className="h-11"
                 value={username}
@@ -139,7 +142,11 @@ function RegisterForm() {
                 id="email"
                 name="email"
                 type="email"
+                inputMode="email"
                 autoComplete="email"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 required
                 className="h-11"
                 value={email}
@@ -174,6 +181,9 @@ function RegisterForm() {
                   id="invite_code"
                   name="invite_code"
                   autoComplete="one-time-code"
+                  autoCapitalize="characters"
+                  autoCorrect="off"
+                  spellCheck={false}
                   required={privateBetaEnabled}
                   className="h-11 uppercase"
                   value={inviteCode}

@@ -454,6 +454,10 @@ export function SubscriptionForm({
               <Field label="Account email" error={errors.account_email}>
                 <Input
                   type="email"
+                  inputMode="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   value={form.account_email}
                   onChange={(e) => update("account_email", e.target.value)}
                   placeholder="you@example.com"

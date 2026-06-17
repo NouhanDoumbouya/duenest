@@ -639,6 +639,10 @@ function RequestsTab({
               <Field label="External recipient email">
                 <Input
                   type="email"
+                  inputMode="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   value={recipientEmail}
                   onChange={(event) => setRecipientEmail(event.target.value)}
                   placeholder="recipient@example.com"
