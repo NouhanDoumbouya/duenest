@@ -42,6 +42,11 @@ scheduled sweep:
 - Billing: `billing_payment_failed`, `billing_canceled`, and
   `billing_trial_ending` are created from billing lifecycle events
   (`apps/billing/services.py`).
+- Quick Share / SafeSend: `share_viewed` is created when a recipient previews or
+  downloads a shared file (`apps/quick_share/views.py` via
+  `notify_owner_share_viewed`). It respects the owner's "activity notifications"
+  preference (off by default), skips owner self-views, and dedupes to one record
+  per session per day. The copy never names the file or recipient.
 
 These reuse the same `create_notification` helper, `dedupe_key` rule, and
 metadata sanitization as scheduled notifications.
@@ -117,17 +122,32 @@ beat) requires `REDIS_URL`, `ENABLE_BACKGROUND_JOBS=true`, and
 `ENABLE_CELERY_BEAT=true`. Until one of those runs the command, scheduled
 reminders are generated only on demand.
 
+Pick exactly one of these per environment:
+
+- **Lean mode (recommended for beta):** a platform/system cron that runs the
+  command every ~15 minutes. The command is idempotent, so the cadence only
+  affects latency, never duplicates:
+
+  ```cron
+  */15 * * * *  python manage.py process_due_notifications
+  ```
+
+- **Scale-ready mode:** run the `beat` process (`Procfile`,
+  `ENABLE_CELERY_BEAT=true`) which already schedules
+  `process-due-notifications` every 15 minutes onto the `notifications` queue.
+
+See `docs/deployment/scale-ready-lean-foundation.md` (Scheduled jobs) and
+`docs/DEPLOYMENT.md` for the full per-platform setup.
+
 Each run is recorded as a `NotificationDeliveryRun` (aggregate counts only, no
 user data), surfaced to founders via the delivery-health endpoint
-(`apps/founder/views.py` → `build_delivery_health`).
+(`apps/founder/views.py` → `build_delivery_health`), so you can confirm the
+scheduler is actually firing in production.
 
 ## Known Limitations
 
 - No worker/beat process or cron is wired by default — scheduled reminders need
   an external scheduler to invoke `process_due_notifications` (see above).
 - Daily digest delivery is reserved for later.
-- Real-time `share_viewed` for Quick Share / SafeSend views is not wired yet; the
-  type and scheduled share/room-expiry generation exist, and `emergency_viewed`
-  is wired.
 - PWA push notifications are not implemented. See `docs/PWA.md` §9 for the future
   plan (tracked as `feature/pwa-push-notifications`).

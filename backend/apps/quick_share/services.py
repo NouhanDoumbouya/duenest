@@ -53,6 +53,52 @@ def log_activity(
         logger.warning("Failed to record quick share activity", exc_info=True)
 
 
+def notify_owner_share_viewed(session, *, viewer=None) -> None:
+    """
+    Create a calm, privacy-safe in-app notification telling the owner that a file
+    they shared was opened.
+
+    Respects the owner's "activity notifications" preference (off by default), is
+    skipped when the owner opens their own share, and is deduped to one record per
+    session per day so repeated opens never spam. Never raises — a notification
+    failure must not break file serving. No recipient identity, file name, token,
+    or access code is ever included.
+    """
+    try:
+        if viewer is not None and getattr(viewer, "id", None) == session.owner_id:
+            return
+
+        from apps.notifications.services import (
+            NotificationCandidate,
+            create_notification,
+            get_preferences,
+            sanitize_metadata,
+        )
+
+        prefs = get_preferences(session.owner)
+        if not (prefs.in_app_enabled and prefs.activity_notifications_enabled):
+            return
+
+        today = timezone.now().date().isoformat()
+        dedupe = f"share_viewed:{session.owner_id}:quick_share:{session.id}:{today}"
+        candidate = NotificationCandidate(
+            user=session.owner,
+            type="share_viewed",
+            title="Shared item activity",
+            message="A file you shared was just opened.",
+            severity="info",
+            source_type="quick_share_session",
+            source_id=str(session.id),
+            action_url=f"/dashboard/quick-share/{session.id}",
+            scheduled_for=timezone.now(),
+            dedupe_key=dedupe[:255],
+            metadata=sanitize_metadata({"channel": "quick_share"}),
+        )
+        create_notification(candidate)
+    except Exception:  # noqa: BLE001 — notifications must never break the flow
+        logger.warning("Failed to create quick share view notification", exc_info=True)
+
+
 def summarize_user_agent(request) -> str:
     """Coarse, non-identifying client summary (browser + platform family)."""
     if request is None:
