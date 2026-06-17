@@ -177,5 +177,6 @@ See `docs/PWA.md` §9 for the full flow.
 - No worker/beat process or cron is wired by default — scheduled reminders need
   an external scheduler to invoke `process_due_notifications` (see above).
 - Daily digest delivery is reserved for later.
-- PWA push notifications are not implemented. See `docs/PWA.md` §9 for the future
-  plan (tracked as `feature/pwa-push-notifications`).
+- PWA Web Push is implemented as an opt-in foundation (see above and
+  `docs/PWA.md` §9) but stays off until VAPID keys are configured; per-type push
+  controls remain a future enhancement.
