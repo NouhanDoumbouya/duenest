@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { CalendarClock, Loader2, MapPin, Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -203,13 +204,19 @@ export function DocumentAppointments({
           <span>Loading appointments…</span>
         </div>
       ) : items.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center">
-          <CalendarClock className="mx-auto size-7 text-muted-foreground/60" />
-          <p className="mt-3 text-sm font-medium">No appointments yet</p>
-          <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-            Add an appointment so it shows up on your timeline.
-          </p>
-        </div>
+        <EmptyState
+          icon={CalendarClock}
+          title="No appointments yet"
+          description="Add one to track biometrics, interviews, notary visits, and other important dates — it shows up on your timeline."
+          action={
+            !showForm && (
+              <Button size="sm" onClick={() => setShowForm(true)}>
+                <Plus className="size-4" />
+                Add appointment
+              </Button>
+            )
+          }
+        />
       ) : (
         <ul className="space-y-2">
           {items.map((item) => (
