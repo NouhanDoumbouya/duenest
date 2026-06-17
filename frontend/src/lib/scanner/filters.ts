@@ -328,40 +328,110 @@ export function applyFilter(
 }
 
 /**
- * Optional manual fine-tuning applied ON TOP of a filter. Both values are
- * sliders in [-100, 100]; 0/0 is a no-op. Kept separate from filters so the
- * "Adjust" panel composes with any filter and stays fully non-destructive.
+ * Optional manual fine-tuning applied ON TOP of a filter. `brightness` and
+ * `contrast` are sliders in [-100, 100]; `sharpness` is [0, 100]; `denoise` is a
+ * toggle. All-neutral is a no-op. Kept separate from filters so the "Adjust"
+ * panel composes with any filter and stays fully non-destructive.
  */
 export interface Adjustments {
   brightness: number;
   contrast: number;
+  sharpness: number;
+  denoise: boolean;
 }
 
-export const NEUTRAL_ADJUST: Adjustments = { brightness: 0, contrast: 0 };
+export const NEUTRAL_ADJUST: Adjustments = {
+  brightness: 0,
+  contrast: 0,
+  sharpness: 0,
+  denoise: false,
+};
 
 export function isNeutralAdjust(adj: Adjustments): boolean {
-  return adj.brightness === 0 && adj.contrast === 0;
+  return (
+    adj.brightness === 0 &&
+    adj.contrast === 0 &&
+    adj.sharpness === 0 &&
+    !adj.denoise
+  );
 }
 
-/** Apply brightness/contrast to raw RGBA data IN PLACE. Pure (no DOM). */
+/** 3×3 box blur of the RGB channels → a new buffer (alpha preserved). */
+function boxBlur3x3(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+): Uint8ClampedArray {
+  const out = new Uint8ClampedArray(data.length);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const i = (y * width + x) * 4;
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      let n = 0;
+      for (let dy = -1; dy <= 1; dy += 1) {
+        const yy = y + dy;
+        if (yy < 0 || yy >= height) continue;
+        for (let dx = -1; dx <= 1; dx += 1) {
+          const xx = x + dx;
+          if (xx < 0 || xx >= width) continue;
+          const j = (yy * width + xx) * 4;
+          r += data[j];
+          g += data[j + 1];
+          b += data[j + 2];
+          n += 1;
+        }
+      }
+      out[i] = r / n;
+      out[i + 1] = g / n;
+      out[i + 2] = b / n;
+      out[i + 3] = data[i + 3];
+    }
+  }
+  return out;
+}
+
+/** Apply denoise → sharpen → brightness/contrast to RGBA data IN PLACE. Pure. */
 export function applyAdjustmentsToImageData(
   data: Uint8ClampedArray,
+  width: number,
+  height: number,
   adj: Adjustments,
 ): Uint8ClampedArray {
   if (isNeutralAdjust(adj)) return data;
-  const brightness = Math.max(-100, Math.min(100, adj.brightness));
-  // Standard contrast factor; slider -100..100 maps to c -128..128.
-  const c = Math.max(-100, Math.min(100, adj.contrast)) * 1.28;
-  const factor = (259 * (c + 255)) / (255 * (259 - c));
 
-  const lut = new Uint8ClampedArray(256);
-  for (let v = 0; v < 256; v += 1) {
-    lut[v] = clamp8(factor * (v + brightness - 128) + 128);
+  // 1) Denoise: a light 3×3 mean smooths sensor noise before sharpening.
+  if (adj.denoise) {
+    data.set(boxBlur3x3(data, width, height));
   }
-  for (let i = 0; i < data.length; i += 4) {
-    data[i] = lut[data[i]];
-    data[i + 1] = lut[data[i + 1]];
-    data[i + 2] = lut[data[i + 2]];
+
+  // 2) Sharpen: unsharp mask = pixel + amount × (pixel − blurred).
+  const sharpen = Math.max(0, Math.min(100, adj.sharpness));
+  if (sharpen > 0) {
+    const amount = (sharpen / 100) * 1.5;
+    const blurred = boxBlur3x3(data, width, height);
+    for (let i = 0; i < data.length; i += 4) {
+      data[i] = clamp8(data[i] + amount * (data[i] - blurred[i]));
+      data[i + 1] = clamp8(data[i + 1] + amount * (data[i + 1] - blurred[i + 1]));
+      data[i + 2] = clamp8(data[i + 2] + amount * (data[i + 2] - blurred[i + 2]));
+    }
+  }
+
+  // 3) Brightness/contrast via a single tone curve.
+  const brightness = Math.max(-100, Math.min(100, adj.brightness));
+  const c = Math.max(-100, Math.min(100, adj.contrast)) * 1.28;
+  if (brightness !== 0 || c !== 0) {
+    const factor = (259 * (c + 255)) / (255 * (259 - c));
+    const lut = new Uint8ClampedArray(256);
+    for (let v = 0; v < 256; v += 1) {
+      lut[v] = clamp8(factor * (v + brightness - 128) + 128);
+    }
+    for (let i = 0; i < data.length; i += 4) {
+      data[i] = lut[data[i]];
+      data[i + 1] = lut[data[i + 1]];
+      data[i + 2] = lut[data[i + 2]];
+    }
   }
   return data;
 }
@@ -383,7 +453,7 @@ export function applyAdjustments(
   if (isNeutralAdjust(adj)) return out;
   try {
     const image = ctx.getImageData(0, 0, out.width, out.height);
-    applyAdjustmentsToImageData(image.data, adj);
+    applyAdjustmentsToImageData(image.data, out.width, out.height, adj);
     ctx.putImageData(image, 0, 0);
   } catch {
     return source;
@@ -407,7 +477,7 @@ export function renderPage(
   if (!ctx) return filtered;
   try {
     const image = ctx.getImageData(0, 0, filtered.width, filtered.height);
-    applyAdjustmentsToImageData(image.data, adj);
+    applyAdjustmentsToImageData(image.data, filtered.width, filtered.height, adj);
     ctx.putImageData(image, 0, 0);
   } catch {
     return filtered;

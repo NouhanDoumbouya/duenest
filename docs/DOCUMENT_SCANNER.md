@@ -58,11 +58,13 @@ preview rotates the base too, so a later filter change keeps the orientation.
   etc. so advanced filters can be plan-gated later. **No paywall is enforced in
   code** — the tags are descriptive only, and B&W is shown but never auto-applied
   to color documents.
-- **Adjust** (hidden by default): optional **brightness** and **contrast**
-  sliders compose on top of the chosen filter (`applyAdjustments` /
-  `renderPage`), stay non-destructive (re-derived from the cached filtered base
-  so dragging only re-runs a cheap LUT pass), and are captured per page in a
-  multi-page scan. 0/0 is a no-op; "Reset adjustments" restores it.
+- **Adjust** (hidden by default): optional **brightness**, **contrast**,
+  **sharpness** (unsharp mask) sliders and a **denoise** toggle (3×3 mean),
+  composed on top of the chosen filter (`applyAdjustments` / `renderPage`), fully
+  non-destructive (re-derived from the cached filtered base), and captured per
+  page in a multi-page scan. Neutral is a no-op; "Reset adjustments" restores it.
+  (Brightness/contrast are a cheap LUT pass; sharpness/denoise are light
+  convolutions run only when enabled.)
 - The pixel math (`applyFilterToImageData`, `applyAdjustmentsToImageData`) and
   quality heuristics (`analyzeImageData` / `qualityWarnings` in `quality.ts`)
   are pure and unit-tested (`filters.test.ts`, `quality.test.ts`). Quality warnings
@@ -74,20 +76,27 @@ preview rotates the base too, so a later filter change keeps the orientation.
 
 Single-page scanning is unchanged and fast: capture → review → **Save to Vault**.
 For multiple pages, the review screen offers **Add page**, which commits the
-current page (its rotated base + chosen filter) and returns to capture. The page
-strip shows thumbnails with **delete** and **move left/right (reorder)**; **Apply
-filter to all** copies the current filter onto every committed page. **Save** then
-renders every page (each with its own filter, in strip order) into a single PDF
-via `generatePdfBlob`. Capacity is bounded (`MAX_PAGES = 25`). Committed pages
-and thumbnails live only in memory and are cleared on "Scan another"/unmount.
+current page and returns to capture. The page strip shows thumbnails with
+**delete** and **move left/right (reorder)**; **Apply filter to all** copies the
+current filter onto every committed page. **Save** renders every page (each with
+its own filter + adjustments, in strip order) into a single PDF via
+`generatePdfBlob`. Capacity is bounded (`MAX_PAGES = 25`). Committed pages,
+thumbnails and the per-page pre-warp frames live only in memory and are cleared
+on "Scan another"/unmount.
 
-**Honest limitation:** a committed page can be deleted/reordered/recolored (via
-"Apply filter to all") but not individually re-cropped or re-rotated after it is
-added — delete and re-add to redo a page. Sharpness/denoise controls are not
-implemented (brightness/contrast are). Scanned files land in the **File Inbox** as encrypted
-files; adding expiry / category / reminder / bundle happens when organizing the
-inbox file into a Document (the scanner links there from the done screen rather
-than faking attachment).
+**Per-page re-edit:** tapping a committed thumbnail re-opens that page (it is
+pulled from the list, remembering its slot via `editingIndex`) so you can
+re-crop (**Edit crop** → corner editor), re-rotate, re-filter and re-adjust;
+committing drops it back into the same position. Each page stores its pre-warp
+frame + quad to make re-cropping possible.
+
+**Export quality:** the save screen offers **Standard** (JPEG q≈0.72) or **HD**
+(q≈0.92) for the generated PDF.
+
+Scanned files land in the **File Inbox** as encrypted files; adding expiry /
+category / reminder / bundle happens when organizing the inbox file into a
+Document (the scanner links there from the done screen rather than faking
+attachment).
 
 ### Capability detection & graceful degradation
 

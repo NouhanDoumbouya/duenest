@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Crop,
   FileText,
   FlashlightOff,
   Flashlight,
@@ -88,9 +89,14 @@ import { CropEditor } from "./CropEditor";
 
 type Phase = "idle" | "camera" | "cropping" | "enhancing" | "done";
 
-/** A committed page in a multi-page scan: its warped base + chosen filter. */
+/**
+ * A committed page in a multi-page scan. We keep the pre-warp frame + quad (not
+ * just the warped base) so a page can be re-opened and re-cropped later.
+ */
 interface ScanPage {
   id: string;
+  frozen: HTMLCanvasElement;
+  quad: Quad;
   base: HTMLCanvasElement;
   filterId: FilterId;
   adjust: Adjustments;
@@ -130,6 +136,9 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
   const [pages, setPages] = useState<ScanPage[]>([]);
   const [adjust, setAdjust] = useState<Adjustments>(NEUTRAL_ADJUST);
   const [adjustOpen, setAdjustOpen] = useState(false);
+  const [exportQuality, setExportQuality] = useState<"standard" | "hd">("standard");
+  // When re-editing a committed page, the slot it should return to (else append).
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [docName, setDocName] = useState("");
   const [pdfSize, setPdfSize] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
@@ -548,18 +557,24 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
 
   // ---- save / upload ----------------------------------------------------
   const saveAndUpload = useCallback(async () => {
-    // All committed pages (rendered with their own filter) plus the page on
-    // screen now, in order → one PDF.
-    const canvases = [
-      ...pages.map((p) => renderPage(p.base, p.filterId, p.adjust)),
-      ...(enhancedCanvas ? [enhancedCanvas] : []),
-    ];
+    // All committed pages (rendered with their own filter), with the page on
+    // screen now inserted at its slot (when re-editing) or appended, → one PDF.
+    const canvases = pages.map((p) => renderPage(p.base, p.filterId, p.adjust));
+    if (enhancedCanvas) {
+      if (editingIndex !== null && editingIndex <= canvases.length) {
+        canvases.splice(editingIndex, 0, enhancedCanvas);
+      } else {
+        canvases.push(enhancedCanvas);
+      }
+    }
     if (canvases.length === 0) return;
     setBusy(true);
     announce("Generating PDF");
     let blob: Blob;
     try {
-      blob = await generatePdfBlob(canvases);
+      blob = await generatePdfBlob(canvases, {
+        quality: exportQuality === "hd" ? 0.92 : 0.72,
+      });
       setPdfSize(blob.size);
     } catch {
       setBusy(false);
@@ -603,7 +618,7 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
       showToast(`${message} Saved locally to retry.`, "error");
       announce("Scan queued for upload when online");
     }
-  }, [announce, docName, enhancedCanvas, online, pages, refreshQueue, showToast]);
+  }, [announce, docName, editingIndex, enhancedCanvas, exportQuality, online, pages, refreshQueue, showToast]);
 
   // ---- navigation helpers ----------------------------------------------
   const goToCamera = useCallback(() => {
@@ -635,26 +650,46 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
   }, [goToCamera, resetCurrentCapture]);
 
   // ---- multi-page -------------------------------------------------------
-  // Commit the current page and capture another into the same document/PDF.
-  const addPage = useCallback(() => {
+  // Commit the current working page into the page list. When re-editing, it
+  // returns to its original slot; otherwise it is appended. Returns false if the
+  // page limit is reached. Does NOT navigate (callers decide what to do next).
+  const commitCurrentPage = useCallback((): boolean => {
     const base = baseCanvasRef.current;
-    if (!base) return;
-    if (pages.length + 1 >= MAX_PAGES) {
+    const frozen = frozenCanvas;
+    if (!base || !frozen || !quad) return false;
+    if (editingIndex === null && pages.length + 1 >= MAX_PAGES) {
       showToast(`A scan can hold up to ${MAX_PAGES} pages.`, "info");
-      return;
+      return false;
     }
     const page: ScanPage = {
       id:
         typeof crypto !== "undefined" && crypto.randomUUID
           ? crypto.randomUUID()
           : `page-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      frozen,
+      quad,
       base,
       filterId,
       adjust,
       thumb: makeThumbnail(base, filterId, adjust),
     };
-    setPages((prev) => [...prev, page]);
-    announce(`Page ${pages.length + 1} added`);
+    const slot = editingIndex;
+    setPages((prev) => {
+      if (slot !== null && slot <= prev.length) {
+        const next = [...prev];
+        next.splice(slot, 0, page);
+        return next;
+      }
+      return [...prev, page];
+    });
+    setEditingIndex(null);
+    return true;
+  }, [adjust, editingIndex, filterId, frozenCanvas, pages.length, quad, showToast]);
+
+  // Commit the current page and capture another into the same document/PDF.
+  const addPage = useCallback(() => {
+    if (!commitCurrentPage()) return;
+    announce("Page added");
     resetCurrentCapture();
     // Resume live capture if the camera is running; otherwise (import-only flow)
     // return to the idle screen so the user can import the next page.
@@ -664,7 +699,42 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
       setMoreOpen(false);
       setPhase("idle");
     }
-  }, [adjust, announce, filterId, goToCamera, pages.length, resetCurrentCapture, showToast]);
+  }, [announce, commitCurrentPage, goToCamera, resetCurrentCapture]);
+
+  // Re-open a committed page to re-crop / re-rotate / re-filter / re-adjust. It
+  // is pulled out of the list (remembering its slot) and loaded as the working
+  // page; committing later drops it back into the same position.
+  const startEditPage = useCallback(
+    (index: number) => {
+      const p = pages[index];
+      if (!p) return;
+      setPages((prev) => prev.filter((_, i) => i !== index));
+      setEditingIndex(index);
+      setFrozenCanvas(p.frozen);
+      setQuad(p.quad);
+      setFilterId(p.filterId);
+      setAdjust(p.adjust);
+      baseCanvasRef.current = p.base;
+      const filtered = applyFilter(p.base, p.filterId);
+      filteredBaseRef.current = filtered;
+      setEnhancedCanvas(applyAdjustments(filtered, p.adjust));
+      setWarnings(analyzeCanvasQuality(p.base));
+      setMoreOpen(false);
+      setPdfSize(null);
+      setPhase("enhancing");
+      announce(`Editing page ${index + 1}`);
+    },
+    [announce, pages],
+  );
+
+  // Back to the corner editor for the current page (re-crop). Frozen frame and
+  // quad are still in state, so this works for fresh captures and re-edits alike.
+  const editCrop = useCallback(() => {
+    if (!frozenCanvas || !quad) return;
+    setMoreOpen(false);
+    setPhase("cropping");
+    announce("Adjust the document corners");
+  }, [announce, frozenCanvas, quad]);
 
   const removePage = useCallback((index: number) => {
     setPages((prev) => prev.filter((_, i) => i !== index));
@@ -696,6 +766,7 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
   const scanAnother = useCallback(() => {
     setPages([]);
     setDocName("");
+    setEditingIndex(null);
     retake();
   }, [retake]);
 
@@ -910,7 +981,7 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
                 aria-label="Enhanced document preview"
               />
             </div>
-            <div className="space-y-3 border-t border-white/10 bg-slate-950/80 p-4 backdrop-blur-md">
+            <div className="max-h-[62vh] space-y-3 overflow-y-auto border-t border-white/10 bg-slate-950/80 p-4 backdrop-blur-md">
               {warnings.length > 0 && (
                 <div className="space-y-1.5">
                   {warnings.map((w) => (
@@ -985,6 +1056,23 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
                       value={adjust.contrast}
                       onChange={(v) => onAdjustChange({ ...adjust, contrast: v })}
                     />
+                    <AdjustSlider
+                      label="Sharpness"
+                      min={0}
+                      value={adjust.sharpness}
+                      onChange={(v) => onAdjustChange({ ...adjust, sharpness: v })}
+                    />
+                    <label className="flex items-center justify-between text-xs text-slate-300">
+                      <span>Denoise</span>
+                      <input
+                        type="checkbox"
+                        checked={adjust.denoise}
+                        onChange={(e) =>
+                          onAdjustChange({ ...adjust, denoise: e.target.checked })
+                        }
+                        className="size-4 accent-teal-400"
+                      />
+                    </label>
                     <div className="flex justify-end">
                       <button
                         type="button"
@@ -998,7 +1086,7 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
                   </div>
                 )}
               </div>
-              <div className="flex items-center justify-center gap-2" role="group" aria-label="Rotate scan">
+              <div className="flex flex-wrap items-center justify-center gap-2" role="group" aria-label="Edit scan">
                 <Button
                   variant="outline"
                   size="sm"
@@ -1014,6 +1102,14 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
                   className="border-white/20 bg-white/5 text-slate-100 hover:bg-white/10"
                 >
                   <RotateCw className="size-4" aria-hidden="true" /> Rotate right
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={editCrop}
+                  className="border-white/20 bg-white/5 text-slate-100 hover:bg-white/10"
+                >
+                  <Crop className="size-4" aria-hidden="true" /> Edit crop
                 </Button>
               </div>
               {pdfSize != null && (
@@ -1038,13 +1134,20 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
                     {pages.map((p, i) => (
                       <li key={p.id} className="shrink-0">
                         <div className="relative">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={p.thumb}
-                            alt={`Page ${i + 1}`}
-                            className="h-20 w-16 rounded-md object-cover ring-1 ring-white/15"
-                          />
-                          <span className="absolute left-1 top-1 rounded bg-black/60 px-1 text-[0.6rem] font-medium text-white">
+                          <button
+                            type="button"
+                            onClick={() => startEditPage(i)}
+                            aria-label={`Edit page ${i + 1}`}
+                            className="block rounded-md focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={p.thumb}
+                              alt={`Page ${i + 1}`}
+                              className="h-20 w-16 rounded-md object-cover ring-1 ring-white/15"
+                            />
+                          </button>
+                          <span className="pointer-events-none absolute left-1 top-1 rounded bg-black/60 px-1 text-[0.6rem] font-medium text-white">
                             {i + 1}
                           </span>
                           <button
@@ -1080,7 +1183,7 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
                     ))}
                     <li className="shrink-0">
                       <div className="flex h-20 w-16 items-center justify-center rounded-md bg-teal-500/10 px-1 text-center text-[0.6rem] font-medium text-teal-200 ring-1 ring-teal-400/60">
-                        This page
+                        {editingIndex !== null ? `Editing page ${editingIndex + 1}` : "This page"}
                       </div>
                     </li>
                   </ul>
@@ -1096,6 +1199,31 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
                 enterKeyHint="done"
                 className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-base text-slate-100 placeholder:text-slate-400 focus-visible:border-teal-300 focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none sm:text-sm"
               />
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs text-slate-400">PDF quality</span>
+                <div
+                  className="inline-flex rounded-full bg-white/5 p-0.5"
+                  role="group"
+                  aria-label="PDF quality"
+                >
+                  {(["standard", "hd"] as const).map((q) => (
+                    <button
+                      key={q}
+                      type="button"
+                      onClick={() => setExportQuality(q)}
+                      aria-pressed={exportQuality === q}
+                      className={cn(
+                        "rounded-full px-3 py-1 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none",
+                        exportQuality === q
+                          ? "bg-teal-500 text-slate-950"
+                          : "text-slate-200 hover:text-white",
+                      )}
+                    >
+                      {q === "standard" ? "Standard" : "HD"}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-2">
                 <Button variant="outline" onClick={retake} className="border-white/20 bg-white/5 text-slate-100 hover:bg-white/10">
                   <RefreshCw className="size-4" aria-hidden="true" /> Retake
@@ -1482,10 +1610,12 @@ function AdjustSlider({
   label,
   value,
   onChange,
+  min = -100,
 }: {
   label: string;
   value: number;
   onChange: (value: number) => void;
+  min?: number;
 }) {
   return (
     <label className="block">
@@ -1495,7 +1625,7 @@ function AdjustSlider({
       </span>
       <input
         type="range"
-        min={-100}
+        min={min}
         max={100}
         step={1}
         value={value}
