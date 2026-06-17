@@ -161,6 +161,10 @@ export default function WaitlistPage() {
                         <Input
                           id="email"
                           type="email"
+                          inputMode="email"
+                          autoCapitalize="none"
+                          autoCorrect="off"
+                          spellCheck={false}
                           required
                           value={email}
                           onChange={(event) => setEmail(event.target.value)}

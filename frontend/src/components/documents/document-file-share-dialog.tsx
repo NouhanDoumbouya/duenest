@@ -720,6 +720,10 @@ export function DocumentFileShareDialog({
                 <Input
                   id="share-recipient"
                   type="email"
+                  inputMode="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   value={recipientEmail}
                   onChange={(event) => setRecipientEmail(event.target.value)}
                   placeholder="visaoffice@example.edu"

@@ -1064,6 +1064,10 @@ function TrustedContactsSection({
                 <Input
                   id="c-email"
                   type="email"
+                  inputMode="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   className="h-10"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}

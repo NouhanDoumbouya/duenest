@@ -147,6 +147,10 @@ export default function OrganizationRequestPage({
                       <Input
                         id="email"
                         type="email"
+                        inputMode="email"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck={false}
                         value={email}
                         onChange={(event) => setEmail(event.target.value)}
                         placeholder="you@example.com"
