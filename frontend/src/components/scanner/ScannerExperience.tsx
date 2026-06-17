@@ -16,6 +16,7 @@ import {
   Maximize,
   Mic,
   MicOff,
+  MoreHorizontal,
   Plus,
   RefreshCw,
   RotateCcw,
@@ -137,6 +138,8 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
   const [adjust, setAdjust] = useState<Adjustments>(NEUTRAL_ADJUST);
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [exportQuality, setExportQuality] = useState<"standard" | "hd">("standard");
+  // Human-readable progress shown during multi-step work (PDF build → upload).
+  const [progress, setProgress] = useState<string | null>(null);
   // When re-editing a committed page, the slot it should return to (else append).
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [docName, setDocName] = useState("");
@@ -569,6 +572,7 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
     }
     if (canvases.length === 0) return;
     setBusy(true);
+    setProgress("Preparing PDF…");
     announce("Generating PDF");
     let blob: Blob;
     try {
@@ -578,6 +582,7 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
       setPdfSize(blob.size);
     } catch {
       setBusy(false);
+      setProgress(null);
       showToast("PDF generation failed. Please try again.", "error");
       return;
     }
@@ -585,10 +590,12 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
     const filename = `${buildScanBasename(docName)}.pdf`;
 
     if (!online) {
+      setProgress("Saving offline…");
       await enqueueScan(blob, filename);
       await requestBackgroundFlush();
       await refreshQueue();
       setBusy(false);
+      setProgress(null);
       setPhase("done");
       showToast(
         "You are offline. Scan saved locally and will upload when connection returns.",
@@ -599,13 +606,15 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
     }
 
     try {
+      setProgress("Uploading…");
       await uploadScan(blob, filename);
       setBusy(false);
+      setProgress(null);
       setPhase("done");
       showToast(
         canvases.length > 1
-          ? `${canvases.length}-page scan uploaded to your vault.`
-          : "Scan uploaded to your vault.",
+          ? `${canvases.length}-page scan saved to your File Inbox.`
+          : "Scan saved to your File Inbox.",
         "success",
       );
       announce("Upload complete");
@@ -613,6 +622,7 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
       await enqueueScan(blob, filename);
       await refreshQueue();
       setBusy(false);
+      setProgress(null);
       setPhase("done");
       const message = (err as Error).message || "Upload failed.";
       showToast(`${message} Saved locally to retry.`, "error");
@@ -845,6 +855,7 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
     if (found) {
       setQuad(found.map((p) => ({ x: p.x / scale, y: p.y / scale })) as Quad);
       haptic(20);
+      showToast("Edges detected.", "success");
       announce("Edges detected");
     } else {
       showToast("Edges weren't found. Adjust the corners or use the full image.", "info");
@@ -1000,6 +1011,11 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
                   ))}
                 </div>
               )}
+              {warnings.length === 0 && (
+                <p className="flex items-center justify-center gap-1.5 text-xs text-teal-300">
+                  <Check className="size-3.5" aria-hidden="true" /> Looks clear — ready to save
+                </p>
+              )}
               <div
                 className="-mx-1 flex items-center gap-2 overflow-x-auto px-1 pb-1"
                 role="group"
@@ -1020,7 +1036,7 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
                   aria-expanded={moreOpen}
                   className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white/5 px-3.5 py-1.5 text-xs font-medium text-slate-200 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
                 >
-                  <SlidersHorizontal className="size-3.5" aria-hidden="true" /> More
+                  <MoreHorizontal className="size-3.5" aria-hidden="true" /> More
                 </button>
               </div>
               <p className="text-center text-xs text-slate-400">
@@ -1224,6 +1240,11 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
                   ))}
                 </div>
               </div>
+              {exportQuality === "hd" && (
+                <p className="text-right text-[0.68rem] text-slate-400">
+                  HD keeps more detail and may create a larger file.
+                </p>
+              )}
               <div className="grid grid-cols-2 gap-2">
                 <Button variant="outline" onClick={retake} className="border-white/20 bg-white/5 text-slate-100 hover:bg-white/10">
                   <RefreshCw className="size-4" aria-hidden="true" /> Retake
@@ -1238,11 +1259,13 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
                 className="w-full bg-teal-500 text-slate-950 hover:bg-teal-400"
               >
                 {busy ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Upload className="size-4" aria-hidden="true" />}
-                {online
-                  ? pages.length > 0
-                    ? `Save to Vault (${pages.length + 1} pages)`
-                    : "Save to Vault"
-                  : "Save offline"}
+                {busy
+                  ? (progress ?? "Saving…")
+                  : online
+                    ? pages.length > 0
+                      ? `Save to Inbox (${pages.length + 1} pages)`
+                      : "Save to Inbox"
+                    : "Save offline"}
               </Button>
             </div>
 
@@ -1262,7 +1285,7 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
               <Check className="size-8 text-teal-300" aria-hidden="true" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold">{online ? "Scan saved" : "Scan queued"}</h2>
+              <h2 className="text-lg font-semibold">{online ? "Saved to File Inbox" : "Scan queued"}</h2>
               <p className="mt-1 max-w-xs text-sm text-slate-400">
                 {online
                   ? "It's safe in your File Inbox. Organize it to add an expiry date, category, reminder, or add it to a bundle."
@@ -1476,6 +1499,10 @@ function IdleScreen(props: {
         <p className="mt-2 text-sm text-slate-400">
           Capture passports, letters, and forms. We auto-detect the edges, flatten the page,
           and save a clean PDF straight to your encrypted vault.
+        </p>
+        <p className="mt-3 inline-flex items-center gap-1.5 text-xs text-slate-500">
+          <ShieldCheck className="size-3.5 text-teal-300/80" aria-hidden="true" />
+          Processed on your device
         </p>
       </div>
 

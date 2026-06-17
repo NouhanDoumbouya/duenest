@@ -47,6 +47,14 @@ describe("FILTERS metadata", () => {
     }
   });
 
+  it("keeps the visible (primary) tray small so it can't crowd mobile", () => {
+    const primary = FILTERS.filter((f) => f.primary);
+    expect(primary.length).toBeGreaterThan(0);
+    expect(primary.length).toBeLessThanOrEqual(5);
+    // Original must always be reachable directly in the tray.
+    expect(primary.map((f) => f.id)).toContain("original");
+  });
+
   it("keeps Original safe and B&W flagged as color-destroying", () => {
     const original = getFilterMeta("original");
     expect(original.destructiveRisk).toBe("none");
