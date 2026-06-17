@@ -2,19 +2,22 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  AlertTriangle,
   Check,
-  Crop,
   FileText,
   FlashlightOff,
   Flashlight,
   Image as ImageIcon,
   Loader2,
+  Maximize,
   Mic,
   MicOff,
   RefreshCw,
   RotateCcw,
   RotateCw,
+  ScanSearch,
   ShieldCheck,
+  SlidersHorizontal,
   Upload,
   WifiOff,
   X,
@@ -45,7 +48,17 @@ import {
   tiltLabel,
 } from "@/lib/scanner/orientation";
 import { createVoiceController, type VoiceController } from "@/lib/scanner/voice";
-import { ENHANCE_MODES, enhanceCanvas } from "@/lib/scanner/enhance";
+import {
+  applyFilter,
+  DEFAULT_FILTER,
+  FILTERS,
+  getFilterMeta,
+  type FilterId,
+} from "@/lib/scanner/filters";
+import {
+  analyzeCanvasQuality,
+  type ScanQualityWarning,
+} from "@/lib/scanner/quality";
 import { formatBytes, generatePdfBlob } from "@/lib/scanner/pdf";
 import { uploadScan, flushQueuedScans } from "@/lib/scanner/client";
 import { enqueueScan, listQueuedScans, purgeStale } from "@/lib/scanner/queue";
@@ -56,7 +69,6 @@ import {
 } from "@/lib/scanner/sw";
 import type {
   DetectionState,
-  EnhanceMode,
   Quad,
   QueuedScan,
   ScannerCapabilities,
@@ -92,7 +104,10 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
   const [autoCapture, setAutoCapture] = useState(true);
   const [holdProgress, setHoldProgress] = useState(0);
   const [flash, setFlash] = useState(false);
-  const [enhanceMode, setEnhanceMode] = useState<EnhanceMode>("clean");
+  const [filterId, setFilterId] = useState<FilterId>(DEFAULT_FILTER);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [warnings, setWarnings] = useState<ScanQualityWarning[]>([]);
+  const [docName, setDocName] = useState("");
   const [pdfSize, setPdfSize] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [online, setOnline] = useState(() =>
@@ -103,6 +118,10 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
   const [quad, setQuad] = useState<Quad | null>(null);
   const [frozenCanvas, setFrozenCanvas] = useState<HTMLCanvasElement | null>(null);
   const [enhancedCanvas, setEnhancedCanvas] = useState<HTMLCanvasElement | null>(null);
+  // The warped/cropped page BEFORE any filter. Filters are non-destructive: they
+  // are always re-derived from this base, so switching filters or reverting to
+  // Original never compounds processing or loses quality.
+  const baseCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -417,18 +436,16 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
     img.src = url;
   }, [announce, showToast]);
 
-  // ---- apply warp + enhance --------------------------------------------
-  const buildEnhanced = useCallback(
-    (mode: EnhanceMode): HTMLCanvasElement | null => {
-      if (!frozenCanvas || !quad) return null;
-      const cv = cvRef.current;
-      const warped = cv
-        ? warpToCanvas(cv, frozenCanvas, quad)
-        : cropBoundingBox(frozenCanvas, quad);
-      return enhanceCanvas(warped, mode);
-    },
-    [frozenCanvas, quad],
-  );
+  // ---- apply warp, then non-destructive filters ------------------------
+  // Warp/crop the captured frame ONCE into a base canvas; filters and rotation
+  // are always re-derived from that base so nothing compounds or degrades.
+  const buildBase = useCallback((): HTMLCanvasElement | null => {
+    if (!frozenCanvas || !quad) return null;
+    const cv = cvRef.current;
+    return cv
+      ? warpToCanvas(cv, frozenCanvas, quad)
+      : cropBoundingBox(frozenCanvas, quad);
+  }, [frozenCanvas, quad]);
 
   const applyCrop = useCallback(() => {
     if (!frozenCanvas || !quad) return;
@@ -436,28 +453,43 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
     announce("Processing scan");
     window.setTimeout(() => {
       try {
-        const enhanced = buildEnhanced(enhanceMode);
-        if (!enhanced) throw new Error("enhance failed");
-        setEnhancedCanvas(enhanced);
+        const base = buildBase();
+        if (!base) throw new Error("warp failed");
+        baseCanvasRef.current = base;
+        setEnhancedCanvas(applyFilter(base, filterId));
+        setWarnings(analyzeCanvasQuality(base));
         setPdfSize(null);
         setPhase("enhancing");
-        announce("PDF ready to review");
+        announce("Scan ready to review");
       } catch {
         showToast("We couldn't process that scan. Try retaking it.", "error");
       } finally {
         setBusy(false);
       }
     }, 30);
-  }, [announce, buildEnhanced, enhanceMode, frozenCanvas, quad, showToast]);
+  }, [announce, buildBase, filterId, frozenCanvas, quad, showToast]);
 
-  const changeEnhanceMode = useCallback(
-    (mode: EnhanceMode) => {
-      setEnhanceMode(mode);
+  // Switch filters live. Re-derives from the untouched base (non-destructive)
+  // and falls back to Original with a friendly message if a filter throws.
+  const changeFilter = useCallback(
+    (id: FilterId) => {
+      setFilterId(id);
+      setMoreOpen(false);
       setPdfSize(null);
-      const enhanced = buildEnhanced(mode);
-      if (enhanced) setEnhancedCanvas(enhanced);
+      const base = baseCanvasRef.current;
+      if (!base) return;
+      try {
+        setEnhancedCanvas(applyFilter(base, id));
+      } catch {
+        setFilterId("original");
+        setEnhancedCanvas(applyFilter(base, "original"));
+        showToast(
+          "That filter couldn't be applied. We kept the original scan.",
+          "error",
+        );
+      }
     },
-    [buildEnhanced],
+    [showToast],
   );
 
   // Paint the current enhanced canvas into the visible preview canvas.
@@ -487,7 +519,7 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
       return;
     }
 
-    const filename = `scan-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "")}.pdf`;
+    const filename = `${buildScanBasename(docName)}.pdf`;
 
     if (!online) {
       await enqueueScan(blob, filename);
@@ -518,12 +550,17 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
       showToast(`${message} Saved locally to retry.`, "error");
       announce("Scan queued for upload when online");
     }
-  }, [announce, enhancedCanvas, online, refreshQueue, showToast]);
+  }, [announce, docName, enhancedCanvas, online, refreshQueue, showToast]);
 
   // ---- navigation helpers ----------------------------------------------
   const retake = useCallback(() => {
     setFrozenCanvas(null);
     setEnhancedCanvas(null);
+    baseCanvasRef.current = null;
+    setWarnings([]);
+    setDocName("");
+    setFilterId(DEFAULT_FILTER);
+    setMoreOpen(false);
     setQuad(null);
     setDetection("searching");
     setPhase("camera");
@@ -551,13 +588,66 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
   // repaint effect) and the saved/uploaded PDF, since both read enhancedCanvas.
   const rotatePreview = useCallback(
     (clockwise: boolean) => {
-      setEnhancedCanvas((prev) => (prev ? rotateCanvas90(prev, clockwise) : prev));
+      // Rotate the base too, so switching filters after a rotation keeps the
+      // orientation instead of snapping back to the un-rotated capture.
+      const base = baseCanvasRef.current;
+      if (base) {
+        const rotated = rotateCanvas90(base, clockwise);
+        baseCanvasRef.current = rotated;
+        setEnhancedCanvas(applyFilter(rotated, filterId));
+      } else {
+        setEnhancedCanvas((prev) => (prev ? rotateCanvas90(prev, clockwise) : prev));
+      }
       setPdfSize(null);
       haptic(20);
       announce(clockwise ? "Rotated right" : "Rotated left");
     },
-    [announce],
+    [announce, filterId],
   );
+
+  // ---- edge-detection fallbacks (cropping phase) -----------------------
+  // Stretch the crop to the entire frame — a one-tap escape from bad detection.
+  const useFullImage = useCallback(() => {
+    const c = frozenCanvas;
+    if (!c) return;
+    setQuad([
+      { x: 0, y: 0 },
+      { x: c.width, y: 0 },
+      { x: c.width, y: c.height },
+      { x: 0, y: c.height },
+    ]);
+    announce("Using the full image");
+  }, [announce, frozenCanvas]);
+
+  // Re-run edge detection on the captured frame (downscaled for speed).
+  const retryDetect = useCallback(() => {
+    const c = frozenCanvas;
+    const cv = cvRef.current;
+    if (!c) return;
+    if (!cv) {
+      showToast("Edge detection is still loading. Adjust the corners manually.", "info");
+      return;
+    }
+    const scale = Math.min(1, 900 / c.width);
+    const small = document.createElement("canvas");
+    small.width = Math.round(c.width * scale);
+    small.height = Math.round(c.height * scale);
+    small.getContext("2d")?.drawImage(c, 0, 0, small.width, small.height);
+    let found: Quad | null = null;
+    try {
+      found = detectQuadFromCanvas(cv, small);
+    } catch {
+      found = null;
+    }
+    if (found) {
+      setQuad(found.map((p) => ({ x: p.x / scale, y: p.y / scale })) as Quad);
+      haptic(20);
+      announce("Edges detected");
+    } else {
+      showToast("Edges weren't found. Adjust the corners or use the full image.", "info");
+      announce("Edges not detected");
+    }
+  }, [announce, frozenCanvas, showToast]);
 
   return (
     <div className="fixed inset-0 z-[100] flex flex-col bg-slate-950 text-slate-50">
@@ -642,24 +732,39 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
               </p>
               <CropEditor source={frozenCanvas} quad={quad} onQuadChange={setQuad} />
             </div>
-            <div className="grid grid-cols-2 gap-2 border-t border-white/10 bg-slate-950/80 p-4 backdrop-blur-md sm:grid-cols-4">
-              <Button variant="outline" onClick={retake} className="border-white/20 bg-white/5 text-slate-100 hover:bg-white/10">
-                <RefreshCw className="size-4" aria-hidden="true" /> Retake
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => frozenCanvas && quad && resetQuad(frozenCanvas, setQuad)}
-                className="border-white/20 bg-white/5 text-slate-100 hover:bg-white/10"
-              >
-                <Crop className="size-4" aria-hidden="true" /> Reset
-              </Button>
-              <Button variant="outline" onClick={rotateCrop} className="border-white/20 bg-white/5 text-slate-100 hover:bg-white/10">
-                <RotateCw className="size-4" aria-hidden="true" /> Rotate
-              </Button>
-              <Button onClick={applyCrop} disabled={busy} className="bg-teal-500 text-slate-950 hover:bg-teal-400">
-                {busy ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Check className="size-4" aria-hidden="true" />}
-                Apply
-              </Button>
+            <div className="space-y-2 border-t border-white/10 bg-slate-950/80 p-4 backdrop-blur-md">
+              {/* Edge-detection escape hatches: never trap the user on bad auto-detection. */}
+              <div className="flex items-center justify-center gap-4 text-xs">
+                <button
+                  type="button"
+                  onClick={retryDetect}
+                  className="inline-flex items-center gap-1.5 text-teal-300 hover:underline focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
+                >
+                  <ScanSearch className="size-3.5" aria-hidden="true" /> Retry detection
+                </button>
+                <button
+                  type="button"
+                  onClick={() => frozenCanvas && resetQuad(frozenCanvas, setQuad)}
+                  className="text-slate-300 hover:underline focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
+                >
+                  Reset corners
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <Button variant="outline" onClick={retake} className="border-white/20 bg-white/5 text-slate-100 hover:bg-white/10">
+                  <RefreshCw className="size-4" aria-hidden="true" /> Retake
+                </Button>
+                <Button variant="outline" onClick={useFullImage} className="border-white/20 bg-white/5 text-slate-100 hover:bg-white/10">
+                  <Maximize className="size-4" aria-hidden="true" /> Full image
+                </Button>
+                <Button variant="outline" onClick={rotateCrop} className="border-white/20 bg-white/5 text-slate-100 hover:bg-white/10">
+                  <RotateCw className="size-4" aria-hidden="true" /> Rotate
+                </Button>
+                <Button onClick={applyCrop} disabled={busy} className="bg-teal-500 text-slate-950 hover:bg-teal-400">
+                  {busy ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Check className="size-4" aria-hidden="true" />}
+                  Apply
+                </Button>
+              </div>
             </div>
           </div>
         )}
@@ -674,24 +779,50 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
               />
             </div>
             <div className="space-y-3 border-t border-white/10 bg-slate-950/80 p-4 backdrop-blur-md">
-              <div className="flex items-center justify-center gap-2" role="group" aria-label="Enhancement level">
-                {ENHANCE_MODES.map((m) => (
-                  <button
-                    key={m.value}
-                    type="button"
-                    onClick={() => changeEnhanceMode(m.value)}
-                    aria-pressed={enhanceMode === m.value}
-                    className={cn(
-                      "rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none",
-                      enhanceMode === m.value
-                        ? "bg-teal-500 text-slate-950"
-                        : "bg-white/5 text-slate-200 hover:bg-white/10",
-                    )}
-                  >
-                    {m.label}
-                  </button>
+              {warnings.length > 0 && (
+                <div className="space-y-1.5">
+                  {warnings.map((w) => (
+                    <p
+                      key={w.id}
+                      className={cn(
+                        "flex items-start gap-1.5 rounded-lg px-2.5 py-1.5 text-xs",
+                        w.severity === "warn"
+                          ? "bg-amber-500/15 text-amber-200"
+                          : "bg-white/5 text-slate-300",
+                      )}
+                    >
+                      <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+                      <span>{w.message}</span>
+                    </p>
+                  ))}
+                </div>
+              )}
+              <div
+                className="-mx-1 flex items-center gap-2 overflow-x-auto px-1 pb-1"
+                role="group"
+                aria-label="Document filter"
+              >
+                {FILTERS.filter((f) => f.primary).map((f) => (
+                  <FilterChip
+                    key={f.id}
+                    label={f.label}
+                    active={filterId === f.id}
+                    onClick={() => changeFilter(f.id)}
+                  />
                 ))}
+                <button
+                  type="button"
+                  onClick={() => setMoreOpen(true)}
+                  aria-haspopup="dialog"
+                  aria-expanded={moreOpen}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white/5 px-3.5 py-1.5 text-xs font-medium text-slate-200 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
+                >
+                  <SlidersHorizontal className="size-3.5" aria-hidden="true" /> More
+                </button>
               </div>
+              <p className="text-center text-xs text-slate-400">
+                {getFilterMeta(filterId).description}
+              </p>
               <div className="flex items-center justify-center gap-2" role="group" aria-label="Rotate scan">
                 <Button
                   variant="outline"
@@ -713,16 +844,34 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
               {pdfSize != null && (
                 <p className="text-center text-xs text-slate-400">PDF size: {formatBytes(pdfSize)}</p>
               )}
+              {/* Optional rename — quick save still works if left blank. */}
+              <input
+                type="text"
+                value={docName}
+                onChange={(e) => setDocName(e.target.value)}
+                placeholder="Document name (optional)"
+                aria-label="Document name"
+                enterKeyHint="done"
+                className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-base text-slate-100 placeholder:text-slate-400 focus-visible:border-teal-300 focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none sm:text-sm"
+              />
               <div className="grid grid-cols-2 gap-2">
                 <Button variant="outline" onClick={retake} className="border-white/20 bg-white/5 text-slate-100 hover:bg-white/10">
                   <RefreshCw className="size-4" aria-hidden="true" /> Retake
                 </Button>
                 <Button onClick={saveAndUpload} disabled={busy} className="bg-teal-500 text-slate-950 hover:bg-teal-400">
                   {busy ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Upload className="size-4" aria-hidden="true" />}
-                  {online ? "Save & upload" : "Save offline"}
+                  {online ? "Save to Vault" : "Save offline"}
                 </Button>
               </div>
             </div>
+
+            {moreOpen && (
+              <MoreFiltersSheet
+                activeId={filterId}
+                onSelect={changeFilter}
+                onClose={() => setMoreOpen(false)}
+              />
+            )}
           </div>
         )}
 
@@ -735,16 +884,16 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
               <h2 className="text-lg font-semibold">{online ? "Scan saved" : "Scan queued"}</h2>
               <p className="mt-1 max-w-xs text-sm text-slate-400">
                 {online
-                  ? "Your document is in your vault inbox."
+                  ? "It's safe in your File Inbox. Organize it to add an expiry date, category, reminder, or add it to a bundle."
                   : "It will upload automatically when you're back online."}
               </p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-center justify-center gap-2">
               <Button variant="outline" onClick={retake} className="border-white/20 bg-white/5 text-slate-100 hover:bg-white/10">
                 <FileText className="size-4" aria-hidden="true" /> Scan another
               </Button>
               <Button onClick={handleClose} className="bg-teal-500 text-slate-950 hover:bg-teal-400">
-                Done
+                {online ? "Organize in File Inbox" : "Done"}
               </Button>
             </div>
           </div>
@@ -1040,4 +1189,123 @@ function resetQuad(source: HTMLCanvasElement, setQuad: (q: Quad) => void) {
     { x: source.width * 0.94, y: source.height * 0.94 },
     { x: source.width * 0.06, y: source.height * 0.94 },
   ]);
+}
+
+/** A clean PDF basename from the optional user name; backend re-sanitizes too. */
+function buildScanBasename(name: string): string {
+  const cleaned = name
+    .trim()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 80);
+  if (cleaned) return cleaned;
+  return `scan-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "")}`;
+}
+
+function FilterChip({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "shrink-0 rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none",
+        active
+          ? "bg-teal-500 text-slate-950"
+          : "bg-white/5 text-slate-200 hover:bg-white/10",
+      )}
+    >
+      {label}
+    </button>
+  );
+}
+
+/**
+ * Bottom sheet of all filters with descriptions. Advanced filters carry a subtle
+ * "Pro" tag (descriptive only — nothing is gated/blocked in this branch).
+ */
+function MoreFiltersSheet({
+  activeId,
+  onSelect,
+  onClose,
+}: {
+  activeId: FilterId;
+  onSelect: (id: FilterId) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="absolute inset-0 z-40 flex flex-col justify-end bg-black/60"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Choose a filter"
+      onClick={onClose}
+    >
+      <div
+        className="max-h-[80%] overflow-y-auto rounded-t-2xl border-t border-white/10 bg-slate-900 p-4"
+        style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 1rem)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-slate-100">Filters</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close filters"
+            className="rounded-md p-1 text-slate-300 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
+          >
+            <X className="size-5" aria-hidden="true" />
+          </button>
+        </div>
+        <ul className="space-y-1.5">
+          {FILTERS.map((f) => (
+            <li key={f.id}>
+              <button
+                type="button"
+                onClick={() => onSelect(f.id)}
+                aria-pressed={activeId === f.id}
+                className={cn(
+                  "flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-colors focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none",
+                  activeId === f.id
+                    ? "border-teal-400/60 bg-teal-500/10"
+                    : "border-white/10 bg-white/5 hover:bg-white/10",
+                )}
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-slate-100">{f.label}</span>
+                    {f.planTier === "pro" && (
+                      <span className="rounded-full bg-amber-400/15 px-1.5 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide text-amber-300">
+                        Pro
+                      </span>
+                    )}
+                    {!f.preservesColor && (
+                      <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[0.6rem] font-medium text-slate-300">
+                        No color
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-0.5 text-xs leading-relaxed text-slate-400">
+                    {f.description}
+                  </p>
+                </div>
+                {activeId === f.id && (
+                  <Check className="mt-0.5 size-4 shrink-0 text-teal-300" aria-hidden="true" />
+                )}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
 }

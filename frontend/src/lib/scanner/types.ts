@@ -8,8 +8,6 @@ export type Quad = [Point, Point, Point, Point];
 
 export type DetectionState = "searching" | "detected" | "hold-steady" | "captured";
 
-export type EnhanceMode = "original" | "clean" | "high-contrast";
-
 export interface ScannerCapabilities {
   camera: boolean;
   torch: boolean;
