@@ -1,8 +1,9 @@
 # Document Scanner
 
 A mobile-first, in-browser document scanner: capture with the camera, auto-detect
-edges, refine corners, flatten perspective, enhance contrast, build a PDF, and
-upload to the existing encrypted vault — with an offline-resilient queue.
+edges, refine corners, flatten perspective, apply a non-destructive filter,
+build a PDF, and upload to the existing encrypted vault — with an
+offline-resilient queue.
 
 It is a **Next.js feature** (the DueNest frontend is a Next.js SPA, not Django
 templates) that reuses the **existing encrypted `DocumentFile` pipeline** rather
@@ -25,7 +26,8 @@ frontend/src/lib/scanner/        # framework-free logic modules
   opencv.ts         CDN loader, edge detection, perspective warp (Mat-safe)
   orientation.ts    DeviceOrientation bubble level (smoothed)
   voice.ts          Web Speech command controller
-  enhance.ts        canvas enhancement (original / clean / high-contrast)
+  filters.ts        non-destructive document filters + rich filter metadata
+  quality.ts        local scan-quality heuristics (brightness/contrast/blur)
   pdf.ts            jsPDF generation (lazy-loaded)
   queue.ts          localForage offline queue + Web Crypto encryption
   client.ts         upload + flush queued scans
@@ -39,6 +41,36 @@ frontend/src/components/scanner/
 
 frontend/public/scanner-sw.js   conservative service worker
 ```
+
+### Filters & scan quality (non-destructive)
+
+The warped/cropped page is kept as an untouched **base canvas**; filters are
+always re-derived from it (`filters.ts`), so switching filters or reverting to
+**Original** never compounds processing or loses quality. Rotation in the
+preview rotates the base too, so a later filter change keeps the orientation.
+
+- Filters: **Original, Auto, Light, Grayscale, B&W** are implemented; **ID /
+  Passport, Receipt, Low-Light, Signature / Stamp** are implemented as
+  color-preserving variants and tagged `planTier: "pro"` + `isExperimental`.
+  `Auto` is the default and is deliberately gentle so it never over-darkens.
+- Filter metadata (`FILTERS`) carries `planTier` (`free|pro|experimental|
+  internal_only`), `preservesColor`, `destructiveRisk`, `supportsBatchApply`,
+  etc. so advanced filters can be plan-gated later. **No paywall is enforced in
+  code** — the tags are descriptive only, and B&W is shown but never auto-applied
+  to color documents.
+- The pixel math (`applyFilterToImageData`) and quality heuristics
+  (`analyzeImageData` / `qualityWarnings` in `quality.ts`) are pure and
+  unit-tested (`filters.test.ts`, `quality.test.ts`). Quality warnings
+  (dark / bright / low-contrast / blurry / low-resolution) are **non-blocking** —
+  the user can always save anyway. All analysis is local; no image content
+  leaves the browser.
+
+**Honest limitation:** multi-page capture and manual brightness/contrast sliders
+are not implemented yet (`pdf.ts` already accepts an array, ready for multi-page).
+Scanned files land in the **File Inbox** as encrypted files; adding expiry /
+category / reminder / bundle happens when organizing the inbox file into a
+Document (the scanner links there from the done screen rather than faking
+attachment).
 
 ### Capability detection & graceful degradation
 
