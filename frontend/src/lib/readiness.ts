@@ -423,6 +423,31 @@ export function getOnboardingRedirect(state: OnboardingState | null): string | n
   return shouldShowOnboarding(state) ? "/dashboard/onboarding" : null;
 }
 
+/** The goal-based readiness flow a genuinely new user should start in. */
+export const READINESS_FLOW_PATH = "/dashboard/readiness-setup";
+
+/**
+ * Decide where to send a user right after a successful login/signup.
+ *
+ * Precedence (loop-safe by construction):
+ *   1. An explicit, already-sanitized `next` (deep link / returnTo) ALWAYS wins —
+ *      invite, SafeSend, emergency and any preserved destination are never hijacked.
+ *   2. A genuinely new user (not completed, not skipped/dismissed, no first
+ *      document) → the readiness flow.
+ *   3. Everyone else (returning, completed, skipped) → the dashboard.
+ *
+ * Returns `/dashboard` when onboarding state is unknown (fetch failed), so a
+ * transient error can never trap anyone or cause a redirect loop.
+ */
+export function postAuthDestination(opts: {
+  explicitNext: string | null;
+  onboarding: OnboardingState | null;
+}): string {
+  if (opts.explicitNext) return opts.explicitNext;
+  if (shouldShowOnboarding(opts.onboarding)) return READINESS_FLOW_PATH;
+  return "/dashboard";
+}
+
 /** "Step 2 of 5" style progress text. */
 export function formatOnboardingProgress(currentStep: number, totalSteps: number): string {
   const safeTotal = Math.max(1, totalSteps);

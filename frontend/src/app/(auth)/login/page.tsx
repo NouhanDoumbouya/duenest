@@ -19,6 +19,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { login } from "@/lib/auth";
+import { getOnboardingState } from "@/lib/onboarding";
+import { postAuthDestination } from "@/lib/readiness";
 import { ApiError } from "@/lib/api";
 
 function LoginForm() {
@@ -28,10 +30,12 @@ function LoginForm() {
   // Preserve a post-login destination (e.g. a Quick Share claim page). Only
   // same-origin relative paths are honoured.
   const nextParam = searchParams.get("next");
-  const nextPath =
+  // A safe, same-origin deep link / returnTo. When present it always wins, so
+  // invite / SafeSend / emergency / preserved destinations are never hijacked.
+  const explicitNext =
     nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//")
       ? nextParam
-      : "/dashboard";
+      : null;
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -45,9 +49,19 @@ function LoginForm() {
 
     try {
       await login({ username, password });
-      // Login success → return to the preserved destination, else the dashboard.
+      // A preserved deep link always wins; otherwise genuinely new users start
+      // in the readiness flow. Onboarding state is only fetched when there's no
+      // explicit destination, and any failure falls back to the dashboard.
+      let onboarding = null;
+      if (!explicitNext) {
+        try {
+          onboarding = await getOnboardingState();
+        } catch {
+          onboarding = null;
+        }
+      }
       // `replace` so the login page isn't left in the back-history stack.
-      router.replace(nextPath);
+      router.replace(postAuthDestination({ explicitNext, onboarding }));
     } catch (err) {
       setError(
         err instanceof ApiError
