@@ -434,7 +434,6 @@ export default function DashboardPage() {
             <div className="flex flex-col gap-6" id="fix-first">
               <SectionCard
                 title="Fix first"
-                description="Most urgent first, across documents, money, shares, and emergency."
                 action={
                   <Link
                     href="/dashboard/attention"
@@ -455,10 +454,7 @@ export default function DashboardPage() {
                 )}
               </SectionCard>
 
-              <SectionCard
-                title="Quick actions"
-                description="Jump straight to the things you do most."
-              >
+              <SectionCard title="Quick actions">
                 <QuickActionsPanel />
               </SectionCard>
 
