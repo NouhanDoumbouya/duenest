@@ -7,9 +7,12 @@ import {
   CreditCard,
   FileText,
   LifeBuoy,
-  Plus,
+  Package,
+  ScanLine,
   Share2,
   ShieldAlert,
+  ShieldCheck,
+  type LucideIcon,
 } from "lucide-react";
 
 import { LifeRadarHero } from "@/components/dashboard/life-radar/hero";
@@ -44,7 +47,16 @@ import {
   getSubscriptionSummary,
 } from "@/lib/subscriptions";
 import { listQuickShares, revokeQuickShare } from "@/lib/quick-share";
-import { getDocumentSetupChecklist, getOnboardingState } from "@/lib/onboarding";
+import {
+  getDocumentSetupChecklist,
+  getOnboardingState,
+  updateOnboardingState,
+} from "@/lib/onboarding";
+import {
+  getQuickStartGoals,
+  type QuickStartGoal,
+  type QuickStartGoalKey,
+} from "@/lib/readiness";
 import {
   buildLifeRadarSummary,
   computeDashboardReadinessScore,
@@ -132,6 +144,7 @@ export default function DashboardPage() {
   const user = useDashboardUser();
   const [state, setState] = useState<RadarState | null>(null);
   const [revokingId, setRevokingId] = useState<number | null>(null);
+  const [checklistDismissed, setChecklistDismissed] = useState(false);
   const mountedRef = useRef(true);
 
   const load = useCallback(async () => {
@@ -220,6 +233,15 @@ export default function DashboardPage() {
       mountedRef.current = false;
     };
   }, [load]);
+
+  // Hide the readiness checklist for good (a calm "not now"). Optimistic; the
+  // metadata flag is best-effort so a network blip never traps the card on screen.
+  const handleDismissChecklist = useCallback(() => {
+    setChecklistDismissed(true);
+    void updateOnboardingState({
+      metadata: { readiness_checklist_dismissed: true },
+    }).catch(() => {});
+  }, []);
 
   const handleRevoke = useCallback(async (id: number) => {
     setRevokingId(id);
@@ -361,10 +383,12 @@ export default function DashboardPage() {
 
   const showSetupChecklist =
     !loading &&
+    !checklistDismissed &&
     state.checklist !== null &&
     state.onboarding !== null &&
     !state.onboarding.has_completed_document_onboarding &&
-    !state.onboarding.dismissed_onboarding_at;
+    !state.onboarding.dismissed_onboarding_at &&
+    !state.onboarding.metadata?.readiness_checklist_dismissed;
 
   return (
     <PageContainer>
@@ -388,7 +412,10 @@ export default function DashboardPage() {
       )}
 
       {showSetupChecklist && state?.checklist && (
-        <SetupChecklistCard checklist={state.checklist} />
+        <SetupChecklistCard
+          checklist={state.checklist}
+          onDismiss={handleDismissChecklist}
+        />
       )}
 
       {isBrandNew ? (
@@ -491,64 +518,86 @@ export default function DashboardPage() {
   );
 }
 
-/** Premium first-run state with three concrete next steps. */
+const QUICK_START_ICONS: Record<QuickStartGoalKey, LucideIcon> = {
+  document: FileText,
+  scan: ScanLine,
+  subscription: CreditCard,
+  bundle: Package,
+  safesend: Share2,
+  emergency: LifeBuoy,
+};
+
+/** A single goal-based starting path. */
+function GoalCard({ goal }: { goal: QuickStartGoal }) {
+  const Icon = QUICK_START_ICONS[goal.key];
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
+      <span className="flex size-9 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+        <Icon className="size-4" aria-hidden />
+      </span>
+      <div className="flex-1">
+        <p className="text-sm font-semibold">{goal.title}</p>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+          {goal.body}
+        </p>
+      </div>
+      <Link
+        href={goal.href}
+        onClick={() =>
+          trackEvent("empty_state_cta_used", { metadata: { goal: goal.key } })
+        }
+        className={cn(buttonVariants({ size: "sm" }), "w-full")}
+      >
+        {goal.cta}
+      </Link>
+    </div>
+  );
+}
+
+/**
+ * Premium first-run state: goal-based starting paths (life goals, not feature
+ * names). Four are shown by default; the rest are progressively disclosed so the
+ * empty dashboard stays calm on mobile.
+ */
 function BrandNewState() {
-  const steps = [
-    {
-      title: "Add your first document",
-      body: "Start with your passport, ID, visa, insurance, certificate, or any document you can't afford to lose.",
-      href: "/dashboard/documents/new",
-      cta: "Add document",
-      icon: FileText,
-    },
-    {
-      title: "Track a subscription",
-      body: "Catch silent renewals and trial endings before they charge you.",
-      href: "/dashboard/subscriptions/new",
-      cta: "Add subscription",
-      icon: CreditCard,
-    },
-    {
-      title: "Prepare emergency access",
-      body: "Set up trusted access so the right people can help if needed.",
-      href: "/dashboard/emergency",
-      cta: "Set up",
-      icon: LifeBuoy,
-    },
-  ];
+  const goals = getQuickStartGoals();
+  const primary = goals.filter((g) => g.primary);
+  const more = goals.filter((g) => !g.primary);
+  const [showMore, setShowMore] = useState(false);
+
   return (
     <SectionCard
-      title="Get started in 3 steps"
-      description="DueNest will start watching your renewals, deadlines, shares, and emergency setup as soon as you add something."
+      title="Start with one thing"
+      description="Pick a goal — DueNest starts watching the dates that matter as soon as you add something. You can do the rest later."
     >
-      <div className="grid gap-3 sm:grid-cols-3">
-        {steps.map((step) => {
-          const Icon = step.icon;
-          return (
-            <div
-              key={step.title}
-              className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4"
-            >
-              <span className="flex size-9 items-center justify-center rounded-lg bg-accent text-accent-foreground">
-                <Icon className="size-4" aria-hidden />
-              </span>
-              <div className="flex-1">
-                <p className="text-sm font-semibold">{step.title}</p>
-                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                  {step.body}
-                </p>
-              </div>
-              <Link
-                href={step.href}
-                className={cn(buttonVariants({ size: "sm" }), "w-full")}
-              >
-                <Plus className="size-3.5" aria-hidden />
-                {step.cta}
-              </Link>
-            </div>
-          );
-        })}
+      <div className="grid gap-3 sm:grid-cols-2">
+        {primary.map((goal) => (
+          <GoalCard key={goal.key} goal={goal} />
+        ))}
       </div>
+
+      {showMore && (
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          {more.map((goal) => (
+            <GoalCard key={goal.key} goal={goal} />
+          ))}
+        </div>
+      )}
+
+      {!showMore && more.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowMore(true)}
+          className="mt-3 text-sm font-medium text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+        >
+          More ways to start
+        </button>
+      )}
+
+      <p className="mt-4 flex items-center gap-1.5 text-xs text-muted-foreground">
+        <ShieldCheck className="size-3.5 text-brand-success" aria-hidden />
+        Your documents stay private. Only you control what gets shared.
+      </p>
     </SectionCard>
   );
 }

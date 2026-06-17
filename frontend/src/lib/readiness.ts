@@ -42,6 +42,83 @@ export interface GoalOption {
   description: string;
 }
 
+/** A first-action starting path for a brand-new dashboard. Icons mapped in UI. */
+export type QuickStartGoalKey =
+  | "document"
+  | "scan"
+  | "subscription"
+  | "bundle"
+  | "safesend"
+  | "emergency";
+
+export interface QuickStartGoal {
+  key: QuickStartGoalKey;
+  title: string;
+  body: string;
+  href: string;
+  cta: string;
+  /** Top goals shown by default; the rest live under "More ways to start". */
+  primary: boolean;
+}
+
+/**
+ * Goal-based starting paths for the empty dashboard. Life goals, not feature
+ * names. The first four are shown by default; the rest are progressively
+ * disclosed so mobile never feels crowded. All routes are existing flows.
+ */
+export function getQuickStartGoals(): QuickStartGoal[] {
+  return [
+    {
+      key: "document",
+      title: "Track an expiring document",
+      body: "Add a passport, ID, visa, insurance, or anything with a date that matters.",
+      href: "/dashboard/documents/new",
+      cta: "Add document",
+      primary: true,
+    },
+    {
+      key: "scan",
+      title: "Scan a document",
+      body: "Capture a paper document, clean it up, and save it to your File Inbox.",
+      href: "/dashboard/scanner",
+      cta: "Start scanning",
+      primary: true,
+    },
+    {
+      key: "subscription",
+      title: "Track a subscription",
+      body: "Catch silent renewals and trial endings before they charge you.",
+      href: "/dashboard/subscriptions/new",
+      cta: "Add subscription",
+      primary: true,
+    },
+    {
+      key: "bundle",
+      title: "Prepare an application pack",
+      body: "Gather documents for a scholarship, visa, job, or university application.",
+      href: "/dashboard/bundles/new",
+      cta: "Create a pack",
+      primary: true,
+    },
+    {
+      key: "safesend",
+      title: "Share something safely",
+      body: "Share a document without losing control of who can open it.",
+      href: "/dashboard/quick-share",
+      cta: "Set up sharing",
+      primary: false,
+    },
+    {
+      key: "emergency",
+      title: "Set up emergency access",
+      body: "Choose what trusted people can reach if something happens.",
+      href: "/dashboard/emergency",
+      cta: "Set up",
+      primary: false,
+    },
+  ];
+}
+
 /** Use-case options shown on the goal-selection step (icons mapped in the UI). */
 export function getOnboardingGoalOptions(): GoalOption[] {
   return [

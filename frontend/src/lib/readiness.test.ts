@@ -10,6 +10,7 @@ import {
   getDocumentSuggestionsForGoal,
   getOnboardingGoalOptions,
   getOnboardingRedirect,
+  getQuickStartGoals,
   getPersonalizedNextAction,
   mergeReadinessMetadata,
   readReadinessMetadata,
@@ -171,5 +172,25 @@ describe("computeReadinessChecklist", () => {
     expect(items.find((i) => i.key === "first_document")?.completed).toBe(true);
     expect(items.find((i) => i.key === "try_safesend")?.completed).toBe(false);
     expect(items).toHaveLength(6);
+  });
+});
+
+describe("getQuickStartGoals", () => {
+  it("offers life goals with valid dashboard routes and unique keys", () => {
+    const goals = getQuickStartGoals();
+    expect(goals.length).toBeGreaterThanOrEqual(4);
+    expect(new Set(goals.map((g) => g.key)).size).toBe(goals.length);
+    for (const g of goals) {
+      expect(g.href.startsWith("/dashboard/")).toBe(true);
+      expect(g.title.length).toBeGreaterThan(0);
+      expect(g.cta.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("keeps the default (primary) set to four so mobile stays calm", () => {
+    const primary = getQuickStartGoals().filter((g) => g.primary);
+    expect(primary).toHaveLength(4);
+    expect(primary.map((g) => g.key)).toContain("scan");
+    expect(primary.map((g) => g.key)).toContain("document");
   });
 });
