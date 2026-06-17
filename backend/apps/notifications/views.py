@@ -5,8 +5,14 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Notification, NotificationPreference
-from .serializers import NotificationPreferenceSerializer, NotificationSerializer
+from .models import Notification, NotificationPreference, PushWebSubscription
+from .push import is_push_configured, public_key
+from .serializers import (
+    NotificationPreferenceSerializer,
+    NotificationSerializer,
+    PushSubscriptionSerializer,
+    PushSubscriptionWriteSerializer,
+)
 
 
 def get_preferences(user):
@@ -139,3 +145,61 @@ class NotificationPreferenceView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class PushPublicKeyView(APIView):
+    """Expose whether Web Push is available and the VAPID public key to subscribe."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        configured = is_push_configured()
+        return Response(
+            {
+                "enabled": configured,
+                "public_key": public_key() if configured else "",
+            }
+        )
+
+
+class PushSubscribeView(APIView):
+    """Register (or refresh) this device's Web Push subscription for the user."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = PushSubscriptionWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        subscription, _ = PushWebSubscription.objects.update_or_create(
+            endpoint=data["endpoint"],
+            defaults={
+                "user": request.user,
+                "p256dh": data["p256dh"],
+                "auth": data["auth"],
+                "device_label": data.get("device_label", ""),
+                "failure_count": 0,
+            },
+        )
+        return Response(
+            PushSubscriptionSerializer(subscription).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class PushUnsubscribeView(APIView):
+    """Remove this device's Web Push subscription (by endpoint)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        endpoint = (request.data.get("endpoint") or "").strip()
+        if not endpoint:
+            return Response(
+                {"detail": "endpoint is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        deleted, _ = PushWebSubscription.objects.filter(
+            user=request.user, endpoint=endpoint
+        ).delete()
+        return Response({"deleted": deleted})

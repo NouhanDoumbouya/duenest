@@ -201,3 +201,55 @@ async function notifyClientsToFlush() {
     client.postMessage({ type: "FLUSH_QUEUED_SCANS" });
   }
 }
+
+// ---- Web Push (PWA notifications) ------------------------------------------
+// The backend sends a privacy-safe payload only: a generic title/body plus an
+// internal URL. No document name or private detail ever reaches the lock screen
+// — the real, sensitive content is shown inside the authenticated app once the
+// user opens it. We always show a generic fallback if the payload is missing or
+// malformed, because Chrome requires a visible notification for every push.
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = {};
+  }
+  const title = typeof data.title === "string" && data.title ? data.title : "DueNest";
+  const body =
+    typeof data.body === "string" && data.body
+      ? data.body
+      : "You have a new update in DueNest.";
+  const url = typeof data.url === "string" && data.url.startsWith("/") ? data.url : "/dashboard/notifications";
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      tag: typeof data.tag === "string" ? data.tag : "duenest-notification",
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      data: { url },
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = (event.notification.data && event.notification.data.url) || "/dashboard/notifications";
+  event.waitUntil(
+    (async () => {
+      const clients = await self.clients.matchAll({
+        type: "window",
+        includeUncontrolled: true,
+      });
+      // Focus an existing tab and route it, otherwise open a new one.
+      for (const client of clients) {
+        if ("focus" in client) {
+          client.postMessage({ type: "PUSH_NAVIGATE", url: target });
+          return client.focus();
+        }
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(target);
+      return undefined;
+    })(),
+  );
+});

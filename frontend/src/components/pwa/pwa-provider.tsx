@@ -114,6 +114,28 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  // ---- Push notification click routing -------------------------------------
+  // When the user taps a push and an app tab is already open, the service
+  // worker focuses it and posts PUSH_NAVIGATE so we can route to the target page.
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
+      return;
+    }
+    const onMessage = (event: MessageEvent) => {
+      const data = event.data || {};
+      if (
+        data.type === "PUSH_NAVIGATE" &&
+        typeof data.url === "string" &&
+        data.url.startsWith("/")
+      ) {
+        window.location.assign(data.url);
+      }
+    };
+    navigator.serviceWorker.addEventListener("message", onMessage);
+    return () =>
+      navigator.serviceWorker.removeEventListener("message", onMessage);
+  }, []);
+
   // ---- Online / offline awareness ------------------------------------------
   useEffect(() => {
     const update = () => setOnline(navigator.onLine);

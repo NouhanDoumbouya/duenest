@@ -74,6 +74,7 @@ export interface NotificationSummary {
 export interface NotificationPreferences {
   in_app_enabled: boolean;
   email_enabled: boolean;
+  push_enabled: boolean;
   document_reminders_enabled: boolean;
   subscription_reminders_enabled: boolean;
   checklist_bundle_reminders_enabled: boolean;
