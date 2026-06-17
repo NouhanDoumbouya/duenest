@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDate, daysUntil } from "@/lib/documents";
 import { cn } from "@/lib/utils";
@@ -461,6 +462,12 @@ function TimelineEmptyState() {
             When documents, reminders, checklists, or bundles have upcoming
             dates, they’ll appear along this timeline in the order they arrive.
           </p>
+          <Link
+            href="/dashboard/documents/new"
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-4")}
+          >
+            Add a document
+          </Link>
         </div>
       </div>
     </div>
