@@ -436,6 +436,80 @@ class FileAccessTests(QuickShareBaseTest):
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
 
+class ShareViewedNotificationTests(QuickShareBaseTest):
+    """A recipient opening a shared file notifies the owner, privacy-safely."""
+
+    def _enable_activity_notifications(self, user):
+        from apps.notifications.models import NotificationPreference
+
+        prefs, _ = NotificationPreference.objects.get_or_create(user=user)
+        prefs.activity_notifications_enabled = True
+        prefs.save(update_fields=["activity_notifications_enabled"])
+
+    def _accept(self, session, user):
+        self.client.force_authenticate(user)
+        self.client.post(f"/api/v1/quick-share/claim/{session.token}/accept/")
+
+    def _owner_share_viewed(self):
+        from apps.notifications.models import Notification
+
+        return Notification.objects.filter(
+            user=self.alice, type=Notification.Type.SHARE_VIEWED
+        )
+
+    def test_recipient_preview_notifies_owner_when_enabled(self):
+        self._enable_activity_notifications(self.alice)
+        session = self.make_session()
+        self._accept(session, self.bob)
+        self.consume(
+            self.client.get(
+                f"/api/v1/quick-share/claim/{session.token}/files/{self.alice_file.id}/preview/"
+            )
+        )
+        note = self._owner_share_viewed().get()
+        self.assertEqual(note.action_url, f"/dashboard/quick-share/{session.id}")
+        # Privacy: no file name, recipient identity, or token in the copy/metadata.
+        self.assertNotIn("passport", (note.title + note.message).lower())
+        self.assertNotIn("bob", (note.title + note.message).lower())
+        self.assertNotIn(session.token, str(note.metadata))
+
+    def test_no_notification_when_activity_pref_disabled(self):
+        # Default preference leaves activity notifications off.
+        session = self.make_session()
+        self._accept(session, self.bob)
+        self.consume(
+            self.client.get(
+                f"/api/v1/quick-share/claim/{session.token}/files/{self.alice_file.id}/preview/"
+            )
+        )
+        self.assertFalse(self._owner_share_viewed().exists())
+
+    def test_owner_self_view_does_not_notify(self):
+        self._enable_activity_notifications(self.alice)
+        session = self.make_session(
+            permission=QuickShareSession.Permission.DOWNLOAD_ALLOWED
+        )
+        self.client.force_authenticate(self.alice)
+        self.consume(
+            self.client.get(
+                f"/api/v1/quick-share/claim/{session.token}/files/{self.alice_file.id}/download/"
+            )
+        )
+        self.assertFalse(self._owner_share_viewed().exists())
+
+    def test_repeat_views_same_day_dedupe_to_one(self):
+        self._enable_activity_notifications(self.alice)
+        session = self.make_session()
+        self._accept(session, self.bob)
+        for _ in range(3):
+            self.consume(
+                self.client.get(
+                    f"/api/v1/quick-share/claim/{session.token}/files/{self.alice_file.id}/preview/"
+                )
+            )
+        self.assertEqual(self._owner_share_viewed().count(), 1)
+
+
 class SaveCopyTests(QuickShareBaseTest):
     def _accept(self, session, user):
         self.client.force_authenticate(user)

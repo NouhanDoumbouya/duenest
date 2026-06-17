@@ -56,6 +56,7 @@ from .services import (
     get_or_create_receiver_claim,
     inline_file_response,
     log_activity,
+    notify_owner_share_viewed,
     resolve_session,
     resolve_session_file,
     save_copy_to_vault,
@@ -657,6 +658,10 @@ class QuickShareFilePreviewView(_ClaimFileAccessMixin):
             summary="File previewed.",
             metadata={"file_id": file.id},
         )
+        notify_owner_share_viewed(
+            session,
+            viewer=request.user if request.user.is_authenticated else None,
+        )
         return response
 
 
@@ -687,6 +692,10 @@ class QuickShareFileDownloadView(_ClaimFileAccessMixin):
             actor=request.user if request.user.is_authenticated else None,
             summary="File downloaded.",
             metadata={"file_id": file.id},
+        )
+        notify_owner_share_viewed(
+            session,
+            viewer=request.user if request.user.is_authenticated else None,
         )
         return response
 
