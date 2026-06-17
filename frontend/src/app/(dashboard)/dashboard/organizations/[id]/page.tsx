@@ -453,8 +453,42 @@ function OverviewTab({
         </SectionCard>
 
         <SectionCard title="Member compliance preview">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[560px] text-sm">
+          {/* Mobile: stacked cards, so nothing scrolls off-screen sideways. */}
+          <ul className="space-y-3 sm:hidden">
+            {state.members.slice(0, 6).map((member) => (
+              <li key={member.id} className="rounded-lg border border-border p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{member.user_name}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {member.user_email}
+                    </p>
+                  </div>
+                  <Badge variant="outline" className="shrink-0">
+                    {ROLE_LABELS[member.role]}
+                  </Badge>
+                </div>
+                <div className="mt-2 flex gap-4 text-xs text-muted-foreground">
+                  <span>
+                    Assigned:{" "}
+                    <span className="font-medium text-foreground">
+                      {member.assigned_requests_count}
+                    </span>
+                  </span>
+                  <span>
+                    Overdue:{" "}
+                    <span className="font-medium text-foreground">
+                      {member.overdue_requests_count}
+                    </span>
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          {/* Desktop: the full table. */}
+          <div className="hidden overflow-x-auto sm:block">
+            <table className="w-full min-w-[480px] text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-xs text-muted-foreground">
                   <th className="py-2 font-medium">Member</th>
@@ -998,8 +1032,43 @@ function MembersTab({
   return (
     <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
       <SectionCard title="Members">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] text-sm">
+        {/* Mobile: stacked cards instead of a sideways-scrolling table. */}
+        <ul className="space-y-3 sm:hidden">
+          {state.members.map((member) => (
+            <li key={member.id} className="rounded-lg border border-border p-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{member.user_name}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {member.user_email}
+                  </p>
+                </div>
+                <Badge variant="outline" className="shrink-0">
+                  {ROLE_LABELS[member.role]}
+                </Badge>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                <span className="capitalize">Status: {member.status}</span>
+                <span>
+                  Assigned:{" "}
+                  <span className="font-medium text-foreground">
+                    {member.assigned_requests_count}
+                  </span>
+                </span>
+                <span>
+                  Overdue:{" "}
+                  <span className="font-medium text-foreground">
+                    {member.overdue_requests_count}
+                  </span>
+                </span>
+              </div>
+            </li>
+          ))}
+        </ul>
+
+        {/* Desktop: the full table. */}
+        <div className="hidden overflow-x-auto sm:block">
+          <table className="w-full min-w-[560px] text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs text-muted-foreground">
                 <th className="py-2 font-medium">Member</th>
