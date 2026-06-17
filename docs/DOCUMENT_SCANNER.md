@@ -65,12 +65,24 @@ preview rotates the base too, so a later filter change keeps the orientation.
   the user can always save anyway. All analysis is local; no image content
   leaves the browser.
 
-**Honest limitation:** multi-page capture and manual brightness/contrast sliders
-are not implemented yet (`pdf.ts` already accepts an array, ready for multi-page).
-Scanned files land in the **File Inbox** as encrypted files; adding expiry /
-category / reminder / bundle happens when organizing the inbox file into a
-Document (the scanner links there from the done screen rather than faking
-attachment).
+### Multi-page scans
+
+Single-page scanning is unchanged and fast: capture → review → **Save to Vault**.
+For multiple pages, the review screen offers **Add page**, which commits the
+current page (its rotated base + chosen filter) and returns to capture. The page
+strip shows thumbnails with **delete** and **move left/right (reorder)**; **Apply
+filter to all** copies the current filter onto every committed page. **Save** then
+renders every page (each with its own filter, in strip order) into a single PDF
+via `generatePdfBlob`. Capacity is bounded (`MAX_PAGES = 25`). Committed pages
+and thumbnails live only in memory and are cleared on "Scan another"/unmount.
+
+**Honest limitation:** a committed page can be deleted/reordered/recolored (via
+"Apply filter to all") but not individually re-cropped or re-rotated after it is
+added — delete and re-add to redo a page. Manual brightness/contrast sliders are
+still not implemented. Scanned files land in the **File Inbox** as encrypted
+files; adding expiry / category / reminder / bundle happens when organizing the
+inbox file into a Document (the scanner links there from the done screen rather
+than faking attachment).
 
 ### Capability detection & graceful degradation
 

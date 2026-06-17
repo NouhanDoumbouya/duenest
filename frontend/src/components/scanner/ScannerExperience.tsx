@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   Check,
+  ChevronLeft,
+  ChevronRight,
   FileText,
   FlashlightOff,
   Flashlight,
@@ -12,6 +14,7 @@ import {
   Maximize,
   Mic,
   MicOff,
+  Plus,
   RefreshCw,
   RotateCcw,
   RotateCw,
@@ -79,6 +82,16 @@ import { CropEditor } from "./CropEditor";
 
 type Phase = "idle" | "camera" | "cropping" | "enhancing" | "done";
 
+/** A committed page in a multi-page scan: its warped base + chosen filter. */
+interface ScanPage {
+  id: string;
+  base: HTMLCanvasElement;
+  filterId: FilterId;
+  thumb: string;
+}
+
+const MAX_PAGES = 25;
+
 const DETECT_WIDTH = 480;
 const DETECT_INTERVAL_MS = 130;
 const AUTO_CAPTURE_MS = 1200;
@@ -107,6 +120,7 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
   const [filterId, setFilterId] = useState<FilterId>(DEFAULT_FILTER);
   const [moreOpen, setMoreOpen] = useState(false);
   const [warnings, setWarnings] = useState<ScanQualityWarning[]>([]);
+  const [pages, setPages] = useState<ScanPage[]>([]);
   const [docName, setDocName] = useState("");
   const [pdfSize, setPdfSize] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
@@ -505,13 +519,18 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
 
   // ---- save / upload ----------------------------------------------------
   const saveAndUpload = useCallback(async () => {
-    const canvas = enhancedCanvas;
-    if (!canvas) return;
+    // All committed pages (rendered with their own filter) plus the page on
+    // screen now, in order → one PDF.
+    const canvases = [
+      ...pages.map((p) => applyFilter(p.base, p.filterId)),
+      ...(enhancedCanvas ? [enhancedCanvas] : []),
+    ];
+    if (canvases.length === 0) return;
     setBusy(true);
     announce("Generating PDF");
     let blob: Blob;
     try {
-      blob = await generatePdfBlob([canvas]);
+      blob = await generatePdfBlob(canvases);
       setPdfSize(blob.size);
     } catch {
       setBusy(false);
@@ -539,7 +558,12 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
       await uploadScan(blob, filename);
       setBusy(false);
       setPhase("done");
-      showToast("Scan uploaded to your vault.", "success");
+      showToast(
+        canvases.length > 1
+          ? `${canvases.length}-page scan uploaded to your vault.`
+          : "Scan uploaded to your vault.",
+        "success",
+      );
       announce("Upload complete");
     } catch (err) {
       await enqueueScan(blob, filename);
@@ -550,24 +574,97 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
       showToast(`${message} Saved locally to retry.`, "error");
       announce("Scan queued for upload when online");
     }
-  }, [announce, docName, enhancedCanvas, online, refreshQueue, showToast]);
+  }, [announce, docName, enhancedCanvas, online, pages, refreshQueue, showToast]);
 
   // ---- navigation helpers ----------------------------------------------
-  const retake = useCallback(() => {
-    setFrozenCanvas(null);
-    setEnhancedCanvas(null);
-    baseCanvasRef.current = null;
-    setWarnings([]);
-    setDocName("");
-    setFilterId(DEFAULT_FILTER);
-    setMoreOpen(false);
-    setQuad(null);
+  const goToCamera = useCallback(() => {
     setDetection("searching");
     setPhase("camera");
+    setMoreOpen(false);
     stableSinceRef.current = null;
     rafRef.current = requestAnimationFrame(runDetection);
     announce("Camera ready");
   }, [announce, runDetection]);
+
+  // Clear the in-progress capture (NOT the committed pages or the document name).
+  const resetCurrentCapture = useCallback(() => {
+    setFrozenCanvas(null);
+    setEnhancedCanvas(null);
+    baseCanvasRef.current = null;
+    setWarnings([]);
+    setFilterId(DEFAULT_FILTER);
+    setQuad(null);
+  }, []);
+
+  // Re-shoot the current page; committed pages and the document name are kept.
+  const retake = useCallback(() => {
+    resetCurrentCapture();
+    goToCamera();
+  }, [goToCamera, resetCurrentCapture]);
+
+  // ---- multi-page -------------------------------------------------------
+  // Commit the current page and capture another into the same document/PDF.
+  const addPage = useCallback(() => {
+    const base = baseCanvasRef.current;
+    if (!base) return;
+    if (pages.length + 1 >= MAX_PAGES) {
+      showToast(`A scan can hold up to ${MAX_PAGES} pages.`, "info");
+      return;
+    }
+    const page: ScanPage = {
+      id:
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `page-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      base,
+      filterId,
+      thumb: makeThumbnail(base, filterId),
+    };
+    setPages((prev) => [...prev, page]);
+    announce(`Page ${pages.length + 1} added`);
+    resetCurrentCapture();
+    // Resume live capture if the camera is running; otherwise (import-only flow)
+    // return to the idle screen so the user can import the next page.
+    if (cameraRef.current) {
+      goToCamera();
+    } else {
+      setMoreOpen(false);
+      setPhase("idle");
+    }
+  }, [announce, filterId, goToCamera, pages.length, resetCurrentCapture, showToast]);
+
+  const removePage = useCallback((index: number) => {
+    setPages((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const movePage = useCallback((index: number, dir: -1 | 1) => {
+    setPages((prev) => {
+      const j = index + dir;
+      if (j < 0 || j >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[j]] = [next[j], next[index]];
+      return next;
+    });
+  }, []);
+
+  // Apply the current filter to every committed page (supports_batch_apply).
+  const applyFilterToAllPages = useCallback(() => {
+    setPages((prev) =>
+      prev.map((p) => ({
+        ...p,
+        filterId,
+        thumb: makeThumbnail(p.base, filterId),
+      })),
+    );
+    showToast("Filter applied to all pages.", "success");
+  }, [filterId, showToast]);
+
+  // Start a brand-new document (clears committed pages + name). Used after save.
+  const scanAnother = useCallback(() => {
+    setPages([]);
+    setDocName("");
+    retake();
+  }, [retake]);
 
   // Rotate the captured page 90° clockwise during cropping. Rotating the actual
   // source canvas (not just re-ordering quad corners) makes the change visible
@@ -844,6 +941,73 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
               {pdfSize != null && (
                 <p className="text-center text-xs text-slate-400">PDF size: {formatBytes(pdfSize)}</p>
               )}
+              {/* Multi-page strip: reorder/delete committed pages → one PDF. */}
+              {pages.length > 0 && (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-slate-300">
+                      {pages.length + 1} pages in this scan
+                    </span>
+                    <button
+                      type="button"
+                      onClick={applyFilterToAllPages}
+                      className="text-xs text-teal-300 hover:underline focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
+                    >
+                      Apply filter to all
+                    </button>
+                  </div>
+                  <ul className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+                    {pages.map((p, i) => (
+                      <li key={p.id} className="shrink-0">
+                        <div className="relative">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={p.thumb}
+                            alt={`Page ${i + 1}`}
+                            className="h-20 w-16 rounded-md object-cover ring-1 ring-white/15"
+                          />
+                          <span className="absolute left-1 top-1 rounded bg-black/60 px-1 text-[0.6rem] font-medium text-white">
+                            {i + 1}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => removePage(i)}
+                            aria-label={`Delete page ${i + 1}`}
+                            className="absolute -right-1 -top-1 rounded-full bg-slate-900 p-0.5 text-slate-200 ring-1 ring-white/20 hover:text-white focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
+                          >
+                            <X className="size-3" aria-hidden="true" />
+                          </button>
+                        </div>
+                        <div className="mt-1 flex justify-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => movePage(i, -1)}
+                            disabled={i === 0}
+                            aria-label={`Move page ${i + 1} left`}
+                            className="rounded p-0.5 text-slate-300 hover:text-white disabled:opacity-30 focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
+                          >
+                            <ChevronLeft className="size-3.5" aria-hidden="true" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => movePage(i, 1)}
+                            disabled={i === pages.length - 1}
+                            aria-label={`Move page ${i + 1} right`}
+                            className="rounded p-0.5 text-slate-300 hover:text-white disabled:opacity-30 focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
+                          >
+                            <ChevronRight className="size-3.5" aria-hidden="true" />
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                    <li className="shrink-0">
+                      <div className="flex h-20 w-16 items-center justify-center rounded-md bg-teal-500/10 px-1 text-center text-[0.6rem] font-medium text-teal-200 ring-1 ring-teal-400/60">
+                        This page
+                      </div>
+                    </li>
+                  </ul>
+                </div>
+              )}
               {/* Optional rename — quick save still works if left blank. */}
               <input
                 type="text"
@@ -858,11 +1022,22 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
                 <Button variant="outline" onClick={retake} className="border-white/20 bg-white/5 text-slate-100 hover:bg-white/10">
                   <RefreshCw className="size-4" aria-hidden="true" /> Retake
                 </Button>
-                <Button onClick={saveAndUpload} disabled={busy} className="bg-teal-500 text-slate-950 hover:bg-teal-400">
-                  {busy ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Upload className="size-4" aria-hidden="true" />}
-                  {online ? "Save to Vault" : "Save offline"}
+                <Button variant="outline" onClick={addPage} className="border-white/20 bg-white/5 text-slate-100 hover:bg-white/10">
+                  <Plus className="size-4" aria-hidden="true" /> Add page
                 </Button>
               </div>
+              <Button
+                onClick={saveAndUpload}
+                disabled={busy}
+                className="w-full bg-teal-500 text-slate-950 hover:bg-teal-400"
+              >
+                {busy ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Upload className="size-4" aria-hidden="true" />}
+                {online
+                  ? pages.length > 0
+                    ? `Save to Vault (${pages.length + 1} pages)`
+                    : "Save to Vault"
+                  : "Save offline"}
+              </Button>
             </div>
 
             {moreOpen && (
@@ -889,7 +1064,7 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
               </p>
             </div>
             <div className="flex flex-wrap items-center justify-center gap-2">
-              <Button variant="outline" onClick={retake} className="border-white/20 bg-white/5 text-slate-100 hover:bg-white/10">
+              <Button variant="outline" onClick={scanAnother} className="border-white/20 bg-white/5 text-slate-100 hover:bg-white/10">
                 <FileText className="size-4" aria-hidden="true" /> Scan another
               </Button>
               <Button onClick={handleClose} className="bg-teal-500 text-slate-950 hover:bg-teal-400">
@@ -1189,6 +1364,24 @@ function resetQuad(source: HTMLCanvasElement, setQuad: (q: Quad) => void) {
     { x: source.width * 0.94, y: source.height * 0.94 },
     { x: source.width * 0.06, y: source.height * 0.94 },
   ]);
+}
+
+/** Small filtered JPEG data-URL for a multi-page thumbnail strip. */
+function makeThumbnail(source: HTMLCanvasElement, id: FilterId): string {
+  const maxW = 120;
+  const scale = Math.min(1, maxW / Math.max(1, source.width));
+  const w = Math.max(1, Math.round(source.width * scale));
+  const h = Math.max(1, Math.round(source.height * scale));
+  const filtered = applyFilter(source, id);
+  const thumb = document.createElement("canvas");
+  thumb.width = w;
+  thumb.height = h;
+  thumb.getContext("2d")?.drawImage(filtered, 0, 0, w, h);
+  try {
+    return thumb.toDataURL("image/jpeg", 0.6);
+  } catch {
+    return "";
+  }
 }
 
 /** A clean PDF basename from the optional user name; backend re-sanitizes too. */
