@@ -124,39 +124,73 @@ describe("applyFilterToImageData", () => {
 });
 
 describe("manual adjustments", () => {
-  it("treats 0/0 as neutral and leaves pixels untouched", () => {
+  const base = { brightness: 0, contrast: 0, sharpness: 0, denoise: false };
+
+  it("treats neutral as a no-op and leaves pixels untouched", () => {
     expect(isNeutralAdjust(NEUTRAL_ADJUST)).toBe(true);
     const data = solid(4, 4, 120, 120, 120);
     const copy = data.slice();
-    applyAdjustmentsToImageData(data, NEUTRAL_ADJUST);
+    applyAdjustmentsToImageData(data, 4, 4, NEUTRAL_ADJUST);
     expect(Array.from(data)).toEqual(Array.from(copy));
   });
 
   it("positive brightness lifts, negative brightness lowers", () => {
     const up = solid(4, 4, 120, 120, 120);
-    applyAdjustmentsToImageData(up, { brightness: 40, contrast: 0 });
+    applyAdjustmentsToImageData(up, 4, 4, { ...base, brightness: 40 });
     expect(up[0]).toBeGreaterThan(120);
 
     const down = solid(4, 4, 120, 120, 120);
-    applyAdjustmentsToImageData(down, { brightness: -40, contrast: 0 });
+    applyAdjustmentsToImageData(down, 4, 4, { ...base, brightness: -40 });
     expect(down[0]).toBeLessThan(120);
   });
 
   it("contrast pushes darks darker and lights lighter around mid-grey", () => {
     const dark = solid(2, 2, 90, 90, 90);
     const light = solid(2, 2, 170, 170, 170);
-    applyAdjustmentsToImageData(dark, { brightness: 0, contrast: 50 });
-    applyAdjustmentsToImageData(light, { brightness: 0, contrast: 50 });
+    applyAdjustmentsToImageData(dark, 2, 2, { ...base, contrast: 50 });
+    applyAdjustmentsToImageData(light, 2, 2, { ...base, contrast: 50 });
     expect(dark[0]).toBeLessThan(90);
     expect(light[0]).toBeGreaterThan(170);
   });
 
   it("clamps to the 0–255 range", () => {
     const data = solid(2, 2, 250, 5, 130);
-    applyAdjustmentsToImageData(data, { brightness: 100, contrast: 100 });
+    applyAdjustmentsToImageData(data, 2, 2, {
+      ...base,
+      brightness: 100,
+      contrast: 100,
+      sharpness: 100,
+    });
     for (let i = 0; i < data.length; i += 1) {
       expect(data[i]).toBeGreaterThanOrEqual(0);
       expect(data[i]).toBeLessThanOrEqual(255);
     }
+  });
+
+  it("sharpness increases local contrast at an edge", () => {
+    // 4×1 row: dark | dark | light | light → the edge is between px1 and px2.
+    const w = 4;
+    const h = 1;
+    const data = new Uint8ClampedArray(w * h * 4);
+    [40, 40, 200, 200].forEach((v, x) => {
+      const i = x * 4;
+      data[i] = data[i + 1] = data[i + 2] = v;
+      data[i + 3] = 255;
+    });
+    applyAdjustmentsToImageData(data, w, h, { ...base, sharpness: 100 });
+    // The dark side of the edge gets darker, the light side lighter.
+    expect(data[1 * 4]).toBeLessThanOrEqual(40);
+    expect(data[2 * 4]).toBeGreaterThanOrEqual(200);
+  });
+
+  it("denoise smooths a single noisy pixel toward its neighbors", () => {
+    const w = 3;
+    const h = 3;
+    const data = solid(w, h, 100, 100, 100);
+    const center = (1 * w + 1) * 4;
+    data[center] = data[center + 1] = data[center + 2] = 255; // hot pixel
+    applyAdjustmentsToImageData(data, w, h, { ...base, denoise: true });
+    expect(data[center]).toBeLessThan(255);
+    expect(data[center]).toBeGreaterThan(100);
   });
 });
