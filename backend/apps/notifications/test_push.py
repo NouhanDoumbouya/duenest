@@ -102,6 +102,22 @@ class PushDeliveryTests(APITestCase):
             username="bana", email="bana@x.com", password="StrongPassword123!DN"
         )
 
+    @override_settings(**_VAPID)
+    def test_send_one_uses_high_urgency_and_ttl(self):
+        # Prompt background delivery (beats Android Doze) + survives brief offline.
+        from apps.notifications.push import _PUSH_TTL_SECONDS, _send_one
+
+        sub = PushWebSubscription.objects.create(
+            user=self.user, endpoint="https://push.example.com/x", p256dh="k", auth="a"
+        )
+        with mock.patch("pywebpush.webpush") as wp:
+            result = _send_one(sub, {"title": "DueNest", "body": "x", "url": "/dashboard"})
+        self.assertEqual(result, "sent")
+        kwargs = wp.call_args.kwargs
+        self.assertEqual(kwargs["headers"]["Urgency"], "high")
+        self.assertEqual(kwargs["ttl"], _PUSH_TTL_SECONDS)
+        self.assertGreaterEqual(kwargs["ttl"], 3600)
+
     def _make_notification(self):
         return Notification.objects.create(
             user=self.user,

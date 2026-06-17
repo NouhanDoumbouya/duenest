@@ -23,6 +23,11 @@ from django.utils import timezone
 
 logger = logging.getLogger("duenest.notifications")
 
+# How long the push service should hold a message if the device is offline or
+# dozing, before discarding it (seconds). Default pywebpush TTL is 0 = drop if
+# not immediately deliverable, which loses pushes while a phone is asleep.
+_PUSH_TTL_SECONDS = 60 * 60 * 24  # 1 day
+
 # Lock-screen copy. The title stays a constant brand string and the body is
 # category-level only — enough to know whether to open DueNest now, but never a
 # document name, date, amount, recipient, or any other private specific. The
@@ -135,6 +140,14 @@ def _send_one(subscription, payload: dict) -> str:
             data=json.dumps(payload),
             vapid_private_key=settings.VAPID_PRIVATE_KEY,
             vapid_claims={"sub": settings.VAPID_SUBJECT},
+            # TTL: keep the message queued for up to a day if the device is
+            # briefly offline/dozing (default 0 = "deliver now or drop").
+            ttl=_PUSH_TTL_SECONDS,
+            # Urgency "high" tells the push service to wake the device and deliver
+            # promptly even under Android Doze, instead of holding it until the
+            # user next opens the app. DueNest pushes are deadline reminders, so
+            # prompt background delivery is the whole point.
+            headers={"Urgency": "high"},
             timeout=10,
         )
     except WebPushException as exc:
