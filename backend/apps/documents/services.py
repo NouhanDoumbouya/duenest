@@ -1545,10 +1545,14 @@ def build_calendar_events(
             when=appt_date,
             linked_type="document" if appt.document_id else "bundle",
             linked_id=appt.document_id or appt.bundle_id,
+            # Deep-link straight to where the appointment lives: the document
+            # Renewal tab (or bundle Timeline tab) with an anchor to the
+            # Appointments section, so "Open appointment" lands on it directly
+            # instead of the top of the parent record.
             url=(
-                f"/dashboard/documents/{appt.document_id}"
+                f"/dashboard/documents/{appt.document_id}?tab=renewal#appointments"
                 if appt.document_id
-                else f"/dashboard/bundles/{appt.bundle_id}"
+                else f"/dashboard/bundles/{appt.bundle_id}?tab=timeline#appointments"
                 if appt.bundle_id
                 else "/dashboard/calendar"
             ),

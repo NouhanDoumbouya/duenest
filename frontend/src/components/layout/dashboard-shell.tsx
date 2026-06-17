@@ -9,8 +9,9 @@ import {
 } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Bell, CheckCheck, LogOut, Menu, X } from "lucide-react";
+import { Bell, CheckCheck, LogOut, X } from "lucide-react";
 
+import { BottomNav } from "@/components/layout/bottom-nav";
 import { Logo } from "@/components/layout/logo";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { Button } from "@/components/ui/button";
@@ -323,17 +324,9 @@ export function DashboardShell({
           <NotificationBell />
         </header>
 
-        {/* Mobile top bar */}
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-card/80 px-4 backdrop-blur md:hidden">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setMobileNavOpen(true)}
-            aria-label="Open navigation"
-            aria-expanded={mobileNavOpen}
-          >
-            <Menu className="size-5" />
-          </Button>
+        {/* Mobile top bar. Navigation lives in the bottom nav (and its "More"
+            drawer), so the top bar stays slim with just brand + utilities. */}
+        <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-card/80 px-4 backdrop-blur md:hidden">
           <Logo href="/dashboard" />
           <div className="flex items-center gap-1">
             <NotificationBell />
@@ -386,7 +379,12 @@ export function DashboardShell({
           </div>
         )}
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-10">{children}</main>
+        {/* Extra bottom padding on mobile leaves room for the fixed bottom nav. */}
+        <main className="flex-1 px-4 pt-4 pb-24 sm:px-6 sm:pt-6 md:pb-6 lg:px-10 lg:pt-10 lg:pb-10">
+          {children}
+        </main>
+
+        <BottomNav onOpenMore={() => setMobileNavOpen(true)} />
       </div>
     </div>
   );
