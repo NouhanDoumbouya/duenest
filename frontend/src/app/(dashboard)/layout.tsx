@@ -2,10 +2,12 @@
 
 // Shared chrome + auth gate for every /dashboard route.
 //
-// The hard gate is server-side Next middleware (src/middleware.ts), which keeps
-// logged-out users out before this renders. Here we additionally resolve the
-// current user from the cookie session via /users/me/ (the API client refreshes
-// once on 401); if that fails we log out and redirect to /login.
+// In same-origin (cookie) deployments the first gate is the server-side Next 16
+// Proxy (src/proxy.ts) — it redirects logged-out users before this renders. In
+// split-domain (Bearer) deployments the Proxy can't see the session, so THIS
+// client layout is the gate. Either way we resolve the current user from the
+// session via /users/me/ (the API client refreshes once on 401); if that fails
+// we log out and redirect to /login.
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
