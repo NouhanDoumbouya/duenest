@@ -156,8 +156,10 @@ notifications. This is **opt-in and privacy-safe**:
   and registers a `PushWebSubscription`). Permission is requested only on that
   explicit action — never on page load.
 - When a notification is first delivered in-app, `apps/notifications/push.py`
-  sends a **generic** push (title/body never name the document, file, recipient,
-  or any private detail; only an internal URL is included). The real content is
+  sends a **category-level** push: the body says what *kind* of thing needs
+  attention (e.g. "A subscription renewal is coming up.") but never names the
+  document, file, recipient, amount, date, or any private detail. The title is a
+  constant "DueNest" and only an internal URL is included. The real content is
   shown after the user opens DueNest and is authenticated.
 - Endpoints: `GET /notifications/push/public-key/`,
   `POST /notifications/push/subscribe/`, `POST /notifications/push/unsubscribe/`.

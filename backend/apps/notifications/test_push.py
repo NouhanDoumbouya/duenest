@@ -122,6 +122,38 @@ class PushDeliveryTests(APITestCase):
         self.assertNotIn("july", blob)
         self.assertEqual(payload["url"], "/dashboard/documents/42")
 
+    def test_payload_body_is_category_aware_but_safe(self):
+        # A document-expiry notification with sensitive title/message must still
+        # produce a category-level body that names nothing specific.
+        note = Notification.objects.create(
+            user=self.user,
+            type=Notification.Type.DOCUMENT_EXPIRY,
+            title="Guinean passport expires July 18",
+            message="Your passport G1234567 expires on July 18, 2026.",
+            action_url="/dashboard/documents/7",
+            dedupe_key="cat:doc",
+        )
+        payload = _safe_payload(note)
+        self.assertEqual(payload["body"], "A document needs your attention soon.")
+        blob = (payload["title"] + payload["body"]).lower()
+        for leak in ("passport", "july", "guinean", "g1234567"):
+            self.assertNotIn(leak, blob)
+
+    def test_payload_body_varies_by_category(self):
+        cases = {
+            Notification.Type.SUBSCRIPTION_RENEWAL: "A subscription renewal is coming up.",
+            Notification.Type.SHARE_VIEWED: "There's new activity on something you shared.",
+            Notification.Type.EMERGENCY_VIEWED: "Emergency access needs your review.",
+            Notification.Type.SECURITY_ALERT: "A security alert needs your review.",
+            Notification.Type.GENERIC_REMINDER: "You have a new update in DueNest.",
+        }
+        for ntype, expected in cases.items():
+            note = Notification.objects.create(
+                user=self.user, type=ntype, title="t", message="m",
+                dedupe_key=f"cat:{ntype}",
+            )
+            self.assertEqual(_safe_payload(note)["body"], expected)
+
     @override_settings(**_VAPID)
     def test_push_skipped_when_pref_disabled(self):
         note = self._make_notification()
