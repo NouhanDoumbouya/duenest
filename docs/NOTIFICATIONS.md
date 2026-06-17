@@ -31,6 +31,21 @@ The command generates due notifications for:
 - System/account: model support exists for security alerts and failed login
   warnings; event hooks can create those records separately.
 
+## Event-Driven Notifications
+
+Some notifications are created in real time from app events rather than the
+scheduled sweep:
+
+- Emergency access: `emergency_request` and `emergency_viewed` are created when a
+  trusted contact requests or opens an emergency pack (`apps/documents/views.py`
+  via `notify_pack_owner`).
+- Billing: `billing_payment_failed`, `billing_canceled`, and
+  `billing_trial_ending` are created from billing lifecycle events
+  (`apps/billing/services.py`).
+
+These reuse the same `create_notification` helper, `dedupe_key` rule, and
+metadata sanitization as scheduled notifications.
+
 ## Delivery Command
 
 ```bash
@@ -91,10 +106,28 @@ notes, or document contents.
 Action URLs are restricted to internal paths and are reset to `/dashboard` if
 they look unsafe.
 
+## Scheduled Delivery
+
+Celery tasks and a beat schedule are defined (`config/celery.py`,
+`apps/notifications/tasks.py`). In the default lean mode
+(`ENABLE_BACKGROUND_JOBS=false`) Celery runs eagerly inline, so the supported way
+to deliver due notifications is to run `process_due_notifications` from an
+external scheduler (cron / hosting scheduler). Scale-ready mode (a real worker +
+beat) requires `REDIS_URL`, `ENABLE_BACKGROUND_JOBS=true`, and
+`ENABLE_CELERY_BEAT=true`. Until one of those runs the command, scheduled
+reminders are generated only on demand.
+
+Each run is recorded as a `NotificationDeliveryRun` (aggregate counts only, no
+user data), surfaced to founders via the delivery-health endpoint
+(`apps/founder/views.py` → `build_delivery_health`).
+
 ## Known Limitations
 
-- No Celery/Redis worker is configured yet.
+- No worker/beat process or cron is wired by default — scheduled reminders need
+  an external scheduler to invoke `process_due_notifications` (see above).
 - Daily digest delivery is reserved for later.
-- Activity event hooks such as `share_viewed` can use the model, but this pass
-  focuses on reminder generation.
-- Founder delivery metrics are not added in this pass.
+- Real-time `share_viewed` for Quick Share / SafeSend views is not wired yet; the
+  type and scheduled share/room-expiry generation exist, and `emergency_viewed`
+  is wired.
+- PWA push notifications are not implemented. See `docs/PWA.md` §9 for the future
+  plan (tracked as `feature/pwa-push-notifications`).
