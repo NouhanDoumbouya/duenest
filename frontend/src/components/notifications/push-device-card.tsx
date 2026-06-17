@@ -5,7 +5,10 @@ import { BellRing, ShieldCheck } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { SectionCard } from "@/components/ui/section-card";
-import { updateNotificationPreferences } from "@/lib/notifications";
+import {
+  getNotificationPreferences,
+  updateNotificationPreferences,
+} from "@/lib/notifications";
 import {
   getPushPublicKey,
   getPushSubscriptionState,
@@ -13,6 +16,14 @@ import {
   unsubscribeFromPush,
 } from "@/lib/push";
 import { supportsPush } from "@/lib/pwa";
+
+const HOURS = Array.from({ length: 24 }, (_, h) => h);
+
+function formatHour(h: number): string {
+  const hour = ((h + 11) % 12) + 1;
+  const suffix = h < 12 ? "AM" : "PM";
+  return `${hour}:00 ${suffix}`;
+}
 
 type Status = "loading" | "unsupported" | "unconfigured" | "ready";
 
@@ -34,6 +45,27 @@ export function PushDeviceCard() {
   const [subscribed, setSubscribed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+
+  // Quiet hours (push only — in-app notifications are never suppressed).
+  const [quietEnabled, setQuietEnabled] = useState(false);
+  const [quietStart, setQuietStart] = useState(22);
+  const [quietEnd, setQuietEnd] = useState(7);
+  const [quietSaving, setQuietSaving] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    getNotificationPreferences()
+      .then((prefs) => {
+        if (!active) return;
+        setQuietEnabled(prefs.push_quiet_hours_enabled);
+        setQuietStart(prefs.push_quiet_start_hour);
+        setQuietEnd(prefs.push_quiet_end_hour);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -79,6 +111,26 @@ export function PushDeviceCard() {
     setSubscribed(false);
     setMessage("Push notifications are off for this device.");
     setBusy(false);
+  }
+
+  async function saveQuietHours(next: {
+    enabled?: boolean;
+    start?: number;
+    end?: number;
+  }) {
+    const enabled = next.enabled ?? quietEnabled;
+    const start = next.start ?? quietStart;
+    const end = next.end ?? quietEnd;
+    setQuietEnabled(enabled);
+    setQuietStart(start);
+    setQuietEnd(end);
+    setQuietSaving(true);
+    await updateNotificationPreferences({
+      push_quiet_hours_enabled: enabled,
+      push_quiet_start_hour: start,
+      push_quiet_end_hour: end,
+    }).catch(() => undefined);
+    setQuietSaving(false);
   }
 
   return (
@@ -134,6 +186,72 @@ export function PushDeviceCard() {
           <p className="text-sm text-muted-foreground" role="status">
             {message}
           </p>
+        )}
+
+        {status === "ready" && subscribed && (
+          <div className="space-y-3 rounded-xl border border-border bg-card px-4 py-3">
+            <label className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                checked={quietEnabled}
+                onChange={(event) =>
+                  saveQuietHours({ enabled: event.target.checked })
+                }
+                disabled={quietSaving}
+                className="mt-1 size-4 rounded border-input accent-primary"
+              />
+              <span className="min-w-0">
+                <span className="block text-sm font-medium">Quiet hours</span>
+                <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
+                  Hold back device pushes overnight. Notifications still appear
+                  in DueNest — only the lock-screen nudge waits until quiet hours
+                  end.
+                </span>
+              </span>
+            </label>
+
+            {quietEnabled && (
+              <div className="flex flex-wrap items-center gap-3 pl-7">
+                <label className="flex items-center gap-2 text-sm">
+                  <span className="text-muted-foreground">From</span>
+                  <select
+                    value={quietStart}
+                    onChange={(event) =>
+                      saveQuietHours({ start: Number(event.target.value) })
+                    }
+                    disabled={quietSaving}
+                    className="rounded-md border border-input bg-background px-2 py-1 text-sm"
+                  >
+                    {HOURS.map((h) => (
+                      <option key={h} value={h}>
+                        {formatHour(h)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <span className="text-muted-foreground">to</span>
+                  <select
+                    value={quietEnd}
+                    onChange={(event) =>
+                      saveQuietHours({ end: Number(event.target.value) })
+                    }
+                    disabled={quietSaving}
+                    className="rounded-md border border-input bg-background px-2 py-1 text-sm"
+                  >
+                    {HOURS.map((h) => (
+                      <option key={h} value={h}>
+                        {formatHour(h)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <span className="text-xs text-muted-foreground">
+                  in your notification timezone
+                </span>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </SectionCard>

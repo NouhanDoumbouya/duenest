@@ -41,6 +41,35 @@ def public_key() -> str:
     return getattr(settings, "VAPID_PUBLIC_KEY", "") or ""
 
 
+def _in_quiet_hours(prefs, now=None) -> bool:
+    """
+    True when `now` falls inside the user's push quiet-hours window, evaluated in
+    their notification timezone. Supports windows that wrap midnight (start > end).
+    Only affects push — in-app delivery is never suppressed.
+    """
+    if not getattr(prefs, "push_quiet_hours_enabled", False):
+        return False
+    from datetime import datetime
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    now = now or timezone.now()
+    try:
+        tz = ZoneInfo(prefs.timezone or "UTC")
+    except (ZoneInfoNotFoundError, ValueError, KeyError):
+        tz = ZoneInfo("UTC")
+    if timezone.is_naive(now):
+        now = timezone.make_aware(now, datetime.now().astimezone().tzinfo)
+    hour = now.astimezone(tz).hour
+    start = int(prefs.push_quiet_start_hour)
+    end = int(prefs.push_quiet_end_hour)
+    if start == end:
+        return False  # zero-length window = effectively off
+    if start < end:
+        return start <= hour < end
+    # Wraps midnight, e.g. 22 → 7.
+    return hour >= start or hour < end
+
+
 def _safe_payload(notification) -> dict:
     """
     Build a privacy-safe push payload.
@@ -116,7 +145,7 @@ def push_notification(notification) -> dict:
 
     Returns a small counts dict for observability. Never raises.
     """
-    summary = {"sent": 0, "expired": 0, "failed": 0, "skipped": 0}
+    summary = {"sent": 0, "expired": 0, "failed": 0, "skipped": 0, "quiet": 0}
     try:
         if not is_push_configured():
             summary["skipped"] = 1
@@ -127,6 +156,12 @@ def push_notification(notification) -> dict:
         prefs = NotificationPreference.objects.filter(user=notification.user).first()
         if prefs is None or not prefs.push_enabled:
             summary["skipped"] = 1
+            return summary
+
+        # Quiet hours hold back the device nudge only; the notification is still
+        # delivered in-app and will be seen next time DueNest is opened.
+        if _in_quiet_hours(prefs):
+            summary["quiet"] = 1
             return summary
 
         subs = list(PushWebSubscription.objects.filter(user=notification.user))

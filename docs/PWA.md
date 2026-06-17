@@ -162,9 +162,13 @@ End-to-end flow:
    `apps/notifications/push.py` sends a **generic** Web Push to the user's
    devices (gated on `push_enabled` + configured VAPID + an existing
    subscription). `pywebpush` is imported lazily; absent it, delivery is a no-op.
-5. `sw.js` handles `push` (shows a generic notification) and `notificationclick`
+5. In lean mode the push is sent inline; in scale-ready mode
+   (`ENABLE_BACKGROUND_JOBS=true`) `deliver_notification` dispatches the
+   `send_push` Celery task onto the dedicated `push` queue so the slow,
+   network-bound web-push never blocks the notification flow.
+6. `sw.js` handles `push` (shows a generic notification) and `notificationclick`
    (focuses an existing tab via a `PUSH_NAVIGATE` message, else opens the URL).
-6. Subscriptions reported gone (HTTP 404/410) are deleted automatically.
+7. Subscriptions reported gone (HTTP 404/410) are deleted automatically.
 
 Endpoints: `GET /notifications/push/public-key/`,
 `POST /notifications/push/subscribe/`, `POST /notifications/push/unsubscribe/`.
@@ -172,12 +176,17 @@ Endpoints: `GET /notifications/push/public-key/`,
 Generate a key pair with `python -m py_vapid --gen` (or any VAPID generator) and
 keep the private key in the environment only — never commit it.
 
+### Quiet hours
+
+Users can set a daily quiet-hours window (in their notification timezone) from
+the push settings card. During quiet hours, **device pushes are held back but
+in-app notifications are never suppressed** — the user still sees everything next
+time they open DueNest. The window may wrap midnight (e.g. 22:00 → 07:00).
+
 ### Not yet included (future)
 
-- Quiet hours / per-time-window suppression.
-- A dedicated Celery `push` task (delivery is currently inline within
-  `deliver_notification`; in scale-ready mode it still runs inside the
-  notification flow).
+- Per-notification-type push controls (currently push mirrors any first in-app
+  delivery the user's category preferences already allowed).
 - iOS Web Push requires iOS 16.4+ and the app installed to the Home Screen.
 
 ## 10. Security / privacy rules for push messages

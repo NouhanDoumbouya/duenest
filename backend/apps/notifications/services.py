@@ -28,7 +28,8 @@ class DeliveryResult:
     email_skipped: bool = False  # email enabled but provider not configured
     email_failed: bool = False
     email_queued: bool = False  # handed to the `email` worker queue (async mode)
-    push_sent: bool = False  # at least one Web Push device was nudged
+    push_sent: bool = False  # at least one Web Push device was nudged (inline)
+    push_queued: bool = False  # handed to the `push` worker queue (async mode)
 
     def __bool__(self) -> bool:
         # Backwards-compatible: callers historically treated the return value as
@@ -410,13 +411,22 @@ def deliver_notification(notification: Notification, *, now=None) -> DeliveryRes
         )
 
     # Web Push is best-effort and fires once, when a notification is first
-    # delivered in-app, so a user is never pushed twice for the same record.
-    # push_notification() self-gates on opt-in + VAPID config and never raises.
+    # delivered in-app, so a user is never pushed twice for the same record. The
+    # send self-gates on opt-in, quiet hours, and VAPID config and never raises.
     if first_in_app and prefs.push_enabled:
-        from .push import push_notification
+        if getattr(settings, "ENABLE_BACKGROUND_JOBS", False):
+            # Scale-ready mode: hand the (slow, network-bound) web-push to the
+            # `push` queue so it never blocks the notification flow.
+            from apps.notifications.tasks import send_push
 
-        push_summary = push_notification(notification)
-        result.push_sent = push_summary.get("sent", 0) > 0
+            send_push.delay(notification.id)
+            result.push_queued = True
+        else:
+            # Lean/eager mode (default): send inline.
+            from .push import push_notification
+
+            push_summary = push_notification(notification)
+            result.push_sent = push_summary.get("sent", 0) > 0
 
     return result
 
