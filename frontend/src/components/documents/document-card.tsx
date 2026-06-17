@@ -177,20 +177,29 @@ export function DocumentCard({
             href={`/dashboard/documents/${doc.id}`}
             className="-m-2 min-w-0 flex-1 rounded-lg p-2 outline-none transition-colors hover:bg-muted/40 focus-visible:ring-3 focus-visible:ring-ring/50"
           >
+            {/* Title + status stay primary on every screen. Lower-priority
+                badges are deferred to sm+ so mobile cards stay calm and the
+                badge row never wraps into multi-line clutter. */}
             <div className="flex flex-wrap items-center gap-2">
               <span className="truncate font-heading text-base font-semibold">
                 {doc.title}
               </span>
               <DocumentStatusBadge status={doc.computed_status} />
-              <LifecycleBadge status={doc.lifecycle_status} />
-              <UrgencyBadge level={doc.urgency_level} />
-              <ConfidencePill
-                score={doc.confidence_score}
-                label={doc.confidence_label}
-              />
+              <span className="hidden sm:inline-flex">
+                <LifecycleBadge status={doc.lifecycle_status} />
+              </span>
+              <span className="hidden sm:inline-flex">
+                <UrgencyBadge level={doc.urgency_level} />
+              </span>
+              <span className="hidden sm:inline-flex">
+                <ConfidencePill
+                  score={doc.confidence_score}
+                  label={doc.confidence_label}
+                />
+              </span>
               {doc.is_shared_externally && (
                 <span
-                  className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[0.68rem] font-medium text-primary"
+                  className="hidden items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[0.68rem] font-medium text-primary sm:inline-flex"
                   title="This document has an active external share"
                 >
                   <Share2 className="size-3" aria-hidden />
@@ -199,7 +208,7 @@ export function DocumentCard({
               )}
               {doc.in_bundle && (
                 <span
-                  className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[0.68rem] font-medium text-muted-foreground"
+                  className="hidden items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[0.68rem] font-medium text-muted-foreground sm:inline-flex"
                   title="This document is used in a bundle"
                 >
                   <Package className="size-3" aria-hidden />

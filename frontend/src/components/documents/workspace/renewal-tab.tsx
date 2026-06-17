@@ -32,6 +32,19 @@ export function RenewalTab({
     };
   }, [doc.id]);
 
+  // When opened via a calendar "Open appointment" deep-link
+  // (?tab=renewal#appointments), scroll the Appointments section into view.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.location.hash !== "#appointments") return;
+    const timer = window.setTimeout(() => {
+      document
+        .getElementById("appointments")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   return (
     <div className="space-y-6">
       <SectionCard
@@ -55,12 +68,14 @@ export function RenewalTab({
         <DocumentRenewalHistory documentId={doc.id} />
       </SectionCard>
 
-      <SectionCard
-        title="Appointments"
-        description="Appointments connected to this document."
-      >
-        <DocumentAppointments documentId={doc.id} />
-      </SectionCard>
+      <div id="appointments" className="scroll-mt-24">
+        <SectionCard
+          title="Appointments"
+          description="Appointments connected to this document."
+        >
+          <DocumentAppointments documentId={doc.id} />
+        </SectionCard>
+      </div>
 
       <SectionCard
         title="Renewal & application costs"

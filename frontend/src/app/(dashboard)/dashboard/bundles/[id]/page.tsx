@@ -101,6 +101,15 @@ const BUNDLE_TABS: { value: BundleTab; label: string }[] = [
   { value: "exports", label: "Exports" },
 ];
 
+/** Read the initial bundle tab from `?tab=` (e.g. a calendar deep-link). */
+function initialBundleTab(): BundleTab {
+  if (typeof window === "undefined") return "requirements";
+  const tab = new URLSearchParams(window.location.search).get("tab");
+  return BUNDLE_TABS.some((t) => t.value === tab)
+    ? (tab as BundleTab)
+    : "requirements";
+}
+
 const STATUS_STYLES: Record<RequirementStatus, string> = {
   missing: "bg-amber-100 text-amber-700",
   attached: "bg-primary/10 text-primary",
@@ -282,7 +291,7 @@ export default function BundleDetailPage() {
   const [exportBusy, setExportBusy] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [activeTab, setActiveTab] = useState<BundleTab>("requirements");
+  const [activeTab, setActiveTab] = useState<BundleTab>(initialBundleTab);
 
   useEffect(() => {
     if (!validId) return;
@@ -310,6 +319,20 @@ export default function BundleDetailPage() {
       active = false;
     };
   }, [bundleId, validId]);
+
+  // Calendar "Open appointment" deep-link (?tab=timeline#appointments): once the
+  // bundle has loaded and the Timeline tab is active, scroll to the section.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!bundle || activeTab !== "timeline") return;
+    if (window.location.hash !== "#appointments") return;
+    const timer = window.setTimeout(() => {
+      document
+        .getElementById("appointments")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [bundle, activeTab]);
 
   async function refreshReadiness() {
     // Re-fetch the bundle so the readiness score + counts stay in sync.
@@ -617,12 +640,14 @@ export default function BundleDetailPage() {
                 </CardContent>
               </Card>
 
-              <SectionCard
-                title="Appointments"
-                description="Appointments connected to this bundle."
-              >
-                <DocumentAppointments bundleId={bundleId} />
-              </SectionCard>
+              <div id="appointments" className="scroll-mt-24">
+                <SectionCard
+                  title="Appointments"
+                  description="Appointments connected to this bundle."
+                >
+                  <DocumentAppointments bundleId={bundleId} />
+                </SectionCard>
+              </div>
 
               <SectionCard
                 title="Application costs"

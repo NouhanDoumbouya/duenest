@@ -3276,7 +3276,10 @@ GET /api/v1/calendar/export.ics                                 # one-way .ics
 `type` groups: `documents,reminders,bundles,appointments,proofs,shares,rooms,emergency,subscriptions`.
 `urgency`: `overdue,critical,soon,upcoming,normal`. Events are aggregated from
 existing models (no duplicate table), owner-scoped, and carry a
-`linked_resource_url` back to the right workspace page. The `.ics` export is
+`linked_resource_url` back to the right workspace page. Appointment events
+deep-link to the parent document's Renewal tab (or a bundle's Timeline tab)
+with an `#appointments` anchor, so "Open appointment" lands on the appointment
+itself rather than the top of the record. The `.ics` export is
 one-way and uses safe `DueNest: ...` titles only - no tokens, access codes,
 internal paths, or sensitive numbers. **No Google/Outlook/two-way sync exists.**
 

@@ -12,6 +12,7 @@ import {
   Mic,
   MicOff,
   RefreshCw,
+  RotateCcw,
   RotateCw,
   ShieldCheck,
   Upload,
@@ -531,9 +532,32 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
     announce("Camera ready");
   }, [announce, runDetection]);
 
-  const rotateQuad = useCallback(() => {
-    setQuad((prev) => (prev ? ([prev[3], prev[0], prev[1], prev[2]] as Quad) : prev));
-  }, []);
+  // Rotate the captured page 90° clockwise during cropping. Rotating the actual
+  // source canvas (not just re-ordering quad corners) makes the change visible
+  // immediately and persists it through both the OpenCV warp and the
+  // bounding-box fallback. The quad is re-mapped so the crop selection is kept.
+  const rotateCrop = useCallback(() => {
+    if (!frozenCanvas) return;
+    const h = frozenCanvas.height;
+    setQuad((prev) =>
+      prev ? (prev.map((p) => ({ x: h - p.y, y: p.x })) as Quad) : prev,
+    );
+    setFrozenCanvas(rotateCanvas90(frozenCanvas, true));
+    haptic(20);
+    announce("Rotated 90 degrees");
+  }, [announce, frozenCanvas]);
+
+  // Rotate the final enhanced preview. This updates the visible canvas (via the
+  // repaint effect) and the saved/uploaded PDF, since both read enhancedCanvas.
+  const rotatePreview = useCallback(
+    (clockwise: boolean) => {
+      setEnhancedCanvas((prev) => (prev ? rotateCanvas90(prev, clockwise) : prev));
+      setPdfSize(null);
+      haptic(20);
+      announce(clockwise ? "Rotated right" : "Rotated left");
+    },
+    [announce],
+  );
 
   return (
     <div className="fixed inset-0 z-[100] flex flex-col bg-slate-950 text-slate-50">
@@ -629,7 +653,7 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
               >
                 <Crop className="size-4" aria-hidden="true" /> Reset
               </Button>
-              <Button variant="outline" onClick={rotateQuad} className="border-white/20 bg-white/5 text-slate-100 hover:bg-white/10">
+              <Button variant="outline" onClick={rotateCrop} className="border-white/20 bg-white/5 text-slate-100 hover:bg-white/10">
                 <RotateCw className="size-4" aria-hidden="true" /> Rotate
               </Button>
               <Button onClick={applyCrop} disabled={busy} className="bg-teal-500 text-slate-950 hover:bg-teal-400">
@@ -667,6 +691,24 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
                     {m.label}
                   </button>
                 ))}
+              </div>
+              <div className="flex items-center justify-center gap-2" role="group" aria-label="Rotate scan">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => rotatePreview(false)}
+                  className="border-white/20 bg-white/5 text-slate-100 hover:bg-white/10"
+                >
+                  <RotateCcw className="size-4" aria-hidden="true" /> Rotate left
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => rotatePreview(true)}
+                  className="border-white/20 bg-white/5 text-slate-100 hover:bg-white/10"
+                >
+                  <RotateCw className="size-4" aria-hidden="true" /> Rotate right
+                </Button>
               </div>
               {pdfSize != null && (
                 <p className="text-center text-xs text-slate-400">PDF size: {formatBytes(pdfSize)}</p>
@@ -966,6 +1008,28 @@ function cropBoundingBox(source: HTMLCanvasElement, quad: Quad): HTMLCanvasEleme
   out.width = Math.max(1, Math.round(w));
   out.height = Math.max(1, Math.round(h));
   out.getContext("2d")?.drawImage(source, minX, minY, w, h, 0, 0, out.width, out.height);
+  return out;
+}
+
+/** Return a new canvas rotated 90° (clockwise by default), swapping dimensions. */
+function rotateCanvas90(
+  source: HTMLCanvasElement,
+  clockwise = true,
+): HTMLCanvasElement {
+  const out = document.createElement("canvas");
+  out.width = source.height;
+  out.height = source.width;
+  const ctx = out.getContext("2d");
+  if (ctx) {
+    if (clockwise) {
+      ctx.translate(out.width, 0);
+      ctx.rotate(Math.PI / 2);
+    } else {
+      ctx.translate(0, out.height);
+      ctx.rotate(-Math.PI / 2);
+    }
+    ctx.drawImage(source, 0, 0);
+  }
   return out;
 }
 

@@ -560,7 +560,7 @@ function DocumentsPageInner() {
           </div>
 
           <div
-            className="flex flex-wrap gap-2"
+            className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0"
             role="group"
             aria-label="Filter by status"
           >
@@ -572,6 +572,7 @@ function DocumentsPageInner() {
                 variant={quickFilter === filter.value ? "default" : "outline"}
                 aria-pressed={quickFilter === filter.value}
                 onClick={() => setQuickFilter(filter.value)}
+                className="shrink-0"
               >
                 {filter.label}
               </Button>
@@ -587,7 +588,7 @@ function DocumentsPageInner() {
                 Browse by category
               </p>
               <div
-                className="flex flex-wrap gap-2"
+                className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0"
                 role="group"
                 aria-labelledby="category-filter-label"
               >
@@ -597,6 +598,7 @@ function DocumentsPageInner() {
                   variant={category === "" ? "default" : "outline"}
                   aria-pressed={category === ""}
                   onClick={() => setCategory("")}
+                  className="shrink-0"
                 >
                   All categories
                 </Button>
@@ -608,6 +610,7 @@ function DocumentsPageInner() {
                     variant={category === c.id ? "default" : "outline"}
                     aria-pressed={category === c.id}
                     onClick={() => setCategory(c.id)}
+                    className="shrink-0"
                   >
                     {c.name}
                   </Button>
@@ -618,6 +621,7 @@ function DocumentsPageInner() {
                   variant={category === "none" ? "default" : "outline"}
                   aria-pressed={category === "none"}
                   onClick={() => setCategory("none")}
+                  className="shrink-0"
                 >
                   Uncategorized
                 </Button>
