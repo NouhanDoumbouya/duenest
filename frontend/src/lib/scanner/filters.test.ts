@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  applyAdjustmentsToImageData,
   applyFilterToImageData,
   DEFAULT_FILTER,
   FILTERS,
   getFilterMeta,
+  isNeutralAdjust,
+  NEUTRAL_ADJUST,
   type FilterId,
 } from "./filters";
 
@@ -116,6 +119,44 @@ describe("applyFilterToImageData", () => {
         expect(copy[i]).toBeGreaterThanOrEqual(0);
         expect(copy[i]).toBeLessThanOrEqual(255);
       }
+    }
+  });
+});
+
+describe("manual adjustments", () => {
+  it("treats 0/0 as neutral and leaves pixels untouched", () => {
+    expect(isNeutralAdjust(NEUTRAL_ADJUST)).toBe(true);
+    const data = solid(4, 4, 120, 120, 120);
+    const copy = data.slice();
+    applyAdjustmentsToImageData(data, NEUTRAL_ADJUST);
+    expect(Array.from(data)).toEqual(Array.from(copy));
+  });
+
+  it("positive brightness lifts, negative brightness lowers", () => {
+    const up = solid(4, 4, 120, 120, 120);
+    applyAdjustmentsToImageData(up, { brightness: 40, contrast: 0 });
+    expect(up[0]).toBeGreaterThan(120);
+
+    const down = solid(4, 4, 120, 120, 120);
+    applyAdjustmentsToImageData(down, { brightness: -40, contrast: 0 });
+    expect(down[0]).toBeLessThan(120);
+  });
+
+  it("contrast pushes darks darker and lights lighter around mid-grey", () => {
+    const dark = solid(2, 2, 90, 90, 90);
+    const light = solid(2, 2, 170, 170, 170);
+    applyAdjustmentsToImageData(dark, { brightness: 0, contrast: 50 });
+    applyAdjustmentsToImageData(light, { brightness: 0, contrast: 50 });
+    expect(dark[0]).toBeLessThan(90);
+    expect(light[0]).toBeGreaterThan(170);
+  });
+
+  it("clamps to the 0–255 range", () => {
+    const data = solid(2, 2, 250, 5, 130);
+    applyAdjustmentsToImageData(data, { brightness: 100, contrast: 100 });
+    for (let i = 0; i < data.length; i += 1) {
+      expect(data[i]).toBeGreaterThanOrEqual(0);
+      expect(data[i]).toBeLessThanOrEqual(255);
     }
   });
 });

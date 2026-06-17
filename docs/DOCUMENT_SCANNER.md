@@ -58,9 +58,14 @@ preview rotates the base too, so a later filter change keeps the orientation.
   etc. so advanced filters can be plan-gated later. **No paywall is enforced in
   code** — the tags are descriptive only, and B&W is shown but never auto-applied
   to color documents.
-- The pixel math (`applyFilterToImageData`) and quality heuristics
-  (`analyzeImageData` / `qualityWarnings` in `quality.ts`) are pure and
-  unit-tested (`filters.test.ts`, `quality.test.ts`). Quality warnings
+- **Adjust** (hidden by default): optional **brightness** and **contrast**
+  sliders compose on top of the chosen filter (`applyAdjustments` /
+  `renderPage`), stay non-destructive (re-derived from the cached filtered base
+  so dragging only re-runs a cheap LUT pass), and are captured per page in a
+  multi-page scan. 0/0 is a no-op; "Reset adjustments" restores it.
+- The pixel math (`applyFilterToImageData`, `applyAdjustmentsToImageData`) and
+  quality heuristics (`analyzeImageData` / `qualityWarnings` in `quality.ts`)
+  are pure and unit-tested (`filters.test.ts`, `quality.test.ts`). Quality warnings
   (dark / bright / low-contrast / blurry / low-resolution) are **non-blocking** —
   the user can always save anyway. All analysis is local; no image content
   leaves the browser.
@@ -78,8 +83,8 @@ and thumbnails live only in memory and are cleared on "Scan another"/unmount.
 
 **Honest limitation:** a committed page can be deleted/reordered/recolored (via
 "Apply filter to all") but not individually re-cropped or re-rotated after it is
-added — delete and re-add to redo a page. Manual brightness/contrast sliders are
-still not implemented. Scanned files land in the **File Inbox** as encrypted
+added — delete and re-add to redo a page. Sharpness/denoise controls are not
+implemented (brightness/contrast are). Scanned files land in the **File Inbox** as encrypted
 files; adding expiry / category / reminder / bundle happens when organizing the
 inbox file into a Document (the scanner links there from the done screen rather
 than faking attachment).

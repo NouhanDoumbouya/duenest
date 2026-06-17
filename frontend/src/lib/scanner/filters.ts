@@ -326,3 +326,91 @@ export function applyFilter(
   }
   return out;
 }
+
+/**
+ * Optional manual fine-tuning applied ON TOP of a filter. Both values are
+ * sliders in [-100, 100]; 0/0 is a no-op. Kept separate from filters so the
+ * "Adjust" panel composes with any filter and stays fully non-destructive.
+ */
+export interface Adjustments {
+  brightness: number;
+  contrast: number;
+}
+
+export const NEUTRAL_ADJUST: Adjustments = { brightness: 0, contrast: 0 };
+
+export function isNeutralAdjust(adj: Adjustments): boolean {
+  return adj.brightness === 0 && adj.contrast === 0;
+}
+
+/** Apply brightness/contrast to raw RGBA data IN PLACE. Pure (no DOM). */
+export function applyAdjustmentsToImageData(
+  data: Uint8ClampedArray,
+  adj: Adjustments,
+): Uint8ClampedArray {
+  if (isNeutralAdjust(adj)) return data;
+  const brightness = Math.max(-100, Math.min(100, adj.brightness));
+  // Standard contrast factor; slider -100..100 maps to c -128..128.
+  const c = Math.max(-100, Math.min(100, adj.contrast)) * 1.28;
+  const factor = (259 * (c + 255)) / (255 * (259 - c));
+
+  const lut = new Uint8ClampedArray(256);
+  for (let v = 0; v < 256; v += 1) {
+    lut[v] = clamp8(factor * (v + brightness - 128) + 128);
+  }
+  for (let i = 0; i < data.length; i += 4) {
+    data[i] = lut[data[i]];
+    data[i + 1] = lut[data[i + 1]];
+    data[i + 2] = lut[data[i + 2]];
+  }
+  return data;
+}
+
+/**
+ * Apply brightness/contrast to a canvas, returning a NEW canvas. Used for cheap
+ * live slider updates on an already-filtered canvas (no re-filtering needed).
+ */
+export function applyAdjustments(
+  source: HTMLCanvasElement,
+  adj: Adjustments,
+): HTMLCanvasElement {
+  const out = document.createElement("canvas");
+  out.width = source.width;
+  out.height = source.height;
+  const ctx = out.getContext("2d");
+  if (!ctx) return source;
+  ctx.drawImage(source, 0, 0);
+  if (isNeutralAdjust(adj)) return out;
+  try {
+    const image = ctx.getImageData(0, 0, out.width, out.height);
+    applyAdjustmentsToImageData(image.data, adj);
+    ctx.putImageData(image, 0, 0);
+  } catch {
+    return source;
+  }
+  return out;
+}
+
+/**
+ * Render a page = filter + optional manual adjustments, non-destructively, from
+ * the untouched base canvas. Returns a NEW canvas (or the filtered one when no
+ * adjustment is needed).
+ */
+export function renderPage(
+  base: HTMLCanvasElement,
+  id: FilterId,
+  adj: Adjustments = NEUTRAL_ADJUST,
+): HTMLCanvasElement {
+  const filtered = applyFilter(base, id);
+  if (isNeutralAdjust(adj)) return filtered;
+  const ctx = filtered.getContext("2d");
+  if (!ctx) return filtered;
+  try {
+    const image = ctx.getImageData(0, 0, filtered.width, filtered.height);
+    applyAdjustmentsToImageData(image.data, adj);
+    ctx.putImageData(image, 0, 0);
+  } catch {
+    return filtered;
+  }
+  return filtered;
+}

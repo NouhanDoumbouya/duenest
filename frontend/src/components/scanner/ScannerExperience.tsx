@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   FileText,
@@ -52,10 +53,15 @@ import {
 } from "@/lib/scanner/orientation";
 import { createVoiceController, type VoiceController } from "@/lib/scanner/voice";
 import {
+  applyAdjustments,
   applyFilter,
   DEFAULT_FILTER,
   FILTERS,
   getFilterMeta,
+  isNeutralAdjust,
+  NEUTRAL_ADJUST,
+  renderPage,
+  type Adjustments,
   type FilterId,
 } from "@/lib/scanner/filters";
 import {
@@ -87,6 +93,7 @@ interface ScanPage {
   id: string;
   base: HTMLCanvasElement;
   filterId: FilterId;
+  adjust: Adjustments;
   thumb: string;
 }
 
@@ -121,6 +128,8 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
   const [moreOpen, setMoreOpen] = useState(false);
   const [warnings, setWarnings] = useState<ScanQualityWarning[]>([]);
   const [pages, setPages] = useState<ScanPage[]>([]);
+  const [adjust, setAdjust] = useState<Adjustments>(NEUTRAL_ADJUST);
+  const [adjustOpen, setAdjustOpen] = useState(false);
   const [docName, setDocName] = useState("");
   const [pdfSize, setPdfSize] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
@@ -136,6 +145,10 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
   // are always re-derived from this base, so switching filters or reverting to
   // Original never compounds processing or loses quality.
   const baseCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  // The base with the current filter applied (no manual adjustments). Lets the
+  // brightness/contrast sliders re-run a single cheap LUT pass while dragging,
+  // instead of re-filtering the whole frame each tick.
+  const filteredBaseRef = useRef<HTMLCanvasElement | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -470,7 +483,9 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
         const base = buildBase();
         if (!base) throw new Error("warp failed");
         baseCanvasRef.current = base;
-        setEnhancedCanvas(applyFilter(base, filterId));
+        const filtered = applyFilter(base, filterId);
+        filteredBaseRef.current = filtered;
+        setEnhancedCanvas(applyAdjustments(filtered, adjust));
         setWarnings(analyzeCanvasQuality(base));
         setPdfSize(null);
         setPhase("enhancing");
@@ -481,10 +496,11 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
         setBusy(false);
       }
     }, 30);
-  }, [announce, buildBase, filterId, frozenCanvas, quad, showToast]);
+  }, [adjust, announce, buildBase, filterId, frozenCanvas, quad, showToast]);
 
-  // Switch filters live. Re-derives from the untouched base (non-destructive)
-  // and falls back to Original with a friendly message if a filter throws.
+  // Switch filters live. Re-derives from the untouched base (non-destructive),
+  // re-applies the current manual adjustments, and falls back to Original with a
+  // friendly message if a filter throws.
   const changeFilter = useCallback(
     (id: FilterId) => {
       setFilterId(id);
@@ -493,18 +509,31 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
       const base = baseCanvasRef.current;
       if (!base) return;
       try {
-        setEnhancedCanvas(applyFilter(base, id));
+        const filtered = applyFilter(base, id);
+        filteredBaseRef.current = filtered;
+        setEnhancedCanvas(applyAdjustments(filtered, adjust));
       } catch {
         setFilterId("original");
-        setEnhancedCanvas(applyFilter(base, "original"));
+        const filtered = applyFilter(base, "original");
+        filteredBaseRef.current = filtered;
+        setEnhancedCanvas(applyAdjustments(filtered, adjust));
         showToast(
           "That filter couldn't be applied. We kept the original scan.",
           "error",
         );
       }
     },
-    [showToast],
+    [adjust, showToast],
   );
+
+  // Live brightness/contrast: only re-runs a cheap LUT pass on the cached
+  // filtered base, so dragging stays smooth even on large captures.
+  const onAdjustChange = useCallback((next: Adjustments) => {
+    setAdjust(next);
+    setPdfSize(null);
+    const filtered = filteredBaseRef.current;
+    if (filtered) setEnhancedCanvas(applyAdjustments(filtered, next));
+  }, []);
 
   // Paint the current enhanced canvas into the visible preview canvas.
   useEffect(() => {
@@ -522,7 +551,7 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
     // All committed pages (rendered with their own filter) plus the page on
     // screen now, in order → one PDF.
     const canvases = [
-      ...pages.map((p) => applyFilter(p.base, p.filterId)),
+      ...pages.map((p) => renderPage(p.base, p.filterId, p.adjust)),
       ...(enhancedCanvas ? [enhancedCanvas] : []),
     ];
     if (canvases.length === 0) return;
@@ -591,8 +620,11 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
     setFrozenCanvas(null);
     setEnhancedCanvas(null);
     baseCanvasRef.current = null;
+    filteredBaseRef.current = null;
     setWarnings([]);
     setFilterId(DEFAULT_FILTER);
+    setAdjust(NEUTRAL_ADJUST);
+    setAdjustOpen(false);
     setQuad(null);
   }, []);
 
@@ -618,7 +650,8 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
           : `page-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       base,
       filterId,
-      thumb: makeThumbnail(base, filterId),
+      adjust,
+      thumb: makeThumbnail(base, filterId, adjust),
     };
     setPages((prev) => [...prev, page]);
     announce(`Page ${pages.length + 1} added`);
@@ -631,7 +664,7 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
       setMoreOpen(false);
       setPhase("idle");
     }
-  }, [announce, filterId, goToCamera, pages.length, resetCurrentCapture, showToast]);
+  }, [adjust, announce, filterId, goToCamera, pages.length, resetCurrentCapture, showToast]);
 
   const removePage = useCallback((index: number) => {
     setPages((prev) => prev.filter((_, i) => i !== index));
@@ -653,7 +686,7 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
       prev.map((p) => ({
         ...p,
         filterId,
-        thumb: makeThumbnail(p.base, filterId),
+        thumb: makeThumbnail(p.base, filterId, p.adjust),
       })),
     );
     showToast("Filter applied to all pages.", "success");
@@ -691,7 +724,9 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
       if (base) {
         const rotated = rotateCanvas90(base, clockwise);
         baseCanvasRef.current = rotated;
-        setEnhancedCanvas(applyFilter(rotated, filterId));
+        const filtered = applyFilter(rotated, filterId);
+        filteredBaseRef.current = filtered;
+        setEnhancedCanvas(applyAdjustments(filtered, adjust));
       } else {
         setEnhancedCanvas((prev) => (prev ? rotateCanvas90(prev, clockwise) : prev));
       }
@@ -699,7 +734,7 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
       haptic(20);
       announce(clockwise ? "Rotated right" : "Rotated left");
     },
-    [announce, filterId],
+    [adjust, announce, filterId],
   );
 
   // ---- edge-detection fallbacks (cropping phase) -----------------------
@@ -920,6 +955,49 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
               <p className="text-center text-xs text-slate-400">
                 {getFilterMeta(filterId).description}
               </p>
+              {/* Manual fine-tuning, hidden by default (progressive disclosure). */}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setAdjustOpen((v) => !v)}
+                  aria-expanded={adjustOpen}
+                  className="mx-auto flex items-center gap-1.5 text-xs font-medium text-slate-300 hover:text-white focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
+                >
+                  <SlidersHorizontal className="size-3.5" aria-hidden="true" />
+                  Adjust
+                  {!isNeutralAdjust(adjust) && (
+                    <span className="size-1.5 rounded-full bg-teal-300" aria-hidden="true" />
+                  )}
+                  <ChevronDown
+                    className={cn("size-3.5 transition-transform", adjustOpen && "rotate-180")}
+                    aria-hidden="true"
+                  />
+                </button>
+                {adjustOpen && (
+                  <div className="mt-2 space-y-3 rounded-lg bg-white/5 p-3">
+                    <AdjustSlider
+                      label="Brightness"
+                      value={adjust.brightness}
+                      onChange={(v) => onAdjustChange({ ...adjust, brightness: v })}
+                    />
+                    <AdjustSlider
+                      label="Contrast"
+                      value={adjust.contrast}
+                      onChange={(v) => onAdjustChange({ ...adjust, contrast: v })}
+                    />
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => onAdjustChange(NEUTRAL_ADJUST)}
+                        disabled={isNeutralAdjust(adjust)}
+                        className="text-xs text-teal-300 hover:underline disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
+                      >
+                        Reset adjustments
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
               <div className="flex items-center justify-center gap-2" role="group" aria-label="Rotate scan">
                 <Button
                   variant="outline"
@@ -1366,17 +1444,21 @@ function resetQuad(source: HTMLCanvasElement, setQuad: (q: Quad) => void) {
   ]);
 }
 
-/** Small filtered JPEG data-URL for a multi-page thumbnail strip. */
-function makeThumbnail(source: HTMLCanvasElement, id: FilterId): string {
+/** Small filtered+adjusted JPEG data-URL for a multi-page thumbnail strip. */
+function makeThumbnail(
+  source: HTMLCanvasElement,
+  id: FilterId,
+  adj: Adjustments,
+): string {
   const maxW = 120;
   const scale = Math.min(1, maxW / Math.max(1, source.width));
   const w = Math.max(1, Math.round(source.width * scale));
   const h = Math.max(1, Math.round(source.height * scale));
-  const filtered = applyFilter(source, id);
+  const rendered = renderPage(source, id, adj);
   const thumb = document.createElement("canvas");
   thumb.width = w;
   thumb.height = h;
-  thumb.getContext("2d")?.drawImage(filtered, 0, 0, w, h);
+  thumb.getContext("2d")?.drawImage(rendered, 0, 0, w, h);
   try {
     return thumb.toDataURL("image/jpeg", 0.6);
   } catch {
@@ -1394,6 +1476,35 @@ function buildScanBasename(name: string): string {
     .slice(0, 80);
   if (cleaned) return cleaned;
   return `scan-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "")}`;
+}
+
+function AdjustSlider({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1 flex items-center justify-between text-xs text-slate-300">
+        <span>{label}</span>
+        <span className="tabular-nums text-slate-400">{value > 0 ? `+${value}` : value}</span>
+      </span>
+      <input
+        type="range"
+        min={-100}
+        max={100}
+        step={1}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        aria-label={label}
+        className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-white/15 accent-teal-400"
+      />
+    </label>
+  );
 }
 
 function FilterChip({
