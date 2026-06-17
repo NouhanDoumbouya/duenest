@@ -23,10 +23,34 @@ from django.utils import timezone
 
 logger = logging.getLogger("duenest.notifications")
 
-# Notification types that are safe to surface as a generic push. Sensitive copy
-# is never sent; the body below is intentionally vague.
+# Lock-screen copy. The title stays a constant brand string and the body is
+# category-level only — enough to know whether to open DueNest now, but never a
+# document name, date, amount, recipient, or any other private specific. The
+# real detail is shown only inside the authenticated app.
 _GENERIC_TITLE = "DueNest"
 _GENERIC_BODY = "You have a new update in DueNest."
+
+
+def _push_body(notification_type: str) -> str:
+    """Safe, category-level lock-screen body for a notification type."""
+    t = notification_type or ""
+    if t.startswith("document_"):
+        return "A document needs your attention soon."
+    if t.startswith("subscription_"):
+        return "A subscription renewal is coming up."
+    if t.startswith(("bundle_", "checklist_")):
+        return "Your bundle needs attention."
+    if t.startswith("organization_"):
+        return "An organization task needs your attention."
+    if t.startswith("emergency_"):
+        return "Emergency access needs your review."
+    if t in {"security_alert", "failed_login_warning"}:
+        return "A security alert needs your review."
+    if t.startswith("billing_") or t == "storage_plan_warning":
+        return "There's a billing update on your account."
+    if t.endswith("_viewed") or t.startswith(("share_", "room_")):
+        return "There's new activity on something you shared."
+    return _GENERIC_BODY
 
 
 def is_push_configured() -> bool:
@@ -85,7 +109,7 @@ def _safe_payload(notification) -> dict:
         url = "/dashboard/notifications"
     return {
         "title": _GENERIC_TITLE,
-        "body": _GENERIC_BODY,
+        "body": _push_body(notification.type),
         "url": url,
         "tag": "duenest-notification",
     }
