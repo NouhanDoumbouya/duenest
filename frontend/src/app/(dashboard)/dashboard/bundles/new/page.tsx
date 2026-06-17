@@ -30,15 +30,24 @@ const BUNDLE_TYPES: BundleType[] = [
   "custom",
 ];
 
+/** Preselect a bundle type from `?type=` (e.g. from the onboarding goal card). */
+function initialBundleType(): BundleType {
+  if (typeof window === "undefined") return "renewal";
+  const type = new URLSearchParams(window.location.search).get("type");
+  return (BUNDLE_TYPES as string[]).includes(type ?? "")
+    ? (type as BundleType)
+    : "renewal";
+}
+
 export default function NewBundlePage() {
   const router = useRouter();
-  const [form, setForm] = useState<CreateBundleRequest>({
+  const [form, setForm] = useState<CreateBundleRequest>(() => ({
     title: "",
-    bundle_type: "renewal",
+    bundle_type: initialBundleType(),
     target_date: "",
     authority_or_provider: "",
     description: "",
-  });
+  }));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

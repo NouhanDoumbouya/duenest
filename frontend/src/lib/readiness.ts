@@ -96,7 +96,7 @@ export function getQuickStartGoals(): QuickStartGoal[] {
       key: "bundle",
       title: "Prepare an application pack",
       body: "Gather documents for a scholarship, visa, job, or university application.",
-      href: "/dashboard/bundles/new",
+      href: "/dashboard/bundles/new?type=application",
       cta: "Create a pack",
       primary: true,
     },
