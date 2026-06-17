@@ -11,6 +11,8 @@ import {
   getOnboardingGoalOptions,
   getOnboardingRedirect,
   getQuickStartGoals,
+  postAuthDestination,
+  READINESS_FLOW_PATH,
   getPersonalizedNextAction,
   mergeReadinessMetadata,
   readReadinessMetadata,
@@ -192,5 +194,49 @@ describe("getQuickStartGoals", () => {
     expect(primary).toHaveLength(4);
     expect(primary.map((g) => g.key)).toContain("scan");
     expect(primary.map((g) => g.key)).toContain("document");
+  });
+});
+
+describe("postAuthDestination", () => {
+  it("sends a genuinely new user into the readiness flow", () => {
+    expect(postAuthDestination({ explicitNext: null, onboarding: makeState() })).toBe(
+      READINESS_FLOW_PATH,
+    );
+  });
+
+  it("always honours an explicit deep link / returnTo, even for new users", () => {
+    expect(
+      postAuthDestination({
+        explicitNext: "/quick-share/abc",
+        onboarding: makeState(),
+      }),
+    ).toBe("/quick-share/abc");
+  });
+
+  it("does not redirect returning, completed, or skipped users", () => {
+    expect(
+      postAuthDestination({
+        explicitNext: null,
+        onboarding: makeState({ has_completed_document_onboarding: true }),
+      }),
+    ).toBe("/dashboard");
+    expect(
+      postAuthDestination({
+        explicitNext: null,
+        onboarding: makeState({ dismissed_onboarding_at: "2026-01-02T00:00:00Z" }),
+      }),
+    ).toBe("/dashboard");
+    expect(
+      postAuthDestination({
+        explicitNext: null,
+        onboarding: makeState({ first_document_created_at: "2026-01-02T00:00:00Z" }),
+      }),
+    ).toBe("/dashboard");
+  });
+
+  it("falls back to the dashboard when onboarding state is unknown (no loop)", () => {
+    expect(postAuthDestination({ explicitNext: null, onboarding: null })).toBe(
+      "/dashboard",
+    );
   });
 });
