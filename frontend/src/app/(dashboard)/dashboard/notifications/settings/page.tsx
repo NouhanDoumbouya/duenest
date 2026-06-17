@@ -10,6 +10,7 @@ import { PageContainer } from "@/components/ui/page-container";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PushDeviceCard } from "@/components/notifications/push-device-card";
 import { ApiError } from "@/lib/api";
 import {
   getNotificationPreferences,
@@ -292,6 +293,8 @@ export default function NotificationSettingsPage() {
           </label>
         </div>
       </SectionCard>
+
+      <PushDeviceCard />
 
       <SectionCard title="Email privacy" description="Reminder emails are not a vault.">
         <div className="flex items-start gap-3 rounded-xl border border-border bg-muted/30 px-4 py-3">

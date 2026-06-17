@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Notification, NotificationPreference
+from .models import Notification, NotificationPreference, PushWebSubscription
 
 
 @admin.register(Notification)
@@ -30,3 +30,10 @@ class NotificationPreferenceAdmin(admin.ModelAdmin):
         "updated_at",
     )
     search_fields = ("user__email", "user__username", "timezone")
+
+
+@admin.register(PushWebSubscription)
+class PushWebSubscriptionAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "device_label", "failure_count", "last_used_at", "created_at")
+    search_fields = ("user__email", "user__username", "device_label")
+    readonly_fields = ("endpoint", "p256dh", "auth", "created_at", "last_used_at")

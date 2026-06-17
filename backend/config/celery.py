@@ -33,6 +33,7 @@ app.config_from_object("django.conf:settings", namespace="CELERY")
 # Unmatched tasks fall through to CELERY_TASK_DEFAULT_QUEUE ("default").
 app.conf.task_routes = {
     "apps.notifications.tasks.send_email": {"queue": "email"},
+    "apps.notifications.tasks.send_push": {"queue": "push"},
     "apps.notifications.tasks.deliver_notification": {"queue": "notifications"},
     "apps.notifications.tasks.process_due_notifications": {"queue": "notifications"},
     "apps.documents.tasks.run_scanner_ocr": {"queue": "scanner"},

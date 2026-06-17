@@ -97,6 +97,23 @@ def deliver_notification(notification_id: int) -> dict:
     return {"delivered": bool(result.changed)}
 
 
+@shared_task(name="apps.notifications.tasks.send_push", acks_late=True)
+def send_push(notification_id: int) -> dict:
+    """Deliver one notification as a Web Push (in-app delivery already happened).
+
+    Safe to run on the `push` queue: ``push_notification`` self-gates on opt-in,
+    quiet hours, and VAPID config, and never raises.
+    """
+    from apps.notifications.models import Notification
+    from apps.notifications.push import push_notification
+
+    try:
+        notification = Notification.objects.select_related("user").get(pk=notification_id)
+    except Notification.DoesNotExist:
+        return {"sent": 0, "reason": "missing"}
+    return push_notification(notification)
+
+
 @shared_task(name="apps.notifications.tasks.process_due_notifications", acks_late=True)
 def process_due_notifications(limit: int = 200, user_id: int | None = None) -> dict:
     """Scheduled sweep: create + deliver due notifications (idempotent)."""

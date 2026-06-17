@@ -17,6 +17,14 @@ class NotificationPreference(models.Model):
     )
     in_app_enabled = models.BooleanField(default=True)
     email_enabled = models.BooleanField(default=True)
+    push_enabled = models.BooleanField(default=False)
+    # Quiet hours suppress *push* nudges during a daily window (in the user's
+    # notification timezone). In-app notifications are never suppressed — only
+    # the device/lock-screen push is held back. Hours are 0–23; a window that
+    # wraps midnight (e.g. 22 → 7) is supported.
+    push_quiet_hours_enabled = models.BooleanField(default=False)
+    push_quiet_start_hour = models.PositiveSmallIntegerField(default=22)
+    push_quiet_end_hour = models.PositiveSmallIntegerField(default=7)
     document_reminders_enabled = models.BooleanField(default=True)
     subscription_reminders_enabled = models.BooleanField(default=True)
     checklist_bundle_reminders_enabled = models.BooleanField(default=True)
@@ -195,3 +203,37 @@ class NotificationDeliveryRun(models.Model):
 
     def __str__(self):
         return f"DeliveryRun {self.started_at:%Y-%m-%d %H:%M} ({self.status})"
+
+
+class PushWebSubscription(models.Model):
+    """
+    A browser/PWA Web Push subscription owned by one user.
+
+    Stores only the standard Web Push endpoint + public keys needed to deliver a
+    push to that device. No document content, notification body, OS account, or
+    precise device identity is stored. A user may have several (one per device).
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="push_subscriptions",
+    )
+    endpoint = models.URLField(max_length=500, unique=True)
+    p256dh = models.CharField(max_length=255)
+    auth = models.CharField(max_length=255)
+    # Coarse, non-identifying client label (e.g. "Chrome on Android"), for the
+    # user's own "your devices" list — never a raw user agent.
+    device_label = models.CharField(max_length=120, blank=True)
+    failure_count = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"PushSubscription for user {self.user_id}"
