@@ -75,6 +75,9 @@ export interface NotificationPreferences {
   in_app_enabled: boolean;
   email_enabled: boolean;
   push_enabled: boolean;
+  push_quiet_hours_enabled: boolean;
+  push_quiet_start_hour: number;
+  push_quiet_end_hour: number;
   document_reminders_enabled: boolean;
   subscription_reminders_enabled: boolean;
   checklist_bundle_reminders_enabled: boolean;

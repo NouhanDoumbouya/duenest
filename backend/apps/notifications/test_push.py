@@ -4,15 +4,17 @@ privacy-safe payload. Web Push network sending is mocked, so these run without
 the optional `pywebpush` dependency installed.
 """
 
+from datetime import datetime, timezone as dt_timezone
 from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.test import override_settings
+from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
 from .models import Notification, NotificationPreference, PushWebSubscription
-from .push import _safe_payload, push_notification
+from .push import _in_quiet_hours, _safe_payload, push_notification
 
 User = get_user_model()
 
@@ -158,3 +160,95 @@ class PushDeliveryTests(APITestCase):
             summary = push_notification(note)
         send.assert_not_called()
         self.assertEqual(summary["skipped"], 1)
+
+    @override_settings(**_VAPID)
+    def test_quiet_hours_suppress_push_but_not_in_app(self):
+        note = self._make_notification()
+        NotificationPreference.objects.create(user=self.user, push_enabled=True)
+        PushWebSubscription.objects.create(
+            user=self.user, endpoint="https://p/x", p256dh="k", auth="a"
+        )
+        # Force "now" inside quiet hours regardless of the test clock.
+        with mock.patch("apps.notifications.push._in_quiet_hours", return_value=True):
+            with mock.patch("apps.notifications.push._send_one") as send:
+                summary = push_notification(note)
+        send.assert_not_called()
+        self.assertEqual(summary["quiet"], 1)
+        # The in-app record is untouched — push quiet hours never hide it.
+        self.assertTrue(Notification.objects.filter(pk=note.pk).exists())
+
+
+class QuietHoursWindowTests(TestCase):
+    """Pure logic for the quiet-hours window, including midnight wrap."""
+
+    def _prefs(self, *, enabled=True, start=22, end=7, tz="UTC"):
+        return NotificationPreference(
+            push_quiet_hours_enabled=enabled,
+            push_quiet_start_hour=start,
+            push_quiet_end_hour=end,
+            timezone=tz,
+        )
+
+    def _at(self, hour, tz=dt_timezone.utc):
+        return datetime(2026, 6, 17, hour, 30, tzinfo=tz)
+
+    def test_disabled_is_never_quiet(self):
+        self.assertFalse(_in_quiet_hours(self._prefs(enabled=False), self._at(3)))
+
+    def test_wrap_midnight_window(self):
+        prefs = self._prefs(start=22, end=7)
+        self.assertTrue(_in_quiet_hours(prefs, self._at(23)))  # late night
+        self.assertTrue(_in_quiet_hours(prefs, self._at(3)))  # early morning
+        self.assertFalse(_in_quiet_hours(prefs, self._at(12)))  # midday
+
+    def test_same_day_window(self):
+        prefs = self._prefs(start=9, end=17)
+        self.assertTrue(_in_quiet_hours(prefs, self._at(10)))
+        self.assertFalse(_in_quiet_hours(prefs, self._at(20)))
+
+    def test_zero_length_window_is_off(self):
+        self.assertFalse(_in_quiet_hours(self._prefs(start=8, end=8), self._at(8)))
+
+    def test_evaluated_in_user_timezone(self):
+        # 02:00 UTC is 10:00 in Kuala Lumpur (UTC+8) — outside a 22→7 window.
+        prefs = self._prefs(start=22, end=7, tz="Asia/Kuala_Lumpur")
+        self.assertFalse(_in_quiet_hours(prefs, self._at(2)))
+
+
+class PushDispatchTests(TestCase):
+    """deliver_notification routes push inline (lean) vs to the queue (scale)."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="cisse", email="cisse@x.com", password="StrongPassword123!DN"
+        )
+        NotificationPreference.objects.create(user=self.user, push_enabled=True)
+
+    def _note(self):
+        return Notification.objects.create(
+            user=self.user,
+            type=Notification.Type.GENERIC_REMINDER,
+            title="t",
+            message="m",
+            dedupe_key="dispatch:1",
+        )
+
+    @override_settings(ENABLE_BACKGROUND_JOBS=True, **_VAPID)
+    def test_scale_ready_queues_push_task(self):
+        from .services import deliver_notification
+
+        with mock.patch("apps.notifications.tasks.send_push.delay") as delay:
+            result = deliver_notification(self._note())
+        delay.assert_called_once()
+        self.assertTrue(result.push_queued)
+
+    @override_settings(ENABLE_BACKGROUND_JOBS=False, **_VAPID)
+    def test_lean_sends_push_inline(self):
+        from .services import deliver_notification
+
+        with mock.patch(
+            "apps.notifications.push.push_notification",
+            return_value={"sent": 1},
+        ) as inline:
+            deliver_notification(self._note())
+        inline.assert_called_once()

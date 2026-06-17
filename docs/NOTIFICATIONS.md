@@ -163,6 +163,12 @@ notifications. This is **opt-in and privacy-safe**:
   `POST /notifications/push/subscribe/`, `POST /notifications/push/unsubscribe/`.
 - `pywebpush` is imported lazily; if absent or unconfigured, push is a no-op.
 - Gone subscriptions (HTTP 404/410) are deleted automatically.
+- Delivery is inline in lean mode; in scale-ready mode
+  (`ENABLE_BACKGROUND_JOBS=true`) it runs on the dedicated `push` Celery queue
+  via the `send_push` task.
+- **Quiet hours:** users can set a daily window (in their notification timezone,
+  may wrap midnight) that holds back device pushes only — in-app notifications
+  are never suppressed.
 
 See `docs/PWA.md` §9 for the full flow.
 

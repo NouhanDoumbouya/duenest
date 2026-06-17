@@ -18,6 +18,13 @@ class NotificationPreference(models.Model):
     in_app_enabled = models.BooleanField(default=True)
     email_enabled = models.BooleanField(default=True)
     push_enabled = models.BooleanField(default=False)
+    # Quiet hours suppress *push* nudges during a daily window (in the user's
+    # notification timezone). In-app notifications are never suppressed — only
+    # the device/lock-screen push is held back. Hours are 0–23; a window that
+    # wraps midnight (e.g. 22 → 7) is supported.
+    push_quiet_hours_enabled = models.BooleanField(default=False)
+    push_quiet_start_hour = models.PositiveSmallIntegerField(default=22)
+    push_quiet_end_hour = models.PositiveSmallIntegerField(default=7)
     document_reminders_enabled = models.BooleanField(default=True)
     subscription_reminders_enabled = models.BooleanField(default=True)
     checklist_bundle_reminders_enabled = models.BooleanField(default=True)
