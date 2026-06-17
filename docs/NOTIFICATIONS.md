@@ -91,6 +91,29 @@ notes, or document contents.
 Action URLs are restricted to internal paths and are reset to `/dashboard` if
 they look unsafe.
 
+## PWA Web Push (opt-in)
+
+In-app notifications can optionally be mirrored as device/browser Web Push
+notifications. This is **opt-in and privacy-safe**:
+
+- Off until VAPID keys are configured (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`,
+  `VAPID_SUBJECT`) — no prompts, no delivery otherwise.
+- The user enables it per device from
+  `/dashboard/notifications/settings` (which sets the `push_enabled` preference
+  and registers a `PushWebSubscription`). Permission is requested only on that
+  explicit action — never on page load.
+- When a notification is first delivered in-app, `apps/notifications/push.py`
+  sends a **generic** push (title/body never name the document, file, recipient,
+  or any private detail; only an internal URL is included). The real content is
+  shown after the user opens DueNest and is authenticated.
+- Endpoints: `GET /notifications/push/public-key/`,
+  `POST /notifications/push/subscribe/`, `POST /notifications/push/unsubscribe/`.
+- `pywebpush` is imported lazily; if absent or unconfigured, push is a no-op.
+- Gone subscriptions (HTTP 404/410) are deleted automatically.
+
+See `docs/PWA.md` §9 for the full flow and the deferred items (quiet hours, a
+dedicated push queue/task).
+
 ## Known Limitations
 
 - No Celery/Redis worker is configured yet.

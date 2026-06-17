@@ -7,6 +7,9 @@ from .views import (
     NotificationMarkReadView,
     NotificationPreferenceView,
     NotificationSummaryView,
+    PushPublicKeyView,
+    PushSubscribeView,
+    PushUnsubscribeView,
 )
 
 urlpatterns = [
@@ -35,5 +38,20 @@ urlpatterns = [
         "notifications/<int:pk>/dismiss/",
         NotificationDismissView.as_view(),
         name="notification-dismiss",
+    ),
+    path(
+        "notifications/push/public-key/",
+        PushPublicKeyView.as_view(),
+        name="notifications-push-public-key",
+    ),
+    path(
+        "notifications/push/subscribe/",
+        PushSubscribeView.as_view(),
+        name="notifications-push-subscribe",
+    ),
+    path(
+        "notifications/push/unsubscribe/",
+        PushUnsubscribeView.as_view(),
+        name="notifications-push-unsubscribe",
     ),
 ]

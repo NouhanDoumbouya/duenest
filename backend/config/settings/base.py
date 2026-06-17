@@ -282,6 +282,15 @@ NOTIFICATION_REMINDER_CATCHUP_DAYS = config(
     "NOTIFICATION_REMINDER_CATCHUP_DAYS", default=3, cast=int
 )
 
+# Web Push (PWA) — VAPID keys. Empty by default: push is fully disabled until a
+# key pair is supplied (no prompts, no delivery). Generate with:
+#   python -m py_vapid --gen   (or any VAPID key generator)
+# Keep the private key in the environment only — never commit it.
+VAPID_PUBLIC_KEY = config("VAPID_PUBLIC_KEY", default="")
+VAPID_PRIVATE_KEY = config("VAPID_PRIVATE_KEY", default="")
+# mailto: or https: contact, required by the Web Push spec for VAPID.
+VAPID_SUBJECT = config("VAPID_SUBJECT", default=f"mailto:{SUPPORT_EMAIL}")
+
 _IS_RUNNING_TESTS = "test" in sys.argv
 
 

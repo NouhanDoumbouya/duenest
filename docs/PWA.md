@@ -19,9 +19,9 @@ deliberately excludes, and the security rules that shape it.
 - Service worker **update handling** with a user-initiated "Update available" banner
 - A polite, dismissible **install prompt** (Android/Chrome + iOS guidance)
 - Offline/online awareness banner
-- A reusable **PWA status card** (Settings → Data controls) with a disabled
-  "push notifications coming soon" opt-in
-- Push-notification **frontend preparation** (feature detection only)
+- A reusable **PWA status card** (Settings → Data controls)
+- **Opt-in Web Push** (see §9): per-device subscribe/unsubscribe, privacy-safe
+  lock-screen copy, and `push`/`notificationclick` handling in the service worker
 
 ## 2. What it intentionally excludes (this sprint)
 
@@ -29,9 +29,10 @@ deliberately excludes, and the security rules that shape it.
 - No caching of `/api/*` or any authenticated/private response
 - No background sync of private document uploads (only the existing scanner
   OpenCV/queue behaviour is preserved)
-- No PushSubscription backend, VAPID keys, Celery push delivery, or push triggers
-  (these depend on the security + scale-ready Redis/Celery/notification work and
-  ship in a later sprint)
+
+> Note: Web Push (PushSubscription backend, VAPID keys, push delivery) was
+> excluded in the original PWA sprint and has since shipped as an opt-in
+> foundation — see §9.
 
 ## 3. Why private documents are not cached offline
 
@@ -139,20 +140,45 @@ A mobile-first, dismissible bottom banner orchestrated by `PwaProvider`
 - `beforeinstallprompt` drives the in-app Install button; the OS may also show
   its own install affordance.
 
-## 9. Future push-notification integration plan
+## 9. Push notifications (implemented foundation)
 
-Implement only **after** the security + scale-ready (Redis/Celery/notification)
-foundations are merged:
+Web Push is implemented as an **opt-in, privacy-safe** foundation. It is fully
+disabled until a deployment supplies VAPID keys, and it never prompts on page
+load — only from the explicit "Enable on this device" control in
+`/dashboard/notifications/settings`.
 
-1. Generate **VAPID** keys; expose the public key to the frontend.
-2. After the user opts in (explicit, post-setup), call `Notification.requestPermission()`.
-3. `registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey })`.
-4. POST the `PushSubscription` to a new backend endpoint; store it per user.
-5. Deliver reminder / emergency / security pushes via a Celery task → web-push.
-6. Handle `push` + `notificationclick` events in `sw.js`.
+End-to-end flow:
 
-Frontend is **prepared** (capability detection in `frontend/src/lib/pwa.ts`,
-disabled opt-in UI) but does **not** subscribe yet.
+1. **VAPID keys** are read from the environment (`VAPID_PUBLIC_KEY`,
+   `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`). When unset, push is off everywhere
+   (the public-key endpoint reports `enabled: false`).
+2. The settings card requests `Notification.requestPermission()` **only on the
+   user's click**, then
+   `registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey })`.
+3. The browser `PushSubscription` is POSTed to
+   `/api/v1/notifications/push/subscribe/` and stored per device
+   (`PushWebSubscription`). The user's `push_enabled` preference is set true.
+4. When a notification is first delivered in-app (`deliver_notification`),
+   `apps/notifications/push.py` sends a **generic** Web Push to the user's
+   devices (gated on `push_enabled` + configured VAPID + an existing
+   subscription). `pywebpush` is imported lazily; absent it, delivery is a no-op.
+5. `sw.js` handles `push` (shows a generic notification) and `notificationclick`
+   (focuses an existing tab via a `PUSH_NAVIGATE` message, else opens the URL).
+6. Subscriptions reported gone (HTTP 404/410) are deleted automatically.
+
+Endpoints: `GET /notifications/push/public-key/`,
+`POST /notifications/push/subscribe/`, `POST /notifications/push/unsubscribe/`.
+
+Generate a key pair with `python -m py_vapid --gen` (or any VAPID generator) and
+keep the private key in the environment only — never commit it.
+
+### Not yet included (future)
+
+- Quiet hours / per-time-window suppression.
+- A dedicated Celery `push` task (delivery is currently inline within
+  `deliver_notification`; in scale-ready mode it still runs inside the
+  notification flow).
+- iOS Web Push requires iOS 16.4+ and the app installed to the Home Screen.
 
 ## 10. Security / privacy rules for push messages
 

@@ -2501,6 +2501,7 @@ Preference fields:
 {
   "in_app_enabled": true,
   "email_enabled": true,
+  "push_enabled": false,
   "document_reminders_enabled": true,
   "subscription_reminders_enabled": true,
   "checklist_bundle_reminders_enabled": true,
@@ -2514,6 +2515,43 @@ Preference fields:
   "created_at": "2026-06-14T09:00:00Z",
   "updated_at": "2026-06-14T09:00:00Z"
 }
+```
+
+## PWA Web Push (opt-in)
+
+Web Push is off until the server has VAPID keys configured. All endpoints
+require authentication and are owner-scoped. Payloads delivered to devices are
+generic and lock-screen-safe — see `docs/PWA.md` §9.
+
+```http
+GET  /api/v1/notifications/push/public-key/
+POST /api/v1/notifications/push/subscribe/
+POST /api/v1/notifications/push/unsubscribe/
+```
+
+`GET .../public-key/` returns whether push is available and the VAPID public key
+to subscribe with:
+
+```json
+{ "enabled": true, "public_key": "<base64url VAPID public key>" }
+```
+
+`POST .../subscribe/` registers (or refreshes) this device's browser
+`PushSubscription`:
+
+```json
+{
+  "endpoint": "https://push.example.com/...",
+  "p256dh": "<base64url>",
+  "auth": "<base64url>",
+  "device_label": "Chrome on Android"
+}
+```
+
+`POST .../unsubscribe/` removes this device by endpoint:
+
+```json
+{ "endpoint": "https://push.example.com/..." }
 ```
 
 ---

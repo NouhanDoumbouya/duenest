@@ -37,6 +37,10 @@ PyJWT==2.13.0
 pypdf==6.13.2
 pytesseract==0.3.13
 python-decouple==3.8
+# pywebpush powers PWA Web Push delivery. Imported lazily in
+# apps.notifications.push — push degrades to a no-op if it is absent or VAPID
+# keys are unset, so lean installs without it still run.
+pywebpush==1.14.1
 redis==5.2.1
 requests==2.34.2
 s3transfer==0.10.4
