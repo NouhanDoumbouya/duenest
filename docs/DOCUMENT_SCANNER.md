@@ -307,19 +307,23 @@ is never overwritten.
 
 ### Backlog (deferred, with reasons)
 
-These need PDF **parsing/rasterisation** (`pdf-lib` / `pdf.js`), which is not a
-dependency today. Adding them is a separate, scoped branch — they are **not**
-faked in the UI:
+**Shipped since:** **Cross-file PDF merge** — File Inbox bulk action ("Merge N
+PDFs") combines selected inbox PDFs into one new file using `pdf-lib`
+(client-side, structural copy — no rasterisation, no quality loss; bytes never
+leave the browser; originals preserved). Gated by `document_merge`
+(`founder_only`). See `lib/pdf/merge.ts`.
 
-- **Cross-file / Vault merge** (e.g. passport + visa + certificate from existing
-  files). In-session combine of scanned pages is supported; merging *existing*
-  PDFs is deferred. (`feature/pdf-lib-document-tools`)
+Still deferred — these need PDF **rasterisation** (`pdf.js`) or a heavier
+toolkit, which is not a dependency today. Each is a separate, scoped branch and
+is **not** faked in the UI:
+
 - **Importing an existing PDF into a scan session.** `onImportFile` currently
   handles images only; PDF import needs `pdf.js` rasterisation.
-- **Compress / split / redact an arbitrary existing Vault PDF.** Safe only with a
-  real PDF toolkit; today these operate on the in-session scanned canvases.
+- **Compress an arbitrary existing PDF.** True re-compression needs rasterise +
+  re-encode (`pdf.js`); today compression applies to in-session scanned canvases.
+  (Split/extract of existing PDFs is feasible with `pdf-lib` as a follow-up.)
 - **Secure redaction of text-layer PDFs.** Redaction is only non-recoverable on
   rasterised scanner output; doing it safely on text PDFs requires flattening via
-  a PDF toolkit. (`feature/secure-redaction-tools`)
+  rasterisation. (`feature/secure-redaction-tools`)
 - **Scan-to-Bundle deep link** into a specific requirement (wire the existing
   `linkRequirementFile` endpoint into the requirement UI). (`feature/scan-to-bundle-deep-link`)

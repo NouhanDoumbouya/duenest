@@ -92,8 +92,9 @@ All keys seed `enabled` except `founder_console` and the **advanced scanner /
 document-preparation tools**, which seed `founder_only`:
 `scanner_advanced_tools`, `scan_to_safesend`, `scan_to_bundle`,
 `scan_to_reminder`, `scan_safe_copy`, `scan_watermark`, `scan_compression`,
-`scan_page_export`, `scan_redaction`. These stay invisible to normal users until
-a founder launches each one (`beta_only` / `enabled`). They mostly gate UI
+`scan_page_export`, `scan_redaction`, plus `document_merge` (File Inbox PDF
+merge). These stay invisible to normal users until a founder launches each one
+(`beta_only` / `enabled`). They mostly gate UI
 affordances on the scanner success screen; the underlying risky actions reuse
 already server-gated flows (e.g. Quick Share create is enforced by `quick_share`
 regardless of `scan_to_safesend`). See `DOCUMENT_SCANNER.md`.

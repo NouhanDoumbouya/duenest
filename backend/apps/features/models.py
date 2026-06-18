@@ -65,6 +65,7 @@ FEATURE_DEFINITIONS: list[dict] = [
     {"key": "scan_compression", "name": "Scanner — compress PDF", "default": Visibility.FOUNDER_ONLY, "description": "Create a smaller PDF copy for uploads/portals."},
     {"key": "scan_page_export", "name": "Scanner — export selected pages", "default": Visibility.FOUNDER_ONLY, "description": "Export only selected scanned pages as a new copy (also covers combining scanned pages into one PDF)."},
     {"key": "scan_redaction", "name": "Scanner — redact (experimental)", "default": Visibility.FOUNDER_ONLY, "description": "Burn-in redaction on scanned image pages. Experimental; founder-only."},
+    {"key": "document_merge", "name": "Documents — merge PDFs", "default": Visibility.FOUNDER_ONLY, "description": "Combine selected File Inbox PDFs into one new PDF (client-side; originals preserved)."},
 ]
 
 FEATURE_KEYS = [d["key"] for d in FEATURE_DEFINITIONS]

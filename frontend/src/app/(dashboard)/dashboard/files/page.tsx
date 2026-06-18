@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   CheckSquare,
+  Combine,
   Download,
   Eye,
   FolderInput,
@@ -15,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 
+import { useFeature } from "@/components/features/feature-flags-provider";
 import { DocumentFileViewer } from "@/components/documents/document-file-viewer";
 import { FileThumbnail } from "@/components/documents/file-thumbnail";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -35,10 +37,13 @@ import {
   downloadDocumentFile,
   formatFileSize,
   getFileInbox,
+  getInboxFileDownloadBlob,
+  uploadInboxFile,
   uploadInboxFileWithProgress,
   validateFile,
 } from "@/lib/document-files";
 import { getDocuments, listDocumentCategories } from "@/lib/documents";
+import { mergePdfs } from "@/lib/pdf/merge";
 import { cn } from "@/lib/utils";
 import type { DocumentFile } from "@/types/document-files";
 import type { DocumentCategory, DocumentRecord } from "@/types/documents";
@@ -341,8 +346,67 @@ export default function FileInboxPage() {
     }
   }
 
+  async function handleMerge() {
+    const pdfs = (files ?? []).filter(
+      (file) => selected.has(file.id) && file.content_type === "application/pdf",
+    );
+    if (pdfs.length < 2) {
+      setError("Select at least two PDF files to merge.");
+      return;
+    }
+    setBulkBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      // Fetch each file's bytes through the authenticated, owner-scoped
+      // download endpoint, merge client-side (bytes never leave the browser),
+      // and upload the result as a new inbox file. Originals are untouched.
+      const buffers = await Promise.all(
+        pdfs.map(async (file) =>
+          new Uint8Array(
+            await (await getInboxFileDownloadBlob(file.id)).arrayBuffer(),
+          ),
+        ),
+      );
+      const mergedBytes = await mergePdfs(buffers);
+      // Copy into a tight ArrayBuffer so the bytes satisfy BlobPart cleanly.
+      const mergedBuffer = mergedBytes.buffer.slice(
+        mergedBytes.byteOffset,
+        mergedBytes.byteOffset + mergedBytes.byteLength,
+      ) as ArrayBuffer;
+      const merged = new File(
+        [mergedBuffer],
+        `Merged-${new Date().toISOString().slice(0, 10)}.pdf`,
+        { type: "application/pdf" },
+      );
+      const result = await uploadInboxFile(merged);
+      setFiles((current) => [result, ...(current ?? [])]);
+      clearSelection();
+      setNotice(
+        `Merged ${pdfs.length} files into a new PDF. Originals preserved.`,
+      );
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : "Couldn't merge those files. Your originals are unchanged.",
+      );
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
   const allSelected =
     files !== null && files.length > 0 && selected.size === files.length;
+  const selectedPdfCount = useMemo(
+    () =>
+      (files ?? []).filter(
+        (file) =>
+          selected.has(file.id) && file.content_type === "application/pdf",
+      ).length,
+    [files, selected],
+  );
+  const mergeEnabled = useFeature("document_merge");
 
   return (
     <PageContainer>
@@ -512,6 +576,22 @@ export default function FileInboxPage() {
           {selected.size > 0 && (
             <div className="flex items-center gap-2">
               <span className="text-muted-foreground">{selected.size} selected</span>
+              {mergeEnabled && selectedPdfCount >= 2 && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handleMerge}
+                  disabled={bulkBusy}
+                >
+                  {bulkBusy ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Combine className="size-4" />
+                  )}
+                  Merge {selectedPdfCount} PDFs
+                </Button>
+              )}
               <Button
                 type="button"
                 size="sm"
