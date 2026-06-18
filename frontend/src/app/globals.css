@@ -164,6 +164,14 @@
   body {
     overflow-x: clip;
   }
+  /* Truncating text must be able to shrink inside a flex/grid parent. Without
+     this, a long unbreakable token (e.g. a filename like "scan_2026_..._x.png")
+     gives the element a huge min-content width that forces the whole row past
+     the viewport on phones — which `overflow-x: clip` then hides as clipped
+     content. An explicit `min-w-*` utility still overrides this. */
+  .truncate {
+    min-width: 0;
+  }
   h1, h2, h3 {
     @apply font-heading;
     letter-spacing: 0;
