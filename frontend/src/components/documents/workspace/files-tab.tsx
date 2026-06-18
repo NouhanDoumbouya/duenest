@@ -142,6 +142,7 @@ export function FilesTab({
 
       {previewingFile && (
         <DocumentFileViewer
+          key={previewingFile.id}
           file={previewingFile}
           downloading={downloadingId === previewingFile.id}
           onClose={() => setPreviewingFile(null)}

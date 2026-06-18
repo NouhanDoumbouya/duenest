@@ -75,6 +75,7 @@ FEATURE_DEFINITIONS: list[dict] = [
     {"key": "document_versioning", "name": "Documents — version history", "default": Visibility.FOUNDER_ONLY, "description": "View a document's version history and restore previous metadata. Originals/previous files are preserved."},
     {"key": "filename_templates", "name": "Scanner — filename templates", "default": Visibility.FOUNDER_ONLY, "description": "Quick clean-name chips (document type + year) when saving a scan. Editable; nothing invented."},
     {"key": "scan_modes", "name": "Scanner — scan modes", "default": Visibility.FOUNDER_ONLY, "description": "Friendly presets (Document/ID/Certificate/Receipt/Application/Photo) that set safe filter + quality defaults. User-chosen; not auto-recognition."},
+    {"key": "advanced_document_preview", "name": "Documents — advanced preview", "default": Visibility.FOUNDER_ONLY, "description": "Image preview zoom controls (fit / actual size / +-) in the file viewer. UI-only."},
 ]
 
 FEATURE_KEYS = [d["key"] for d in FEATURE_DEFINITIONS]

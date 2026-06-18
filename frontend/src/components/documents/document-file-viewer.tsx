@@ -7,10 +7,14 @@ import {
   FileText,
   Loader2,
   LockKeyhole,
+  Maximize2,
   Share2,
   X,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 
+import { useFeature } from "@/components/features/feature-flags-provider";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ApiError } from "@/lib/api";
 import {
@@ -54,6 +58,11 @@ export function DocumentFileViewer({
     url: null,
     error: null,
   });
+  const advancedPreview = useFeature("advanced_document_preview");
+  // Image zoom: `fit` (contain, the calm default) vs an explicit scale factor.
+  // Callers key this component by file id, so zoom resets naturally per file.
+  const [fit, setFit] = useState(true);
+  const [scale, setScale] = useState(1);
 
   useEffect(() => {
     if (!file) return;
@@ -132,6 +141,13 @@ export function DocumentFileViewer({
                 <span className="uppercase">{ext}</span> ·{" "}
                 {formatFileSize(file.file_size)}
                 {file.document_title ? ` · ${file.document_title}` : " · File Inbox"}
+                {file.created_at
+                  ? ` · ${new Date(file.created_at).toLocaleDateString(undefined, {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })}`
+                  : ""}
               </p>
             </div>
           </div>
@@ -201,13 +217,77 @@ export function DocumentFileViewer({
               }
             />
           ) : objectUrl && kind === "image" ? (
-            <div className="flex h-full min-h-[360px] items-center justify-center">
+            <div className="relative flex h-full min-h-[360px] items-center justify-center overflow-auto">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={objectUrl}
                 alt={file.original_filename}
-                className="max-h-full max-w-full rounded-xl border border-border bg-card object-contain shadow-elevated"
+                className={cn(
+                  "rounded-xl border border-border bg-card shadow-elevated",
+                  fit && "max-h-full max-w-full object-contain",
+                )}
+                style={
+                  fit
+                    ? undefined
+                    : { transform: `scale(${scale})`, transformOrigin: "center" }
+                }
               />
+              {advancedPreview && (
+                <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-full border border-border bg-card/95 px-1.5 py-1 text-xs shadow-elevated backdrop-blur">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFit(true);
+                      setScale(1);
+                    }}
+                    aria-pressed={fit}
+                    className={cn(
+                      "rounded-full px-2 py-1 font-medium hover:bg-muted",
+                      fit && "text-primary",
+                    )}
+                  >
+                    Fit
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Zoom out"
+                    onClick={() => {
+                      const base = fit ? 1 : scale;
+                      setFit(false);
+                      setScale(Math.max(0.5, +(base - 0.25).toFixed(2)));
+                    }}
+                    className="rounded-full p-1.5 hover:bg-muted"
+                  >
+                    <ZoomOut className="size-4" />
+                  </button>
+                  <span className="w-10 text-center tabular-nums text-muted-foreground">
+                    {fit ? "Fit" : `${Math.round(scale * 100)}%`}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Zoom in"
+                    onClick={() => {
+                      const base = fit ? 1 : scale;
+                      setFit(false);
+                      setScale(Math.min(4, +(base + 0.25).toFixed(2)));
+                    }}
+                    className="rounded-full p-1.5 hover:bg-muted"
+                  >
+                    <ZoomIn className="size-4" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Actual size"
+                    onClick={() => {
+                      setFit(false);
+                      setScale(1);
+                    }}
+                    className="rounded-full p-1.5 hover:bg-muted"
+                  >
+                    <Maximize2 className="size-4" />
+                  </button>
+                </div>
+              )}
             </div>
           ) : objectUrl && kind === "pdf" ? (
             <iframe

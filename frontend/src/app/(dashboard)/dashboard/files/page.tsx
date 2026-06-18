@@ -1251,6 +1251,7 @@ export default function FileInboxPage() {
       />
 
       <DocumentFileViewer
+        key={previewFile?.id ?? "none"}
         file={previewFile}
         downloading={busyFileId === previewFile?.id}
         onClose={() => setPreviewFile(null)}

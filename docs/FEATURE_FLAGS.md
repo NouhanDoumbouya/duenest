@@ -100,9 +100,11 @@ PDF into the scanner), `document_compress` (shrink a scanned PDF), and
 checksum/name/size, never auto-deletes or replaces), and `document_versioning`
 (version-history tab + restore previous metadata; the restore/replace **write**
 endpoints are enforced server-side, not just hidden), `filename_templates`
-(scanner quick clean-name chips; UI-only, editable), and `scan_modes` (friendly
-filter+quality presets; user-chosen, not auto-recognition). These stay invisible
-to normal users until a founder launches each one (`beta_only` / `enabled`). They mostly gate UI
+(scanner quick clean-name chips; UI-only, editable), `scan_modes` (friendly
+filter+quality presets; user-chosen, not auto-recognition), and
+`advanced_document_preview` (image zoom controls in the file viewer; UI-only).
+These stay invisible to normal users until a founder launches each one
+(`beta_only` / `enabled`). They mostly gate UI
 affordances on the scanner success screen; the underlying risky actions reuse
 already server-gated flows (e.g. Quick Share create is enforced by `quick_share`
 regardless of `scan_to_safesend`). See `DOCUMENT_SCANNER.md`.
