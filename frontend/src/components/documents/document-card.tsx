@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   Edit3,
   FileUp,
+  Inbox,
   LifeBuoy,
   Loader2,
   MoreHorizontal,
@@ -222,6 +223,15 @@ export function DocumentCard({
                 >
                   <LifeBuoy className="size-3" aria-hidden />
                   Emergency
+                </span>
+              )}
+              {doc.category === null && (
+                <span
+                  className="hidden items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[0.68rem] font-medium text-muted-foreground sm:inline-flex"
+                  title="No category yet — file it to find it faster later"
+                >
+                  <Inbox className="size-3" aria-hidden />
+                  Unsorted
                 </span>
               )}
             </div>
