@@ -5,25 +5,6 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { Severity } from "@/lib/life-radar";
 
-export function LifeRadarStatusSentence({
-  sentence,
-  clear,
-}: {
-  sentence: string;
-  clear: boolean;
-}) {
-  return (
-    <p
-      className={cn(
-        "mt-2 max-w-2xl text-[0.95rem] leading-relaxed",
-        clear ? "text-muted-foreground" : "text-foreground",
-      )}
-    >
-      {sentence}
-    </p>
-  );
-}
-
 const ACCENT_BAR: Record<Severity, string> = {
   critical: "bg-destructive",
   soon: "bg-brand-amber",
@@ -33,19 +14,15 @@ const ACCENT_BAR: Record<Severity, string> = {
 
 export function LifeRadarHero({
   name,
-  sentence,
   worstSeverity,
   readinessScore,
   lastChecked,
-  clear,
   onForgottenClick,
 }: {
   name: string;
-  sentence: string;
   worstSeverity: Severity;
   readinessScore: number;
   lastChecked: string;
-  clear: boolean;
   onForgottenClick?: () => void;
 }) {
   return (
@@ -71,8 +48,6 @@ export function LifeRadarHero({
           <p className="mt-1 text-sm text-muted-foreground">
             Welcome back, {name}
           </p>
-
-          <LifeRadarStatusSentence sentence={sentence} clear={clear} />
 
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <Link
