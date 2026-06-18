@@ -82,6 +82,7 @@ import { applyWatermark } from "@/lib/scanner/watermark";
 import { applyRedactions, type RedactionRect } from "@/lib/scanner/redaction";
 import { rasterizePdf } from "@/lib/pdf/rasterize";
 import { FILENAME_TYPE_CHIPS, suggestFilename } from "@/lib/scanner/filename";
+import { SCAN_MODES } from "@/lib/scanner/modes";
 import { uploadScan, flushQueuedScans } from "@/lib/scanner/client";
 import {
   enqueueScan,
@@ -152,6 +153,9 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
   const [flash, setFlash] = useState(false);
   const [filterId, setFilterId] = useState<FilterId>(DEFAULT_FILTER);
   const [moreOpen, setMoreOpen] = useState(false);
+  // Chosen scan mode (session-only). A preset over filter + quality; never
+  // auto-detected. null = no explicit mode picked.
+  const [scanMode, setScanMode] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<ScanQualityWarning[]>([]);
   const [pages, setPages] = useState<ScanPage[]>([]);
   const [adjust, setAdjust] = useState<Adjustments>(NEUTRAL_ADJUST);
@@ -1307,6 +1311,41 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
                 <p className="flex items-center justify-center gap-1.5 text-xs text-teal-300">
                   <Check className="size-3.5" aria-hidden="true" /> Looks clear — ready to save
                 </p>
+              )}
+              {featureEnabled("scan_modes") && (
+                <div className="space-y-1">
+                  <div
+                    className="-mx-1 flex items-center gap-2 overflow-x-auto px-1 pb-1"
+                    role="group"
+                    aria-label="Scan mode"
+                  >
+                    {SCAN_MODES.map((mode) => (
+                      <button
+                        key={mode.id}
+                        type="button"
+                        onClick={() => {
+                          changeFilter(mode.filterId);
+                          setExportQuality(mode.quality);
+                          setScanMode(mode.id);
+                        }}
+                        aria-pressed={scanMode === mode.id}
+                        className={cn(
+                          "inline-flex shrink-0 items-center rounded-full px-3 py-1.5 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none",
+                          scanMode === mode.id
+                            ? "bg-teal-500/20 text-teal-100 ring-1 ring-teal-400/60"
+                            : "bg-white/5 text-slate-200 hover:bg-white/10",
+                        )}
+                      >
+                        {mode.label}
+                      </button>
+                    ))}
+                  </div>
+                  {scanMode !== null && (
+                    <p className="text-center text-[0.7rem] text-slate-500">
+                      {SCAN_MODES.find((m) => m.id === scanMode)?.hint}
+                    </p>
+                  )}
+                </div>
               )}
               <div
                 className="-mx-1 flex items-center gap-2 overflow-x-auto px-1 pb-1"
