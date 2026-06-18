@@ -10,6 +10,7 @@ import {
   FolderInput,
   EyeOff,
   Loader2,
+  Minimize2,
   Plus,
   Scissors,
   Square,
@@ -21,6 +22,7 @@ import {
 import { useFeature } from "@/components/features/feature-flags-provider";
 import { DocumentFileViewer } from "@/components/documents/document-file-viewer";
 import { ExtractPagesDialog } from "@/components/documents/extract-pages-dialog";
+import { CompressPdfDialog } from "@/components/documents/compress-pdf-dialog";
 import { RedactionEditor } from "@/components/scanner/RedactionEditor";
 import { FileThumbnail } from "@/components/documents/file-thumbnail";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -50,6 +52,7 @@ import { getDocuments, listDocumentCategories } from "@/lib/documents";
 import { mergePdfs } from "@/lib/pdf/merge";
 import { extractPages, getPdfPageCount } from "@/lib/pdf/extract";
 import { rasterizePdf } from "@/lib/pdf/rasterize";
+import { compressPdf } from "@/lib/pdf/compress";
 import { generatePdfBlob } from "@/lib/scanner/pdf";
 import { applyRedactions, type RedactionRect } from "@/lib/scanner/redaction";
 import { cn } from "@/lib/utils";
@@ -114,6 +117,11 @@ export default function FileInboxPage() {
     null,
   );
   const [redactBusy, setRedactBusy] = useState(false);
+  // "Shrink PDF" (compress) target + busy state.
+  const [compressTarget, setCompressTarget] = useState<DocumentFile | null>(
+    null,
+  );
+  const [compressBusy, setCompressBusy] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -532,6 +540,47 @@ export default function FileInboxPage() {
     }
   }
 
+  async function confirmCompress(quality: number) {
+    if (!compressTarget) return;
+    const original = compressTarget;
+    setCompressBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const buffer = await (
+        await getInboxFileDownloadBlob(original.id)
+      ).arrayBuffer();
+      const blob = await compressPdf(buffer, quality);
+      // Don't save a "compressed" copy that isn't actually smaller (text PDFs
+      // can grow when rasterized) — tell the user honestly instead.
+      if (blob.size >= original.file_size) {
+        setCompressTarget(null);
+        setNotice(
+          `This PDF is already compact (${formatFileSize(original.file_size)}). No smaller copy was created.`,
+        );
+        return;
+      }
+      const base = original.original_filename.replace(/\.[^/.]+$/, "");
+      const file = new File([blob], `${base}-compressed.pdf`, {
+        type: "application/pdf",
+      });
+      const result = await uploadInboxFile(file);
+      setFiles((current) => [result, ...(current ?? [])]);
+      setCompressTarget(null);
+      setNotice(
+        `Compressed: ${formatFileSize(original.file_size)} → ${formatFileSize(blob.size)}. Original preserved.`,
+      );
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : "Couldn't compress that PDF. Your original is unchanged.",
+      );
+    } finally {
+      setCompressBusy(false);
+    }
+  }
+
   const allSelected =
     files !== null && files.length > 0 && selected.size === files.length;
   const selectedPdfCount = useMemo(
@@ -545,6 +594,7 @@ export default function FileInboxPage() {
   const mergeEnabled = useFeature("document_merge");
   const pageExtractEnabled = useFeature("document_page_extract");
   const redactionEnabled = useFeature("document_redaction");
+  const compressEnabled = useFeature("document_compress");
 
   return (
     <PageContainer>
@@ -839,6 +889,19 @@ export default function FileInboxPage() {
                           Export pages
                         </Button>
                       )}
+                    {compressEnabled &&
+                      file.content_type === "application/pdf" && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCompressTarget(file)}
+                          disabled={busyFileId === file.id}
+                        >
+                          <Minimize2 className="size-4" />
+                          Shrink
+                        </Button>
+                      )}
                     {redactionEnabled &&
                       file.content_type === "application/pdf" && (
                         <Button
@@ -1077,6 +1140,15 @@ export default function FileInboxPage() {
           onCreate={confirmRedact}
         />
       )}
+
+      <CompressPdfDialog
+        open={compressTarget !== null}
+        fileName={compressTarget?.original_filename ?? ""}
+        originalSize={compressTarget?.file_size ?? 0}
+        busy={compressBusy}
+        onCancel={() => setCompressTarget(null)}
+        onConfirm={confirmCompress}
+      />
     </PageContainer>
   );
 }

@@ -331,11 +331,13 @@ bytes never leave the browser; originals preserved); both `founder_only`.
   the same multi-page review / prepare-copy / export tools as a fresh capture.
   Gated by `scan_pdf_import` (`founder_only`). When disabled, picking a PDF shows
   a calm "not available" message instead of a confusing image error.
+- **Shrink (compress) a PDF** — per-PDF "Shrink" action rasterises + re-encodes
+  at a chosen quality (`lib/pdf/compress.ts`). Honest framing: best for scanned /
+  image-heavy PDFs; the copy is image-based (no selectable text), and if the
+  result isn't actually smaller (e.g. a text PDF) **no copy is saved** and the
+  user is told. Shows before→after size. Gated by `document_compress`.
 
 Still deferred — separate, scoped branches; **not** faked in the UI:
 
-- **Compress an arbitrary existing PDF.** Rasterise + re-encode would lose the
-  text layer and can *bloat* text PDFs, so it's only worthwhile for scanned /
-  image-heavy PDFs — deferred until that trade-off is worth surfacing honestly.
 - **Scan-to-Bundle deep link** into a specific requirement (wire the existing
   `linkRequirementFile` endpoint into the requirement UI). (`feature/scan-to-bundle-deep-link`)
