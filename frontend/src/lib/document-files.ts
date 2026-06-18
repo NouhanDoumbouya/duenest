@@ -185,6 +185,24 @@ export function uploadDocumentFile(
   });
 }
 
+/**
+ * Upload a replacement/new file as a new version of `fileId`'s document. The
+ * old file blob is retained (history is preserved); the response is the new
+ * file. Gated server-side by `document_versioning`.
+ */
+export function createDocumentFileVersion(
+  documentId: number,
+  fileId: number,
+  file: File,
+): Promise<DocumentFile> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiFetch<DocumentFile>(
+    `/documents/${documentId}/files/${fileId}/versions/`,
+    { method: "POST", body: formData, auth: true },
+  );
+}
+
 export function getFileInbox(): Promise<Paginated<DocumentFile>> {
   return apiFetch<Paginated<DocumentFile>>("/files/", { auth: true });
 }

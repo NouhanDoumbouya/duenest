@@ -1,6 +1,14 @@
 "use client";
 
-import { Download, Eye, FileText, Loader2, Share2, Trash2 } from "lucide-react";
+import {
+  Download,
+  Eye,
+  FileText,
+  FileUp,
+  Loader2,
+  Share2,
+  Trash2,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { fileExtension, formatFileSize } from "@/lib/document-files";
@@ -24,17 +32,22 @@ function EmptyState() {
 export function DocumentFilesList({
   files,
   downloadingId,
+  replacingId,
   onPreview,
   onDownload,
   onShare,
   onRequestDelete,
+  onReplace,
 }: {
   files: DocumentFile[];
   downloadingId: number | null;
+  replacingId?: number | null;
   onPreview: (file: DocumentFile) => void;
   onDownload: (file: DocumentFile) => void;
   onShare: (file: DocumentFile) => void;
   onRequestDelete: (file: DocumentFile) => void;
+  /** When provided, shows a "New version" action that replaces this file. */
+  onReplace?: (file: DocumentFile) => void;
 }) {
   if (files.length === 0) return <EmptyState />;
 
@@ -100,6 +113,23 @@ export function DocumentFilesList({
                 <Share2 className="size-3.5" />
                 <span className="hidden sm:inline">Share</span>
               </Button>
+              {onReplace && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onReplace(file)}
+                  disabled={replacingId === file.id}
+                  aria-label={`Replace ${file.original_filename} with a new version`}
+                >
+                  {replacingId === file.id ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <FileUp className="size-3.5" />
+                  )}
+                  <span className="hidden sm:inline">New version</span>
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="ghost"
