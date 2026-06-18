@@ -3,6 +3,7 @@
 import {
   Download,
   Eye,
+  FileStack,
   FileText,
   FileUp,
   Loader2,
@@ -38,6 +39,7 @@ export function DocumentFilesList({
   onShare,
   onRequestDelete,
   onReplace,
+  onEditPages,
 }: {
   files: DocumentFile[];
   downloadingId: number | null;
@@ -48,6 +50,8 @@ export function DocumentFilesList({
   onRequestDelete: (file: DocumentFile) => void;
   /** When provided, shows a "New version" action that replaces this file. */
   onReplace?: (file: DocumentFile) => void;
+  /** When provided, shows an "Edit pages" action for PDF files. */
+  onEditPages?: (file: DocumentFile) => void;
 }) {
   if (files.length === 0) return <EmptyState />;
 
@@ -128,6 +132,18 @@ export function DocumentFilesList({
                     <FileUp className="size-3.5" />
                   )}
                   <span className="hidden sm:inline">New version</span>
+                </Button>
+              )}
+              {onEditPages && file.content_type === "application/pdf" && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onEditPages(file)}
+                  aria-label={`Edit pages of ${file.original_filename}`}
+                >
+                  <FileStack className="size-3.5" />
+                  <span className="hidden sm:inline">Edit pages</span>
                 </Button>
               )}
               <Button

@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react";
 
 import { useFeature } from "@/components/features/feature-flags-provider";
 import { DocumentFilesList } from "@/components/documents/document-files-list";
+import { PageEditorDialog } from "@/components/documents/page-editor-dialog";
 import { DocumentFileShareDialog } from "@/components/documents/document-file-share-dialog";
 import { DocumentFileUploader } from "@/components/documents/document-file-uploader";
 import { DocumentFileViewer } from "@/components/documents/document-file-viewer";
@@ -36,7 +37,11 @@ export function FilesTab({
   const [deleting, setDeleting] = useState(false);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [replacingId, setReplacingId] = useState<number | null>(null);
+  const [editingPagesFile, setEditingPagesFile] = useState<DocumentFile | null>(
+    null,
+  );
   const versioningEnabled = useFeature("document_versioning");
+  const pageEditEnabled = useFeature("document_page_edit");
   const replaceInputRef = useRef<HTMLInputElement>(null);
   const replaceTargetId = useRef<number | null>(null);
 
@@ -165,6 +170,7 @@ export function FilesTab({
             onShare={setSharingFile}
             onRequestDelete={setPendingDelete}
             onReplace={versioningEnabled ? handleReplace : undefined}
+            onEditPages={pageEditEnabled ? setEditingPagesFile : undefined}
           />
         )}
 
@@ -209,6 +215,19 @@ export function FilesTab({
         <DocumentFileShareDialog
           file={sharingFile}
           onClose={() => setSharingFile(null)}
+        />
+      )}
+
+      {editingPagesFile && (
+        <PageEditorDialog
+          documentId={documentId}
+          file={editingPagesFile}
+          onClose={() => setEditingPagesFile(null)}
+          onSaved={(created) => {
+            setFiles((prev) => [created, ...(prev ?? [])]);
+            setEditingPagesFile(null);
+            onChanged?.();
+          }}
         />
       )}
     </SectionCard>

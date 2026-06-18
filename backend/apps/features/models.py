@@ -77,6 +77,7 @@ FEATURE_DEFINITIONS: list[dict] = [
     {"key": "scan_modes", "name": "Scanner — scan modes", "default": Visibility.FOUNDER_ONLY, "description": "Friendly presets (Document/ID/Certificate/Receipt/Application/Photo) that set safe filter + quality defaults. User-chosen; not auto-recognition."},
     {"key": "advanced_document_preview", "name": "Documents — advanced preview", "default": Visibility.FOUNDER_ONLY, "description": "Image preview zoom controls (fit / actual size / +-) in the file viewer. UI-only."},
     {"key": "batch_scan_actions", "name": "File Inbox — batch actions", "default": Visibility.FOUNDER_ONLY, "description": "Move multiple selected inbox files to the Vault at once (optionally under a category). Uses existing create-document; originals become documents."},
+    {"key": "document_page_edit", "name": "Documents — replace/add PDF pages", "default": Visibility.FOUNDER_ONLY, "description": "Replace a bad page or add a page in a PDF (lossless via pdf-lib); saved as a new version. Original retained. Experimental; founder-only."},
 ]
 
 FEATURE_KEYS = [d["key"] for d in FEATURE_DEFINITIONS]

@@ -103,9 +103,11 @@ endpoints are enforced server-side, not just hidden), `filename_templates`
 (scanner quick clean-name chips; UI-only, editable), `scan_modes` (friendly
 filter+quality presets; user-chosen, not auto-recognition), and
 `advanced_document_preview` (image zoom controls in the file viewer; UI-only),
-and `batch_scan_actions` (move multiple selected inbox files to the Vault at
-once, optionally under a category). These stay invisible to normal users until a
-founder launches each one (`beta_only` / `enabled`). They mostly gate UI
+`batch_scan_actions` (move multiple selected inbox files to the Vault at once,
+optionally under a category), and `document_page_edit` (replace a bad page / add
+a page in a PDF, lossless via pdf-lib, saved as a new version; experimental).
+These stay invisible to normal users until a founder launches each one
+(`beta_only` / `enabled`). They mostly gate UI
 affordances on the scanner success screen; the underlying risky actions reuse
 already server-gated flows (e.g. Quick Share create is enforced by `quick_share`
 regardless of `scan_to_safesend`). See `DOCUMENT_SCANNER.md`.

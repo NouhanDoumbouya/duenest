@@ -337,7 +337,18 @@ bytes never leave the browser; originals preserved); both `founder_only`.
   result isn't actually smaller (e.g. a text PDF) **no copy is saved** and the
   user is told. Shows before→after size. Gated by `document_compress`.
 
+**Shipped since (Document Organization v2):** duplicate detection (checksum/
+name/size), version-history tab + restore + file-level "New version", filename
+templates, scan modes, image-preview zoom, "Unsorted" badge, batch Move-to-Vault,
+extra timeline events (reminder / added-to-bundle / shared-via-SafeSend), and
+**lossless per-page replace/add** in a saved PDF (`lib/pdf/pages.ts` via pdf-lib —
+existing pages keep their text layer; only the new page is an image; saved as a
+new version; gated `document_page_edit`).
+
 Still deferred — separate, scoped branches; **not** faked in the UI:
 
 - **Scan-to-Bundle deep link** into a specific requirement (wire the existing
   `linkRequirementFile` endpoint into the requirement UI). (`feature/scan-to-bundle-deep-link`)
+- **"Possible duplicate" / "Has newer version" badges** — the former needs a
+  cross-file checksum aggregate per list (cost vs. upload-time dedup); the latter
+  is misleading (versions are history, not staleness). Deliberately not shown.
