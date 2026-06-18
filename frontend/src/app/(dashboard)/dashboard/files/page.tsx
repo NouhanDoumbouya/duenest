@@ -1136,6 +1136,7 @@ export default function FileInboxPage() {
         <RedactionEditor
           pages={redactPages}
           busy={redactBusy}
+          tone="surface"
           onCancel={closeRedact}
           onCreate={confirmRedact}
         />

@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Loader2, Undo2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   isMeaningfulRect,
   normalizeRect,
@@ -11,7 +12,50 @@ import {
 } from "@/lib/scanner/redaction";
 
 /**
- * Full-screen editor for drawing burn-in redaction areas over scanned pages.
+ * Visual tone. `dark` matches the force-dark scanner; `surface` uses semantic
+ * theme tokens so the editor fits the (light or dark) File Inbox. The drawing
+ * colors (teal draft, black redaction) sit over the document image and stay the
+ * same in both tones.
+ */
+export type RedactionTone = "dark" | "surface";
+
+const TONES: Record<
+  RedactionTone,
+  {
+    root: string;
+    border: string;
+    iconBtn: string;
+    meta: string;
+    warn: string;
+    cancelVariant: "ghost" | "outline";
+    cancelClass: string;
+    primaryClass: string;
+  }
+> = {
+  dark: {
+    root: "bg-slate-950 text-slate-50",
+    border: "border-white/10",
+    iconBtn: "text-slate-300 hover:bg-white/10",
+    meta: "text-slate-400",
+    warn: "text-amber-300/90",
+    cancelVariant: "ghost",
+    cancelClass: "text-slate-300 hover:bg-white/5 hover:text-white",
+    primaryClass: "bg-teal-500 text-slate-950 hover:bg-teal-400",
+  },
+  surface: {
+    root: "bg-background text-foreground",
+    border: "border-border",
+    iconBtn: "text-muted-foreground hover:bg-muted",
+    meta: "text-muted-foreground",
+    warn: "text-amber-600",
+    cancelVariant: "outline",
+    cancelClass: "",
+    primaryClass: "",
+  },
+};
+
+/**
+ * Full-screen editor for drawing burn-in redaction areas over rasterized pages.
  * Rectangles are kept normalized (0..1) per page; the parent burns them into the
  * full-resolution canvases on export. This never touches the original — export
  * always produces a NEW copy.
@@ -19,14 +63,17 @@ import {
 export function RedactionEditor({
   pages,
   busy,
+  tone = "dark",
   onCancel,
   onCreate,
 }: {
   pages: HTMLCanvasElement[];
   busy: boolean;
+  tone?: RedactionTone;
   onCancel: () => void;
   onCreate: (rectsPerPage: RedactionRect[][]) => void;
 }) {
+  const t = TONES[tone];
   const urls = useMemo(
     () => pages.map((c) => c.toDataURL("image/jpeg", 0.85)),
     [pages],
@@ -42,7 +89,9 @@ export function RedactionEditor({
   const totalAreas = rects.reduce((n, p) => n + p.length, 0);
   const pageAreas = rects[page]?.length ?? 0;
 
-  function fractionFromEvent(e: React.PointerEvent): { x: number; y: number } | null {
+  function fractionFromEvent(
+    e: React.PointerEvent,
+  ): { x: number; y: number } | null {
     const el = surfaceRef.current;
     if (!el) return null;
     const box = el.getBoundingClientRect();
@@ -86,13 +135,18 @@ export function RedactionEditor({
   }
 
   return (
-    <div className="fixed inset-0 z-[110] flex flex-col bg-slate-950 text-slate-50">
-      <header className="flex items-center justify-between border-b border-white/10 p-3">
+    <div className={cn("fixed inset-0 z-[110] flex flex-col", t.root)}>
+      <header
+        className={cn("flex items-center justify-between border-b p-3", t.border)}
+      >
         <button
           type="button"
           onClick={onCancel}
           aria-label="Cancel redaction"
-          className="rounded-md p-1 text-slate-300 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
+          className={cn(
+            "rounded-md p-1 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+            t.iconBtn,
+          )}
         >
           <X className="size-5" aria-hidden="true" />
         </button>
@@ -102,7 +156,10 @@ export function RedactionEditor({
           onClick={undoLast}
           disabled={pageAreas === 0}
           aria-label="Undo last area"
-          className="rounded-md p-1 text-slate-300 hover:bg-white/10 disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
+          className={cn(
+            "rounded-md p-1 disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+            t.iconBtn,
+          )}
         >
           <Undo2 className="size-5" aria-hidden="true" />
         </button>
@@ -120,7 +177,7 @@ export function RedactionEditor({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={urls[page]}
-            alt={`Scanned page ${page + 1}`}
+            alt={`Page ${page + 1}`}
             draggable={false}
             className="max-h-[68vh] max-w-full select-none"
           />
@@ -151,10 +208,15 @@ export function RedactionEditor({
       </div>
 
       <footer
-        className="border-t border-white/10 p-3"
+        className={cn("border-t p-3", t.border)}
         style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 0.75rem)" }}
       >
-        <div className="mb-2 flex items-center justify-between text-xs text-slate-400">
+        <div
+          className={cn(
+            "mb-2 flex items-center justify-between text-xs",
+            t.meta,
+          )}
+        >
           <span>Drag over anything you want to hide.</span>
           <span>
             {totalAreas} area{totalAreas === 1 ? "" : "s"}
@@ -168,11 +230,11 @@ export function RedactionEditor({
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={page === 0}
               aria-label="Previous page"
-              className="rounded-md p-1 text-slate-300 hover:bg-white/10 disabled:opacity-40"
+              className={cn("rounded-md p-1 disabled:opacity-40", t.iconBtn)}
             >
               <ChevronLeft className="size-5" aria-hidden="true" />
             </button>
-            <span className="text-xs text-slate-300">
+            <span className={cn("text-xs", t.meta)}>
               Page {page + 1} of {pages.length}
             </span>
             <button
@@ -180,31 +242,31 @@ export function RedactionEditor({
               onClick={() => setPage((p) => Math.min(pages.length - 1, p + 1))}
               disabled={page === pages.length - 1}
               aria-label="Next page"
-              className="rounded-md p-1 text-slate-300 hover:bg-white/10 disabled:opacity-40"
+              className={cn("rounded-md p-1 disabled:opacity-40", t.iconBtn)}
             >
               <ChevronRight className="size-5" aria-hidden="true" />
             </button>
           </div>
         )}
 
-        <p className="mb-3 text-center text-xs text-amber-300/90">
+        <p className={cn("mb-3 text-center text-xs", t.warn)}>
           Review carefully before sharing. This creates a new copy; your original
           is unchanged.
         </p>
 
         <div className="flex items-center justify-end gap-2">
           <Button
-            variant="ghost"
+            variant={t.cancelVariant}
             onClick={onCancel}
             disabled={busy}
-            className="text-slate-300 hover:bg-white/5 hover:text-white"
+            className={t.cancelClass || undefined}
           >
             Cancel
           </Button>
           <Button
             onClick={() => onCreate(rects)}
             disabled={busy || totalAreas === 0}
-            className="bg-teal-500 text-slate-950 hover:bg-teal-400"
+            className={t.primaryClass || undefined}
           >
             {busy ? (
               <Loader2 className="size-4 animate-spin" aria-hidden="true" />
