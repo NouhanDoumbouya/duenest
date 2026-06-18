@@ -10,6 +10,7 @@ import {
   FolderInput,
   Loader2,
   Plus,
+  Scissors,
   Square,
   Trash2,
   Upload,
@@ -18,6 +19,7 @@ import {
 
 import { useFeature } from "@/components/features/feature-flags-provider";
 import { DocumentFileViewer } from "@/components/documents/document-file-viewer";
+import { ExtractPagesDialog } from "@/components/documents/extract-pages-dialog";
 import { FileThumbnail } from "@/components/documents/file-thumbnail";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -44,6 +46,7 @@ import {
 } from "@/lib/document-files";
 import { getDocuments, listDocumentCategories } from "@/lib/documents";
 import { mergePdfs } from "@/lib/pdf/merge";
+import { extractPages, getPdfPageCount } from "@/lib/pdf/extract";
 import { cn } from "@/lib/utils";
 import type { DocumentFile } from "@/types/document-files";
 import type { DocumentCategory, DocumentRecord } from "@/types/documents";
@@ -95,6 +98,11 @@ export default function FileInboxPage() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [confirmBulk, setConfirmBulk] = useState(false);
+  // "Export selected pages" state: the PDF being split + its loaded bytes/count.
+  const [extractTarget, setExtractTarget] = useState<DocumentFile | null>(null);
+  const [extractBytes, setExtractBytes] = useState<ArrayBuffer | null>(null);
+  const [extractPageCount, setExtractPageCount] = useState<number | null>(null);
+  const [extractBusy, setExtractBusy] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -396,6 +404,64 @@ export default function FileInboxPage() {
     }
   }
 
+  async function openExtract(file: DocumentFile) {
+    setBusyFileId(file.id);
+    setError(null);
+    try {
+      const buffer = await (
+        await getInboxFileDownloadBlob(file.id)
+      ).arrayBuffer();
+      const count = await getPdfPageCount(buffer);
+      setExtractBytes(buffer);
+      setExtractPageCount(count);
+      setExtractTarget(file);
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : "Couldn't open that PDF.",
+      );
+    } finally {
+      setBusyFileId(null);
+    }
+  }
+
+  function closeExtract() {
+    setExtractTarget(null);
+    setExtractBytes(null);
+    setExtractPageCount(null);
+  }
+
+  async function confirmExtract(indices: number[]) {
+    if (!extractTarget || !extractBytes) return;
+    setExtractBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const bytes = await extractPages(extractBytes, indices);
+      const buffer = bytes.buffer.slice(
+        bytes.byteOffset,
+        bytes.byteOffset + bytes.byteLength,
+      ) as ArrayBuffer;
+      const base = extractTarget.original_filename.replace(/\.[^/.]+$/, "");
+      const file = new File([buffer], `${base}-pages.pdf`, {
+        type: "application/pdf",
+      });
+      const result = await uploadInboxFile(file);
+      setFiles((current) => [result, ...(current ?? [])]);
+      closeExtract();
+      setNotice(
+        `Exported ${indices.length} page${indices.length === 1 ? "" : "s"} as a new PDF. Original preserved.`,
+      );
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : "Couldn't export those pages. Your original is unchanged.",
+      );
+    } finally {
+      setExtractBusy(false);
+    }
+  }
+
   const allSelected =
     files !== null && files.length > 0 && selected.size === files.length;
   const selectedPdfCount = useMemo(
@@ -407,6 +473,7 @@ export default function FileInboxPage() {
     [files, selected],
   );
   const mergeEnabled = useFeature("document_merge");
+  const pageExtractEnabled = useFeature("document_page_extract");
 
   return (
     <PageContainer>
@@ -688,6 +755,19 @@ export default function FileInboxPage() {
                       )}
                       Download
                     </Button>
+                    {pageExtractEnabled &&
+                      file.content_type === "application/pdf" && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openExtract(file)}
+                          disabled={busyFileId === file.id}
+                        >
+                          <Scissors className="size-4" />
+                          Export pages
+                        </Button>
+                      )}
                     <Button
                       type="button"
                       variant="ghost"
@@ -893,6 +973,16 @@ export default function FileInboxPage() {
         onClose={() => setPreviewFile(null)}
         onDownload={handleDownload}
         onShare={() => undefined}
+      />
+
+      <ExtractPagesDialog
+        key={extractTarget?.id ?? "none"}
+        open={extractTarget !== null && extractPageCount !== null}
+        fileName={extractTarget?.original_filename ?? ""}
+        pageCount={extractPageCount ?? 0}
+        busy={extractBusy}
+        onCancel={closeExtract}
+        onConfirm={confirmExtract}
       />
     </PageContainer>
   );

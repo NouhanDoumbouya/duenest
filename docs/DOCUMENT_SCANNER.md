@@ -307,11 +307,15 @@ is never overwritten.
 
 ### Backlog (deferred, with reasons)
 
-**Shipped since:** **Cross-file PDF merge** — File Inbox bulk action ("Merge N
-PDFs") combines selected inbox PDFs into one new file using `pdf-lib`
-(client-side, structural copy — no rasterisation, no quality loss; bytes never
-leave the browser; originals preserved). Gated by `document_merge`
-(`founder_only`). See `lib/pdf/merge.ts`.
+**Shipped since (existing-file PDF tools, `pdf-lib`, client-side):**
+
+- **Merge** — File Inbox bulk action ("Merge N PDFs") combines selected inbox
+  PDFs into one new file. Gated by `document_merge`. See `lib/pdf/merge.ts`.
+- **Export selected pages (split)** — per-PDF "Export pages" action picks pages
+  into a new PDF. Gated by `document_page_extract`. See `lib/pdf/extract.ts`.
+
+Both copy pages structurally (no rasterisation, no quality loss; bytes never
+leave the browser; originals preserved); both `founder_only`.
 
 Still deferred — these need PDF **rasterisation** (`pdf.js`) or a heavier
 toolkit, which is not a dependency today. Each is a separate, scoped branch and
@@ -321,7 +325,6 @@ is **not** faked in the UI:
   handles images only; PDF import needs `pdf.js` rasterisation.
 - **Compress an arbitrary existing PDF.** True re-compression needs rasterise +
   re-encode (`pdf.js`); today compression applies to in-session scanned canvases.
-  (Split/extract of existing PDFs is feasible with `pdf-lib` as a follow-up.)
 - **Secure redaction of text-layer PDFs.** Redaction is only non-recoverable on
   rasterised scanner output; doing it safely on text PDFs requires flattening via
   rasterisation. (`feature/secure-redaction-tools`)
