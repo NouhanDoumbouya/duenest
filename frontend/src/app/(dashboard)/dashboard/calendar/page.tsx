@@ -365,24 +365,14 @@ export default function CalendarPage() {
       <header className="rounded-2xl border border-border bg-card px-5 py-5 shadow-card sm:px-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                Workspace
-              </p>
-              <span className="h-1 w-1 rounded-full bg-muted-foreground/40" />
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/15 bg-primary/5 px-2 py-0.5 text-xs font-medium text-primary">
-                <ShieldCheck className="size-3" />
-                Private calendar
-              </span>
-            </div>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/15 bg-primary/5 px-2 py-0.5 text-xs font-medium text-primary">
+              <ShieldCheck className="size-3" />
+              Private calendar
+            </span>
             <h1 className="mt-3 text-page-title">Calendar</h1>
             <p className="mt-2 text-page-subtitle">
               Plan around expiries, renewals, reminders, bundle deadlines, and
               secure share expiries.
-            </p>
-            <p className="mt-3 max-w-3xl text-xs leading-relaxed text-muted-foreground">
-              Calendar events use safe summaries only. DueNest never includes
-              share tokens, access codes, or internal file paths.
             </p>
           </div>
 
@@ -902,16 +892,6 @@ function EventAgendaRow({
             Details
           </Button>
         )}
-        {event.linked_resource_url && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onSelect(event)}
-            className="text-muted-foreground"
-          >
-            Details
-          </Button>
-        )}
       </div>
     </div>
   );
@@ -952,12 +932,11 @@ function PlanningRail({
         <CardContent className="space-y-4">
           {metrics ? (
             <>
-              <div className="grid grid-cols-2 gap-2">
-                <SummaryStat label="Visible" value={filteredCount} />
-                <SummaryStat label="Loaded" value={metrics.total} />
-                <SummaryStat label="Overdue" value={metrics.overdue} tone={metrics.overdue > 0 ? "danger" : "good"} />
-                <SummaryStat label="This week" value={metrics.thisWeek} tone={metrics.thisWeek > 0 ? "warn" : "secure"} />
-              </div>
+              <p className="text-sm text-muted-foreground">
+                Showing{" "}
+                <span className="font-semibold text-foreground">{filteredCount}</span>{" "}
+                of {metrics.total} date{metrics.total === 1 ? "" : "s"} in this range
+              </p>
               <div className="rounded-xl border border-border bg-muted/25 p-3">
                 <p className="text-xs font-medium text-muted-foreground">Range</p>
                 <p className="mt-1 text-sm font-medium">
@@ -966,10 +945,9 @@ function PlanningRail({
               </div>
             </>
           ) : (
-            <div className="grid grid-cols-2 gap-2">
-              {Array.from({ length: 4 }).map((_, index) => (
-                <Skeleton key={index} className="h-16 rounded-xl" />
-              ))}
+            <div className="space-y-2">
+              <Skeleton className="h-5 w-48 rounded" />
+              <Skeleton className="h-16 rounded-xl" />
             </div>
           )}
 
@@ -1012,33 +990,6 @@ function PlanningRail({
         </CardContent>
       </Card>
     </aside>
-  );
-}
-
-function SummaryStat({
-  label,
-  value,
-  tone = "default",
-}: {
-  label: string;
-  value: number;
-  tone?: "default" | "good" | "warn" | "danger" | "secure";
-}) {
-  return (
-    <div className="rounded-xl border border-border bg-card p-3">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p
-        className={cn(
-          "mt-1 text-xl font-semibold",
-          tone === "danger" && "text-destructive",
-          tone === "warn" && "text-brand-amber",
-          tone === "good" && "text-brand-success",
-          tone === "secure" && "text-primary",
-        )}
-      >
-        {value}
-      </p>
-    </div>
   );
 }
 
