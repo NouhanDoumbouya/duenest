@@ -11,6 +11,8 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from apps.features.models import FeatureFlag, Visibility
+
 from .models import (
     Document,
     DocumentExportRequest,
@@ -176,6 +178,11 @@ class VaultMaturityTests(APITestCase):
         self.assertFalse(DocumentFile.objects.filter(id=file.id).exists())
 
     def test_document_versions_are_created_and_can_restore_metadata(self):
+        # Restoring a version is gated by `document_versioning`; enable it.
+        FeatureFlag.objects.update_or_create(
+            key="document_versioning",
+            defaults={"visibility": Visibility.ENABLED},
+        )
         self.auth(self.alice)
         created = self.client.post(
             "/api/v1/documents/",
@@ -205,6 +212,26 @@ class VaultMaturityTests(APITestCase):
         self.assertEqual(restored.data["title"], "Original Passport")
         self.assertEqual(
             DocumentVersion.objects.filter(document_id=document_id).count(), 3
+        )
+
+    def test_version_restore_is_gated_server_side(self):
+        # founder_only (the default) → a normal user gets a controlled 503,
+        # so hiding the UI is never the only protection.
+        FeatureFlag.objects.update_or_create(
+            key="document_versioning",
+            defaults={"visibility": Visibility.FOUNDER_ONLY},
+        )
+        self.auth(self.alice)
+        created = self.client.post(
+            "/api/v1/documents/", {"title": "Gated Doc"}, format="json"
+        )
+        document_id = created.data["id"]
+        version = DocumentVersion.objects.filter(document_id=document_id).first()
+        blocked = self.client.post(
+            f"/api/v1/documents/{document_id}/versions/{version.id}/restore-metadata/"
+        )
+        self.assertEqual(
+            blocked.status_code, status.HTTP_503_SERVICE_UNAVAILABLE
         )
 
     def test_export_generates_secret_free_json_and_skips_trash(self):

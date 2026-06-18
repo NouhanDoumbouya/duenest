@@ -195,6 +195,56 @@ export function deleteDocumentReminderRule(
   });
 }
 
+// ---- Document version history ----------------------------------------------
+
+export type DocumentVersionType =
+  | "file_upload"
+  | "file_replacement"
+  | "metadata_snapshot"
+  | "extraction_applied"
+  | "manual_update";
+
+export interface DocumentVersion {
+  id: number;
+  document: number;
+  file: number | null;
+  version_number: number;
+  version_type: DocumentVersionType;
+  title_snapshot: string;
+  document_type_snapshot: string;
+  issue_date_snapshot: string | null;
+  expiry_date_snapshot: string | null;
+  renewal_date_snapshot: string | null;
+  notes_snapshot: string;
+  file_name_snapshot: string;
+  file_size_snapshot: number | null;
+  change_summary: string;
+  created_by_username: string | null;
+  created_at: string;
+}
+
+export function getDocumentVersions(
+  documentId: number,
+): Promise<DocumentVersion[]> {
+  return apiFetch<DocumentVersion[]>(`/documents/${documentId}/versions/`, {
+    auth: true,
+  });
+}
+
+/**
+ * Restore a previous version's metadata onto the document. Files are never
+ * rolled back; a new version is recorded so the restore is itself reversible.
+ */
+export function restoreDocumentVersionMetadata(
+  documentId: number,
+  versionId: number,
+): Promise<unknown> {
+  return apiFetch<unknown>(
+    `/documents/${documentId}/versions/${versionId}/restore-metadata/`,
+    { method: "POST", auth: true },
+  );
+}
+
 export function getUpcomingDocumentReminders(): Promise<UpcomingRemindersResponse> {
   return apiFetch<UpcomingRemindersResponse>("/documents/reminders/upcoming/", {
     auth: true,

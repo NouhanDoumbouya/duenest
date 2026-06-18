@@ -72,6 +72,7 @@ FEATURE_DEFINITIONS: list[dict] = [
     {"key": "document_compress", "name": "Documents — shrink PDF", "default": Visibility.FOUNDER_ONLY, "description": "Make a smaller image-based copy of a scanned/image-heavy File Inbox PDF (client-side; original preserved)."},
     # --- Scanner Document Organization v2 -------------------------------
     {"key": "duplicate_detection", "name": "Documents — duplicate detection", "default": Visibility.FOUNDER_ONLY, "description": "Warn before adding a file that matches an existing one (checksum/name/size). Never auto-deletes or replaces."},
+    {"key": "document_versioning", "name": "Documents — version history", "default": Visibility.FOUNDER_ONLY, "description": "View a document's version history and restore previous metadata. Originals/previous files are preserved."},
 ]
 
 FEATURE_KEYS = [d["key"] for d in FEATURE_DEFINITIONS]

@@ -2901,6 +2901,7 @@ class DocumentFileCreateVersionView(_DocumentScopedMixin, APIView):
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request, document_id, file_id):
+        require_feature_enabled("document_versioning", request.user)
         document = self.get_document()
         previous = get_object_or_404(
             DocumentFile, pk=file_id, document=document, is_trashed=False
@@ -2982,6 +2983,7 @@ class DocumentVersionRestoreMetadataView(_DocumentVersionScopedMixin, APIView):
     """
 
     def post(self, request, document_id, version_id):
+        require_feature_enabled("document_versioning", request.user)
         document = self.get_document()
         version = get_object_or_404(
             DocumentVersion, pk=version_id, document=document, owner=request.user

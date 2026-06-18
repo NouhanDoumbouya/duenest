@@ -10,6 +10,7 @@ import {
   Edit3,
   FileCheck2,
   FileText,
+  History,
   Info,
   LifeBuoy,
   Loader2,
@@ -31,6 +32,8 @@ import { DocumentSummaryGrid } from "@/components/documents/document-summary-gri
 import { DocumentTabs, type TabDef } from "@/components/documents/document-tabs";
 import { LifecycleBadge } from "@/components/documents/lifecycle-badge";
 import { ActivityTab } from "@/components/documents/workspace/activity-tab";
+import { VersionsTab } from "@/components/documents/workspace/versions-tab";
+import { useFeature } from "@/components/features/feature-flags-provider";
 import { FilesTab } from "@/components/documents/workspace/files-tab";
 import { OverviewTab } from "@/components/documents/workspace/overview-tab";
 import { ProofTab } from "@/components/documents/workspace/proof-tab";
@@ -48,7 +51,14 @@ import { cn } from "@/lib/utils";
 import { isSensitiveDocument } from "@/lib/vault";
 import type { DocumentRecord } from "@/types/documents";
 
-type TabKey = "overview" | "files" | "renewal" | "proof" | "sharing" | "activity";
+type TabKey =
+  | "overview"
+  | "files"
+  | "renewal"
+  | "proof"
+  | "sharing"
+  | "activity"
+  | "versions";
 
 const TABS: TabDef[] = [
   { key: "overview", label: "Overview", icon: FileText },
@@ -59,7 +69,10 @@ const TABS: TabDef[] = [
   { key: "activity", label: "Activity", icon: Activity },
 ];
 
-const TAB_KEYS = new Set(TABS.map((tab) => tab.key));
+// "versions" is gated, so it's a recognised key (for deep links) but only
+// rendered/shown when the feature is enabled for the viewer.
+const VERSIONS_TAB: TabDef = { key: "versions", label: "Versions", icon: History };
+const TAB_KEYS = new Set([...TABS.map((tab) => tab.key), VERSIONS_TAB.key]);
 
 function isTabKey(value: string | null): value is TabKey {
   return Boolean(value && TAB_KEYS.has(value));
@@ -178,6 +191,8 @@ export default function DocumentWorkspacePage() {
   );
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>(() => tabFromLocation());
+  const versioningEnabled = useFeature("document_versioning");
+  const visibleTabs = versioningEnabled ? [...TABS, VERSIONS_TAB] : TABS;
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [savingTitle, setSavingTitle] = useState(false);
@@ -279,7 +294,10 @@ export default function DocumentWorkspacePage() {
 
   function renderTab() {
     if (!doc) return null;
-    switch (activeTab) {
+    // Route protection: a disabled "versions" deep link falls back to overview.
+    const tab =
+      activeTab === "versions" && !versioningEnabled ? "overview" : activeTab;
+    switch (tab) {
       case "files":
         return <FilesTab documentId={doc.id} onChanged={refreshDocument} />;
       case "renewal":
@@ -290,6 +308,8 @@ export default function DocumentWorkspacePage() {
         return <SharingTab documentId={doc.id} />;
       case "activity":
         return <ActivityTab documentId={doc.id} />;
+      case "versions":
+        return <VersionsTab documentId={doc.id} onChanged={refreshDocument} />;
       default:
         return (
           <OverviewTab
@@ -474,7 +494,7 @@ export default function DocumentWorkspacePage() {
           </section>
 
           <DocumentTabs
-            tabs={TABS}
+            tabs={visibleTabs}
             active={activeTab}
             onSelect={selectTab}
           />

@@ -97,7 +97,9 @@ merge), `document_page_extract` (export PDF pages), `document_redaction`
 (flatten + redact an existing PDF, experimental), `scan_pdf_import` (import a
 PDF into the scanner), `document_compress` (shrink a scanned PDF), and
 `duplicate_detection` (warn before adding a file matching an existing one;
-checksum/name/size, never auto-deletes or replaces). These stay invisible to
+checksum/name/size, never auto-deletes or replaces), and `document_versioning`
+(version-history tab + restore previous metadata; the restore/replace **write**
+endpoints are enforced server-side, not just hidden). These stay invisible to
 normal users until a founder launches each one (`beta_only` / `enabled`). They mostly gate UI
 affordances on the scanner success screen; the underlying risky actions reuse
 already server-gated flows (e.g. Quick Share create is enforced by `quick_share`
