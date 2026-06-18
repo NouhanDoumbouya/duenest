@@ -245,6 +245,57 @@ export function checkInboxDuplicate(
   );
 }
 
+export type DuplicateLevel = "exact" | "possible" | "name" | "none";
+
+export interface DuplicateMatch {
+  id: number;
+  file_uuid: string;
+  original_filename: string;
+  file_size: number;
+  content_type: string;
+  created_at: string;
+  document_id: number | null;
+  reasons: string[];
+}
+
+export interface DuplicateCheckResult {
+  exists: boolean;
+  count: number;
+  level: DuplicateLevel;
+  matches: DuplicateMatch[];
+}
+
+/**
+ * SHA-256 of a blob as lowercase hex, matching the backend's stored checksum.
+ * Returns "" if Web Crypto isn't available (insecure context) so callers can
+ * fall back to name/size matching without breaking.
+ */
+export async function sha256Hex(blob: Blob): Promise<string> {
+  if (typeof crypto === "undefined" || !crypto.subtle) return "";
+  try {
+    const digest = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
+    return Array.from(new Uint8Array(digest))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+  } catch {
+    return "";
+  }
+}
+
+/** Rich duplicate check by checksum (exact) → name+size (possible) → name. */
+export function checkDuplicateFile(
+  file: { name: string; size: number },
+  checksum?: string,
+): Promise<DuplicateCheckResult> {
+  const params = new URLSearchParams({ filename: file.name });
+  if (Number.isFinite(file.size)) params.set("size", String(file.size));
+  if (checksum) params.set("checksum", checksum);
+  return apiFetch<DuplicateCheckResult>(
+    `/files/check-duplicate/?${params.toString()}`,
+    { auth: true },
+  );
+}
+
 export function createDocumentFromInboxFile(
   fileId: number,
   payload: {

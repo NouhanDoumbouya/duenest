@@ -70,6 +70,8 @@ FEATURE_DEFINITIONS: list[dict] = [
     {"key": "document_redaction", "name": "Documents — redact PDF (experimental)", "default": Visibility.FOUNDER_ONLY, "description": "Flatten a File Inbox PDF to images and burn in redaction areas (non-recoverable). Experimental; founder-only."},
     {"key": "scan_pdf_import", "name": "Scanner — import PDF", "default": Visibility.FOUNDER_ONLY, "description": "Import an existing PDF into the scanner (rasterized to pages) for re-export/preparation."},
     {"key": "document_compress", "name": "Documents — shrink PDF", "default": Visibility.FOUNDER_ONLY, "description": "Make a smaller image-based copy of a scanned/image-heavy File Inbox PDF (client-side; original preserved)."},
+    # --- Scanner Document Organization v2 -------------------------------
+    {"key": "duplicate_detection", "name": "Documents — duplicate detection", "default": Visibility.FOUNDER_ONLY, "description": "Warn before adding a file that matches an existing one (checksum/name/size). Never auto-deletes or replaces."},
 ]
 
 FEATURE_KEYS = [d["key"] for d in FEATURE_DEFINITIONS]

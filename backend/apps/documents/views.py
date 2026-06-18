@@ -956,23 +956,81 @@ class DocumentCategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 class FileInboxDuplicateCheckView(APIView):
     """
-    Read-only: whether the user already has a non-trashed file with a given
-    filename (inbox or attached). Lets the UI warn before an accidental
-    duplicate upload. Owner-scoped — never reveals other users' files.
+    Read-only duplicate signal before an accidental duplicate upload.
+
+    Matches owner's own non-trashed files by the strongest available signal:
+    checksum (exact contents) → name+size (possible) → name (weak). Returns the
+    match level + reasons + a small summary of each match. Owner-scoped — never
+    reveals other users' files, and never deletes/replaces anything.
+
+    Backward compatible: callers passing only ``filename`` still get
+    ``{exists, count}`` (name count); ``level``/``matches`` are additive.
     """
 
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         filename = (request.query_params.get("filename") or "").strip()
-        if not filename:
-            return Response({"exists": False, "count": 0})
-        count = (
-            _owned_file_queryset(request.user)
-            .filter(original_filename__iexact=filename)
-            .count()
+        checksum = (request.query_params.get("checksum") or "").strip().lower()
+        size_raw = (request.query_params.get("size") or "").strip()
+        try:
+            size = int(size_raw) if size_raw else None
+        except ValueError:
+            size = None
+
+        qs = _owned_file_queryset(request.user)
+        name_count = (
+            qs.filter(original_filename__iexact=filename).count() if filename else 0
         )
-        return Response({"exists": count > 0, "count": count})
+
+        matches: list[dict] = []
+        seen: set[int] = set()
+
+        def add(file, reasons):
+            if file.id in seen:
+                return
+            seen.add(file.id)
+            matches.append(
+                {
+                    "id": file.id,
+                    "file_uuid": str(file.file_uuid),
+                    "original_filename": file.original_filename,
+                    "file_size": file.file_size,
+                    "content_type": file.content_type,
+                    "created_at": file.created_at.isoformat(),
+                    "document_id": file.document_id,
+                    "reasons": reasons,
+                }
+            )
+
+        level = "none"
+        if checksum:
+            for f in qs.filter(checksum=checksum)[:10]:
+                reasons = ["Same file contents"]
+                if filename and f.original_filename.lower() == filename.lower():
+                    reasons.append("Same name")
+                add(f, reasons)
+            if matches:
+                level = "exact"
+        if not matches and filename and size is not None:
+            for f in qs.filter(original_filename__iexact=filename, file_size=size)[:10]:
+                add(f, ["Same name", "Same size"])
+            if matches:
+                level = "possible"
+        if not matches and filename:
+            for f in qs.filter(original_filename__iexact=filename)[:10]:
+                add(f, ["Same name"])
+            if matches:
+                level = "name"
+
+        return Response(
+            {
+                "exists": name_count > 0 or bool(matches),
+                "count": name_count,
+                "level": level,
+                "matches": matches[:5],
+            }
+        )
 
 
 class FileInboxListCreateView(generics.ListCreateAPIView):

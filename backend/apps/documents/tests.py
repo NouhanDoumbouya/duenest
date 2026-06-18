@@ -491,6 +491,43 @@ class DocumentFileAPITests(APITestCase):
         miss = self.client.get("/api/v1/files/check-duplicate/?filename=other.pdf")
         self.assertFalse(miss.data["exists"])
 
+    def test_duplicate_check_match_levels(self):
+        DocumentFile.objects.create(
+            uploaded_by=self.alice,
+            file=make_pdf("passport.pdf"),
+            original_filename="passport.pdf",
+            content_type="application/pdf",
+            file_size=2048,
+            checksum="abc123",
+        )
+        self.client.force_authenticate(self.alice)
+
+        # Exact: matching checksum wins even with a different name/size.
+        exact = self.client.get(
+            "/api/v1/files/check-duplicate/?filename=renamed.pdf&checksum=ABC123&size=9"
+        )
+        self.assertEqual(exact.data["level"], "exact")
+        self.assertTrue(exact.data["exists"])
+        self.assertIn("Same file contents", exact.data["matches"][0]["reasons"])
+
+        # Possible: same name + same size, no checksum supplied.
+        possible = self.client.get(
+            "/api/v1/files/check-duplicate/?filename=passport.pdf&size=2048"
+        )
+        self.assertEqual(possible.data["level"], "possible")
+        self.assertIn("Same size", possible.data["matches"][0]["reasons"])
+
+        # Weak: same name, different size.
+        name_only = self.client.get(
+            "/api/v1/files/check-duplicate/?filename=passport.pdf&size=5"
+        )
+        self.assertEqual(name_only.data["level"], "name")
+
+        # None.
+        none = self.client.get("/api/v1/files/check-duplicate/?filename=nope.pdf")
+        self.assertEqual(none.data["level"], "none")
+        self.assertFalse(none.data["exists"])
+
     def test_duplicate_check_is_owner_scoped(self):
         from django.contrib.auth import get_user_model
 

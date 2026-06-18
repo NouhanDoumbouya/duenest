@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   CheckSquare,
@@ -23,6 +23,7 @@ import { useFeature } from "@/components/features/feature-flags-provider";
 import { DocumentFileViewer } from "@/components/documents/document-file-viewer";
 import { ExtractPagesDialog } from "@/components/documents/extract-pages-dialog";
 import { CompressPdfDialog } from "@/components/documents/compress-pdf-dialog";
+import { DuplicateWarningDialog } from "@/components/documents/duplicate-warning-dialog";
 import { RedactionEditor } from "@/components/scanner/RedactionEditor";
 import { FileThumbnail } from "@/components/documents/file-thumbnail";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -38,6 +39,9 @@ import { ApiError } from "@/lib/api";
 import {
   attachInboxFileToDocument,
   checkInboxDuplicate,
+  checkDuplicateFile,
+  sha256Hex,
+  type DuplicateCheckResult,
   createDocumentFromInboxFile,
   deleteInboxFile,
   downloadDocumentFile,
@@ -125,6 +129,13 @@ export default function FileInboxPage() {
     null,
   );
   const [compressBusy, setCompressBusy] = useState(false);
+  // Duplicate warning prompt during upload (resolved by the dialog buttons).
+  const [dupPrompt, setDupPrompt] = useState<{
+    fileName: string;
+    fileSize: number;
+    result: DuplicateCheckResult;
+  } | null>(null);
+  const dupResolver = useRef<((decision: "keep" | "skip") => void) | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -188,23 +199,97 @@ export default function FileInboxPage() {
     [files],
   );
 
+  // Pause the upload to ask the user about a likely duplicate; resolved by the
+  // dialog buttons. Returns "keep" (add anyway) or "skip" (don't add).
+  function askDuplicate(
+    fileName: string,
+    fileSize: number,
+    result: DuplicateCheckResult,
+  ): Promise<"keep" | "skip"> {
+    return new Promise((resolve) => {
+      dupResolver.current = resolve;
+      setDupPrompt({ fileName, fileSize, result });
+    });
+  }
+
+  function resolveDup(decision: "keep" | "skip") {
+    const resolve = dupResolver.current;
+    dupResolver.current = null;
+    setDupPrompt(null);
+    resolve?.(decision);
+  }
+
   async function handleUpload(fileList: FileList | null) {
     const list = fileList ? Array.from(fileList) : [];
     if (list.length === 0) return;
     setUploading(true);
     setError(null);
     setNotice(null);
-    // Warn (non-blocking) about accidental duplicates before uploading copies.
-    const dupChecks = await Promise.all(
-      list.map((file) =>
-        checkInboxDuplicate(file.name).catch(() => ({ exists: false, count: 0 })),
-      ),
-    );
-    const duplicateNames = list
-      .filter((_, i) => dupChecks[i].exists)
-      .map((file) => file.name);
-    // Seed a progress row per file, then upload sequentially with real % events.
-    const seeded: UploadProgress[] = list.map((file, i) => ({
+
+    // Decide what to upload. With duplicate detection on, check each valid file
+    // first and let the user keep-both or skip a likely duplicate before
+    // anything uploads. Duplicate checks are best-effort and never block.
+    const toUpload: File[] = [];
+    const legacyDupNames: string[] = [];
+    let skipped = 0;
+
+    for (const file of list) {
+      if (validateFile(file)) {
+        // Invalid files still go through so the upload loop reports them.
+        toUpload.push(file);
+        continue;
+      }
+      if (!dedupeEnabled) {
+        try {
+          if ((await checkInboxDuplicate(file.name)).exists) {
+            legacyDupNames.push(file.name);
+          }
+        } catch {
+          /* advisory only */
+        }
+        toUpload.push(file);
+        continue;
+      }
+      let checksum = "";
+      try {
+        checksum = await sha256Hex(file);
+      } catch {
+        /* fall back to name/size matching */
+      }
+      let dup: DuplicateCheckResult | null = null;
+      try {
+        dup = await checkDuplicateFile(
+          { name: file.name, size: file.size },
+          checksum,
+        );
+      } catch {
+        /* "Duplicate check failed, but save can continue." */
+      }
+      if (
+        dup &&
+        (dup.level === "exact" || dup.level === "possible") &&
+        dup.matches.length > 0
+      ) {
+        const decision = await askDuplicate(file.name, file.size, dup);
+        if (decision === "skip") {
+          skipped += 1;
+          continue;
+        }
+      }
+      toUpload.push(file);
+    }
+
+    if (toUpload.length === 0) {
+      setUploading(false);
+      if (skipped > 0) {
+        setNotice(
+          `Skipped ${skipped} duplicate${skipped === 1 ? "" : "s"}. Nothing was changed.`,
+        );
+      }
+      return;
+    }
+
+    const seeded: UploadProgress[] = toUpload.map((file, i) => ({
       id: `${Date.now()}-${i}`,
       name: file.name,
       percent: 0,
@@ -213,8 +298,8 @@ export default function FileInboxPage() {
     setUploads(seeded);
     let uploaded = 0;
     const failures: string[] = [];
-    for (let i = 0; i < list.length; i += 1) {
-      const file = list[i];
+    for (let i = 0; i < toUpload.length; i += 1) {
+      const file = toUpload[i];
       const rowId = seeded[i].id;
       const validationError = validateFile(file);
       if (validationError) {
@@ -246,13 +331,18 @@ export default function FileInboxPage() {
     }
     setUploading(false);
     if (uploaded > 0) {
-      const dupNote =
-        duplicateNames.length > 0
-          ? ` Note: you already had ${duplicateNames.length === 1 ? "a file" : "files"} named ${duplicateNames.slice(0, 3).join(", ")} — kept as a copy.`
-          : "";
-      setNotice(
-        `${uploaded} file${uploaded === 1 ? "" : "s"} uploaded to File Inbox.${dupNote}`,
-      );
+      const parts = [
+        `${uploaded} file${uploaded === 1 ? "" : "s"} uploaded to File Inbox.`,
+      ];
+      if (skipped > 0) {
+        parts.push(`Skipped ${skipped} duplicate${skipped === 1 ? "" : "s"}.`);
+      }
+      if (!dedupeEnabled && legacyDupNames.length > 0) {
+        parts.push(
+          `Note: you already had ${legacyDupNames.length === 1 ? "a file" : "files"} named ${legacyDupNames.slice(0, 3).join(", ")} — kept as a copy.`,
+        );
+      }
+      setNotice(parts.join(" "));
     }
     if (failures.length > 0) {
       const shown = failures.slice(0, 3).join(", ");
@@ -601,6 +691,7 @@ export default function FileInboxPage() {
   const pageExtractEnabled = useFeature("document_page_extract");
   const redactionEnabled = useFeature("document_redaction");
   const compressEnabled = useFeature("document_compress");
+  const dedupeEnabled = useFeature("duplicate_detection");
 
   return (
     <PageContainer>
@@ -1194,6 +1285,15 @@ export default function FileInboxPage() {
         busy={compressBusy}
         onCancel={() => setCompressTarget(null)}
         onConfirm={confirmCompress}
+      />
+
+      <DuplicateWarningDialog
+        open={dupPrompt !== null}
+        fileName={dupPrompt?.fileName ?? ""}
+        fileSize={dupPrompt?.fileSize ?? 0}
+        result={dupPrompt?.result ?? null}
+        onKeepBoth={() => resolveDup("keep")}
+        onSkip={() => resolveDup("skip")}
       />
     </PageContainer>
   );

@@ -971,7 +971,7 @@ they behave like document files.
 | `DELETE` | `/api/v1/files/:file_id/permanent-delete/` | Permanently delete a trashed standalone file |
 | `POST`   | `/api/v1/files/:file_id/attach-document/` | Attach inbox file to an existing owned document |
 | `POST`   | `/api/v1/files/:file_id/create-document/` | Create a new document from the inbox file |
-| `GET`    | `/api/v1/files/check-duplicate/?filename=` | Whether the user already has a non-trashed file with this name (owner-scoped), to warn before duplicate uploads |
+| `GET`    | `/api/v1/files/check-duplicate/?filename=&checksum=&size=` | Owner-scoped duplicate signal before upload. Strongest match wins: `checksum` (exact) → name+`size` (possible) → name (weak). Returns `{exists, count, level: exact\|possible\|name\|none, matches:[{id,file_uuid,original_filename,file_size,content_type,created_at,document_id,reasons[]}]}`. Read-only; never deletes/replaces. `filename`-only callers still get `{exists,count}` |
 
 ### Document Scanner API
 
