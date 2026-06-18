@@ -211,22 +211,15 @@ export default function QuickShareListPage() {
         title="Quick Share"
         description="Share safely with SafeSend. Stay in control of access, expiry, and downloads — and revoke anytime."
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <Link
-              href="/dashboard/quick-share/receive"
-              className={cn(buttonVariants({ variant: "outline", size: "lg" }))}
-            >
-              <KeyRound className="size-4" />
-              Receive a code
-            </Link>
-            <Link
-              href="/dashboard/quick-share/new"
-              className={cn(buttonVariants({ size: "lg" }))}
-            >
-              <Plus className="size-4" />
-              Create secure share
-            </Link>
-          </div>
+          // One obvious primary action here; "Receive a code" lives once, with
+          // the other secondary cross-links below, instead of twice.
+          <Link
+            href="/dashboard/quick-share/new"
+            className={cn(buttonVariants({ size: "lg" }))}
+          >
+            <Plus className="size-4" />
+            Create secure share
+          </Link>
         }
       />
 

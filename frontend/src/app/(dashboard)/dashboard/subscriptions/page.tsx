@@ -435,10 +435,15 @@ export default function SubscriptionsPage() {
               )}
             </div>
             <h1 className="mt-3 text-page-title">Subscriptions</h1>
+            {/* The summary sentence only earns its place when there's nothing to
+                show yet — once subscriptions exist, the radar cards + status
+                pills say the same thing without restating it in prose. */}
             {summary ? (
-              <p className="mt-2 max-w-2xl text-pretty text-page-subtitle">
-                {buildHeroLine(summary)}
-              </p>
+              hasNoSubs && (
+                <p className="mt-2 max-w-2xl text-pretty text-page-subtitle">
+                  {buildHeroLine(summary)}
+                </p>
+              )
             ) : (
               <Skeleton className="mt-3 h-5 w-full max-w-2xl rounded-md" />
             )}
