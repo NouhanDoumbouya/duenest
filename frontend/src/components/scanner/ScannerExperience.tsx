@@ -82,7 +82,12 @@ import { applyWatermark } from "@/lib/scanner/watermark";
 import { applyRedactions, type RedactionRect } from "@/lib/scanner/redaction";
 import { rasterizePdf } from "@/lib/pdf/rasterize";
 import { uploadScan, flushQueuedScans } from "@/lib/scanner/client";
-import { enqueueScan, listQueuedScans, purgeStale } from "@/lib/scanner/queue";
+import {
+  enqueueScan,
+  listQueuedScans,
+  purgeStale,
+  removeScan,
+} from "@/lib/scanner/queue";
 import {
   onServiceWorkerFlush,
   registerScannerServiceWorker,
@@ -238,6 +243,21 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
     }
     await refreshQueue();
   }, [announce, refreshQueue, showToast]);
+
+  // Discard a queued/failed local draft. Only removes the LOCAL draft from the
+  // encrypted IndexedDB queue — already-uploaded server files are never touched.
+  const discardQueued = useCallback(
+    async (id: string) => {
+      try {
+        await removeScan(id);
+        await refreshQueue();
+        showToast("Scan discarded.", "info");
+      } catch {
+        showToast("Couldn't discard that scan. Please try again.", "error");
+      }
+    },
+    [refreshQueue, showToast],
+  );
 
   // ---- lifecycle: online state, queue, service worker -------------------
   useEffect(() => {
@@ -1172,6 +1192,7 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
             onImport={() => fileInputRef.current?.click()}
             onRetryQueue={flushNow}
             onRefreshQueue={refreshQueue}
+            onDiscard={discardQueued}
           />
         )}
 
@@ -1913,7 +1934,10 @@ function IdleScreen(props: {
   onImport: () => void;
   onRetryQueue: () => void;
   onRefreshQueue: () => void;
+  onDiscard: (id: string) => void;
 }) {
+  // Which queued draft is mid-discard-confirm (inline, no modal in the scanner).
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
   return (
     <div className="mx-auto flex h-full max-w-md flex-col items-center justify-center gap-6 p-8 text-center">
       <div className="flex size-16 items-center justify-center rounded-2xl bg-teal-500/15">
@@ -1955,7 +1979,7 @@ function IdleScreen(props: {
 
       {props.queued.length > 0 && (
         <div className="w-full rounded-xl border border-white/10 bg-white/5 p-3 text-left">
-          <div className="mb-2 flex items-center justify-between">
+          <div className="mb-1 flex items-center justify-between">
             <span className="text-xs font-medium text-slate-300">
               {props.queued.length} scan{props.queued.length > 1 ? "s" : ""} waiting to upload
             </span>
@@ -1963,11 +1987,51 @@ function IdleScreen(props: {
               Retry now
             </button>
           </div>
-          <ul className="space-y-1 text-xs text-slate-400">
-            {props.queued.slice(0, 3).map((item) => (
-              <li key={item.id} className="flex items-center justify-between">
-                <span className="truncate">{item.filename}</span>
-                <span>{formatBytes(item.sizeBytes)}</span>
+          <p className="mb-2 text-[0.7rem] text-slate-500">
+            Not uploaded yet — they&apos;ll upload automatically when you&apos;re back online, or you can discard a draft.
+          </p>
+          <ul className="space-y-1.5 text-xs text-slate-400">
+            {props.queued.slice(0, 5).map((item) => (
+              <li key={item.id} className="rounded-md bg-white/5 px-2 py-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="min-w-0 flex-1 truncate">{item.filename}</span>
+                  <span className="shrink-0 text-slate-500">{formatBytes(item.sizeBytes)}</span>
+                </div>
+                {confirmingId === item.id ? (
+                  <div className="mt-1 flex items-center justify-between gap-2">
+                    <span className="text-[0.7rem] text-slate-500">
+                      Discard this draft? Uploaded files aren&apos;t affected.
+                    </span>
+                    <span className="flex shrink-0 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          props.onDiscard(item.id);
+                          setConfirmingId(null);
+                        }}
+                        className="font-medium text-rose-300 hover:underline"
+                      >
+                        Discard
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmingId(null)}
+                        className="text-slate-300 hover:underline"
+                      >
+                        Keep
+                      </button>
+                    </span>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingId(item.id)}
+                    aria-label={`Discard ${item.filename}`}
+                    className="mt-1 text-[0.7rem] text-slate-400 hover:text-rose-300"
+                  >
+                    Discard draft
+                  </button>
+                )}
               </li>
             ))}
           </ul>
