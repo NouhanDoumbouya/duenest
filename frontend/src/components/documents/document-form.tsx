@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
-import { Paperclip, UploadCloud } from "lucide-react";
+import { ChevronDown, Paperclip, UploadCloud } from "lucide-react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -114,6 +114,10 @@ export function DocumentForm({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
+  // Progressive disclosure: keep the quick path (what it is + key dates + the
+  // file) visible, and tuck the advanced sections away so adding a document
+  // isn't a wall of fields when you're in a hurry.
+  const [showMore, setShowMore] = useState(false);
 
   function handleFileSelect(event: React.ChangeEvent<HTMLInputElement>) {
     const selected = event.target.files?.[0] ?? null;
@@ -416,6 +420,29 @@ export function DocumentForm({
         </Field>
       </FormSection>
 
+      <button
+        type="button"
+        onClick={() => setShowMore((v) => !v)}
+        aria-expanded={showMore}
+        className="flex w-full items-center justify-between gap-2 border-t border-border pt-6 text-left text-sm font-medium transition-colors hover:text-primary"
+      >
+        <span>
+          {showMore ? "Hide extra details" : "Add more details"}{" "}
+          <span className="font-normal text-muted-foreground">
+            — custom fields, notes, where the original is
+          </span>
+        </span>
+        <ChevronDown
+          className={cn(
+            "size-4 shrink-0 text-muted-foreground transition-transform",
+            showMore && "rotate-180",
+          )}
+          aria-hidden
+        />
+      </button>
+
+      {showMore && (
+        <>
       <FormSection
         title="Custom details"
         description="Extra fields for this document type — passport number, policy number, and so on."
@@ -511,6 +538,8 @@ export function DocumentForm({
           />
         </Field>
       </FormSection>
+        </>
+      )}
 
       {attachFile && (
         <FormSection
