@@ -292,6 +292,31 @@ APIs should support useful filtering from the beginning where needed.
 GET /api/v1/documents/?category=immigration&status=expiring_soon&ordering=expiry_date
 ```
 
+### Unified quick search (command palette)
+
+A single owner-scoped endpoint powers the command palette (Cmd/Ctrl+K). It looks
+across the user's documents, subscriptions, and organizations and returns a
+small, capped list of "go here" results. Trashed documents and archived
+subscriptions are excluded; a blank query returns an empty list.
+
+```http
+GET /api/v1/search/?q=passport
+```
+
+```json
+{
+  "query": "passport",
+  "results": [
+    { "type": "document", "id": 12, "title": "UK Passport", "subtitle": "Passport · UK", "url": "/dashboard/documents/12" },
+    { "type": "subscription", "id": 4, "title": "Passport photo service", "subtitle": "Snappy", "url": "/dashboard/subscriptions/4" },
+    { "type": "organization", "id": 2, "title": "Passport Club", "subtitle": "Club", "url": "/dashboard/organizations/2" }
+  ]
+}
+```
+
+Each type is capped at 5 results. Authentication is required; results never
+include another user's data.
+
 ---
 
 ## 11. Resource Ownership Rules
