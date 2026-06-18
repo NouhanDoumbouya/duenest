@@ -398,11 +398,9 @@ export default function DashboardPage() {
       ) : (
         <LifeRadarHero
           name={greetingName}
-          sentence={radar.statusSentence}
           worstSeverity={radar.worstSeverity}
           readinessScore={readinessScore}
           lastChecked="just now"
-          clear={radar.fixFirst.length === 0}
           onForgottenClick={() =>
             trackEvent("forgetting_check_used", {
               metadata: { source: "hero" },
