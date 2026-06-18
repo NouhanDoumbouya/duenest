@@ -222,7 +222,7 @@ export default function OrganizationsPage() {
                 <Link
                   key={organization.id}
                   href={`/dashboard/organizations/${organization.id}`}
-                  className="group rounded-xl border border-border bg-card p-5 shadow-card transition-colors hover:border-primary/40"
+                  className="group min-w-0 rounded-xl border border-border bg-card p-5 shadow-card transition-colors hover:border-primary/40"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
