@@ -80,6 +80,7 @@ import {
 import { formatBytes, generatePdfBlob } from "@/lib/scanner/pdf";
 import { applyWatermark } from "@/lib/scanner/watermark";
 import { applyRedactions, type RedactionRect } from "@/lib/scanner/redaction";
+import { rasterizePdf } from "@/lib/pdf/rasterize";
 import { uploadScan, flushQueuedScans } from "@/lib/scanner/client";
 import { enqueueScan, listQueuedScans, purgeStale } from "@/lib/scanner/queue";
 import {
@@ -548,9 +549,70 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
   }, [voiceOn, capture, toggleTorch, announce, showToast]);
 
   // ---- file import fallback --------------------------------------------
+  // Import an existing PDF: rasterize every page, keep all but the last as
+  // committed pages, and land the last one in review — so the imported document
+  // flows into the same multi-page save / prepare-copy tools as a fresh scan.
+  const importPdf = useCallback(
+    async (file: File) => {
+      setBusy(true);
+      setProgress("Reading PDF…");
+      announce("Reading PDF");
+      try {
+        let canvases = await rasterizePdf(await file.arrayBuffer());
+        if (canvases.length === 0) throw new Error("empty");
+        if (canvases.length > MAX_PAGES) {
+          canvases = canvases.slice(0, MAX_PAGES);
+          showToast(`Imported the first ${MAX_PAGES} pages.`, "info");
+        }
+        const last = canvases[canvases.length - 1];
+        setPages(
+          canvases.slice(0, -1).map((canvas) => ({
+            id: makeId(),
+            frozen: canvas,
+            quad: fullQuad(canvas),
+            base: canvas,
+            filterId: DEFAULT_FILTER,
+            adjust: NEUTRAL_ADJUST,
+            thumb: makeThumbnail(canvas, DEFAULT_FILTER, NEUTRAL_ADJUST),
+          })),
+        );
+        setEditingIndex(null);
+        baseCanvasRef.current = last;
+        const filtered = applyFilter(last, DEFAULT_FILTER);
+        filteredBaseRef.current = filtered;
+        setFrozenCanvas(last);
+        setQuad(fullQuad(last));
+        setFilterId(DEFAULT_FILTER);
+        setAdjust(NEUTRAL_ADJUST);
+        setEnhancedCanvas(applyAdjustments(filtered, NEUTRAL_ADJUST));
+        setWarnings([]);
+        setPdfSize(null);
+        setPhase("enhancing");
+        announce(
+          `Imported ${canvases.length} page${canvases.length === 1 ? "" : "s"}`,
+        );
+      } catch {
+        showToast("Couldn't import that PDF.", "error");
+      } finally {
+        setBusy(false);
+        setProgress(null);
+      }
+    },
+    [announce, showToast],
+  );
+
   const onImportFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.type === "application/pdf") {
+      e.target.value = "";
+      if (!featureEnabled("scan_pdf_import")) {
+        showToast("PDF import isn't available yet.", "info");
+        return;
+      }
+      void importPdf(file);
+      return;
+    }
     const img = new Image();
     const url = URL.createObjectURL(file);
     img.onload = () => {
@@ -574,7 +636,7 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
       showToast("Could not open that image.", "error");
     };
     img.src = url;
-  }, [announce, showToast]);
+  }, [announce, featureEnabled, importPdf, showToast]);
 
   // ---- apply warp, then non-destructive filters ------------------------
   // Warp/crop the captured frame ONCE into a base canvas; filters and rotation
@@ -1985,6 +2047,23 @@ function makeThumbnail(
 }
 
 /** A clean PDF basename from the optional user name; backend re-sanitizes too. */
+function makeId(): string {
+  return typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `page-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+// A quad covering the whole canvas — imported PDF pages are already flat, so no
+// perspective crop is applied.
+function fullQuad(canvas: HTMLCanvasElement): Quad {
+  return [
+    { x: 0, y: 0 },
+    { x: canvas.width, y: 0 },
+    { x: canvas.width, y: canvas.height },
+    { x: 0, y: canvas.height },
+  ];
+}
+
 function buildScanBasename(name: string): string {
   const cleaned = name
     .trim()

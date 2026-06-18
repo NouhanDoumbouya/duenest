@@ -326,10 +326,14 @@ bytes never leave the browser; originals preserved); both `founder_only`.
   from a CDN pinned to the bundled version (same runtime-CDN model as OpenCV);
   the document bytes are processed locally and never uploaded.
 
+- **Import a PDF into the scanner** — the scanner's import accepts PDFs:
+  `rasterizePdf` turns each page into a scan page so an existing PDF flows into
+  the same multi-page review / prepare-copy / export tools as a fresh capture.
+  Gated by `scan_pdf_import` (`founder_only`). When disabled, picking a PDF shows
+  a calm "not available" message instead of a confusing image error.
+
 Still deferred — separate, scoped branches; **not** faked in the UI:
 
-- **Importing an existing PDF into a scan session.** `onImportFile` handles
-  images only; could reuse `rasterizePdf` to feed PDF pages into the scanner.
 - **Compress an arbitrary existing PDF.** Rasterise + re-encode would lose the
   text layer and can *bloat* text PDFs, so it's only worthwhile for scanned /
   image-heavy PDFs — deferred until that trade-off is worth surfacing honestly.
