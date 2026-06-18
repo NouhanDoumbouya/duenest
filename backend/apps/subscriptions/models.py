@@ -200,6 +200,10 @@ class Subscription(models.Model):
     is_archived = models.BooleanField(default=False)
     archived_at = models.DateTimeField(null=True, blank=True)
 
+    # "I've seen this — remind me later." When set to a future datetime, the
+    # subscription is hidden from the Life Radar / Attention surfaces until then.
+    attention_snoozed_until = models.DateTimeField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

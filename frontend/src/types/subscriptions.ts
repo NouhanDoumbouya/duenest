@@ -99,6 +99,8 @@ export interface Subscription {
   last_reviewed_at: string | null;
   is_archived: boolean;
   archived_at: string | null;
+  // Hidden from Life Radar / Attention until this future datetime, if set.
+  attention_snoozed_until: string | null;
   state: SubscriptionState;
   created_at: string;
   updated_at: string;

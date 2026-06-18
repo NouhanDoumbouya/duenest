@@ -46,6 +46,11 @@ export interface FixFirstItem {
   actionLabel: string;
   /** Optional secondary action the UI can wire to a known, safe handler. */
   secondary?: { label: string; kind: "revoke-share"; targetId: number };
+  /**
+   * When set, the UI can offer a "snooze" action that hides this item from the
+   * radar for a while (the underlying expiry/renewal facts are unchanged).
+   */
+  snooze?: { kind: "document" | "subscription"; targetId: number };
   /** Lower sorts first within a severity bucket (days until / age). */
   sortKey: number;
 }
@@ -180,6 +185,7 @@ export function buildDocumentItems(docs: DocumentRecord[]): FixFirstItem[] {
           : doc.status_label || "",
       href: `/dashboard/documents/${doc.id}`,
       actionLabel: doc.is_expired ? "Update document" : "Open document",
+      snooze: { kind: "document", targetId: doc.id },
       sortKey: doc.days_until_expiry ?? 9_999,
     };
   });
@@ -211,6 +217,7 @@ export function buildSubscriptionItems(
       timeContext: time,
       href: `/dashboard/subscriptions/${item.id}`,
       actionLabel: "Review subscription",
+      snooze: { kind: "subscription", targetId: item.id },
       sortKey: item.days_until_renewal ?? cancelDays ?? 9_999,
     };
   });

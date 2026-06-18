@@ -404,6 +404,7 @@ Implemented `Document` fields:
 | `is_trashed` | BooleanField | Yes | Soft-delete state |
 | `trashed_at` | DateTime | No | When moved to trash |
 | `deletion_reason` | CharField | No | Optional owner-provided trash reason |
+| `attention_snoozed_until` | DateTime | No | When set to a future time, hidden from Life Radar / Attention until then; does not change expiry/renewal facts |
 | `created_at` | DateTime | Yes | Record creation time |
 | `updated_at` | DateTime | Yes | Last update time |
 
@@ -1913,10 +1914,11 @@ Three owner-scoped tables in the `subscriptions` app:
   quarterly/yearly/custom) with optional `custom_interval_count`/`_unit`. Dates:
   `start_date`, `next_billing_date`, `cancellation_deadline`. Flags: `auto_renew`,
   `reminder_days_before`. Value tracking: `importance`, `last_used_date`. Soft
-  archive via `is_archived`/`archived_at`. `payment_method_label` is a human
-  label only — a validator rejects full card numbers; **no card/CVV/bank data is
-  stored**. Indexed on `(owner,status)`, `(owner,next_billing_date)`,
-  `(owner,is_archived)`.
+  archive via `is_archived`/`archived_at`. `attention_snoozed_until` hides the
+  row from Life Radar / Attention until a future time without changing its real
+  dates. `payment_method_label` is a human label only — a validator rejects full
+  card numbers; **no card/CVV/bank data is stored**. Indexed on `(owner,status)`,
+  `(owner,next_billing_date)`, `(owner,is_archived)`.
 * **SubscriptionPaymentRecord** — owner-entered payment log (amount, currency,
   `paid_on`, optional billing-period range, notes). Metadata-only in V1; receipt
   file attachments are deferred.

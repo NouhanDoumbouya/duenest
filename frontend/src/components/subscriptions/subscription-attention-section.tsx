@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Loader2, RefreshCw } from "lucide-react";
+import { BellOff, Loader2, RefreshCw } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import {
   getSubscriptionAttention,
   markSubscriptionCancelled,
   markSubscriptionPaid,
+  snoozeSubscription,
 } from "@/lib/subscriptions";
 import { cn } from "@/lib/utils";
 import type { SubscriptionAttentionItem } from "@/types/subscriptions";
@@ -147,6 +148,19 @@ export function SubscriptionAttentionSection() {
                 >
                   Open
                 </Link>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={busyId === item.id}
+                  className="text-muted-foreground"
+                  title="Hide this from your radar for a week"
+                  onClick={() =>
+                    runAction(item.id, () => snoozeSubscription(item.id))
+                  }
+                >
+                  <BellOff className="size-3.5" />
+                  Snooze
+                </Button>
               </div>
             </li>
           );

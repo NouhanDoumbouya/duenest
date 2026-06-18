@@ -194,6 +194,11 @@ class Document(models.Model):
         blank=True,
     )
 
+    # "I've seen this — stop nagging me until later." When set to a future
+    # datetime, the document is hidden from the Life Radar / Attention surfaces
+    # until then. It does NOT change the real expiry/renewal facts.
+    attention_snoozed_until = models.DateTimeField(null=True, blank=True)
+
     # Soft delete (trash). Trashed documents are hidden from active lists,
     # intelligence, timeline, reminders, and share access until restored.
     is_trashed = models.BooleanField(default=False)

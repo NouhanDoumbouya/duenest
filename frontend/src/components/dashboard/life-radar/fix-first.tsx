@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowRight, ShieldCheck } from "lucide-react";
+import { ArrowRight, BellOff, ShieldCheck } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -15,10 +15,14 @@ export function FixFirstItem({
   item,
   onRevoke,
   revoking,
+  onSnooze,
+  snoozing,
 }: {
   item: FixFirstItemData;
   onRevoke?: (id: number) => void;
   revoking?: boolean;
+  onSnooze?: (snooze: NonNullable<FixFirstItemData["snooze"]>) => void;
+  snoozing?: boolean;
 }) {
   return (
     <li className="rounded-xl border border-border bg-card p-3 transition-colors hover:border-primary/30">
@@ -59,6 +63,21 @@ export function FixFirstItem({
                 {revoking ? "Revoking…" : item.secondary.label}
               </button>
             )}
+            {item.snooze && onSnooze && (
+              <button
+                type="button"
+                disabled={snoozing}
+                onClick={() => onSnooze(item.snooze!)}
+                title="Hide this from your radar for a week"
+                className={cn(
+                  buttonVariants({ variant: "ghost", size: "sm" }),
+                  "h-8 text-muted-foreground disabled:opacity-60",
+                )}
+              >
+                <BellOff className="size-3.5" aria-hidden />
+                {snoozing ? "Snoozing…" : "Snooze 1 week"}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -70,10 +89,14 @@ export function FixFirstSection({
   items,
   onRevoke,
   revokingId,
+  onSnooze,
+  snoozingId,
 }: {
   items: FixFirstItemData[];
   onRevoke?: (id: number) => void;
   revokingId?: number | null;
+  onSnooze?: (snooze: NonNullable<FixFirstItemData["snooze"]>) => void;
+  snoozingId?: string | null;
 }) {
   const [showAll, setShowAll] = useState(false);
 
@@ -105,6 +128,8 @@ export function FixFirstSection({
             item={item}
             onRevoke={onRevoke}
             revoking={revokingId === item.secondary?.targetId}
+            onSnooze={onSnooze}
+            snoozing={snoozingId === item.id}
           />
         ))}
       </ul>

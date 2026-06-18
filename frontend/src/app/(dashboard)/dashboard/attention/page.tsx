@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
+  BellOff,
   BellRing,
   CalendarClock,
   CheckCircle2,
@@ -23,7 +24,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/lib/api";
-import { formatDate, getAttentionNeeded } from "@/lib/documents";
+import { formatDate, getAttentionNeeded, snoozeDocument } from "@/lib/documents";
 import { cn } from "@/lib/utils";
 import type { DocumentRecord, DocumentUrgencyLevel } from "@/types/documents";
 
@@ -89,7 +90,15 @@ function issueReason(doc: DocumentRecord): string {
   return doc.status_reason || `${doc.title} needs review`;
 }
 
-function IssueRow({ doc }: { doc: DocumentRecord }) {
+function IssueRow({
+  doc,
+  onSnooze,
+  snoozing,
+}: {
+  doc: DocumentRecord;
+  onSnooze: (id: number) => void;
+  snoozing: boolean;
+}) {
   const workspaceHref = `/dashboard/documents/${doc.id}`;
   const needsReminder = !hasReminder(doc);
 
@@ -162,6 +171,19 @@ function IssueRow({ doc }: { doc: DocumentRecord }) {
           Open
           <ArrowRight className="size-3.5" />
         </Link>
+        <button
+          type="button"
+          disabled={snoozing}
+          onClick={() => onSnooze(doc.id)}
+          title="Hide this from your radar for a week"
+          className={cn(
+            buttonVariants({ variant: "ghost", size: "sm" }),
+            "text-muted-foreground disabled:opacity-60",
+          )}
+        >
+          <BellOff className="size-3.5" />
+          {snoozing ? "Snoozing…" : "Snooze"}
+        </button>
       </div>
     </li>
   );
@@ -170,6 +192,20 @@ function IssueRow({ doc }: { doc: DocumentRecord }) {
 export default function AttentionPage() {
   const [items, setItems] = useState<DocumentRecord[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [snoozingId, setSnoozingId] = useState<number | null>(null);
+
+  const handleSnooze = async (id: number) => {
+    setSnoozingId(id);
+    try {
+      await snoozeDocument(id);
+      // Optimistic: drop it so the list updates instantly.
+      setItems((prev) => (prev ? prev.filter((d) => d.id !== id) : prev));
+    } catch {
+      // Soft-fail: leave it in place; the user can retry.
+    } finally {
+      setSnoozingId(null);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -284,7 +320,12 @@ export default function AttentionPage() {
                   </div>
                   <ul className="divide-y divide-border">
                     {docs.map((doc) => (
-                      <IssueRow key={doc.id} doc={doc} />
+                      <IssueRow
+                        key={doc.id}
+                        doc={doc}
+                        onSnooze={handleSnooze}
+                        snoozing={snoozingId === doc.id}
+                      />
                     ))}
                   </ul>
                 </SectionCard>
