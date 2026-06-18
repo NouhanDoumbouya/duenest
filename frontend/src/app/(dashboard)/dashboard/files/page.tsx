@@ -74,6 +74,9 @@ export default function FileInboxPage() {
   const [dragging, setDragging] = useState(false);
   const [uploads, setUploads] = useState<UploadProgress[]>([]);
   const [busyFileId, setBusyFileId] = useState<number | null>(null);
+  // Which file's organize panel (attach / create-document) is open. Collapsed by
+  // default so the inbox stays a clean, scannable list instead of a stack of forms.
+  const [expandedFile, setExpandedFile] = useState<number | null>(null);
   const [previewFile, setPreviewFile] = useState<DocumentFile | null>(null);
   const [selectedDocument, setSelectedDocument] = useState<Record<number, string>>({});
   const [newDocTitle, setNewDocTitle] = useState<Record<number, string>>({});
@@ -531,7 +534,7 @@ export default function FileInboxPage() {
               key={file.id}
               className="rounded-lg border border-border bg-card p-4"
             >
-              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]">
+              <div className="grid gap-3">
                 <div className="min-w-0">
                   <div className="flex min-w-0 items-start gap-3">
                     <input
@@ -554,6 +557,28 @@ export default function FileInboxPage() {
                   </div>
 
                   <div className="mt-4 flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() =>
+                        setExpandedFile(
+                          expandedFile === file.id ? null : file.id,
+                        )
+                      }
+                      aria-expanded={expandedFile === file.id}
+                    >
+                      {expandedFile === file.id ? (
+                        <>
+                          <X className="size-4" />
+                          Close
+                        </>
+                      ) : (
+                        <>
+                          <FolderInput className="size-4" />
+                          Organize
+                        </>
+                      )}
+                    </Button>
                     <Button
                       type="button"
                       variant="outline"
@@ -592,9 +617,12 @@ export default function FileInboxPage() {
                   </div>
                 </div>
 
-                <div className="grid gap-3">
+                {expandedFile === file.id && (
+                <div className="grid gap-3 border-t border-border pt-4">
                   <div className="grid gap-2">
-                    <Label htmlFor={`document-${file.id}`}>Attach to document</Label>
+                    <Label htmlFor={`document-${file.id}`}>
+                      Attach to an existing document
+                    </Label>
                     <div className="flex gap-2">
                       <select
                         id={`document-${file.id}`}
@@ -626,7 +654,9 @@ export default function FileInboxPage() {
                   </div>
 
                   <div className="grid gap-2 rounded-lg border border-border bg-muted/30 p-3">
-                    <Label htmlFor={`title-${file.id}`}>Create document</Label>
+                    <Label htmlFor={`title-${file.id}`}>
+                      Or create a new document
+                    </Label>
                     <Input
                       id={`title-${file.id}`}
                       value={newDocTitle[file.id] ?? ""}
@@ -747,6 +777,7 @@ export default function FileInboxPage() {
                     </Button>
                   </div>
                 </div>
+                )}
               </div>
             </article>
           ))}
