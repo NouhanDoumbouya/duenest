@@ -838,7 +838,7 @@ function EventAgendaRow({
   return (
     <div
       className={cn(
-        "group grid gap-3 rounded-2xl border p-3 shadow-card transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-elevated motion-reduce:transform-none motion-reduce:transition-none sm:grid-cols-[5.25rem_minmax(0,1fr)_auto]",
+        "group grid grid-cols-1 gap-3 rounded-2xl border p-3 shadow-card transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-elevated motion-reduce:transform-none motion-reduce:transition-none sm:grid-cols-[5.25rem_minmax(0,1fr)_auto]",
         URGENCY_META[event.urgency].row,
       )}
     >
@@ -889,7 +889,7 @@ function EventAgendaRow({
         </div>
       </button>
 
-      <div className="flex items-center gap-2 sm:justify-end">
+      <div className="flex flex-wrap items-center gap-2 sm:justify-end">
         {event.linked_resource_url ? (
           <Link
             href={event.linked_resource_url}

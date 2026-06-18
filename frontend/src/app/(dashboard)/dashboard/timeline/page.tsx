@@ -207,7 +207,7 @@ export default function TimelinePage() {
         </div>
       )}
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_21rem]">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_21rem]">
         <main className="min-w-0 space-y-4">
           <div className="flex flex-wrap gap-1.5 rounded-2xl border border-border bg-card p-3 shadow-card">
             {FILTERS.map((option) => (
