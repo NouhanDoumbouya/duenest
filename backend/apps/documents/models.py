@@ -982,10 +982,16 @@ class DocumentExtraction(models.Model):
         on_delete=models.CASCADE,
         related_name="document_extractions",
     )
+    # Optional: an extraction belongs to a FILE. A scanned File Inbox file has
+    # no parent document yet, so `document` may be null (the per-document
+    # extraction endpoints simply won't surface inbox extractions, which is
+    # correct — they appear once the file is promoted to a document).
     document = models.ForeignKey(
         Document,
         on_delete=models.CASCADE,
         related_name="extractions",
+        null=True,
+        blank=True,
     )
     file = models.ForeignKey(
         DocumentFile,

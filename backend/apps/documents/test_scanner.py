@@ -17,7 +17,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from . import scanner
-from .models import DocumentFile
+from .models import DocumentExtraction, DocumentFile
 
 User = get_user_model()
 
@@ -73,6 +73,33 @@ class ScannerUploadTests(APITestCase):
         self.assertEqual(
             instance.encryption_status, DocumentFile.EncryptionStatus.ENCRYPTED
         )
+
+    def test_inbox_scan_stores_ocr_extraction_with_null_document(self):
+        # Regression: a scanned inbox file has no parent document, so the OCR
+        # extraction must store with document=None (not a NOT NULL violation).
+        from types import SimpleNamespace
+
+        self.auth()
+        fake = SimpleNamespace(
+            status="needs_review",
+            raw_text="Passport No 123",
+            extracted_fields={},
+            confidence_score=0.4,
+            provider="local_ocr",
+            error_message="",
+        )
+        with mock.patch(
+            "apps.documents.scanner.extract_ocr_text", return_value=fake
+        ):
+            resp = self.client.post(
+                self.url, {"file": pdf_upload()}, format="multipart"
+            )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.content)
+        self.assertTrue(resp.json()["ocr_text_stored"])
+        file_id = resp.json()["document_id"]
+        extraction = DocumentExtraction.objects.get(file_id=file_id)
+        self.assertIsNone(extraction.document_id)
+        self.assertEqual(extraction.raw_text, "Passport No 123")
 
     def test_empty_file_rejected(self):
         self.auth()
