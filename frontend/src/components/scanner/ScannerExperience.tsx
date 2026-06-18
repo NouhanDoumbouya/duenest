@@ -1312,91 +1312,40 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
               <p className="text-center text-xs text-slate-400">
                 {getFilterMeta(filterId).description}
               </p>
-              {/* Manual fine-tuning, hidden by default (progressive disclosure). */}
-              <div>
+              {/* Orientation & crop — a compact icon cluster, not three wide
+                  buttons, so the screen reads as "preview + one Save". */}
+              <div
+                className="flex items-center justify-center gap-2"
+                role="group"
+                aria-label="Edit scan"
+              >
                 <button
                   type="button"
-                  onClick={() => setAdjustOpen((v) => !v)}
-                  aria-expanded={adjustOpen}
-                  className="mx-auto flex items-center gap-1.5 text-xs font-medium text-slate-300 hover:text-white focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
-                >
-                  <SlidersHorizontal className="size-3.5" aria-hidden="true" />
-                  Adjust
-                  {!isNeutralAdjust(adjust) && (
-                    <span className="size-1.5 rounded-full bg-teal-300" aria-hidden="true" />
-                  )}
-                  <ChevronDown
-                    className={cn("size-3.5 transition-transform", adjustOpen && "rotate-180")}
-                    aria-hidden="true"
-                  />
-                </button>
-                {adjustOpen && (
-                  <div className="mt-2 space-y-3 rounded-lg bg-white/5 p-3">
-                    <AdjustSlider
-                      label="Brightness"
-                      value={adjust.brightness}
-                      onChange={(v) => onAdjustChange({ ...adjust, brightness: v })}
-                    />
-                    <AdjustSlider
-                      label="Contrast"
-                      value={adjust.contrast}
-                      onChange={(v) => onAdjustChange({ ...adjust, contrast: v })}
-                    />
-                    <AdjustSlider
-                      label="Sharpness"
-                      min={0}
-                      value={adjust.sharpness}
-                      onChange={(v) => onAdjustChange({ ...adjust, sharpness: v })}
-                    />
-                    <label className="flex items-center justify-between text-xs text-slate-300">
-                      <span>Denoise</span>
-                      <input
-                        type="checkbox"
-                        checked={adjust.denoise}
-                        onChange={(e) =>
-                          onAdjustChange({ ...adjust, denoise: e.target.checked })
-                        }
-                        className="size-4 accent-teal-400"
-                      />
-                    </label>
-                    <div className="flex justify-end">
-                      <button
-                        type="button"
-                        onClick={() => onAdjustChange(NEUTRAL_ADJUST)}
-                        disabled={isNeutralAdjust(adjust)}
-                        className="text-xs text-teal-300 hover:underline disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
-                      >
-                        Reset adjustments
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div className="flex flex-wrap items-center justify-center gap-2" role="group" aria-label="Edit scan">
-                <Button
-                  variant="outline"
-                  size="sm"
                   onClick={() => rotatePreview(false)}
-                  className="border-white/20 bg-white/5 text-slate-100 hover:bg-white/10"
+                  aria-label="Rotate left"
+                  title="Rotate left"
+                  className="flex size-9 items-center justify-center rounded-lg border border-white/15 bg-white/5 text-slate-100 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
                 >
-                  <RotateCcw className="size-4" aria-hidden="true" /> Rotate left
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
+                  <RotateCcw className="size-4" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
                   onClick={() => rotatePreview(true)}
-                  className="border-white/20 bg-white/5 text-slate-100 hover:bg-white/10"
+                  aria-label="Rotate right"
+                  title="Rotate right"
+                  className="flex size-9 items-center justify-center rounded-lg border border-white/15 bg-white/5 text-slate-100 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
                 >
-                  <RotateCw className="size-4" aria-hidden="true" /> Rotate right
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
+                  <RotateCw className="size-4" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
                   onClick={editCrop}
-                  className="border-white/20 bg-white/5 text-slate-100 hover:bg-white/10"
+                  aria-label="Edit crop"
+                  title="Edit crop"
+                  className="flex size-9 items-center justify-center rounded-lg border border-white/15 bg-white/5 text-slate-100 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
                 >
-                  <Crop className="size-4" aria-hidden="true" /> Edit crop
-                </Button>
+                  <Crop className="size-4" aria-hidden="true" />
+                </button>
               </div>
               {pdfSize != null && (
                 <p className="text-center text-xs text-slate-400">PDF size: {formatBytes(pdfSize)}</p>
@@ -1477,14 +1426,30 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
                   </ul>
                 </div>
               )}
-              {/* Save options (name + quality) are optional — hidden by default so
-                  a first-time user can just tap Save. */}
-              <div>
+              {/* Optional fine-tuning, paired and tucked away so a first-time
+                  user can just tap Save. */}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAdjustOpen((v) => !v)}
+                  aria-expanded={adjustOpen}
+                  className="flex items-center justify-center gap-1.5 rounded-lg bg-white/5 px-3 py-2 text-xs font-medium text-slate-300 hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
+                >
+                  <SlidersHorizontal className="size-3.5" aria-hidden="true" />
+                  Adjust
+                  {!isNeutralAdjust(adjust) && (
+                    <span className="size-1.5 rounded-full bg-teal-300" aria-hidden="true" />
+                  )}
+                  <ChevronDown
+                    className={cn("size-3.5 transition-transform", adjustOpen && "rotate-180")}
+                    aria-hidden="true"
+                  />
+                </button>
                 <button
                   type="button"
                   onClick={() => setSaveOptionsOpen((v) => !v)}
                   aria-expanded={saveOptionsOpen}
-                  className="mx-auto flex items-center gap-1.5 text-xs font-medium text-slate-300 hover:text-white focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
+                  className="flex items-center justify-center gap-1.5 rounded-lg bg-white/5 px-3 py-2 text-xs font-medium text-slate-300 hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
                 >
                   Save options
                   {(docName.trim() !== "" || exportQuality !== "standard") && (
@@ -1495,50 +1460,91 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
                     aria-hidden="true"
                   />
                 </button>
-                {saveOptionsOpen && (
-                  <div className="mt-2 space-y-3 rounded-lg bg-white/5 p-3">
-                    <input
-                      type="text"
-                      value={docName}
-                      onChange={(e) => setDocName(e.target.value)}
-                      placeholder="Document name (optional)"
-                      aria-label="Document name"
-                      enterKeyHint="done"
-                      className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-base text-slate-100 placeholder:text-slate-400 focus-visible:border-teal-300 focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none sm:text-sm"
-                    />
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs text-slate-400">PDF quality</span>
-                      <div
-                        className="inline-flex rounded-full bg-white/10 p-0.5"
-                        role="group"
-                        aria-label="PDF quality"
-                      >
-                        {(["standard", "hd"] as const).map((q) => (
-                          <button
-                            key={q}
-                            type="button"
-                            onClick={() => setExportQuality(q)}
-                            aria-pressed={exportQuality === q}
-                            className={cn(
-                              "rounded-full px-3 py-1 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none",
-                              exportQuality === q
-                                ? "bg-teal-500 text-slate-950"
-                                : "text-slate-200 hover:text-white",
-                            )}
-                          >
-                            {q === "standard" ? "Standard" : "HD"}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    {exportQuality === "hd" && (
-                      <p className="text-right text-[0.68rem] text-slate-400">
-                        HD keeps more detail and may create a larger file.
-                      </p>
-                    )}
-                  </div>
-                )}
               </div>
+              {adjustOpen && (
+                <div className="space-y-3 rounded-lg bg-white/5 p-3">
+                  <AdjustSlider
+                    label="Brightness"
+                    value={adjust.brightness}
+                    onChange={(v) => onAdjustChange({ ...adjust, brightness: v })}
+                  />
+                  <AdjustSlider
+                    label="Contrast"
+                    value={adjust.contrast}
+                    onChange={(v) => onAdjustChange({ ...adjust, contrast: v })}
+                  />
+                  <AdjustSlider
+                    label="Sharpness"
+                    min={0}
+                    value={adjust.sharpness}
+                    onChange={(v) => onAdjustChange({ ...adjust, sharpness: v })}
+                  />
+                  <label className="flex items-center justify-between text-xs text-slate-300">
+                    <span>Denoise</span>
+                    <input
+                      type="checkbox"
+                      checked={adjust.denoise}
+                      onChange={(e) =>
+                        onAdjustChange({ ...adjust, denoise: e.target.checked })
+                      }
+                      className="size-4 accent-teal-400"
+                    />
+                  </label>
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => onAdjustChange(NEUTRAL_ADJUST)}
+                      disabled={isNeutralAdjust(adjust)}
+                      className="text-xs text-teal-300 hover:underline disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
+                    >
+                      Reset adjustments
+                    </button>
+                  </div>
+                </div>
+              )}
+              {saveOptionsOpen && (
+                <div className="space-y-3 rounded-lg bg-white/5 p-3">
+                  <input
+                    type="text"
+                    value={docName}
+                    onChange={(e) => setDocName(e.target.value)}
+                    placeholder="Document name (optional)"
+                    aria-label="Document name"
+                    enterKeyHint="done"
+                    className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-base text-slate-100 placeholder:text-slate-400 focus-visible:border-teal-300 focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none sm:text-sm"
+                  />
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-slate-400">PDF quality</span>
+                    <div
+                      className="inline-flex rounded-full bg-white/10 p-0.5"
+                      role="group"
+                      aria-label="PDF quality"
+                    >
+                      {(["standard", "hd"] as const).map((q) => (
+                        <button
+                          key={q}
+                          type="button"
+                          onClick={() => setExportQuality(q)}
+                          aria-pressed={exportQuality === q}
+                          className={cn(
+                            "rounded-full px-3 py-1 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none",
+                            exportQuality === q
+                              ? "bg-teal-500 text-slate-950"
+                              : "text-slate-200 hover:text-white",
+                          )}
+                        >
+                          {q === "standard" ? "Standard" : "HD"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {exportQuality === "hd" && (
+                    <p className="text-right text-[0.68rem] text-slate-400">
+                      HD keeps more detail and may create a larger file.
+                    </p>
+                  )}
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-2">
                 <Button variant="outline" onClick={retake} className="border-white/20 bg-white/5 text-slate-100 hover:bg-white/10">
                   <RefreshCw className="size-4" aria-hidden="true" /> Retake
