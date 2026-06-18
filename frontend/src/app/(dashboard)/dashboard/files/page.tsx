@@ -24,6 +24,7 @@ import { DocumentFileViewer } from "@/components/documents/document-file-viewer"
 import { ExtractPagesDialog } from "@/components/documents/extract-pages-dialog";
 import { CompressPdfDialog } from "@/components/documents/compress-pdf-dialog";
 import { DuplicateWarningDialog } from "@/components/documents/duplicate-warning-dialog";
+import { MoveToVaultDialog } from "@/components/documents/move-to-vault-dialog";
 import { RedactionEditor } from "@/components/scanner/RedactionEditor";
 import { FileThumbnail } from "@/components/documents/file-thumbnail";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -136,6 +137,9 @@ export default function FileInboxPage() {
     result: DuplicateCheckResult;
   } | null>(null);
   const dupResolver = useRef<((decision: "keep" | "skip") => void) | null>(null);
+  // Batch "Move to Vault" dialog.
+  const [moveOpen, setMoveOpen] = useState(false);
+  const [moveBusy, setMoveBusy] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -677,6 +681,46 @@ export default function FileInboxPage() {
     }
   }
 
+  async function handleMoveToVault(categoryId: number | null) {
+    const targets = (files ?? []).filter((f) => selected.has(f.id));
+    if (targets.length === 0) return;
+    setMoveBusy(true);
+    setError(null);
+    setNotice(null);
+    let moved = 0;
+    const failures: string[] = [];
+    for (const file of targets) {
+      try {
+        const title = file.original_filename.replace(/\.[^/.]+$/, "");
+        await createDocumentFromInboxFile(file.id, {
+          title,
+          ...(categoryId !== null ? { category: categoryId } : {}),
+        });
+        setFiles((current) => (current ?? []).filter((f) => f.id !== file.id));
+        moved += 1;
+      } catch {
+        failures.push(file.original_filename);
+      }
+    }
+    setMoveBusy(false);
+    setMoveOpen(false);
+    clearSelection();
+    if (moved > 0) {
+      setNotice(
+        `Moved ${moved} file${moved === 1 ? "" : "s"} to your Vault${
+          categoryId !== null ? " under the chosen category" : ""
+        }.`,
+      );
+    }
+    if (failures.length > 0) {
+      setError(
+        `Could not move: ${failures.slice(0, 3).join(", ")}${
+          failures.length > 3 ? `, and ${failures.length - 3} more` : ""
+        }.`,
+      );
+    }
+  }
+
   const allSelected =
     files !== null && files.length > 0 && selected.size === files.length;
   const selectedPdfCount = useMemo(
@@ -692,6 +736,7 @@ export default function FileInboxPage() {
   const redactionEnabled = useFeature("document_redaction");
   const compressEnabled = useFeature("document_compress");
   const dedupeEnabled = useFeature("duplicate_detection");
+  const batchEnabled = useFeature("batch_scan_actions");
 
   return (
     <PageContainer>
@@ -875,6 +920,18 @@ export default function FileInboxPage() {
                     <Combine className="size-4" />
                   )}
                   Merge {selectedPdfCount} PDFs
+                </Button>
+              )}
+              {batchEnabled && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setMoveOpen(true)}
+                  disabled={bulkBusy || moveBusy}
+                >
+                  <FolderInput className="size-4" />
+                  Move to Vault
                 </Button>
               )}
               <Button
@@ -1286,6 +1343,16 @@ export default function FileInboxPage() {
         busy={compressBusy}
         onCancel={() => setCompressTarget(null)}
         onConfirm={confirmCompress}
+      />
+
+      <MoveToVaultDialog
+        key={moveOpen ? "move-open" : "move-closed"}
+        open={moveOpen}
+        count={selected.size}
+        categories={categories}
+        busy={moveBusy}
+        onCancel={() => setMoveOpen(false)}
+        onConfirm={handleMoveToVault}
       />
 
       <DuplicateWarningDialog

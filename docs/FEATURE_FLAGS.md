@@ -102,9 +102,10 @@ checksum/name/size, never auto-deletes or replaces), and `document_versioning`
 endpoints are enforced server-side, not just hidden), `filename_templates`
 (scanner quick clean-name chips; UI-only, editable), `scan_modes` (friendly
 filter+quality presets; user-chosen, not auto-recognition), and
-`advanced_document_preview` (image zoom controls in the file viewer; UI-only).
-These stay invisible to normal users until a founder launches each one
-(`beta_only` / `enabled`). They mostly gate UI
+`advanced_document_preview` (image zoom controls in the file viewer; UI-only),
+and `batch_scan_actions` (move multiple selected inbox files to the Vault at
+once, optionally under a category). These stay invisible to normal users until a
+founder launches each one (`beta_only` / `enabled`). They mostly gate UI
 affordances on the scanner success screen; the underlying risky actions reuse
 already server-gated flows (e.g. Quick Share create is enforced by `quick_share`
 regardless of `scan_to_safesend`). See `DOCUMENT_SCANNER.md`.
