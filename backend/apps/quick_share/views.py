@@ -26,9 +26,14 @@ from rest_framework.views import APIView
 
 from apps.core.security import public_access
 from apps.features.flags import require_feature_enabled
-from apps.documents.models import Document, DocumentBundle, DocumentFile
+from apps.documents.models import (
+    Document,
+    DocumentActivity,
+    DocumentBundle,
+    DocumentFile,
+)
 from apps.documents.plan_usage import enforce_plan_limit
-from apps.documents.services import collect_bundle_files
+from apps.documents.services import collect_bundle_files, log_document_activity
 from apps.users import plans as user_plans
 
 from .models import (
@@ -122,6 +127,7 @@ class QuickShareSessionListCreateView(APIView):
 
         # Attach selected files — each must be owned by the requester.
         created_any = False
+        shared_documents: dict[int, Document] = {}
         for order, file_id in enumerate(file_ids):
             file = (
                 DocumentFile.objects.filter(id=file_id, is_trashed=False)
@@ -139,6 +145,8 @@ class QuickShareSessionListCreateView(APIView):
                 file=file,
                 order=order,
             )
+            if file.document is not None:
+                shared_documents[file.document_id] = file.document
             created_any = True
 
         # Attach whole bundles — each must be owned by the requester and must
@@ -168,6 +176,16 @@ class QuickShareSessionListCreateView(APIView):
                     "with files to share.",
                 },
                 status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Record a privacy-safe timeline event on each shared document.
+        for document in shared_documents.values():
+            log_document_activity(
+                owner=request.user,
+                document=document,
+                action=DocumentActivity.Action.SHARED_VIA_SAFESEND,
+                title="Shared via SafeSend",
+                description=document.title,
             )
 
         log_activity(

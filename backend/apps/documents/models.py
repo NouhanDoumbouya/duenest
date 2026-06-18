@@ -1717,6 +1717,7 @@ class DocumentActivity(models.Model):
         EMERGENCY_PACK_OPENED = "emergency_pack_opened", "Emergency pack opened"
         REMINDER_ADDED = "reminder_added", "Reminder added"
         ADDED_TO_BUNDLE = "added_to_bundle", "Added to a bundle"
+        SHARED_VIA_SAFESEND = "shared_via_safesend", "Shared via SafeSend"
 
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
