@@ -50,7 +50,8 @@ EXPOSE 8000
 # Web process ONLY — never run migrations here. Auto-migrating on every
 # container start makes a crash-restart loop repeatedly retry the same migration,
 # which can leave a half-applied schema (e.g. a duplicate Postgres pattern-ops
-# index). Run migrations once, separately, via scripts/run_migrations.sh / the
-# Railway console / a one-off release step — see
-# docs/deployment/railway-backend-staging.md.
+# index). Migrations run ONCE per deploy via railway.json
+# `deploy.preDeployCommand` (before the new release takes traffic) — not per
+# container start. Non-Railway platforms use scripts/run_migrations.sh / the
+# Procfile `release` step. See docs/deployment/railway-backend-staging.md.
 CMD ["sh", "-c", "gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers 2 --timeout 120"]
