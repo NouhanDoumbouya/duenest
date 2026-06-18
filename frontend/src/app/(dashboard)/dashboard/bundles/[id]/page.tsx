@@ -641,10 +641,7 @@ export default function BundleDetailPage() {
               </Card>
 
               <div id="appointments" className="scroll-mt-24">
-                <SectionCard
-                  title="Appointments"
-                  description="Appointments connected to this bundle."
-                >
+                <SectionCard title="Appointments">
                   <DocumentAppointments bundleId={bundleId} />
                 </SectionCard>
               </div>
