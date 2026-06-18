@@ -1216,8 +1216,9 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
               </p>
               <CropEditor source={frozenCanvas} quad={quad} onQuadChange={setQuad} />
             </div>
-            <div className="space-y-2 border-t border-white/10 bg-slate-950/80 p-4 backdrop-blur-md">
-              {/* Edge-detection escape hatches: never trap the user on bad auto-detection. */}
+            <div className="space-y-3 border-t border-white/10 bg-slate-950/80 p-4 backdrop-blur-md">
+              {/* Edge-detection escape hatches: subtle links, never competing
+                  with the one obvious way forward. */}
               <div className="flex items-center justify-center gap-4 text-xs">
                 <button
                   type="button"
@@ -1234,21 +1235,23 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
                   Reset corners
                 </button>
               </div>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                <Button variant="outline" onClick={retake} className="border-white/20 bg-white/5 text-slate-100 hover:bg-white/10">
+              {/* Alternative actions — subordinate to the primary below. */}
+              <div className="grid grid-cols-3 gap-2">
+                <Button variant="outline" size="sm" onClick={retake} className="border-white/20 bg-white/5 text-slate-100 hover:bg-white/10">
                   <RefreshCw className="size-4" aria-hidden="true" /> Retake
                 </Button>
-                <Button variant="outline" onClick={useFullImage} className="border-white/20 bg-white/5 text-slate-100 hover:bg-white/10">
-                  <Maximize className="size-4" aria-hidden="true" /> Full image
-                </Button>
-                <Button variant="outline" onClick={rotateCrop} className="border-white/20 bg-white/5 text-slate-100 hover:bg-white/10">
+                <Button variant="outline" size="sm" onClick={rotateCrop} className="border-white/20 bg-white/5 text-slate-100 hover:bg-white/10">
                   <RotateCw className="size-4" aria-hidden="true" /> Rotate
                 </Button>
-                <Button onClick={applyCrop} disabled={busy} className="bg-teal-500 text-slate-950 hover:bg-teal-400">
-                  {busy ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Check className="size-4" aria-hidden="true" />}
-                  Apply
+                <Button variant="outline" size="sm" onClick={useFullImage} className="border-white/20 bg-white/5 text-slate-100 hover:bg-white/10">
+                  <Maximize className="size-4" aria-hidden="true" /> Full image
                 </Button>
               </div>
+              {/* Primary — one obvious way forward. */}
+              <Button onClick={applyCrop} disabled={busy} size="lg" className="w-full bg-teal-500 text-slate-950 hover:bg-teal-400">
+                {busy ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Check className="size-4" aria-hidden="true" />}
+                Looks good
+              </Button>
             </div>
           </div>
         )}
