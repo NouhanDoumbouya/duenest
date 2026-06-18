@@ -1715,6 +1715,8 @@ class DocumentActivity(models.Model):
         EXPORT_REQUESTED = "export_requested", "Export requested"
         EMERGENCY_PACK_CREATED = "emergency_pack_created", "Emergency pack created"
         EMERGENCY_PACK_OPENED = "emergency_pack_opened", "Emergency pack opened"
+        REMINDER_ADDED = "reminder_added", "Reminder added"
+        ADDED_TO_BUNDLE = "added_to_bundle", "Added to a bundle"
 
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,

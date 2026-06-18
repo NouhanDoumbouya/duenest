@@ -1481,6 +1481,13 @@ class DocumentReminderRuleListCreateView(
         enforce_plan_limit(self.request.user, user_plans.RESOURCE_REMINDERS)
         rule = serializer.save(owner=self.request.user, document=self.get_document())
         _mark_onboarding(self.request, "first_reminder_created")
+        log_document_activity(
+            owner=self.request.user,
+            document=rule.document,
+            action=DocumentActivity.Action.REMINDER_ADDED,
+            title="Reminder added",
+            description=rule.document.title,
+        )
         _track_product_event(
             self.request,
             "reminder_created",
@@ -2525,6 +2532,14 @@ class BundleRequirementLinkDocumentView(_RequirementActionMixin, APIView):
             update_fields=["linked_document", "status", "updated_at"]
         )
         requirement.bundle.recalculate_readiness()
+        log_document_activity(
+            owner=request.user,
+            document=document,
+            action=DocumentActivity.Action.ADDED_TO_BUNDLE,
+            title="Added to a bundle",
+            description=requirement.bundle.title,
+            related_bundle=requirement.bundle,
+        )
         return Response(
             DocumentBundleRequirementSerializer(
                 requirement, context={"request": request}

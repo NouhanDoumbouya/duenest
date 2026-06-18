@@ -10,7 +10,12 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from .constants import MAX_FILE_SIZE
-from .models import Document, DocumentFile, DocumentReminderRule
+from .models import (
+    Document,
+    DocumentActivity,
+    DocumentFile,
+    DocumentReminderRule,
+)
 
 User = get_user_model()
 
@@ -927,6 +932,20 @@ class DocumentReminderRuleTests(APITestCase):
         )
         expected = self.alice_doc.expiry_date - timedelta(days=90)
         self.assertEqual(response.data["upcoming_reminder_date"], expected.isoformat())
+
+    def test_reminder_creation_logs_timeline_activity(self):
+        self.authenticate(self.alice)
+        self.client.post(
+            reminder_rules_url(self.alice_doc.id),
+            {"trigger_type": "before_expiry", "days_before": 30},
+            format="json",
+        )
+        self.assertTrue(
+            DocumentActivity.objects.filter(
+                document=self.alice_doc,
+                action=DocumentActivity.Action.REMINDER_ADDED,
+            ).exists()
+        )
 
     def test_upcoming_reminders_endpoint_is_owner_scoped(self):
         alice_rule = DocumentReminderRule.objects.create(
