@@ -81,6 +81,7 @@ import { formatBytes, generatePdfBlob } from "@/lib/scanner/pdf";
 import { applyWatermark } from "@/lib/scanner/watermark";
 import { applyRedactions, type RedactionRect } from "@/lib/scanner/redaction";
 import { rasterizePdf } from "@/lib/pdf/rasterize";
+import { FILENAME_TYPE_CHIPS, suggestFilename } from "@/lib/scanner/filename";
 import { uploadScan, flushQueuedScans } from "@/lib/scanner/client";
 import {
   enqueueScan,
@@ -1527,6 +1528,29 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
                       enterKeyHint="done"
                       className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-base text-slate-100 placeholder:text-slate-400 focus-visible:border-teal-300 focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none sm:text-sm"
                     />
+                    {featureEnabled("filename_templates") && (
+                      <div className="space-y-1.5">
+                        <div className="flex flex-wrap gap-1.5">
+                          {FILENAME_TYPE_CHIPS.map((type) => (
+                            <button
+                              key={type}
+                              type="button"
+                              onClick={() =>
+                                setDocName(suggestFilename(type, { withYear: true }))
+                              }
+                              className="rounded-full border border-white/15 px-2.5 py-1 text-xs text-slate-200 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
+                            >
+                              {type}
+                            </button>
+                          ))}
+                        </div>
+                        {docName.trim() !== "" && (
+                          <p className="text-[0.7rem] text-slate-500">
+                            Saves as {buildScanBasename(docName)}.pdf
+                          </p>
+                        )}
+                      </div>
+                    )}
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-xs text-slate-400">PDF quality</span>
                       <div
