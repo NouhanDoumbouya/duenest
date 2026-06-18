@@ -112,6 +112,8 @@ export interface DocumentRecord {
   // Soft delete (trash).
   is_trashed: boolean;
   trashed_at: string | null;
+  // Hidden from Life Radar / Attention until this future datetime, if set.
+  attention_snoozed_until: string | null;
   days_until_permanent_deletion: number | null;
   computed_status: DocumentComputedStatus;
   status_label: string;

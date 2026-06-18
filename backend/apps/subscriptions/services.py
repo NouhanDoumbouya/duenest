@@ -484,6 +484,8 @@ def subscription_attention(user, today: date | None = None) -> list[dict]:
         Subscription.objects.filter(owner=user, is_archived=False)
         .exclude(status=Subscription.Status.CANCELLED)
         .exclude(status=Subscription.Status.EXPIRED)
+        # Hide items the owner snoozed ("I've seen this") until the snooze ends.
+        .exclude(attention_snoozed_until__gt=timezone.now())
         .select_related("category")
     )
 

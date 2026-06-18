@@ -145,6 +145,24 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         subscription.restore()
         return Response(self.get_serializer(subscription).data)
 
+    @action(detail=True, methods=["post"])
+    def snooze(self, request, pk=None):
+        """Hide from Life Radar / Attention until later. Body {"days": int};
+        0 or less clears it, capped at 365."""
+        subscription = self.get_object()
+        try:
+            days = int(request.data.get("days", 7))
+        except (TypeError, ValueError):
+            days = 7
+        if days <= 0:
+            subscription.attention_snoozed_until = None
+        else:
+            subscription.attention_snoozed_until = timezone.now() + timezone.timedelta(
+                days=min(days, 365)
+            )
+        subscription.save(update_fields=["attention_snoozed_until", "updated_at"])
+        return Response(self.get_serializer(subscription).data)
+
     @action(detail=True, methods=["post"], url_path="mark-cancelled")
     def mark_cancelled(self, request, pk=None):
         subscription = self.get_object()

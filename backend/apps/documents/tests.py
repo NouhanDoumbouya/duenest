@@ -827,6 +827,91 @@ class DocumentIntelligenceTests(APITestCase):
         self.assertEqual(response.data["count"], 3)
 
 
+class DocumentSnoozeTests(APITestCase):
+    """Snoozing hides a document from Attention without changing its real dates."""
+
+    def setUp(self):
+        self.alice = User.objects.create_user(
+            username="alice",
+            email="alice@example.com",
+            password="StrongPassword123!DueNest",
+        )
+        self.bob = User.objects.create_user(
+            username="bob",
+            email="bob@example.com",
+            password="StrongPassword123!DueNest",
+        )
+        self.today = timezone.localdate()
+
+    def snooze_url(self, document_id):
+        return f"/api/v1/documents/{document_id}/snooze/"
+
+    def expired_doc(self, owner=None):
+        return Document.objects.create(
+            owner=owner or self.alice,
+            title="Expired passport",
+            expiry_date=self.today - timedelta(days=5),
+        )
+
+    def test_snooze_hides_document_from_attention(self):
+        doc = self.expired_doc()
+        self.client.force_authenticate(self.alice)
+
+        before = self.client.get(attention_url())
+        self.assertIn(doc.id, [item["id"] for item in before.data["items"]])
+
+        snooze = self.client.post(self.snooze_url(doc.id), {"days": 7}, format="json")
+        self.assertEqual(snooze.status_code, status.HTTP_200_OK)
+        self.assertIsNotNone(snooze.data["attention_snoozed_until"])
+
+        after = self.client.get(attention_url())
+        self.assertNotIn(doc.id, [item["id"] for item in after.data["items"]])
+
+    def test_snooze_does_not_change_expiry_date(self):
+        doc = self.expired_doc()
+        self.client.force_authenticate(self.alice)
+        self.client.post(self.snooze_url(doc.id), {"days": 7}, format="json")
+        doc.refresh_from_db()
+        # The real fact is untouched — only the nudge is suppressed.
+        self.assertEqual(doc.expiry_date, self.today - timedelta(days=5))
+        self.assertIsNotNone(doc.attention_snoozed_until)
+
+    def test_expired_snooze_resurfaces_document(self):
+        doc = self.expired_doc()
+        doc.attention_snoozed_until = timezone.now() - timedelta(days=1)
+        doc.save(update_fields=["attention_snoozed_until"])
+        self.client.force_authenticate(self.alice)
+        response = self.client.get(attention_url())
+        self.assertIn(doc.id, [item["id"] for item in response.data["items"]])
+
+    def test_snooze_zero_days_clears_the_snooze(self):
+        doc = self.expired_doc()
+        doc.attention_snoozed_until = timezone.now() + timedelta(days=7)
+        doc.save(update_fields=["attention_snoozed_until"])
+        self.client.force_authenticate(self.alice)
+        response = self.client.post(
+            self.snooze_url(doc.id), {"days": 0}, format="json"
+        )
+        self.assertIsNone(response.data["attention_snoozed_until"])
+        attention = self.client.get(attention_url())
+        self.assertIn(doc.id, [item["id"] for item in attention.data["items"]])
+
+    def test_cannot_snooze_another_users_document(self):
+        bob_doc = self.expired_doc(owner=self.bob)
+        self.client.force_authenticate(self.alice)
+        response = self.client.post(
+            self.snooze_url(bob_doc.id), {"days": 7}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_snooze_requires_authentication(self):
+        doc = self.expired_doc()
+        response = self.client.post(
+            self.snooze_url(doc.id), {"days": 7}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
 class DocumentReminderRuleTests(APITestCase):
     def setUp(self):
         self.alice = User.objects.create_user(

@@ -138,6 +138,22 @@ export function restoreSubscription(id: number): Promise<Subscription> {
   });
 }
 
+/**
+ * Snooze a subscription off the Life Radar / Attention surfaces for `days`
+ * (default 7). Passing `days <= 0` clears the snooze. Does not change the real
+ * renewal dates — only when we nudge the owner about it.
+ */
+export function snoozeSubscription(
+  id: number,
+  days = 7,
+): Promise<Subscription> {
+  return apiFetch<Subscription>(`/subscriptions/${id}/snooze/`, {
+    method: "POST",
+    body: { days },
+    auth: true,
+  });
+}
+
 export function markSubscriptionCancelled(id: number): Promise<Subscription> {
   return apiFetch<Subscription>(`/subscriptions/${id}/mark-cancelled/`, {
     method: "POST",

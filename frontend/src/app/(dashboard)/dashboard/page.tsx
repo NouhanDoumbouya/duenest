@@ -39,12 +39,17 @@ import { SetupChecklistCard } from "@/components/onboarding/setup-checklist-card
 import { buttonVariants } from "@/components/ui/button";
 import { PageContainer } from "@/components/ui/page-container";
 import { SectionCard } from "@/components/ui/section-card";
-import { getAttentionNeeded, getDocuments } from "@/lib/documents";
+import {
+  getAttentionNeeded,
+  getDocuments,
+  snoozeDocument,
+} from "@/lib/documents";
 import { getCalendarEvents, getCalendarSummary } from "@/lib/calendar";
 import { getEmergencyPacks } from "@/lib/emergency";
 import {
   getSubscriptionAttention,
   getSubscriptionSummary,
+  snoozeSubscription,
 } from "@/lib/subscriptions";
 import { listQuickShares, revokeQuickShare } from "@/lib/quick-share";
 import {
@@ -144,6 +149,7 @@ export default function DashboardPage() {
   const user = useDashboardUser();
   const [state, setState] = useState<RadarState | null>(null);
   const [revokingId, setRevokingId] = useState<number | null>(null);
+  const [snoozingId, setSnoozingId] = useState<string | null>(null);
   const [checklistDismissed, setChecklistDismissed] = useState(false);
   const mountedRef = useRef(true);
 
@@ -257,6 +263,46 @@ export default function DashboardPage() {
       setRevokingId(null);
     }
   }, []);
+
+  const handleSnooze = useCallback(
+    async (snooze: { kind: "document" | "subscription"; targetId: number }) => {
+      const itemId = `${snooze.kind}-${snooze.targetId}`;
+      setSnoozingId(itemId);
+      try {
+        if (snooze.kind === "document") {
+          await snoozeDocument(snooze.targetId);
+          // Optimistic: drop it locally so Fix First updates instantly.
+          setState((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  attentionDocs: prev.attentionDocs.filter(
+                    (d) => d.id !== snooze.targetId,
+                  ),
+                }
+              : prev,
+          );
+        } else {
+          await snoozeSubscription(snooze.targetId);
+          setState((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  subAttention: prev.subAttention.filter(
+                    (s) => s.id !== snooze.targetId,
+                  ),
+                }
+              : prev,
+          );
+        }
+      } catch {
+        // Soft-fail: leave it in place; the user can retry.
+      } finally {
+        setSnoozingId(null);
+      }
+    },
+    [],
+  );
 
   const greetingName = user.first_name?.trim() || user.username;
   const loading = state === null;
@@ -448,6 +494,8 @@ export default function DashboardPage() {
                     items={radar.fixFirst}
                     onRevoke={handleRevoke}
                     revokingId={revokingId}
+                    onSnooze={handleSnooze}
+                    snoozingId={snoozingId}
                   />
                 )}
               </SectionCard>

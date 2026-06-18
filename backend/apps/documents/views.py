@@ -609,6 +609,8 @@ class DocumentViewSet(viewsets.ModelViewSet):
             self.get_queryset()
             .filter(is_trashed=False)
             .exclude(status=Document.Status.ARCHIVED)
+            # Hide items the owner snoozed ("I've seen this") until the snooze ends.
+            .exclude(attention_snoozed_until__gt=timezone.now())
         ).filter(computed_status_db__in=self._ATTENTION_STATES)
         items = list(queryset)
         items.sort(key=attention_sort_key)
@@ -675,6 +677,34 @@ class DocumentViewSet(viewsets.ModelViewSet):
                 object_id=document.id,
                 metadata={"target": "document"},
             )
+        return Response(self.get_serializer(document).data)
+
+    @action(detail=True, methods=["post"], url_path="snooze")
+    def snooze(self, request, pk=None):
+        """
+        Hide this document from Life Radar / Attention until later (or clear the
+        snooze). Body: {"days": <int>}; 0 or less clears it, capped at 365 days.
+        Does not change the real expiry/renewal facts.
+        """
+        document = self.get_object()
+        try:
+            days = int(request.data.get("days", 7))
+        except (TypeError, ValueError):
+            days = 7
+        if days <= 0:
+            document.attention_snoozed_until = None
+        else:
+            document.attention_snoozed_until = timezone.now() + timedelta(
+                days=min(days, 365)
+            )
+        document.save(update_fields=["attention_snoozed_until", "updated_at"])
+        _track_product_event(
+            request,
+            "attention_snooze_used",
+            object_type="document",
+            object_id=document.id,
+            metadata={"days": days},
+        )
         return Response(self.get_serializer(document).data)
 
     @action(detail=True, methods=["delete"], url_path="permanent-delete")

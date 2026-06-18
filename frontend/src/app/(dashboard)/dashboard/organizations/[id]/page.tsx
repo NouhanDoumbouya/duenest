@@ -251,10 +251,7 @@ export default function OrganizationWorkspacePage({
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            Organization workspace
-          </p>
-          <div className="mt-2 flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <h1 className="font-heading text-3xl font-semibold tracking-tight">
               {organization.name}
             </h1>
@@ -420,35 +417,24 @@ function OverviewTab({
 
         <SectionCard
           title="Readiness board"
-          description="Current operational state for shared documents, requests, and deadlines."
+          description="The next step that moves readiness forward, with anything still blocking it."
         >
-          <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-            <div className="rounded-xl border border-border bg-muted/30 p-5">
-              <p className="text-sm text-muted-foreground">Workspace readiness</p>
-              <p className="mt-2 text-4xl font-semibold">
-                {summary.readiness.score}%
+          <div className="space-y-3">
+            <p className="text-sm font-medium">{summary.next_recommended_action}</p>
+            {summary.readiness.reasons.length > 0 ? (
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                {summary.readiness.reasons.map((reason) => (
+                  <li key={reason} className="flex gap-2">
+                    <ShieldAlert className="mt-0.5 size-4 shrink-0 text-brand-amber" />
+                    <span>{reason}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No unresolved readiness issues in the current snapshot.
               </p>
-              <Badge className="mt-3 capitalize" variant="outline">
-                {summary.readiness.status.replace("_", " ")}
-              </Badge>
-            </div>
-            <div className="space-y-3">
-              <p className="text-sm font-medium">{summary.next_recommended_action}</p>
-              {summary.readiness.reasons.length > 0 ? (
-                <ul className="space-y-2 text-sm text-muted-foreground">
-                  {summary.readiness.reasons.map((reason) => (
-                    <li key={reason} className="flex gap-2">
-                      <ShieldAlert className="mt-0.5 size-4 shrink-0 text-brand-amber" />
-                      <span>{reason}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No unresolved readiness issues in the current snapshot.
-                </p>
-              )}
-            </div>
+            )}
           </div>
         </SectionCard>
 

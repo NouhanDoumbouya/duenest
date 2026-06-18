@@ -9,9 +9,10 @@ import {
 } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Bell, CheckCheck, LogOut, X } from "lucide-react";
+import { Bell, CheckCheck, LogOut, Search, X } from "lucide-react";
 
 import { BottomNav } from "@/components/layout/bottom-nav";
+import { CommandPalette } from "@/components/command-palette/command-palette";
 import { Logo } from "@/components/layout/logo";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { Button } from "@/components/ui/button";
@@ -273,6 +274,7 @@ export function DashboardShell({
   const router = useRouter();
   const [hasFounderAccess, setHasFounderAccess] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -320,7 +322,18 @@ export function DashboardShell({
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 hidden h-14 items-center justify-end border-b border-border bg-card/80 px-6 backdrop-blur md:flex">
+        <header className="sticky top-0 z-20 hidden h-14 items-center justify-between border-b border-border bg-card/80 px-6 backdrop-blur md:flex">
+          <button
+            type="button"
+            onClick={() => setPaletteOpen(true)}
+            className="flex h-9 w-full max-w-xs items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 text-sm text-muted-foreground transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+          >
+            <Search className="size-4 shrink-0" />
+            <span className="flex-1 text-left">Search or jump to…</span>
+            <kbd className="rounded border border-border bg-card px-1.5 py-0.5 text-[0.68rem] font-sans">
+              ⌘K
+            </kbd>
+          </button>
           <NotificationBell />
         </header>
 
@@ -329,6 +342,14 @@ export function DashboardShell({
         <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-card/80 px-4 backdrop-blur md:hidden">
           <Logo href="/dashboard" />
           <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setPaletteOpen(true)}
+              aria-label="Search"
+            >
+              <Search className="size-4" />
+            </Button>
             <NotificationBell />
             <Button
               variant="ghost"
@@ -386,6 +407,8 @@ export function DashboardShell({
 
         <BottomNav onOpenMore={() => setMobileNavOpen(true)} />
       </div>
+
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
     </div>
   );
 }

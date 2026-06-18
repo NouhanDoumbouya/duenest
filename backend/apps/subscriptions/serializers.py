@@ -107,6 +107,7 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             "last_reviewed_at",
             "is_archived",
             "archived_at",
+            "attention_snoozed_until",
             "state",
             "created_at",
             "updated_at",
@@ -116,6 +117,7 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             "last_reviewed_at",
             "is_archived",
             "archived_at",
+            "attention_snoozed_until",
             "created_at",
             "updated_at",
         ]

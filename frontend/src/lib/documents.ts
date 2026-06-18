@@ -141,6 +141,22 @@ export function permanentlyDeleteDocument(id: number): Promise<void> {
   });
 }
 
+/**
+ * Snooze a document off the Life Radar / Attention surfaces for `days`
+ * (default 7). Passing `days <= 0` clears the snooze. Does not change the real
+ * expiry/renewal dates — only when we nudge the owner about it.
+ */
+export function snoozeDocument(
+  id: number,
+  days = 7,
+): Promise<DocumentRecord> {
+  return apiFetch<DocumentRecord>(`/documents/${id}/snooze/`, {
+    method: "POST",
+    body: { days },
+    auth: true,
+  });
+}
+
 export function getAttentionNeeded(): Promise<AttentionNeededResponse> {
   return apiFetch<AttentionNeededResponse>("/documents/attention-needed/", {
     auth: true,

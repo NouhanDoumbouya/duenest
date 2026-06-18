@@ -11,7 +11,6 @@ import {
   Loader2,
   Plus,
   Search,
-  SlidersHorizontal,
   X,
 } from "lucide-react";
 
@@ -537,27 +536,25 @@ function DocumentsPageInner() {
       />
 
       <Card>
-        <CardContent className="space-y-5">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-start gap-3">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <SlidersHorizontal className="size-5" />
-              </span>
-              <div>
-                <p className="text-sm font-medium">Vault controls</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  DueNest uses dates, files, and renewal rules to show what
-                  needs attention before it becomes urgent.
-                </p>
-              </div>
-            </div>
+        <CardContent className="space-y-4">
+          {/* Search is the single primary control; everything else is secondary
+              (status chips) or tucked behind the "More filters" disclosure. */}
+          <label className="relative block">
+            <span className="sr-only">Search documents</span>
+            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="h-11 pr-10 pl-9"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search title, issuer, country, reference..."
+            />
             {refreshing && (
-              <span className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="size-4 animate-spin" />
-                Updating results
-              </span>
+              <Loader2
+                className="absolute top-1/2 right-3 size-4 -translate-y-1/2 animate-spin text-muted-foreground"
+                aria-label="Updating results"
+              />
             )}
-          </div>
+          </label>
 
           <div
             className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0"
@@ -629,135 +626,138 @@ function DocumentsPageInner() {
             </div>
           )}
 
-          <div className="grid gap-3 lg:grid-cols-[1.4fr_1fr_1fr]">
-            <label className="relative block">
-              <span className="sr-only">Search documents</span>
-              <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                className="h-11 pl-9"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search title, issuer, country, reference..."
-              />
-            </label>
-
-            <label className="block">
-              <span className="sr-only">Document type</span>
-              <Input
-                className="h-11"
-                value={documentType}
-                onChange={(event) => setDocumentType(event.target.value)}
-                placeholder="Type, e.g. passport"
-              />
-            </label>
-
-            <label className="block">
-              <span className="sr-only">Issuer</span>
-              <Input
-                className="h-11"
-                value={issuer}
-                onChange={(event) => setIssuer(event.target.value)}
-                placeholder="Issuer"
-              />
-            </label>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setShowAdvanced((v) => !v)}
-            aria-expanded={showAdvanced}
-            aria-controls="advanced-filters"
-            className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 rounded-md lg:hidden"
-          >
-            <Filter className="size-4" aria-hidden />
-            Advanced filters
-            <ChevronDown
-              className={cn(
-                "size-4 transition-transform",
-                showAdvanced && "rotate-180",
-              )}
-              aria-hidden
-            />
-          </button>
-
-          <div
-            id="advanced-filters"
-            className={cn(
-              "gap-3 sm:grid-cols-2 lg:grid lg:grid-cols-[1fr_1fr_1fr_1.1fr_auto]",
-              showAdvanced ? "grid" : "hidden",
-            )}
-          >
-            <label className="block">
-              <span className="sr-only">Country</span>
-              <Input
-                className="h-10"
-                value={country}
-                onChange={(event) => setCountry(event.target.value)}
-                placeholder="Country"
-              />
-            </label>
-            <label className="block">
-              <span className="sr-only">Filter by tag</span>
-              <select
-                className="h-10 w-full rounded-lg border border-input bg-card px-3 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                value={tag}
-                onChange={(event) =>
-                  setTag(event.target.value === "" ? "" : Number(event.target.value))
-                }
-                disabled={tags.length === 0}
-              >
-                <option value="">All tags</option>
-                {tags.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className="sr-only">Expiry from</span>
-              <Input
-                type="date"
-                className="h-10"
-                value={expiryFrom}
-                onChange={(event) => setExpiryFrom(event.target.value)}
-              />
-            </label>
-            <label className="block">
-              <span className="sr-only">Expiry to</span>
-              <Input
-                type="date"
-                className="h-10"
-                value={expiryTo}
-                onChange={(event) => setExpiryTo(event.target.value)}
-              />
-            </label>
-            <label className="block">
-              <span className="sr-only">Sort documents</span>
-              <select
-                className="h-10 w-full rounded-lg border border-input bg-card px-3 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                value={ordering}
-                onChange={(event) =>
-                  setOrdering(event.target.value as DocumentOrdering)
-                }
-              >
-                {ORDER_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <Button
+          <div>
+            <button
               type="button"
-              variant="ghost"
-              className="justify-center text-muted-foreground"
-              onClick={clearFilters}
-              disabled={!filtersActive}
+              onClick={() => setShowAdvanced((v) => !v)}
+              aria-expanded={showAdvanced}
+              aria-controls="advanced-filters"
+              className="flex items-center gap-1.5 rounded-md text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
             >
-              <X className="size-4" />
-              Clear
-            </Button>
+              <Filter className="size-4" aria-hidden />
+              More filters
+              <ChevronDown
+                className={cn(
+                  "size-4 transition-transform",
+                  showAdvanced && "rotate-180",
+                )}
+                aria-hidden
+              />
+            </button>
+
+            <div
+              id="advanced-filters"
+              className={cn(
+                "mt-3 gap-3 sm:grid-cols-2 lg:grid-cols-4",
+                showAdvanced ? "grid" : "hidden",
+              )}
+            >
+              <label className="block space-y-1">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Type
+                </span>
+                <Input
+                  className="h-10"
+                  value={documentType}
+                  onChange={(event) => setDocumentType(event.target.value)}
+                  placeholder="e.g. passport"
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Issuer
+                </span>
+                <Input
+                  className="h-10"
+                  value={issuer}
+                  onChange={(event) => setIssuer(event.target.value)}
+                  placeholder="e.g. HMPO"
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Country
+                </span>
+                <Input
+                  className="h-10"
+                  value={country}
+                  onChange={(event) => setCountry(event.target.value)}
+                  placeholder="e.g. UK"
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Tag
+                </span>
+                <select
+                  className="h-10 w-full rounded-lg border border-input bg-card px-3 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                  value={tag}
+                  onChange={(event) =>
+                    setTag(event.target.value === "" ? "" : Number(event.target.value))
+                  }
+                  disabled={tags.length === 0}
+                >
+                  <option value="">All tags</option>
+                  {tags.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Expiry from
+                </span>
+                <Input
+                  type="date"
+                  className="h-10"
+                  value={expiryFrom}
+                  onChange={(event) => setExpiryFrom(event.target.value)}
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Expiry to
+                </span>
+                <Input
+                  type="date"
+                  className="h-10"
+                  value={expiryTo}
+                  onChange={(event) => setExpiryTo(event.target.value)}
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Sort
+                </span>
+                <select
+                  className="h-10 w-full rounded-lg border border-input bg-card px-3 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                  value={ordering}
+                  onChange={(event) =>
+                    setOrdering(event.target.value as DocumentOrdering)
+                  }
+                >
+                  {ORDER_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="flex items-end">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-10 w-full justify-center text-muted-foreground"
+                  onClick={clearFilters}
+                  disabled={!filtersActive}
+                >
+                  <X className="size-4" />
+                  Clear
+                </Button>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>

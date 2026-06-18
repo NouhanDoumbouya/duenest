@@ -248,6 +248,73 @@ class AttentionTest(SubscriptionBaseTest):
         self.assertEqual(res.data["count"], 0)
 
 
+class SnoozeTest(SubscriptionBaseTest):
+    """Snoozing hides a subscription from Attention without changing its dates."""
+
+    def snooze_url(self, sub_id):
+        return f"/api/v1/subscriptions/{sub_id}/snooze/"
+
+    def test_snooze_hides_subscription_from_attention(self):
+        sub = self.make_sub(
+            name="Overdue", next_billing_date=self.today - timedelta(days=2)
+        )
+        self.client.force_authenticate(self.alice)
+
+        before = self.client.get(ATTENTION)
+        self.assertEqual(before.data["count"], 1)
+
+        res = self.client.post(
+            self.snooze_url(sub.id), {"days": 7}, format="json"
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIsNotNone(res.data["attention_snoozed_until"])
+
+        after = self.client.get(ATTENTION)
+        self.assertEqual(after.data["count"], 0)
+
+    def test_snooze_does_not_change_billing_date(self):
+        nbd = self.today - timedelta(days=2)
+        sub = self.make_sub(name="Overdue", next_billing_date=nbd)
+        self.client.force_authenticate(self.alice)
+        self.client.post(self.snooze_url(sub.id), {"days": 7}, format="json")
+        sub.refresh_from_db()
+        self.assertEqual(sub.next_billing_date, nbd)
+        self.assertIsNotNone(sub.attention_snoozed_until)
+
+    def test_expired_snooze_resurfaces_subscription(self):
+        sub = self.make_sub(
+            name="Overdue", next_billing_date=self.today - timedelta(days=2)
+        )
+        sub.attention_snoozed_until = timezone.now() - timedelta(days=1)
+        sub.save(update_fields=["attention_snoozed_until"])
+        self.client.force_authenticate(self.alice)
+        res = self.client.get(ATTENTION)
+        self.assertEqual(res.data["count"], 1)
+
+    def test_snooze_zero_days_clears_the_snooze(self):
+        sub = self.make_sub(
+            name="Overdue", next_billing_date=self.today - timedelta(days=2)
+        )
+        sub.attention_snoozed_until = timezone.now() + timedelta(days=7)
+        sub.save(update_fields=["attention_snoozed_until"])
+        self.client.force_authenticate(self.alice)
+        res = self.client.post(
+            self.snooze_url(sub.id), {"days": 0}, format="json"
+        )
+        self.assertIsNone(res.data["attention_snoozed_until"])
+        self.assertEqual(self.client.get(ATTENTION).data["count"], 1)
+
+    def test_cannot_snooze_another_users_subscription(self):
+        bob_sub = self.make_sub(
+            owner=self.bob, next_billing_date=self.today - timedelta(days=2)
+        )
+        self.client.force_authenticate(self.alice)
+        res = self.client.post(
+            self.snooze_url(bob_sub.id), {"days": 7}, format="json"
+        )
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+
 class ActionsTest(SubscriptionBaseTest):
     def setUp(self):
         super().setUp()

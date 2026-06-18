@@ -292,6 +292,31 @@ APIs should support useful filtering from the beginning where needed.
 GET /api/v1/documents/?category=immigration&status=expiring_soon&ordering=expiry_date
 ```
 
+### Unified quick search (command palette)
+
+A single owner-scoped endpoint powers the command palette (Cmd/Ctrl+K). It looks
+across the user's documents, subscriptions, and organizations and returns a
+small, capped list of "go here" results. Trashed documents and archived
+subscriptions are excluded; a blank query returns an empty list.
+
+```http
+GET /api/v1/search/?q=passport
+```
+
+```json
+{
+  "query": "passport",
+  "results": [
+    { "type": "document", "id": 12, "title": "UK Passport", "subtitle": "Passport · UK", "url": "/dashboard/documents/12" },
+    { "type": "subscription", "id": 4, "title": "Passport photo service", "subtitle": "Snappy", "url": "/dashboard/subscriptions/4" },
+    { "type": "organization", "id": 2, "title": "Passport Club", "subtitle": "Club", "url": "/dashboard/organizations/2" }
+  ]
+}
+```
+
+Each type is capped at 5 results. Authentication is required; results never
+include another user's data.
+
 ---
 
 ## 11. Resource Ownership Rules
@@ -707,7 +732,8 @@ Base path:
 | `GET`    | `/api/v1/documents/:id/`  | Retrieve one of the user's documents |
 | `PATCH`  | `/api/v1/documents/:id/`  | Update one of the user's documents   |
 | `DELETE` | `/api/v1/documents/:id/`  | Move one of the user's documents to trash |
-| `GET`    | `/api/v1/documents/attention-needed/` | Documents requiring action |
+| `GET`    | `/api/v1/documents/attention-needed/` | Documents requiring action (excludes snoozed) |
+| `POST`   | `/api/v1/documents/:id/snooze/` | Hide a document from the attention surfaces for a while. Body `{ "days": int }` (default 7, capped at 365; `0` or less clears the snooze). Sets `attention_snoozed_until` — the real expiry/renewal dates are unchanged. |
 | `GET`    | `/api/v1/documents/trash/` | List trashed documents |
 | `POST`   | `/api/v1/documents/:id/trash/` | Move a document to trash with optional reason |
 | `POST`   | `/api/v1/documents/:id/restore/` | Restore a trashed document |
@@ -3351,9 +3377,10 @@ POST   /api/v1/subscriptions/{id}/restore/                  # restore archived
 POST   /api/v1/subscriptions/{id}/mark-cancelled/           # status -> cancelled, auto_renew off
 POST   /api/v1/subscriptions/{id}/mark-paid/                # log a payment + roll next_billing_date
 POST   /api/v1/subscriptions/{id}/skip-next-renewal/        # roll next_billing_date by one cycle
+POST   /api/v1/subscriptions/{id}/snooze/                   # hide from attention; body {days:int} (default 7, 0 clears)
 
 GET    /api/v1/subscriptions/summary/                       # owner roll-up (costs, windows, top renewals)
-GET    /api/v1/subscriptions/attention/                     # subscriptions needing attention + reasons
+GET    /api/v1/subscriptions/attention/                     # subscriptions needing attention + reasons (excludes snoozed)
 
 GET    /api/v1/subscriptions/{id}/payments/                 # list payment records
 POST   /api/v1/subscriptions/{id}/payments/                 # create a payment record
