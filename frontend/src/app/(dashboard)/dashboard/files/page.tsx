@@ -90,6 +90,9 @@ export default function FileInboxPage() {
   const [dragging, setDragging] = useState(false);
   const [uploads, setUploads] = useState<UploadProgress[]>([]);
   const [busyFileId, setBusyFileId] = useState<number | null>(null);
+  // Which file's organize panel (attach / create-document) is open. Collapsed by
+  // default so the inbox stays a clean, scannable list instead of a stack of forms.
+  const [expandedFile, setExpandedFile] = useState<number | null>(null);
   const [previewFile, setPreviewFile] = useState<DocumentFile | null>(null);
   // File whose "create document" form should show a gentle expiry/reminder hint,
   // set when arriving from the scanner's "Add reminder" action.
@@ -148,7 +151,10 @@ export default function FileInboxPage() {
           );
           if (match) {
             if (params.get("intent") === "reminder") {
+              // Expand the file's "Organize" drawer (where the expiry field now
+              // lives) and focus it.
               setReminderHintFileId(match.id);
+              setExpandedFile(match.id);
               requestAnimationFrame(() => {
                 const field = document.getElementById(`expiry-${match.id}`);
                 field?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -829,7 +835,7 @@ export default function FileInboxPage() {
               key={file.id}
               className="rounded-lg border border-border bg-card p-4"
             >
-              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]">
+              <div className="grid gap-3">
                 <div className="min-w-0">
                   <div className="flex min-w-0 items-start gap-3">
                     <input
@@ -854,6 +860,28 @@ export default function FileInboxPage() {
                   <div className="mt-4 flex flex-wrap gap-2">
                     <Button
                       type="button"
+                      size="sm"
+                      onClick={() =>
+                        setExpandedFile(
+                          expandedFile === file.id ? null : file.id,
+                        )
+                      }
+                      aria-expanded={expandedFile === file.id}
+                    >
+                      {expandedFile === file.id ? (
+                        <>
+                          <X className="size-4" />
+                          Close
+                        </>
+                      ) : (
+                        <>
+                          <FolderInput className="size-4" />
+                          Organize
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
                       variant="outline"
                       size="sm"
                       onClick={() => setPreviewFile(file)}
@@ -876,45 +904,6 @@ export default function FileInboxPage() {
                       )}
                       Download
                     </Button>
-                    {pageExtractEnabled &&
-                      file.content_type === "application/pdf" && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openExtract(file)}
-                          disabled={busyFileId === file.id}
-                        >
-                          <Scissors className="size-4" />
-                          Export pages
-                        </Button>
-                      )}
-                    {compressEnabled &&
-                      file.content_type === "application/pdf" && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setCompressTarget(file)}
-                          disabled={busyFileId === file.id}
-                        >
-                          <Minimize2 className="size-4" />
-                          Shrink
-                        </Button>
-                      )}
-                    {redactionEnabled &&
-                      file.content_type === "application/pdf" && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openRedact(file)}
-                          disabled={busyFileId === file.id}
-                        >
-                          <EyeOff className="size-4" />
-                          Redact
-                        </Button>
-                      )}
                     <Button
                       type="button"
                       variant="ghost"
@@ -929,9 +918,62 @@ export default function FileInboxPage() {
                   </div>
                 </div>
 
-                <div className="grid gap-3">
+                {expandedFile === file.id && (
+                <div className="grid gap-3 border-t border-border pt-4">
+                  {file.content_type === "application/pdf" &&
+                    (pageExtractEnabled ||
+                      compressEnabled ||
+                      redactionEnabled) && (
+                      <div className="grid gap-2">
+                        <Label>Document tools</Label>
+                        <div className="flex flex-wrap gap-2">
+                          {pageExtractEnabled && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openExtract(file)}
+                              disabled={busyFileId === file.id}
+                            >
+                              <Scissors className="size-4" />
+                              Export pages
+                            </Button>
+                          )}
+                          {compressEnabled && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setCompressTarget(file)}
+                              disabled={busyFileId === file.id}
+                            >
+                              <Minimize2 className="size-4" />
+                              Shrink
+                            </Button>
+                          )}
+                          {redactionEnabled && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openRedact(file)}
+                              disabled={busyFileId === file.id}
+                            >
+                              <EyeOff className="size-4" />
+                              Redact
+                            </Button>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Each tool creates a new copy — your original is
+                          unchanged.
+                        </p>
+                      </div>
+                    )}
                   <div className="grid gap-2">
-                    <Label htmlFor={`document-${file.id}`}>Attach to document</Label>
+                    <Label htmlFor={`document-${file.id}`}>
+                      Attach to an existing document
+                    </Label>
                     <div className="flex gap-2">
                       <select
                         id={`document-${file.id}`}
@@ -963,7 +1005,9 @@ export default function FileInboxPage() {
                   </div>
 
                   <div className="grid gap-2 rounded-lg border border-border bg-muted/30 p-3">
-                    <Label htmlFor={`title-${file.id}`}>Create document</Label>
+                    <Label htmlFor={`title-${file.id}`}>
+                      Or create a new document
+                    </Label>
                     <Input
                       id={`title-${file.id}`}
                       value={newDocTitle[file.id] ?? ""}
@@ -1090,6 +1134,7 @@ export default function FileInboxPage() {
                     </Button>
                   </div>
                 </div>
+                )}
               </div>
             </article>
           ))}

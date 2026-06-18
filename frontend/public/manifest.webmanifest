@@ -70,5 +70,21 @@
       "url": "/dashboard/emergency",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/mobile.png",
+      "sizes": "824x1784",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Track documents, renewals and deadlines in one calm place"
+    },
+    {
+      "src": "/screenshots/desktop.png",
+      "sizes": "1920x1200",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Your DueNest life-admin dashboard"
+    }
   ]
 }
