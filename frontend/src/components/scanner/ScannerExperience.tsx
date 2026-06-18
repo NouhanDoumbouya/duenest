@@ -1591,7 +1591,7 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
               <h2 className="text-lg font-semibold">{online ? "Saved to File Inbox" : "Scan queued"}</h2>
               <p className="mt-1 max-w-xs text-sm text-slate-400">
                 {online
-                  ? "It's private in your File Inbox. Open it to add an expiry date, category, reminder, or add it to a bundle."
+                  ? "It's saved privately in your File Inbox. Open it any time to add a date, reminder, or category."
                   : "It will upload automatically when you're back online."}
               </p>
             </div>
@@ -1931,8 +1931,8 @@ function IdleScreen(props: {
       <div>
         <h1 className="text-xl font-semibold">Scan a document</h1>
         <p className="mt-2 text-sm text-slate-400">
-          Capture passports, letters, and forms. We auto-detect the edges, flatten the page,
-          and save a clean PDF straight to your encrypted vault.
+          Point your camera at any document — DueNest cleans it up and saves a
+          clean PDF to your vault.
         </p>
         <p className="mt-3 inline-flex items-center gap-1.5 text-xs text-slate-500">
           <ShieldCheck className="size-3.5 text-teal-300/80" aria-hidden="true" />
