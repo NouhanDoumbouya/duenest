@@ -21,7 +21,9 @@ interface BottomNavItem {
   match: (pathname: string) => boolean;
 }
 
-const ITEMS: BottomNavItem[] = [
+// Side destinations — two flank the raised Scan action (Vault on the left,
+// Planning + More on the right).
+const LEFT_ITEMS: BottomNavItem[] = [
   {
     label: "Home",
     href: "/dashboard",
@@ -37,12 +39,9 @@ const ITEMS: BottomNavItem[] = [
         (base) => p === base || p.startsWith(`${base}/`),
       ),
   },
-  {
-    label: "Scan",
-    href: "/dashboard/scanner",
-    icon: ScanLine,
-    match: (p) => p.startsWith("/dashboard/scanner"),
-  },
+];
+
+const RIGHT_ITEMS: BottomNavItem[] = [
   {
     label: "Planning",
     href: "/dashboard/planning",
@@ -54,14 +53,40 @@ const ITEMS: BottomNavItem[] = [
   },
 ];
 
+const scanActive = (p: string) => p.startsWith("/dashboard/scanner");
+
+function NavTab({ item, pathname }: { item: BottomNavItem; pathname: string }) {
+  const active = item.match(pathname);
+  const Icon = item.icon;
+  return (
+    <li className="flex-1">
+      <Link
+        href={item.href}
+        aria-current={active ? "page" : undefined}
+        className={cn(
+          "flex min-h-14 flex-col items-center justify-center gap-1 px-1 py-1.5 text-[0.68rem] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+          active ? "text-primary" : "text-muted-foreground hover:text-foreground",
+        )}
+      >
+        <Icon className="size-5 shrink-0" aria-hidden />
+        {item.label}
+      </Link>
+    </li>
+  );
+}
+
 /**
- * App-like bottom navigation for mobile and installed PWA. Shows the primary
- * destinations within thumb reach and a "More" button that opens the full
- * navigation drawer, so there is a single source of navigation (no duplicate
- * top hamburger). Hidden from `md` up, where the desktop sidebar takes over.
+ * App-like bottom navigation for mobile and installed PWA.
+ *
+ * Scanning is the primary capture action in DueNest, so it is a raised, accented
+ * button in the centre — clearly the main thing, and right under the thumb. The
+ * other destinations flank it, with a "More" button that opens the full
+ * navigation drawer (single source of navigation; no duplicate top hamburger).
+ * Hidden from `md` up, where the desktop sidebar takes over.
  */
 export function BottomNav({ onOpenMore }: { onOpenMore: () => void }) {
   const pathname = usePathname();
+  const onScan = scanActive(pathname);
 
   return (
     <nav
@@ -70,27 +95,41 @@ export function BottomNav({ onOpenMore }: { onOpenMore: () => void }) {
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       <ul className="mx-auto flex max-w-lg items-stretch justify-around">
-        {ITEMS.map((item) => {
-          const active = item.match(pathname);
-          const Icon = item.icon;
-          return (
-            <li key={item.href} className="flex-1">
-              <Link
-                href={item.href}
-                aria-current={active ? "page" : undefined}
-                className={cn(
-                  "flex min-h-14 flex-col items-center justify-center gap-1 px-1 py-1.5 text-[0.68rem] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
-                  active
-                    ? "text-primary"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                <Icon className="size-5 shrink-0" aria-hidden />
-                {item.label}
-              </Link>
-            </li>
-          );
-        })}
+        {LEFT_ITEMS.map((item) => (
+          <NavTab key={item.href} item={item} pathname={pathname} />
+        ))}
+
+        {/* Raised primary action: Scan. */}
+        <li className="flex flex-1 justify-center">
+          <Link
+            href="/dashboard/scanner"
+            aria-label="Scan a document"
+            aria-current={onScan ? "page" : undefined}
+            className="flex min-h-14 flex-col items-center justify-end gap-1 px-1 pb-1.5 focus-visible:outline-none"
+          >
+            <span
+              className={cn(
+                "-mt-5 flex size-12 items-center justify-center rounded-full border-4 border-card bg-primary text-primary-foreground shadow-lg transition-transform hover:bg-primary/90 active:scale-95",
+                onScan && "ring-2 ring-primary/30",
+              )}
+            >
+              <ScanLine className="size-6 shrink-0" aria-hidden />
+            </span>
+            <span
+              className={cn(
+                "text-[0.68rem] font-medium",
+                onScan ? "text-primary" : "text-muted-foreground",
+              )}
+            >
+              Scan
+            </span>
+          </Link>
+        </li>
+
+        {RIGHT_ITEMS.map((item) => (
+          <NavTab key={item.href} item={item} pathname={pathname} />
+        ))}
+
         <li className="flex-1">
           <button
             type="button"
