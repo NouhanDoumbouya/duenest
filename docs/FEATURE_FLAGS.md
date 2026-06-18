@@ -88,11 +88,21 @@ python manage.py seed_feature_flags          # create missing rows (idempotent)
 python manage.py seed_feature_flags --reset  # also reset rows to registry defaults
 ```
 
-All keys seed `enabled` (except `founder_console` → `founder_only`). Recommended
-beta postures a founder may choose: set newer/sensitive features (e.g.
-`emergency_public_viewer`, `secure_rooms`, `organizations`) to `beta_only` until
-real-user QA is done; `email_reminders` stays `enabled` in dev but production
-delivery is separately not configured (see `PRIVATE_BETA_READINESS.md`).
+All keys seed `enabled` except `founder_console` and the **advanced scanner /
+document-preparation tools**, which seed `founder_only`:
+`scanner_advanced_tools`, `scan_to_safesend`, `scan_to_bundle`,
+`scan_to_reminder`, `scan_safe_copy`, `scan_watermark`, `scan_compression`,
+`scan_page_export`, `scan_redaction`. These stay invisible to normal users until
+a founder launches each one (`beta_only` / `enabled`). They mostly gate UI
+affordances on the scanner success screen; the underlying risky actions reuse
+already server-gated flows (e.g. Quick Share create is enforced by `quick_share`
+regardless of `scan_to_safesend`). See `DOCUMENT_SCANNER.md`.
+
+Recommended beta postures a founder may choose: set newer/sensitive features
+(e.g. `emergency_public_viewer`, `secure_rooms`, `organizations`) to `beta_only`
+until real-user QA is done; `email_reminders` stays `enabled` in dev but
+production delivery is separately not configured (see
+`PRIVATE_BETA_READINESS.md`).
 
 ## Emergency rollback
 

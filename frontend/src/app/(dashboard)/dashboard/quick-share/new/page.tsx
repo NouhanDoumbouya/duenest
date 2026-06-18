@@ -32,7 +32,7 @@ import { Label } from "@/components/ui/label";
 import { PageContainer } from "@/components/ui/page-container";
 import { InlineAlert } from "@/components/ui/product-ui";
 import { ApiError } from "@/lib/api";
-import { formatFileSize } from "@/lib/document-files";
+import { formatFileSize, getFileInbox } from "@/lib/document-files";
 import { createQuickShare } from "@/lib/quick-share";
 import { setQuickShareHandoff } from "@/lib/quick-share-handoff";
 import {
@@ -121,6 +121,42 @@ export default function NewQuickSharePage() {
       setRecentRecipients(loadRecentRecipients());
       setSavedSettings(loadLastShareSettings());
     });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Preselect a file handed off from the scanner
+  // (/dashboard/quick-share/new?file=<id>) so "Share safely" opens a draft with
+  // the scan already chosen. Best-effort and non-blocking: if the file can't be
+  // resolved we simply start with an empty selection. setState lands in the
+  // async .then, never synchronously in the effect body.
+  useEffect(() => {
+    const target = new URLSearchParams(window.location.search).get("file");
+    if (!target) return;
+    const id = Number(target);
+    if (!Number.isFinite(id)) return;
+    let active = true;
+    getFileInbox()
+      .then((res) => {
+        if (!active) return;
+        const match = res.results.find((file) => file.id === id);
+        if (!match) return;
+        setSelected((prev) => {
+          if (prev.has(match.id)) return prev;
+          const next = new Map(prev);
+          next.set(match.id, {
+            id: match.id,
+            name: match.original_filename,
+            size: match.file_size,
+            documentTitle: match.document_title || match.original_filename,
+          });
+          return next;
+        });
+      })
+      .catch(() => {
+        /* non-blocking: start empty if the handoff file can't be loaded */
+      });
     return () => {
       active = false;
     };

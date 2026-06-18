@@ -50,6 +50,21 @@ FEATURE_DEFINITIONS: list[dict] = [
     {"key": "invite_signup", "name": "Invite signup", "default": Visibility.ENABLED, "description": "Invite-code registration."},
     {"key": "feedback", "name": "Feedback", "default": Visibility.ENABLED, "description": "Feedback submissions."},
     {"key": "founder_console", "name": "Founder Console", "default": Visibility.FOUNDER_ONLY, "description": "Founder tools."},
+    # --- Advanced scanner / document-preparation tools -------------------
+    # These are new differentiators (prepare/protect/organize/share scanned
+    # documents). They default to FOUNDER_ONLY so they are NOT visible to
+    # normal users until a founder deliberately launches each one (beta_only
+    # / enabled). `scanner_advanced_tools` is the master gate for the whole
+    # surface; the per-tool keys allow launching tools one at a time.
+    {"key": "scanner_advanced_tools", "name": "Scanner — advanced tools", "default": Visibility.FOUNDER_ONLY, "description": "Master gate for advanced scanner/document-preparation tools."},
+    {"key": "scan_to_safesend", "name": "Scanner — share safely", "default": Visibility.FOUNDER_ONLY, "description": "Continue a scanned document into Quick Share / SafeSend."},
+    {"key": "scan_to_bundle", "name": "Scanner — add to bundle", "default": Visibility.FOUNDER_ONLY, "description": "Add a scanned document to an application/renewal bundle."},
+    {"key": "scan_to_reminder", "name": "Scanner — add reminder", "default": Visibility.FOUNDER_ONLY, "description": "Create an expiry/deadline reminder from a scanned document."},
+    {"key": "scan_safe_copy", "name": "Scanner — prepare copy", "default": Visibility.FOUNDER_ONLY, "description": "Create a prepared copy (the original is never modified)."},
+    {"key": "scan_watermark", "name": "Scanner — watermark", "default": Visibility.FOUNDER_ONLY, "description": "Burn a label watermark into a prepared/exported copy."},
+    {"key": "scan_compression", "name": "Scanner — compress PDF", "default": Visibility.FOUNDER_ONLY, "description": "Create a smaller PDF copy for uploads/portals."},
+    {"key": "scan_page_export", "name": "Scanner — export selected pages", "default": Visibility.FOUNDER_ONLY, "description": "Export only selected scanned pages as a new copy (also covers combining scanned pages into one PDF)."},
+    {"key": "scan_redaction", "name": "Scanner — redact (experimental)", "default": Visibility.FOUNDER_ONLY, "description": "Burn-in redaction on scanned image pages. Experimental; founder-only."},
 ]
 
 FEATURE_KEYS = [d["key"] for d in FEATURE_DEFINITIONS]

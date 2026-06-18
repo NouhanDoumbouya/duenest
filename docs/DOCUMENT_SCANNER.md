@@ -272,3 +272,54 @@ CLAMD_FAIL_CLOSED=True
 OpenCV edge detection, torch, device orientation, voice commands, haptics, and
 Background Sync. These are implemented with feature detection + graceful
 fallbacks but should be QA'd on a physical phone over HTTPS.
+
+---
+
+## Advanced document-preparation tools (controlled launch)
+
+Beyond capture→save, the scanner offers optional **prepare / protect / organize /
+share** steps. The basic flow (capture → review → fix → save) is unchanged; every
+advanced affordance appears only on the post-save success screen and only when
+its feature flag is enabled for the viewer, so normal users never see an
+unlaunched tool.
+
+All keys live in the central registry (`apps/features/models.py`) and default to
+**`founder_only`** — coded, testable, and deployable, but invisible until a
+founder deliberately launches each one (`beta_only` / `enabled`). See
+[FEATURE_FLAGS.md](./FEATURE_FLAGS.md).
+
+| Flag key | Tool | Notes |
+| --- | --- | --- |
+| `scan_to_safesend` | "Share safely" → Quick Share with the scan preselected | Reuses the existing, server-gated `quick_share` flow; no link is created without explicit confirmation. |
+| `scan_to_bundle` | "Add to bundle" → bundles area | Honest route only; the scan is in File Inbox. Deep one-tap linking is backlog (see below). |
+| `scan_to_reminder` | "Add reminder" → File Inbox with the file's expiry field focused | Reminders derive from a document's expiry date; no AI extraction. |
+| `scanner_advanced_tools` | Master gate for the "Prepare copy" tools surface | Per-tool keys below also apply. |
+| `scan_safe_copy` | "Prepare copy" — create a new file; original never modified | |
+| `scan_watermark` | Burned-in watermark on the prepared copy | Rasterised into the image (`lib/scanner/watermark.ts`); non-recoverable, but a **labelling aid, not a security control**. |
+| `scan_compression` | Smaller / Standard / High-quality tiers + before→after size | No guaranteed target size. |
+| `scan_page_export` | Choose which scanned pages go into the copy | Also covers combining scanned pages into one PDF. |
+| `scan_redaction` | Burn-in area redaction on scanned image pages | Experimental; founder-only. See redaction section when implemented. |
+
+The copy pipeline reuses the same `buildPageCanvases()` as save, so a prepared
+copy is byte-identical in construction to a normal save plus the chosen
+transforms. Copies upload as a **separate `…-copy.pdf` inbox file**; the original
+is never overwritten.
+
+### Backlog (deferred, with reasons)
+
+These need PDF **parsing/rasterisation** (`pdf-lib` / `pdf.js`), which is not a
+dependency today. Adding them is a separate, scoped branch — they are **not**
+faked in the UI:
+
+- **Cross-file / Vault merge** (e.g. passport + visa + certificate from existing
+  files). In-session combine of scanned pages is supported; merging *existing*
+  PDFs is deferred. (`feature/pdf-lib-document-tools`)
+- **Importing an existing PDF into a scan session.** `onImportFile` currently
+  handles images only; PDF import needs `pdf.js` rasterisation.
+- **Compress / split / redact an arbitrary existing Vault PDF.** Safe only with a
+  real PDF toolkit; today these operate on the in-session scanned canvases.
+- **Secure redaction of text-layer PDFs.** Redaction is only non-recoverable on
+  rasterised scanner output; doing it safely on text PDFs requires flattening via
+  a PDF toolkit. (`feature/secure-redaction-tools`)
+- **Scan-to-Bundle deep link** into a specific requirement (wire the existing
+  `linkRequirementFile` endpoint into the requirement UI). (`feature/scan-to-bundle-deep-link`)

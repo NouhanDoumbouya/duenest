@@ -75,6 +75,11 @@ export default function FileInboxPage() {
   const [uploads, setUploads] = useState<UploadProgress[]>([]);
   const [busyFileId, setBusyFileId] = useState<number | null>(null);
   const [previewFile, setPreviewFile] = useState<DocumentFile | null>(null);
+  // File whose "create document" form should show a gentle expiry/reminder hint,
+  // set when arriving from the scanner's "Add reminder" action.
+  const [reminderHintFileId, setReminderHintFileId] = useState<number | null>(
+    null,
+  );
   const [selectedDocument, setSelectedDocument] = useState<Record<number, string>>({});
   const [newDocTitle, setNewDocTitle] = useState<Record<number, string>>({});
   const [newDocType, setNewDocType] = useState<Record<number, string>>({});
@@ -98,6 +103,31 @@ export default function FileInboxPage() {
         setFiles(fileResult.results);
         setDocuments(documentResult.results);
         setCategories(categoryResult);
+        // Deep link from the scanner success state
+        // (/dashboard/files?file=<id>[&intent=reminder]): with reminder intent
+        // we focus the file's expiry field so the user can set a renewal date;
+        // otherwise we open its preview. Then drop the params so a refresh or
+        // back-navigation doesn't repeat the action.
+        const params = new URLSearchParams(window.location.search);
+        const target = params.get("file");
+        if (target) {
+          const match = fileResult.results.find(
+            (file) => file.id === Number(target),
+          );
+          if (match) {
+            if (params.get("intent") === "reminder") {
+              setReminderHintFileId(match.id);
+              requestAnimationFrame(() => {
+                const field = document.getElementById(`expiry-${match.id}`);
+                field?.scrollIntoView({ behavior: "smooth", block: "center" });
+                (field as HTMLInputElement | null)?.focus();
+              });
+            } else {
+              setPreviewFile(match);
+            }
+            window.history.replaceState(null, "", window.location.pathname);
+          }
+        }
       })
       .catch((err) => {
         if (!active) return;
@@ -698,6 +728,12 @@ export default function FileInboxPage() {
                             }))
                           }
                         />
+                        {reminderHintFileId === file.id && (
+                          <p className="mt-1 text-xs text-primary">
+                            Add an expiry date, then create the document to track
+                            its renewal.
+                          </p>
+                        )}
                       </div>
                       <div>
                         <Label

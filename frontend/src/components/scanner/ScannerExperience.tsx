@@ -1,17 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
+  Bell,
   Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Copy,
   Crop,
+  EyeOff,
   FileText,
   FlashlightOff,
   Flashlight,
   Image as ImageIcon,
+  Layers,
   Loader2,
   Maximize,
   Mic,
@@ -22,6 +27,7 @@ import {
   RotateCcw,
   RotateCw,
   ScanSearch,
+  Share2,
   ShieldCheck,
   SlidersHorizontal,
   Upload,
@@ -30,6 +36,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { getFeatureMap, type FeatureState } from "@/lib/features";
 import { cn } from "@/lib/utils";
 import {
   detectCapabilities,
@@ -71,6 +78,8 @@ import {
   type ScanQualityWarning,
 } from "@/lib/scanner/quality";
 import { formatBytes, generatePdfBlob } from "@/lib/scanner/pdf";
+import { applyWatermark } from "@/lib/scanner/watermark";
+import { applyRedactions, type RedactionRect } from "@/lib/scanner/redaction";
 import { uploadScan, flushQueuedScans } from "@/lib/scanner/client";
 import { enqueueScan, listQueuedScans, purgeStale } from "@/lib/scanner/queue";
 import {
@@ -87,6 +96,8 @@ import type {
 } from "@/lib/scanner/types";
 import { useToast } from "./Toasts";
 import { CropEditor } from "./CropEditor";
+import { PrepareCopySheet, type PreparedCopyOptions } from "./PrepareCopySheet";
+import { RedactionEditor } from "./RedactionEditor";
 
 type Phase = "idle" | "camera" | "cropping" | "enhancing" | "done";
 
@@ -119,6 +130,7 @@ const DETECTION_COPY: Record<DetectionState, string> = {
 
 export function ScannerExperience({ onClose }: { onClose: () => void }) {
   const { showToast } = useToast();
+  const router = useRouter();
 
   const [phase, setPhase] = useState<Phase>("idle");
   const [caps] = useState<ScannerCapabilities>(() => detectCapabilities());
@@ -145,6 +157,23 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [docName, setDocName] = useState("");
   const [pdfSize, setPdfSize] = useState<number | null>(null);
+  // Id of the inbox file created by the last successful upload (online only).
+  // Lets the success state deep-link straight to the saved file.
+  const [savedFileId, setSavedFileId] = useState<number | null>(null);
+  // Resolved feature availability for the current viewer. Advanced "next step"
+  // connectors (share / bundle / reminder) stay hidden unless their flag is on,
+  // so they never appear for normal users until a founder launches them.
+  const [features, setFeatures] = useState<Record<string, FeatureState>>({});
+  // "Prepare copy" sheet + the id of the prepared copy once created. The copy is
+  // always a new inbox file; the original saved scan is never modified.
+  const [prepareCopyOpen, setPrepareCopyOpen] = useState(false);
+  const [copySavedFileId, setCopySavedFileId] = useState<number | null>(null);
+  const [copySavedSize, setCopySavedSize] = useState<number | null>(null);
+  // Redaction editor: open state + the page canvases snapshot it edits.
+  const [redactOpen, setRedactOpen] = useState(false);
+  const [redactPages, setRedactPages] = useState<HTMLCanvasElement[] | null>(
+    null,
+  );
   const [busy, setBusy] = useState(false);
   const [online, setOnline] = useState(() =>
     typeof navigator === "undefined" ? true : navigator.onLine,
@@ -420,6 +449,77 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
     onClose();
   }, [onClose, stopEverything]);
 
+  // Land the user on the exact file they just saved (File Inbox opens its
+  // preview via the ?file= deep link). Falls back to a plain close if we have
+  // no id yet (e.g. an offline scan that is still queued).
+  const viewSavedFile = useCallback(() => {
+    stopEverything();
+    if (savedFileId !== null) {
+      router.push(`/dashboard/files?file=${savedFileId}`);
+    } else {
+      onClose();
+    }
+  }, [onClose, router, savedFileId, stopEverything]);
+
+  // Whether a gated tool/connector is available to this viewer. Defaults to
+  // hidden if the map hasn't loaded or the key is unknown.
+  const featureEnabled = useCallback(
+    (key: string) => features[key]?.enabled ?? false,
+    [features],
+  );
+
+  // Continue the just-saved scan into the Quick Share / SafeSend wizard with the
+  // file preselected. No share/link is created here — the wizard owns all access
+  // decisions and requires explicit confirmation.
+  const shareSafely = useCallback(() => {
+    if (savedFileId === null) return;
+    stopEverything();
+    router.push(`/dashboard/quick-share/new?file=${savedFileId}`);
+  }, [router, savedFileId, stopEverything]);
+
+  // Take the user to the bundles area to organize this scan into an application
+  // pack. The scan is already saved in File Inbox; deep one-tap linking into a
+  // specific requirement is intentionally deferred (see backlog), so we route
+  // honestly rather than imply the file was auto-added.
+  const addToBundle = useCallback(() => {
+    stopEverything();
+    router.push("/dashboard/bundles");
+  }, [router, stopEverything]);
+
+  // Help the user track an expiry/renewal for this scan. Reminders are derived
+  // from a document's expiry date, so we route to the saved file in File Inbox
+  // with reminder intent, which focuses the expiry field on its "create
+  // document" form. No fake auto-extraction — the user enters the date.
+  const addReminder = useCallback(() => {
+    if (savedFileId === null) return;
+    stopEverything();
+    router.push(`/dashboard/files?file=${savedFileId}&intent=reminder`);
+  }, [router, savedFileId, stopEverything]);
+
+  // Open the prepared copy (a distinct inbox file) in File Inbox.
+  const viewCopy = useCallback(() => {
+    if (copySavedFileId === null) return;
+    stopEverything();
+    router.push(`/dashboard/files?file=${copySavedFileId}`);
+  }, [copySavedFileId, router, stopEverything]);
+
+  // Resolve which advanced connectors this viewer may see. setState lands in the
+  // async .then (never synchronously in the effect body); failure leaves every
+  // gated connector hidden, which is the safe default.
+  useEffect(() => {
+    let active = true;
+    getFeatureMap()
+      .then((map) => {
+        if (active) setFeatures(map.features);
+      })
+      .catch(() => {
+        /* keep connectors hidden if availability can't be resolved */
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   // ---- voice ------------------------------------------------------------
   const toggleVoice = useCallback(() => {
     if (voiceOn) {
@@ -560,9 +660,10 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
   }, [phase, enhancedCanvas]);
 
   // ---- save / upload ----------------------------------------------------
-  const saveAndUpload = useCallback(async () => {
-    // All committed pages (rendered with their own filter), with the page on
-    // screen now inserted at its slot (when re-editing) or appended, → one PDF.
+  // All committed pages (rendered with their own filter), with the page on
+  // screen now inserted at its slot (when re-editing) or appended. Shared by
+  // the normal save and the "prepare copy" flow so they stay identical.
+  const buildPageCanvases = useCallback((): HTMLCanvasElement[] => {
     const canvases = pages.map((p) => renderPage(p.base, p.filterId, p.adjust));
     if (enhancedCanvas) {
       if (editingIndex !== null && editingIndex <= canvases.length) {
@@ -571,6 +672,11 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
         canvases.push(enhancedCanvas);
       }
     }
+    return canvases;
+  }, [pages, enhancedCanvas, editingIndex]);
+
+  const saveAndUpload = useCallback(async () => {
+    const canvases = buildPageCanvases();
     if (canvases.length === 0) return;
     setBusy(true);
     setProgress("Preparing PDF…");
@@ -608,7 +714,8 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
 
     try {
       setProgress("Uploading…");
-      await uploadScan(blob, filename);
+      const result = await uploadScan(blob, filename);
+      setSavedFileId(result.document_id);
       setBusy(false);
       setProgress(null);
       setPhase("done");
@@ -629,7 +736,101 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
       showToast(`${message} Saved locally to retry.`, "error");
       announce("Scan queued for upload when online");
     }
-  }, [announce, docName, editingIndex, enhancedCanvas, exportQuality, online, pages, refreshQueue, showToast]);
+  }, [announce, buildPageCanvases, docName, exportQuality, online, refreshQueue, showToast]);
+
+  // Create a prepared *copy* of the current scan as a new inbox file, with an
+  // optional burned-in watermark. The original saved scan is never touched.
+  const createPreparedCopy = useCallback(
+    async (opts: PreparedCopyOptions) => {
+      const all = buildPageCanvases();
+      const chosen = opts.selectedIndices
+        ? opts.selectedIndices.map((i) => all[i]).filter(Boolean)
+        : all;
+      if (chosen.length === 0) return;
+      const watermark = opts.watermark;
+      setBusy(true);
+      setProgress(watermark ? "Adding watermark…" : "Preparing copy…");
+      announce(watermark ? "Adding watermark" : "Preparing copy");
+      try {
+        const pagesOut = watermark
+          ? chosen.map((c) => applyWatermark(c, watermark))
+          : chosen;
+        const blob = await generatePdfBlob(pagesOut, { quality: opts.quality });
+        setProgress("Uploading…");
+        const result = await uploadScan(
+          blob,
+          `${buildScanBasename(docName)}-copy.pdf`,
+        );
+        setCopySavedFileId(result.document_id);
+        setCopySavedSize(blob.size);
+        setPrepareCopyOpen(false);
+        setBusy(false);
+        setProgress(null);
+        showToast("Saved as a new copy. Your original is unchanged.", "success");
+        announce("Copy saved");
+      } catch {
+        setBusy(false);
+        setProgress(null);
+        showToast(
+          "Couldn't create the copy. Your original is unchanged.",
+          "error",
+        );
+      }
+    },
+    [announce, buildPageCanvases, docName, showToast],
+  );
+
+  // Snapshot the current pages and open the redaction editor.
+  const openRedaction = useCallback(() => {
+    const canvases = buildPageCanvases();
+    if (canvases.length === 0) return;
+    setRedactPages(canvases);
+    setRedactOpen(true);
+  }, [buildPageCanvases]);
+
+  // Burn the chosen rectangles into each page (opaque, non-recoverable) and
+  // upload the result as a new redacted copy. Original is never modified.
+  const createRedactedCopy = useCallback(
+    async (rectsPerPage: RedactionRect[][]) => {
+      const source = redactPages;
+      if (!source || source.length === 0) return;
+      setBusy(true);
+      setProgress("Creating redacted copy…");
+      announce("Creating redacted copy");
+      try {
+        const pagesOut = source.map((c, i) =>
+          applyRedactions(c, rectsPerPage[i] ?? []),
+        );
+        const blob = await generatePdfBlob(pagesOut, {
+          quality: exportQuality === "hd" ? 0.92 : 0.72,
+        });
+        setProgress("Uploading…");
+        const result = await uploadScan(
+          blob,
+          `${buildScanBasename(docName)}-redacted.pdf`,
+        );
+        setCopySavedFileId(result.document_id);
+        setCopySavedSize(blob.size);
+        setRedactOpen(false);
+        setRedactPages(null);
+        setBusy(false);
+        setProgress(null);
+        showToast(
+          "Redacted copy created. Your original is unchanged.",
+          "success",
+        );
+        announce("Redacted copy created");
+      } catch {
+        setBusy(false);
+        setProgress(null);
+        showToast(
+          "Couldn't create the redacted copy. Your original is unchanged.",
+          "error",
+        );
+      }
+    },
+    [announce, docName, exportQuality, redactPages, showToast],
+  );
 
   // ---- navigation helpers ----------------------------------------------
   const goToCamera = useCallback(() => {
@@ -779,6 +980,11 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
     setPages([]);
     setDocName("");
     setEditingIndex(null);
+    setSavedFileId(null);
+    setCopySavedFileId(null);
+    setCopySavedSize(null);
+    setRedactOpen(false);
+    setRedactPages(null);
     retake();
   }, [retake]);
 
@@ -1314,7 +1520,7 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
               <h2 className="text-lg font-semibold">{online ? "Saved to File Inbox" : "Scan queued"}</h2>
               <p className="mt-1 max-w-xs text-sm text-slate-400">
                 {online
-                  ? "It's safe in your File Inbox. Organize it to add an expiry date, category, reminder, or add it to a bundle."
+                  ? "It's private in your File Inbox. Open it to add an expiry date, category, reminder, or add it to a bundle."
                   : "It will upload automatically when you're back online."}
               </p>
             </div>
@@ -1322,11 +1528,142 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
               <Button variant="outline" onClick={scanAnother} className="border-white/20 bg-white/5 text-slate-100 hover:bg-white/10">
                 <FileText className="size-4" aria-hidden="true" /> Scan another
               </Button>
-              <Button onClick={handleClose} className="bg-teal-500 text-slate-950 hover:bg-teal-400">
-                {online ? "Organize in File Inbox" : "Done"}
-              </Button>
+              {online && savedFileId !== null ? (
+                <Button onClick={viewSavedFile} className="bg-teal-500 text-slate-950 hover:bg-teal-400">
+                  View file
+                </Button>
+              ) : (
+                <Button onClick={handleClose} className="bg-teal-500 text-slate-950 hover:bg-teal-400">
+                  {online ? "Go to File Inbox" : "Done"}
+                </Button>
+              )}
             </div>
+
+            {/* Optional next steps — each stays hidden unless its feature flag
+                is enabled for this viewer, so normal users never see an
+                unlaunched tool. */}
+            {online &&
+              savedFileId !== null &&
+              (featureEnabled("scan_to_safesend") ||
+                featureEnabled("scan_to_bundle") ||
+                featureEnabled("scan_to_reminder")) && (
+                <div className="flex flex-col items-center gap-3 border-t border-white/10 pt-4">
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    {featureEnabled("scan_to_safesend") && (
+                      <Button
+                        variant="ghost"
+                        onClick={shareSafely}
+                        className="text-slate-200 hover:bg-white/5 hover:text-white"
+                      >
+                        <Share2 className="size-4" aria-hidden="true" /> Share safely
+                      </Button>
+                    )}
+                    {featureEnabled("scan_to_bundle") && (
+                      <Button
+                        variant="ghost"
+                        onClick={addToBundle}
+                        className="text-slate-200 hover:bg-white/5 hover:text-white"
+                      >
+                        <Layers className="size-4" aria-hidden="true" /> Add to bundle
+                      </Button>
+                    )}
+                    {featureEnabled("scan_to_reminder") && (
+                      <Button
+                        variant="ghost"
+                        onClick={addReminder}
+                        className="text-slate-200 hover:bg-white/5 hover:text-white"
+                      >
+                        <Bell className="size-4" aria-hidden="true" /> Add reminder
+                      </Button>
+                    )}
+                  </div>
+                  {featureEnabled("scan_to_safesend") && (
+                    <p className="max-w-xs text-xs text-slate-500">
+                      No public link is created — you&apos;ll review who can access it before sharing.
+                    </p>
+                  )}
+                </div>
+              )}
+
+            {/* Advanced document tools (master-gated). Every tool here produces
+                a NEW file and never touches the original. */}
+            {online &&
+              savedFileId !== null &&
+              featureEnabled("scanner_advanced_tools") &&
+              (featureEnabled("scan_safe_copy") ||
+                featureEnabled("scan_redaction")) &&
+              (copySavedFileId !== null ? (
+                <div className="flex flex-col items-center gap-2 border-t border-white/10 pt-4">
+                  <p className="text-sm text-slate-300">
+                    Saved as a new copy.{" "}
+                    <span className="text-slate-500">Original preserved.</span>
+                  </p>
+                  {pdfSize !== null && copySavedSize !== null && (
+                    <p className="text-xs text-slate-500">
+                      {formatBytes(pdfSize)} → {formatBytes(copySavedSize)}
+                    </p>
+                  )}
+                  <Button
+                    variant="ghost"
+                    onClick={viewCopy}
+                    className="text-slate-200 hover:bg-white/5 hover:text-white"
+                  >
+                    <FileText className="size-4" aria-hidden="true" /> View copy
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-1 border-t border-white/10 pt-4">
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    {featureEnabled("scan_safe_copy") && (
+                      <Button
+                        variant="ghost"
+                        onClick={() => setPrepareCopyOpen(true)}
+                        className="text-slate-200 hover:bg-white/5 hover:text-white"
+                      >
+                        <Copy className="size-4" aria-hidden="true" /> Prepare copy
+                      </Button>
+                    )}
+                    {featureEnabled("scan_redaction") && (
+                      <Button
+                        variant="ghost"
+                        onClick={openRedaction}
+                        className="text-slate-200 hover:bg-white/5 hover:text-white"
+                      >
+                        <EyeOff className="size-4" aria-hidden="true" /> Redact area
+                      </Button>
+                    )}
+                  </div>
+                  <p className="max-w-xs text-xs text-slate-500">
+                    Make a copy for sharing or submission. This won&apos;t change
+                    your original.
+                  </p>
+                </div>
+              ))}
           </div>
+        )}
+
+        {prepareCopyOpen && (
+          <PrepareCopySheet
+            pageCount={pages.length + (enhancedCanvas ? 1 : 0)}
+            pageExportEnabled={featureEnabled("scan_page_export")}
+            compressionEnabled={featureEnabled("scan_compression")}
+            watermarkEnabled={featureEnabled("scan_watermark")}
+            busy={busy}
+            onClose={() => setPrepareCopyOpen(false)}
+            onCreate={createPreparedCopy}
+          />
+        )}
+
+        {redactOpen && redactPages && (
+          <RedactionEditor
+            pages={redactPages}
+            busy={busy}
+            onCancel={() => {
+              setRedactOpen(false);
+              setRedactPages(null);
+            }}
+            onCreate={createRedactedCopy}
+          />
         )}
 
         {flash && <div className="pointer-events-none absolute inset-0 z-50 bg-white animate-out fade-out duration-200" />}
