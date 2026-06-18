@@ -67,6 +67,7 @@ FEATURE_DEFINITIONS: list[dict] = [
     {"key": "scan_redaction", "name": "Scanner — redact (experimental)", "default": Visibility.FOUNDER_ONLY, "description": "Burn-in redaction on scanned image pages. Experimental; founder-only."},
     {"key": "document_merge", "name": "Documents — merge PDFs", "default": Visibility.FOUNDER_ONLY, "description": "Combine selected File Inbox PDFs into one new PDF (client-side; originals preserved)."},
     {"key": "document_page_extract", "name": "Documents — export PDF pages", "default": Visibility.FOUNDER_ONLY, "description": "Export selected pages of a File Inbox PDF as a new PDF (client-side; original preserved)."},
+    {"key": "document_redaction", "name": "Documents — redact PDF (experimental)", "default": Visibility.FOUNDER_ONLY, "description": "Flatten a File Inbox PDF to images and burn in redaction areas (non-recoverable). Experimental; founder-only."},
 ]
 
 FEATURE_KEYS = [d["key"] for d in FEATURE_DEFINITIONS]

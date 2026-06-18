@@ -314,19 +314,24 @@ is never overwritten.
 - **Export selected pages (split)** — per-PDF "Export pages" action picks pages
   into a new PDF. Gated by `document_page_extract`. See `lib/pdf/extract.ts`.
 
-Both copy pages structurally (no rasterisation, no quality loss; bytes never
-leave the browser; originals preserved); both `founder_only`.
+Merge + export copy pages structurally (no rasterisation, no quality loss;
+bytes never leave the browser; originals preserved); both `founder_only`.
 
-Still deferred — these need PDF **rasterisation** (`pdf.js`) or a heavier
-toolkit, which is not a dependency today. Each is a separate, scoped branch and
-is **not** faked in the UI:
+- **Secure redaction of existing PDFs** — per-PDF "Redact" action rasterises the
+  PDF with `pdf.js` (`lib/pdf/rasterize.ts`), reuses the scanner `RedactionEditor`
+  to draw areas, burns opaque rectangles in, and rebuilds an **image-only** PDF
+  (no text layer survives → redacted content is non-recoverable). Gated by
+  `document_redaction` (experimental, `founder_only`). The original is untouched;
+  the result is a new `…-redacted.pdf`. **Note:** `pdf.js`'s worker is loaded
+  from a CDN pinned to the bundled version (same runtime-CDN model as OpenCV);
+  the document bytes are processed locally and never uploaded.
 
-- **Importing an existing PDF into a scan session.** `onImportFile` currently
-  handles images only; PDF import needs `pdf.js` rasterisation.
-- **Compress an arbitrary existing PDF.** True re-compression needs rasterise +
-  re-encode (`pdf.js`); today compression applies to in-session scanned canvases.
-- **Secure redaction of text-layer PDFs.** Redaction is only non-recoverable on
-  rasterised scanner output; doing it safely on text PDFs requires flattening via
-  rasterisation. (`feature/secure-redaction-tools`)
+Still deferred — separate, scoped branches; **not** faked in the UI:
+
+- **Importing an existing PDF into a scan session.** `onImportFile` handles
+  images only; could reuse `rasterizePdf` to feed PDF pages into the scanner.
+- **Compress an arbitrary existing PDF.** Rasterise + re-encode would lose the
+  text layer and can *bloat* text PDFs, so it's only worthwhile for scanned /
+  image-heavy PDFs — deferred until that trade-off is worth surfacing honestly.
 - **Scan-to-Bundle deep link** into a specific requirement (wire the existing
   `linkRequirementFile` endpoint into the requirement UI). (`feature/scan-to-bundle-deep-link`)

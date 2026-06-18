@@ -8,6 +8,7 @@ import {
   Download,
   Eye,
   FolderInput,
+  EyeOff,
   Loader2,
   Plus,
   Scissors,
@@ -20,6 +21,7 @@ import {
 import { useFeature } from "@/components/features/feature-flags-provider";
 import { DocumentFileViewer } from "@/components/documents/document-file-viewer";
 import { ExtractPagesDialog } from "@/components/documents/extract-pages-dialog";
+import { RedactionEditor } from "@/components/scanner/RedactionEditor";
 import { FileThumbnail } from "@/components/documents/file-thumbnail";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -47,6 +49,9 @@ import {
 import { getDocuments, listDocumentCategories } from "@/lib/documents";
 import { mergePdfs } from "@/lib/pdf/merge";
 import { extractPages, getPdfPageCount } from "@/lib/pdf/extract";
+import { rasterizePdf } from "@/lib/pdf/rasterize";
+import { generatePdfBlob } from "@/lib/scanner/pdf";
+import { applyRedactions, type RedactionRect } from "@/lib/scanner/redaction";
 import { cn } from "@/lib/utils";
 import type { DocumentFile } from "@/types/document-files";
 import type { DocumentCategory, DocumentRecord } from "@/types/documents";
@@ -103,6 +108,12 @@ export default function FileInboxPage() {
   const [extractBytes, setExtractBytes] = useState<ArrayBuffer | null>(null);
   const [extractPageCount, setExtractPageCount] = useState<number | null>(null);
   const [extractBusy, setExtractBusy] = useState(false);
+  // PDF redaction: the file being redacted + its rasterized page canvases.
+  const [redactTarget, setRedactTarget] = useState<DocumentFile | null>(null);
+  const [redactPages, setRedactPages] = useState<HTMLCanvasElement[] | null>(
+    null,
+  );
+  const [redactBusy, setRedactBusy] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -462,6 +473,65 @@ export default function FileInboxPage() {
     }
   }
 
+  async function openRedact(file: DocumentFile) {
+    setBusyFileId(file.id);
+    setError(null);
+    try {
+      const buffer = await (
+        await getInboxFileDownloadBlob(file.id)
+      ).arrayBuffer();
+      const pages = await rasterizePdf(buffer);
+      if (pages.length === 0) throw new Error("That PDF has no pages.");
+      setRedactPages(pages);
+      setRedactTarget(file);
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : "Couldn't open that PDF for redaction.",
+      );
+    } finally {
+      setBusyFileId(null);
+    }
+  }
+
+  function closeRedact() {
+    setRedactTarget(null);
+    setRedactPages(null);
+  }
+
+  async function confirmRedact(rectsPerPage: RedactionRect[][]) {
+    if (!redactTarget || !redactPages) return;
+    setRedactBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      // Burn opaque rectangles into the rasterized pages, then rebuild an
+      // image-only PDF. The output has no text layer, so redacted content is
+      // non-recoverable. The original file is never modified.
+      const burned = redactPages.map((canvas, i) =>
+        applyRedactions(canvas, rectsPerPage[i] ?? []),
+      );
+      const blob = await generatePdfBlob(burned, { quality: 0.85 });
+      const base = redactTarget.original_filename.replace(/\.[^/.]+$/, "");
+      const file = new File([blob], `${base}-redacted.pdf`, {
+        type: "application/pdf",
+      });
+      const result = await uploadInboxFile(file);
+      setFiles((current) => [result, ...(current ?? [])]);
+      closeRedact();
+      setNotice("Redacted copy created. Your original is unchanged.");
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : "Couldn't create the redacted copy. Your original is unchanged.",
+      );
+    } finally {
+      setRedactBusy(false);
+    }
+  }
+
   const allSelected =
     files !== null && files.length > 0 && selected.size === files.length;
   const selectedPdfCount = useMemo(
@@ -474,6 +544,7 @@ export default function FileInboxPage() {
   );
   const mergeEnabled = useFeature("document_merge");
   const pageExtractEnabled = useFeature("document_page_extract");
+  const redactionEnabled = useFeature("document_redaction");
 
   return (
     <PageContainer>
@@ -768,6 +839,19 @@ export default function FileInboxPage() {
                           Export pages
                         </Button>
                       )}
+                    {redactionEnabled &&
+                      file.content_type === "application/pdf" && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openRedact(file)}
+                          disabled={busyFileId === file.id}
+                        >
+                          <EyeOff className="size-4" />
+                          Redact
+                        </Button>
+                      )}
                     <Button
                       type="button"
                       variant="ghost"
@@ -984,6 +1068,15 @@ export default function FileInboxPage() {
         onCancel={closeExtract}
         onConfirm={confirmExtract}
       />
+
+      {redactTarget !== null && redactPages !== null && (
+        <RedactionEditor
+          pages={redactPages}
+          busy={redactBusy}
+          onCancel={closeRedact}
+          onCreate={confirmRedact}
+        />
+      )}
     </PageContainer>
   );
 }
