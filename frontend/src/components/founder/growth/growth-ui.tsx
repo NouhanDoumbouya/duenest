@@ -74,6 +74,11 @@ export function GrowthKpiCard({ title, kpi }: { title: string; kpi: Kpi }) {
             </span>
           )}
         </div>
+        {kpi.available !== false && kpi.trend && (
+          <p className="text-xs text-muted-foreground tabular-nums">
+            vs {kpi.trend.previous.toLocaleString()} previous period
+          </p>
+        )}
         {kpi.explanation && (
           <p className="text-xs leading-snug text-muted-foreground">{kpi.explanation}</p>
         )}
@@ -153,6 +158,14 @@ export function GrowthFunnelChart({ funnel }: { funnel: GrowthFunnel }) {
           </div>
         );
       })}
+      {funnel.biggest_drop_off && (
+        <p className="flex items-center gap-1.5 pt-1 text-xs text-amber-700 dark:text-amber-500">
+          <ArrowDownRight className="size-3.5 shrink-0" aria-hidden="true" />
+          Biggest drop-off: {funnel.biggest_drop_off.drop_pct}% between{" "}
+          {funnel.biggest_drop_off.from} and {funnel.biggest_drop_off.to} (
+          {funnel.biggest_drop_off.lost_users.toLocaleString()} users)
+        </p>
+      )}
     </div>
   );
 }

@@ -106,11 +106,21 @@ export function FounderLineChart({
   const height = 180;
   const top = 12; // headroom so the peak isn't clipped
   const baseline = height - 12; // x-axis line
+  const gutter = 34; // left space for the y-axis value labels
   const points = data.map((point, index) => {
-    const x = data.length <= 1 ? width : (index / (data.length - 1)) * width;
+    const x =
+      data.length <= 1
+        ? width
+        : gutter + (index / (data.length - 1)) * (width - gutter);
     const y = baseline - (point.count / max) * (baseline - top);
     return { ...point, x, y };
   });
+  // Y-axis ticks: peak at the top guide, half in the middle, 0 at the baseline.
+  const yTicks = [
+    { y: top, value: max },
+    { y: (top + baseline) / 2, value: Math.round(max / 2) },
+    { y: baseline, value: 0 },
+  ];
   const line = points
     .map((point, index) => `${index === 0 ? "M" : "L"}${point.x},${point.y}`)
     .join(" ");
@@ -128,7 +138,9 @@ export function FounderLineChart({
     const el = containerRef.current;
     if (!el || points.length === 0) return;
     const rect = el.getBoundingClientRect();
-    const frac = (clientX - rect.left) / rect.width;
+    // Account for the left gutter so the mapping lines up with the plotted area.
+    const gx = (gutter / width) * rect.width;
+    const frac = (clientX - rect.left - gx) / (rect.width - gx);
     const idx = Math.round(frac * (points.length - 1));
     setActiveIndex(Math.max(0, Math.min(points.length - 1, idx)));
   }
@@ -170,18 +182,30 @@ export function FounderLineChart({
                   <stop offset="100%" stopColor={color} stopOpacity="0" />
                 </linearGradient>
               </defs>
-              {/* Calm horizontal guides (no dashed clutter). */}
-              {[top, (top + baseline) / 2, baseline].map((y) => (
-                <line
-                  key={y}
-                  x1="0"
-                  y1={y}
-                  x2={width}
-                  y2={y}
-                  stroke="var(--border)"
-                  strokeWidth="1"
-                  opacity={y === baseline ? 0.9 : 0.4}
-                />
+              {/* Calm horizontal guides with y-axis value labels so magnitudes
+                  are readable at a glance, not just on hover. */}
+              {yTicks.map((tick) => (
+                <g key={tick.y}>
+                  <line
+                    x1={gutter}
+                    y1={tick.y}
+                    x2={width}
+                    y2={tick.y}
+                    stroke="var(--border)"
+                    strokeWidth="1"
+                    opacity={tick.y === baseline ? 0.9 : 0.4}
+                  />
+                  <text
+                    x={gutter - 6}
+                    y={tick.y}
+                    textAnchor="end"
+                    dominantBaseline="middle"
+                    fill="var(--muted-foreground)"
+                    fontSize="11"
+                  >
+                    {nf.format(tick.value)}
+                  </text>
+                </g>
               ))}
               <path d={area} fill={`url(#${gradientId})`} stroke="none" />
               <path
