@@ -122,6 +122,21 @@ shortcut into Quick Share). The template/timeline/merged-PDF endpoints are
 enforced server-side (`503`); the SafeSend shortcut reuses the already-gated
 `quick_share` flow. See `api-spec.md` §13B.3 / §28.2.
 
+The **Vault Organization** keys also seed `founder_only`: `vault_bulk_actions`
+(multi-select bar — move category, add tag, archive, trash, export, add-to-pack,
+set-reminder; reuses existing per-document endpoints plus the owner-scoped bulk
+export / add-documents routes), `vault_trash_undo` (inline Undo toast on
+trash/archive/move), `vault_smart_views` (Smart Views panel on the Vault
+overview), and `vault_table_view` (compact table view mode). All are UI-only over
+existing owner-scoped data; the Vault behaves exactly as today when they are off.
+
+The **Customizable QR** key `qr_customization` (`founder_only`) gates the custom
+foreground/background color pickers, live scan-reliability warnings, named style
+presets, quiet-zone control, saved default style, client-side logo upload, and
+SVG export on the SafeSend link screen. UI-only: the QR still encodes only the
+tokenized SafeSend URL and follows the same access/expiry/revoke rules. The
+existing color presets and DueNest badge are unchanged when the flag is off.
+
 Recommended beta postures a founder may choose: set newer/sensitive features
 (e.g. `emergency_public_viewer`, `secure_rooms`, `organizations`) to `beta_only`
 until real-user QA is done; `email_reminders` stays `enabled` in dev but
