@@ -1729,6 +1729,16 @@ class DocumentActivity(models.Model):
         REMINDER_ADDED = "reminder_added", "Reminder added"
         ADDED_TO_BUNDLE = "added_to_bundle", "Added to a bundle"
         SHARED_VIA_SAFESEND = "shared_via_safesend", "Shared via SafeSend"
+        BUNDLE_CREATED = "bundle_created", "Pack created"
+        BUNDLE_TEMPLATE_APPLIED = "bundle_template_applied", "Template applied"
+        BUNDLE_REQUIREMENT_ADDED = "bundle_requirement_added", "Checklist item added"
+        BUNDLE_REQUIREMENT_REMOVED = "bundle_requirement_removed", "Checklist item removed"
+        BUNDLE_REQUIREMENT_STATUS_CHANGED = (
+            "bundle_requirement_status_changed",
+            "Checklist item updated",
+        )
+        BUNDLE_STATUS_CHANGED = "bundle_status_changed", "Pack status changed"
+        BUNDLE_EXPORTED = "bundle_exported", "Pack exported"
 
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,

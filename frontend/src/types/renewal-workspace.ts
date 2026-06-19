@@ -219,9 +219,30 @@ export interface CreateBundleRequest {
   country?: string;
   authority_or_provider?: string;
   notes?: string;
+  /**
+   * Optional pack-template key (e.g. "scholarship"). When the application-pack
+   * templates feature is enabled, the backend seeds an editable starter
+   * checklist from it. Ignored otherwise — never required.
+   */
+  template?: string;
 }
 
 export type UpdateBundleRequest = Partial<CreateBundleRequest>;
+
+/** A generic, non-official pack template used to seed a starter checklist. */
+export interface PackTemplateItem {
+  title: string;
+  is_required: boolean;
+}
+
+export interface PackTemplate {
+  key: string;
+  label: string;
+  description: string;
+  bundle_type: BundleType;
+  disclaimer: string;
+  items: PackTemplateItem[];
+}
 
 export interface CreateRequirementRequest {
   title: string;

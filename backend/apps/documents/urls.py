@@ -19,6 +19,8 @@ from .views import (
     DocumentBundleExportSelectedFilesView,
     DocumentBundleFilesView,
     DocumentBundleListCreateView,
+    BundleActivityTimelineView,
+    PackTemplatesView,
     CalendarEventsView,
     CalendarIcsExportView,
     CalendarSummaryView,
@@ -387,6 +389,11 @@ urlpatterns = [
     ),
     # ---- Renewal workspace: application / renewal bundles ------------------
     path(
+        "document-bundles/pack-templates/",
+        PackTemplatesView.as_view(),
+        name="pack-templates",
+    ),
+    path(
         "document-bundles/",
         DocumentBundleListCreateView.as_view(),
         name="document-bundles",
@@ -395,6 +402,11 @@ urlpatterns = [
         "document-bundles/<int:bundle_id>/",
         DocumentBundleDetailView.as_view(),
         name="document-bundle-detail",
+    ),
+    path(
+        "document-bundles/<int:bundle_id>/activity/",
+        BundleActivityTimelineView.as_view(),
+        name="document-bundle-activity",
     ),
     path(
         "document-bundles/<int:bundle_id>/readiness/",
