@@ -170,17 +170,15 @@ export function DocumentFileViewer({
               <LockKeyhole className="size-3" />
               Account-only preview
             </span>
-            {file.document !== null && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => onShare(file)}
-              >
-                <Share2 className="size-3.5" />
-                Share
-              </Button>
-            )}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onShare(file)}
+            >
+              <Share2 className="size-3.5" />
+              Share
+            </Button>
             <Button
               type="button"
               size="sm"

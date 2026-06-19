@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   CheckSquare,
   Combine,
@@ -12,6 +13,7 @@ import {
   Minimize2,
   Plus,
   ScanLine,
+  Share2,
   Square,
   Trash2,
   Upload,
@@ -52,6 +54,7 @@ import {
   validateFile,
 } from "@/lib/document-files";
 import { getDocuments, listDocumentCategories } from "@/lib/documents";
+import { fileToSelected, setSharePrefill } from "@/lib/quick-share-prefill";
 import { mergePdfs } from "@/lib/pdf/merge";
 import { isImage, isPdf, runCompress } from "@/lib/files/tools";
 import { cn } from "@/lib/utils";
@@ -76,6 +79,7 @@ const TYPE_SUGGESTIONS = [
 ];
 
 export default function FileInboxPage() {
+  const router = useRouter();
   const [files, setFiles] = useState<DocumentFile[] | null>(null);
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -396,6 +400,14 @@ export default function FileInboxPage() {
     } finally {
       setBusyFileId(null);
     }
+  }
+
+  // Sharing is unified on the Quick Share engine: an inbox file's "Share" seeds
+  // the share wizard with that file and opens it. Inbox files are owner-owned and
+  // shareable directly (no document needed).
+  function handleShare(file: DocumentFile) {
+    setSharePrefill({ files: [fileToSelected(file)] });
+    router.push("/dashboard/quick-share/new");
   }
 
   async function handleTrash(file: DocumentFile) {
@@ -972,6 +984,15 @@ export default function FileInboxPage() {
                       )}
                       Download
                     </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleShare(file)}
+                    >
+                      <Share2 className="size-4" />
+                      Share
+                    </Button>
                     <FileToolsButton
                       file={file}
                       loadBlob={() => getInboxFileDownloadBlob(file.id)}
@@ -1190,7 +1211,10 @@ export default function FileInboxPage() {
         downloading={busyFileId === previewFile?.id}
         onClose={() => setPreviewFile(null)}
         onDownload={handleDownload}
-        onShare={() => undefined}
+        onShare={(file) => {
+          setPreviewFile(null);
+          handleShare(file);
+        }}
       />
 
       <MoveToVaultDialog

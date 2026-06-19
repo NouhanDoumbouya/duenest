@@ -11,6 +11,7 @@ import {
   ChevronDown,
   Download,
   Eye,
+  EyeOff,
   FileText,
   IdCard,
   KeyRound,
@@ -40,6 +41,7 @@ import {
 import { getBundle } from "@/lib/renewal-workspace";
 import { createQuickShare } from "@/lib/quick-share";
 import { setQuickShareHandoff } from "@/lib/quick-share-handoff";
+import { takeSharePrefill } from "@/lib/quick-share-prefill";
 import {
   FilePicker,
   type SelectedBundle,
@@ -106,6 +108,7 @@ export default function NewQuickSharePage() {
   const [oneTime, setOneTime] = useState(false);
   const [requireApproval, setRequireApproval] = useState(false);
   const [watermark, setWatermark] = useState(true);
+  const [privacyScreen, setPrivacyScreen] = useState(false);
   const [showCustom, setShowCustom] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
@@ -125,6 +128,13 @@ export default function NewQuickSharePage() {
       if (!active) return;
       setRecentRecipients(loadRecentRecipients());
       setSavedSettings(loadLastShareSettings());
+      // Pre-seed the selection when the user arrived here from a "Share" action
+      // elsewhere (a document file, the File Inbox). One-time handoff; consumed
+      // once. Deferred to a microtask with the others to avoid a sync setState.
+      const prefill = takeSharePrefill();
+      if (prefill?.files?.length) {
+        setSelected(new Map(prefill.files.map((file) => [file.id, file])));
+      }
     });
     return () => {
       active = false;
@@ -349,6 +359,7 @@ export default function NewQuickSharePage() {
       require_sender_approval:
         mode === "account_to_account" ? requireApproval : false,
       watermark_enabled: watermark,
+      privacy_screen_enabled: privacyScreen,
       file_ids: selectedList.map((f) => f.id),
       bundle_ids: selectedBundleList.map((b) => b.id),
     };
@@ -748,6 +759,16 @@ export default function NewQuickSharePage() {
                     }}
                   />
                   {watermark && <WatermarkPreview />}
+                  <ToggleRow
+                    icon={<EyeOff className="size-4" />}
+                    title="Privacy screen"
+                    description="Blur the preview when the viewer switches tabs — extra deterrence against screenshots."
+                    checked={privacyScreen}
+                    onChange={(v) => {
+                      setPrivacyScreen(v);
+                      markCustom();
+                    }}
+                  />
                 </div>
               </Field>
             </div>

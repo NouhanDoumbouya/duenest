@@ -30,6 +30,7 @@ from apps.documents.models import (
     DocumentBundle,
     DocumentBundleRequirement,
     DocumentFile,
+    ProofRecord,
 )
 
 from .models import (
@@ -875,3 +876,108 @@ class RequestExtensionTests(QuickShareBaseTest):
             "/api/v1/quick-share/claim/not-a-real-token/request-extension/"
         )
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class UnifiedEngineItemTests(QuickShareBaseTest):
+    """
+    Quick Share is the single share engine. These cover the capabilities folded
+    in from the single-file link and Share Rooms: privacy screen, whole-document
+    items, and proof items — so those flows keep working through Quick Share.
+    """
+
+    def _create(self, payload):
+        self.client.force_authenticate(self.alice)
+        body = {
+            "permission": "view_only",
+            "expires_at": (timezone.now() + timedelta(minutes=10)).isoformat(),
+        }
+        body.update(payload)
+        return self.client.post(
+            "/api/v1/quick-share/sessions/", body, format="json"
+        )
+
+    def test_privacy_screen_persists_and_is_exposed(self):
+        resp = self._create(
+            {"file_ids": [self.alice_file.id], "privacy_screen_enabled": True}
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.data)
+        self.assertTrue(resp.data["privacy_screen_enabled"])
+        session = QuickShareSession.objects.get(id=resp.data["id"])
+        self.assertTrue(session.privacy_screen_enabled)
+        # Exposed on the public viewer payload too.
+        self.client.force_authenticate(self.bob)
+        public = self.client.get(f"/api/v1/quick-share/claim/{session.token}/")
+        self.assertTrue(public.data["privacy_screen_enabled"])
+
+    def test_privacy_screen_defaults_off(self):
+        resp = self._create({"file_ids": [self.alice_file.id]})
+        self.assertFalse(resp.data["privacy_screen_enabled"])
+
+    def test_document_item_shares_current_files(self):
+        # A whole-document item exposes the document's active files (here: two).
+        resp = self._create({"document_ids": [self.alice_doc.id]})
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.data)
+        session = QuickShareSession.objects.get(id=resp.data["id"])
+        item = session.items.get()
+        self.assertEqual(item.document_id, self.alice_doc.id)
+        self.assertIsNone(item.file_id)
+        shared = {f["name"] for f in resp.data["files"]}
+        self.assertEqual(shared, {"passport.pdf", "visa.pdf"})
+
+    def test_cannot_attach_another_users_document(self):
+        resp = self._create({"document_ids": [self.bob_doc.id]})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_proof_item_shares_linked_file(self):
+        proof = ProofRecord.objects.create(
+            owner=self.alice,
+            document=self.alice_doc,
+            linked_file=self.alice_file,
+            title="Submission receipt",
+        )
+        resp = self._create({"proof_ids": [proof.id]})
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.data)
+        session = QuickShareSession.objects.get(id=resp.data["id"])
+        item = session.items.get()
+        self.assertEqual(item.proof_id, proof.id)
+        self.assertEqual(len(resp.data["files"]), 1)
+        self.assertEqual(resp.data["files"][0]["name"], "passport.pdf")
+
+    def test_cannot_attach_another_users_proof(self):
+        proof = ProofRecord.objects.create(
+            owner=self.bob,
+            document=self.bob_doc,
+            linked_file=self.bob_file,
+            title="Bob receipt",
+        )
+        resp = self._create({"proof_ids": [proof.id]})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_mixed_items_attach_together(self):
+        proof = ProofRecord.objects.create(
+            owner=self.alice,
+            document=self.alice_doc,
+            linked_file=self.alice_file,
+            title="Receipt",
+        )
+        inbox_file = DocumentFile.objects.create(
+            uploaded_by=self.alice,
+            file=make_pdf("inbox.pdf"),
+            original_filename="inbox.pdf",
+            content_type="application/pdf",
+            file_size=18,
+        )
+        resp = self._create(
+            {
+                "file_ids": [inbox_file.id],
+                "document_ids": [self.alice_doc.id],
+                "proof_ids": [proof.id],
+            }
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.data)
+        session = QuickShareSession.objects.get(id=resp.data["id"])
+        # file + document(2 files) + proof(dedup of passport) => unique files:
+        # inbox.pdf, passport.pdf, visa.pdf
+        shared = {f["name"] for f in resp.data["files"]}
+        self.assertEqual(shared, {"inbox.pdf", "passport.pdf", "visa.pdf"})
+        self.assertEqual(session.items.count(), 3)

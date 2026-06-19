@@ -217,7 +217,9 @@ def session_files(session: QuickShareSession):
     """
     files = []
     seen = set()
-    items = session.items.select_related("file", "document", "bundle").all()
+    items = session.items.select_related(
+        "file", "document", "bundle", "proof", "proof__linked_file"
+    ).all()
     for item in items:
         file = item.file
         if file is None and item.bundle_id:
@@ -240,6 +242,18 @@ def session_files(session: QuickShareSession):
                 if doc_file.id not in seen:
                     seen.add(doc_file.id)
                     files.append((item, doc_file))
+            continue
+        if file is None and item.proof_id:
+            # Proof item: expose the proof's linked file (owner isolation was
+            # enforced when the proof was attached). Mirrors collect_room_files.
+            proof_file = item.proof.linked_file if item.proof else None
+            if proof_file is None or proof_file.is_trashed:
+                continue
+            if proof_file.document_id and proof_file.document.is_trashed:
+                continue
+            if proof_file.id not in seen:
+                seen.add(proof_file.id)
+                files.append((item, proof_file))
             continue
         if file is None:
             continue

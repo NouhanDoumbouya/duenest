@@ -1,20 +1,28 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { FileText, Link2, Loader2, Share2 } from "lucide-react";
 
-import { DocumentFileShareDialog } from "@/components/documents/document-file-share-dialog";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SectionCard } from "@/components/ui/section-card";
 import { ApiError } from "@/lib/api";
 import { formatFileSize, getDocumentFiles } from "@/lib/document-files";
+import { fileToSelected, setSharePrefill } from "@/lib/quick-share-prefill";
 import type { DocumentFile } from "@/types/document-files";
 
 export function SharingTab({ documentId }: { documentId: number }) {
+  const router = useRouter();
   const [files, setFiles] = useState<DocumentFile[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [sharingFile, setSharingFile] = useState<DocumentFile | null>(null);
+
+  // Unified on the Quick Share engine: sharing a file seeds the wizard and opens
+  // it, so this tab uses the same secure-share flow as everywhere else.
+  function handleShare(file: DocumentFile) {
+    setSharePrefill({ files: [fileToSelected(file)] });
+    router.push("/dashboard/quick-share/new");
+  }
 
   useEffect(() => {
     let active = true;
@@ -78,21 +86,14 @@ export function SharingTab({ documentId }: { documentId: number }) {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setSharingFile(file)}
+                onClick={() => handleShare(file)}
               >
                 <Share2 className="size-4" />
-                Manage sharing
+                Share
               </Button>
             </li>
           ))}
         </ul>
-      )}
-
-      {sharingFile && (
-        <DocumentFileShareDialog
-          file={sharingFile}
-          onClose={() => setSharingFile(null)}
-        />
       )}
     </SectionCard>
   );

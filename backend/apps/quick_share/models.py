@@ -150,6 +150,10 @@ class QuickShareSession(models.Model):
 
     require_sender_approval = models.BooleanField(default=False)
     watermark_enabled = models.BooleanField(default=True)
+    # Screenshot deterrence on the public viewer (blurs when the tab loses focus).
+    # Mirrors DocumentFileShareLink / ShareRoom so file-link and room shares keep
+    # this capability when they run through the Quick Share engine.
+    privacy_screen_enabled = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -258,6 +262,15 @@ class QuickShareItem(models.Model):
     # share tracks the bundle's contents over time (like a document-level item).
     bundle = models.ForeignKey(
         "documents.DocumentBundle",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="quick_share_items",
+    )
+    # A proof item exposes the proof's linked file, so Share Rooms' proof items
+    # survive when a room is created through the Quick Share engine.
+    proof = models.ForeignKey(
+        "documents.ProofRecord",
         on_delete=models.CASCADE,
         null=True,
         blank=True,
