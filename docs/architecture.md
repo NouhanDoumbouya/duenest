@@ -1298,3 +1298,30 @@ log in, and existing accounts can still be linked to Google.
 Invite code enforcement happens on the backend. The frontend invite field is a
 UX affordance only; the backend checks active status, expiry, and max-use limits
 before creating the user account.
+
+## 35. Anatomy of Sharing
+
+DueNest grew three overlapping ways to share documents: Quick Share
+(`apps/quick_share` — `QuickShareSession`), the single-file share link
+(`DocumentFileShareLink`, app `documents`), and Share Rooms (`ShareRoom`, app
+`documents`). All three reused `generate_share_token` and the same permission /
+expiry / revoke / access-code / watermark / limit shape, but each had its own
+model, public token page, and frontend, so sharing one file felt different
+depending on where you started.
+
+**Quick Share is now the single sharing engine.** It is already a superset
+(multi-item sessions, claims, QR, DN-code, access codes, limits, sender
+approval), so the other two fold into it rather than the reverse:
+
+- The engine gained the only capabilities it lacked — `privacy_screen_enabled`
+  on the session and a `proof` item type — plus `document_ids` / `proof_ids`
+  create inputs (see `docs/database-design.md`).
+- New shares are created as Quick Share sessions. A "Share" action anywhere
+  (e.g. a document file) seeds the one creation wizard
+  (`/dashboard/quick-share/new`) via an in-memory prefill handoff
+  (`frontend/src/lib/quick-share-prefill.ts`) and opens it, so the experience is
+  identical regardless of entry point.
+- **Backward compatibility:** `DocumentFileShareLink` and `ShareRoom` models and
+  their public endpoints (`/share/files/:token`, `/rooms/:token`) are kept so
+  links already in the wild keep resolving. No data migration. Org Secure Rooms
+  and Emergency Packs remain separate, specialized flows and are out of scope.

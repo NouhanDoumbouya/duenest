@@ -1892,6 +1892,22 @@ ever serves these explicit items — never the rest of the vault.
 Owner-only trail: `owner`, `room`, `action`, `actor_type`, `ip_address`,
 `user_agent`, `metadata`, `created_at`. Access codes are never logged.
 
+### Quick Share is the unified sharing engine
+
+`QuickShareSession` (app `quick_share`) is the single engine all new shares run
+through; `DocumentFileShareLink` and `ShareRoom` above remain only so links
+already in the wild keep resolving (no migration). A session carries the same
+controls as those models — `token`, `permission`, `expires_at`, `revoked_at`,
+`access_code_required`/`access_code_hash`, `watermark_enabled`, and
+**`privacy_screen_enabled`** (screenshot deterrence; added so file-link/room
+shares lose nothing through the engine) — plus claim/QR/DN-code/mode features the
+others lack.
+
+`QuickShareItem` exposes one of `file` / `document` / `bundle` / **`proof`** FKs
+(all owner-owned). The `proof` FK was added so Share Rooms' proof items survive
+the unification; a proof item serves the proof's linked file. A single-file share
+is simply a session with one `file` item; a room is a multi-item session.
+
 ### Calendar
 
 DueNest Calendar V1 adds **no new table** — events are aggregated on demand from
