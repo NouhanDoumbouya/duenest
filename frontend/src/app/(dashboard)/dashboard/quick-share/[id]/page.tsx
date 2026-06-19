@@ -4,9 +4,11 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
+  AlertTriangle,
   ArrowLeft,
   Ban,
   Check,
+  CheckCircle2,
   ChevronDown,
   Copy,
   ExternalLink,
@@ -49,7 +51,9 @@ import {
   ShareMessageEditor,
 } from "@/components/quick-share/share-actions";
 import { ShareActivityTimeline } from "@/components/quick-share/activity-timeline";
+import { useFeature } from "@/components/features/feature-flags-provider";
 import { packageMethods, type SharePackage } from "@/lib/safesend";
+import { assessQrContrast } from "@/lib/qr";
 import { cn } from "@/lib/utils";
 import type {
   QuickShareActivity,
@@ -107,7 +111,9 @@ export default function QuickShareDetailPage() {
   const [showMessage, setShowMessage] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [qrColor, setQrColor] = useState<string>(QR_COLOR_PRESETS[0].dark);
+  const [qrLight, setQrLight] = useState("#ffffff");
   const [qrLogo, setQrLogo] = useState(true);
+  const qrCustomEnabled = useFeature("qr_customization");
 
   const claimUrl =
     session && typeof window !== "undefined"
@@ -267,7 +273,9 @@ export default function QuickShareDetailPage() {
   );
   const permLabel = PERMISSION_LABEL[session.permission];
   const expiryLabel = humanizeExpiry(session.expires_at);
-  const qrStyle = { dark: qrColor, logo: qrLogo };
+  const qrStyle = { dark: qrColor, light: qrLight, logo: qrLogo };
+  // Honest, non-blocking scan-reliability assessment for the chosen colors.
+  const qrReliability = assessQrContrast(qrColor, qrLight);
   // A recipient has asked for more time when the latest extension request is
   // newer than the latest extension we granted.
   const pendingExtension = (() => {
@@ -377,6 +385,76 @@ export default function QuickShareDetailPage() {
                   DueNest badge
                 </button>
               </div>
+
+              {qrCustomEnabled && (
+                <div className="mt-3 flex w-full max-w-xs flex-col gap-2 rounded-xl border border-border bg-muted/25 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <label
+                      htmlFor="qr-fg"
+                      className="text-xs font-medium text-muted-foreground"
+                    >
+                      Code color
+                    </label>
+                    <input
+                      id="qr-fg"
+                      type="color"
+                      value={qrColor}
+                      onChange={(e) => setQrColor(e.target.value)}
+                      aria-label="QR code (foreground) color"
+                      className="h-7 w-10 cursor-pointer rounded border border-input bg-card"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <label
+                      htmlFor="qr-bg"
+                      className="text-xs font-medium text-muted-foreground"
+                    >
+                      Background
+                    </label>
+                    <div className="flex items-center gap-2">
+                      {qrLight !== "#ffffff" && (
+                        <button
+                          type="button"
+                          onClick={() => setQrLight("#ffffff")}
+                          className="text-[0.7rem] text-muted-foreground underline-offset-2 hover:underline"
+                        >
+                          Reset
+                        </button>
+                      )}
+                      <input
+                        id="qr-bg"
+                        type="color"
+                        value={qrLight}
+                        onChange={(e) => setQrLight(e.target.value)}
+                        aria-label="QR background color"
+                        className="h-7 w-10 cursor-pointer rounded border border-input bg-card"
+                      />
+                    </div>
+                  </div>
+                  <p
+                    className={cn(
+                      "flex items-center gap-1.5 text-xs",
+                      qrReliability.level === "ok"
+                        ? "text-brand-success"
+                        : "text-brand-amber",
+                    )}
+                    role="status"
+                    aria-live="polite"
+                  >
+                    {qrReliability.level === "ok" ? (
+                      <CheckCircle2 className="size-3.5 shrink-0" aria-hidden />
+                    ) : (
+                      <AlertTriangle className="size-3.5 shrink-0" aria-hidden />
+                    )}
+                    {qrReliability.message}
+                    {qrReliability.ratio !== null && (
+                      <span className="text-muted-foreground">
+                        ({qrReliability.ratio}:1)
+                      </span>
+                    )}
+                  </p>
+                </div>
+              )}
             </div>
           )}
 

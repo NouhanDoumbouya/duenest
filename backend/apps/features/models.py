@@ -95,6 +95,12 @@ FEATURE_DEFINITIONS: list[dict] = [
     {"key": "vault_trash_undo", "name": "Vault — undo toast", "default": Visibility.FOUNDER_ONLY, "description": "Show an inline 'Undo' toast after moving a document to Trash or archiving it (single or bulk), reversing via the existing restore / lifecycle endpoints."},
     {"key": "vault_smart_views", "name": "Vault — Smart Views", "default": Visibility.FOUNDER_ONLY, "description": "A Smart Views panel on the Vault overview (Expiring soon, Needs review, Shared, In packs, Pinned, Archived, …) with real counts, linking into the pre-filtered documents list. State-based filtering only — no AI."},
     {"key": "vault_table_view", "name": "Vault — table view", "default": Visibility.FOUNDER_ONLY, "description": "A compact table view mode for the documents list (name/category/type/expiry/status) alongside the existing list and grid views. Horizontally scrollable on mobile."},
+    # --- Customizable QR codes ------------------------------------------
+    # UI-only QR appearance controls on the SafeSend link screen (custom
+    # foreground/background colors + live scan-reliability warnings). The QR
+    # payload, security model, and existing color presets/logo are unchanged;
+    # this only gates the NEW custom-color pickers + warnings. FOUNDER_ONLY.
+    {"key": "qr_customization", "name": "QR — custom colors + scan warnings", "default": Visibility.FOUNDER_ONLY, "description": "Custom foreground/background QR colors with live contrast + scan-reliability warnings on the SafeSend link screen. UI-only; the QR still encodes only the secure SafeSend URL and follows the same access rules."},
 ]
 
 FEATURE_KEYS = [d["key"] for d in FEATURE_DEFINITIONS]

@@ -44,9 +44,13 @@ export { looksSensitive } from "@/lib/safesend";
 
 // ---- QR data URL (shared by the renderer, downloads, and the share card) ---
 
-/** Optional QR appearance. `dark` is the module color; `logo` centers a badge. */
+/**
+ * Optional QR appearance. `dark` is the module color, `light` the background
+ * (defaults to white), and `logo` centers a DueNest badge.
+ */
 export interface QrStyle {
   dark?: string;
+  light?: string;
   logo?: boolean;
 }
 
@@ -72,11 +76,12 @@ export async function generateQrDataUrl(
 ): Promise<string> {
   const mod = await import("qrcode");
   const dark = style?.dark || DEFAULT_QR_DARK;
+  const light = style?.light || "#ffffff";
   const base = await mod.toDataURL(value, {
     errorCorrectionLevel: style?.logo ? "H" : "M",
     margin: 1,
     width: size,
-    color: { dark, light: "#ffffff" },
+    color: { dark, light },
   });
   if (!style?.logo) return base;
   try {
@@ -159,7 +164,7 @@ export function QrCode({
 }) {
   // A single piece of state keyed to the value+style it was generated for, so we
   // never need a synchronous reset setState inside the effect.
-  const styleKey = `${style?.dark ?? ""}|${style?.logo ? "logo" : ""}`;
+  const styleKey = `${style?.dark ?? ""}|${style?.light ?? ""}|${style?.logo ? "logo" : ""}`;
   const [gen, setGen] = useState<{
     forKey: string;
     url: string | null;
