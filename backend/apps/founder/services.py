@@ -18,7 +18,7 @@ from django.db.models import Count, Exists, F, Max, Min, OuterRef, Q
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 
-from common.email import send_branded_email
+from common.transactional_email import send_transactional_email
 from apps.documents.models import (
     Document,
     DocumentActivity,
@@ -52,6 +52,7 @@ from .models import (
     InviteCodeUse,
     LaunchChecklistItem,
     ProductEvent,
+    TransactionalEmailSetting,
     WaitlistEntry,
 )
 
@@ -387,9 +388,8 @@ def send_waitlist_confirmation_email(entry: WaitlistEntry) -> None:
     if not (_email_enabled() and recipient):
         logger.info("Waitlist confirmation email deferred for entry %s", entry.id)
         return
-    send_branded_email(
-        subject="You're on the DueNest waitlist",
-        template="waitlist_confirmation",
+    send_transactional_email(
+        "waitlist_confirmation",
         context={},
         to=recipient,
     )
@@ -407,9 +407,8 @@ def send_invite_email(invite: InviteCode, entry: WaitlistEntry | None = None) ->
         )
         return
     link = f"{_frontend_base()}/invite/{invite.code}"
-    send_branded_email(
-        subject="Your DueNest invite is ready",
-        template="invite",
+    send_transactional_email(
+        "invite",
         context={"invite_url": link, "invite_code": invite.code},
         to=recipient,
     )
@@ -1756,3 +1755,18 @@ def active_checklist_templates():
         "sort_order",
         "title",
     )
+
+
+def ensure_transactional_email_defaults() -> None:
+    """Seed a TransactionalEmailSetting row for each registered email so the
+    console lists all of them (overrides blank → code defaults apply)."""
+    from common.transactional_email import TRANSACTIONAL_EMAILS
+
+    existing = set(TransactionalEmailSetting.objects.values_list("key", flat=True))
+    rows = [
+        TransactionalEmailSetting(key=d.key, name=d.name)
+        for d in TRANSACTIONAL_EMAILS.values()
+        if d.key not in existing
+    ]
+    if rows:
+        TransactionalEmailSetting.objects.bulk_create(rows, ignore_conflicts=True)

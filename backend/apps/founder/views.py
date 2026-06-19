@@ -21,6 +21,7 @@ from .models import (
     FounderAuditLog,
     InviteCode,
     LaunchChecklistItem,
+    TransactionalEmailSetting,
     ProductEvent,
     WaitlistEntry,
 )
@@ -39,6 +40,7 @@ from .serializers import (
     FounderWaitlistEntrySerializer,
     FounderUserListSerializer,
     LaunchChecklistItemSerializer,
+    TransactionalEmailSettingSerializer,
     InviteValidateSerializer,
     PrivateBetaStatusSerializer,
     WaitlistCreateSerializer,
@@ -58,6 +60,7 @@ from .services import (
     ensure_beta_profiles_for_users,
     ensure_feature_completion_defaults,
     ensure_launch_checklist_defaults,
+    ensure_transactional_email_defaults,
     feature_completion_summary,
     founder_user_queryset,
     launch_readiness_summary,
@@ -831,3 +834,34 @@ class FounderErrorResolveView(APIView):
         error.resolved_at = timezone.now()
         error.save(update_fields=["resolved", "resolved_at"])
         return Response(FounderAppErrorLogSerializer(error).data)
+
+
+class FounderEmailSettingListView(generics.ListAPIView):
+    permission_classes = [IsFounderUser]
+    serializer_class = TransactionalEmailSettingSerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        ensure_transactional_email_defaults()
+        return TransactionalEmailSetting.objects.all()
+
+
+class FounderEmailSettingDetailView(generics.RetrieveUpdateAPIView):
+    permission_classes = [IsFounderUser]
+    serializer_class = TransactionalEmailSettingSerializer
+    lookup_field = "key"
+    lookup_url_kwarg = "key"
+
+    def get_queryset(self):
+        ensure_transactional_email_defaults()
+        return TransactionalEmailSetting.objects.all()
+
+    def perform_update(self, serializer):
+        item = serializer.save(updated_by=self.request.user)
+        log_founder_action(
+            request=self.request,
+            action="founder_updated_email_setting",
+            object_type="email_setting",
+            object_id=item.id,
+            metadata={"key": item.key, "enabled": item.enabled},
+        )

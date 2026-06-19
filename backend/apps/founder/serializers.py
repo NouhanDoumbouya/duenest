@@ -19,6 +19,7 @@ from .models import (
     InviteCodeUse,
     LaunchChecklistItem,
     ProductEvent,
+    TransactionalEmailSetting,
     WaitlistEntry,
 )
 from .services import create_invite_code, normalize_invite_code, sanitize_metadata
@@ -784,3 +785,47 @@ class FounderUserListSerializer(serializers.ModelSerializer):
             "onboarding_completed",
         ]
         read_only_fields = fields
+
+
+class TransactionalEmailSettingSerializer(serializers.ModelSerializer):
+    """Founder-editable transactional email. Only enabled/subject/body are
+    writable; blank subject/body fall back to the code defaults (exposed here as
+    read-only fields so the editor can show and reset to them)."""
+
+    default_subject = serializers.SerializerMethodField()
+    default_body = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TransactionalEmailSetting
+        fields = [
+            "id",
+            "key",
+            "name",
+            "enabled",
+            "subject",
+            "body",
+            "default_subject",
+            "default_body",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "key",
+            "name",
+            "default_subject",
+            "default_body",
+            "updated_at",
+        ]
+
+    def _definition(self, obj):
+        from common.transactional_email import TRANSACTIONAL_EMAILS
+
+        return TRANSACTIONAL_EMAILS.get(obj.key)
+
+    def get_default_subject(self, obj) -> str:
+        definition = self._definition(obj)
+        return definition.subject if definition else ""
+
+    def get_default_body(self, obj) -> str:
+        definition = self._definition(obj)
+        return definition.body if definition else ""

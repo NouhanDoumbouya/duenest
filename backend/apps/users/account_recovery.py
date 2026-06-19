@@ -25,7 +25,7 @@ from django.utils import timezone
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 
-from common.email import send_branded_email
+from common.transactional_email import send_transactional_email
 
 User = get_user_model()
 
@@ -46,9 +46,8 @@ def send_password_reset_email(user) -> None:
     uid = urlsafe_base64_encode(force_bytes(user.pk))
     token = default_token_generator.make_token(user)
     link = f"{_frontend_base()}/reset-password?uid={uid}&token={token}"
-    send_branded_email(
-        subject="Reset your DueNest password",
-        template="password_reset",
+    send_transactional_email(
+        "password_reset",
         context={"reset_url": link},
         to=user.email,
     )
@@ -106,9 +105,8 @@ def send_email_verification(user) -> None:
         return
     token = make_email_verification_token(user)
     link = f"{_frontend_base()}/verify-email?token={token}"
-    send_branded_email(
-        subject="Verify your DueNest email",
-        template="email_verification",
+    send_transactional_email(
+        "email_verification",
         context={"verify_url": link},
         to=user.email,
     )

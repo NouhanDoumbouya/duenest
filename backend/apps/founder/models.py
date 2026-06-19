@@ -1023,3 +1023,32 @@ class DailyAnalyticsRollup(models.Model):
 
     def __str__(self):
         return f"Analytics rollup {self.date} ({self.total_events} events)"
+
+
+class TransactionalEmailSetting(models.Model):
+    """Founder-editable override for a transactional email.
+
+    `key` matches an entry in common.transactional_email.TRANSACTIONAL_EMAILS.
+    Blank subject/body fall back to the code defaults; `enabled=False` skips
+    sending. Only the message prose is editable — branding/links stay in code.
+    """
+
+    key = models.SlugField(max_length=80, unique=True)
+    name = models.CharField(max_length=140)
+    enabled = models.BooleanField(default=True)
+    subject = models.CharField(max_length=200, blank=True)
+    body = models.TextField(blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"Email setting: {self.key}"
