@@ -54,6 +54,12 @@ export interface QrStyle {
   light?: string;
   logo?: boolean;
   margin?: number;
+  /**
+   * Optional custom center logo as a raster data URL (PNG/JPEG/WebP only —
+   * validated client-side, never stored). Takes the place of the DueNest badge
+   * and, like it, raises error correction to H so the code stays scannable.
+   */
+  logoSrc?: string;
 }
 
 export const QR_COLOR_PRESETS: { id: string; label: string; dark: string }[] = [
@@ -147,19 +153,65 @@ export async function generateQrDataUrl(
   const mod = await import("qrcode");
   const dark = style?.dark || DEFAULT_QR_DARK;
   const light = style?.light || "#ffffff";
+  const hasCenter = Boolean(style?.logo || style?.logoSrc);
   const base = await mod.toDataURL(value, {
-    errorCorrectionLevel: style?.logo ? "H" : "M",
+    errorCorrectionLevel: hasCenter ? "H" : "M",
     margin: style?.margin ?? 1,
     width: size,
     color: { dark, light },
   });
-  if (!style?.logo) return base;
+  if (!hasCenter) return base;
   try {
-    return await overlayDueNestBadge(base, size, dark);
+    return await overlayCenterMark(base, size, dark, light, style?.logoSrc);
   } catch {
     // Never let a badge failure break the QR — fall back to the plain code.
     return base;
   }
+}
+
+/**
+ * Build a scalable SVG QR (qrcode lib output) with an optional centered mark.
+ * The mark is drawn as SVG (white cushion + DueNest monogram, or an embedded
+ * raster `<image>` for a custom logo) so the SVG is self-contained.
+ */
+export async function generateQrSvg(
+  value: string,
+  style?: QrStyle,
+): Promise<string> {
+  const mod = await import("qrcode");
+  const dark = style?.dark || DEFAULT_QR_DARK;
+  const light = style?.light || "#ffffff";
+  const hasCenter = Boolean(style?.logo || style?.logoSrc);
+  const svg = await mod.toString(value, {
+    type: "svg",
+    errorCorrectionLevel: hasCenter ? "H" : "M",
+    margin: style?.margin ?? 1,
+    color: { dark, light },
+  });
+  if (!hasCenter) return svg;
+  const vb = svg.match(/viewBox="0 0 ([\d.]+) [\d.]+"/);
+  const size = vb ? parseFloat(vb[1]) : 0;
+  if (!size) return svg;
+  const badge = size * 0.2;
+  const c = size / 2;
+  const cushion = badge * 1.24;
+  let overlay =
+    `<rect x="${c - cushion / 2}" y="${c - cushion / 2}" width="${cushion}" ` +
+    `height="${cushion}" rx="${badge * 0.3}" fill="#ffffff"/>`;
+  if (style?.logoSrc) {
+    overlay +=
+      `<image x="${c - badge / 2}" y="${c - badge / 2}" width="${badge}" ` +
+      `height="${badge}" href="${style.logoSrc}" ` +
+      `preserveAspectRatio="xMidYMid slice"/>`;
+  } else {
+    overlay +=
+      `<rect x="${c - badge / 2}" y="${c - badge / 2}" width="${badge}" ` +
+      `height="${badge}" rx="${badge * 0.26}" fill="${dark}"/>` +
+      `<text x="${c}" y="${c}" font-family="system-ui,-apple-system,sans-serif" ` +
+      `font-weight="700" font-size="${badge * 0.44}" fill="#ffffff" ` +
+      `text-anchor="middle" dominant-baseline="central">DN</text>`;
+  }
+  return svg.replace("</svg>", `${overlay}</svg>`);
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -188,10 +240,12 @@ function roundRect(
   ctx.closePath();
 }
 
-async function overlayDueNestBadge(
+async function overlayCenterMark(
   dataUrl: string,
   size: number,
   dark: string,
+  light: string,
+  logoSrc?: string,
 ): Promise<string> {
   const img = await loadImage(dataUrl);
   const canvas = document.createElement("canvas");
@@ -203,19 +257,37 @@ async function overlayDueNestBadge(
 
   const badge = size * 0.2;
   const c = size / 2;
-  // White cushion so the badge reads cleanly against the modules.
-  ctx.fillStyle = "#ffffff";
+  // White cushion so the mark reads cleanly against the modules (use the
+  // background color when it's light, else white for contrast).
+  ctx.fillStyle = light || "#ffffff";
   roundRect(ctx, c - badge * 0.62, c - badge * 0.62, badge * 1.24, badge * 1.24, badge * 0.3);
   ctx.fill();
-  // Brand-colored badge with the DueNest monogram.
-  ctx.fillStyle = dark;
-  roundRect(ctx, c - badge / 2, c - badge / 2, badge, badge, badge * 0.26);
-  ctx.fill();
-  ctx.fillStyle = "#ffffff";
-  ctx.font = `700 ${badge * 0.44}px system-ui, -apple-system, sans-serif`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText("DN", c, c + badge * 0.02);
+
+  if (logoSrc) {
+    // Custom raster logo, clipped to a rounded square within the cushion.
+    const logo = await loadImage(logoSrc);
+    ctx.save();
+    roundRect(ctx, c - badge / 2, c - badge / 2, badge, badge, badge * 0.26);
+    ctx.clip();
+    // Cover-fit the logo into the badge square.
+    const ar = logo.width / logo.height || 1;
+    let dw = badge;
+    let dh = badge;
+    if (ar > 1) dw = badge * ar;
+    else dh = badge / ar;
+    ctx.drawImage(logo, c - dw / 2, c - dh / 2, dw, dh);
+    ctx.restore();
+  } else {
+    // Brand-colored badge with the DueNest monogram.
+    ctx.fillStyle = dark;
+    roundRect(ctx, c - badge / 2, c - badge / 2, badge, badge, badge * 0.26);
+    ctx.fill();
+    ctx.fillStyle = "#ffffff";
+    ctx.font = `700 ${badge * 0.44}px system-ui, -apple-system, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("DN", c, c + badge * 0.02);
+  }
   return canvas.toDataURL("image/png");
 }
 
@@ -234,7 +306,7 @@ export function QrCode({
 }) {
   // A single piece of state keyed to the value+style it was generated for, so we
   // never need a synchronous reset setState inside the effect.
-  const styleKey = `${style?.dark ?? ""}|${style?.light ?? ""}|${style?.logo ? "logo" : ""}|${style?.margin ?? ""}`;
+  const styleKey = `${style?.dark ?? ""}|${style?.light ?? ""}|${style?.logo ? "logo" : ""}|${style?.margin ?? ""}|${style?.logoSrc ? "custom" : ""}`;
   const [gen, setGen] = useState<{
     forKey: string;
     url: string | null;

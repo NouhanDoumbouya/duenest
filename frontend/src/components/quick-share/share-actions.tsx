@@ -22,7 +22,11 @@ import {
 import { siWhatsapp, siTelegram } from "simple-icons";
 
 import { Button } from "@/components/ui/button";
-import { generateQrDataUrl, type QrStyle } from "@/components/quick-share/shared";
+import {
+  generateQrDataUrl,
+  generateQrSvg,
+  type QrStyle,
+} from "@/components/quick-share/shared";
 import {
   buildEmailSubject,
   buildShareMessage,
@@ -89,7 +93,9 @@ export function ShareDistributionActions(props: ShareActionsProps) {
   } = props;
 
   const [copied, setCopied] = useState<string | null>(null);
-  const [downloading, setDownloading] = useState<"qr" | "card" | null>(null);
+  const [downloading, setDownloading] = useState<
+    "qr" | "svg" | "card" | null
+  >(null);
   // The `sms:` scheme only does anything on phones — gate the button to touch
   // devices so it never shows as a dead action on desktop.
   const canUseSms =
@@ -174,6 +180,20 @@ export function ShareDistributionActions(props: ShareActionsProps) {
       flash("QR image copied.");
     } catch {
       flash("Could not copy the QR image. Try downloading it instead.");
+    }
+  }
+
+  async function downloadQrSvg() {
+    setDownloading("svg");
+    try {
+      const svg = await generateQrSvg(shareUrl, props.qrStyle);
+      const dataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+      triggerDownload(dataUrl, "duenest-share-qr.svg");
+      flash("QR (SVG) downloaded.");
+    } catch {
+      flash("Could not generate the SVG.");
+    } finally {
+      setDownloading(null);
     }
   }
 
@@ -288,7 +308,7 @@ export function ShareDistributionActions(props: ShareActionsProps) {
       {/* Download row */}
       <div>
         <p className="mb-2 text-xs font-medium text-muted-foreground">Download</p>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <Button
             variant="outline"
             onClick={downloadQr}
@@ -300,7 +320,20 @@ export function ShareDistributionActions(props: ShareActionsProps) {
             ) : (
               <Download className="size-4" />
             )}
-            QR image
+            QR image (PNG)
+          </Button>
+          <Button
+            variant="outline"
+            onClick={downloadQrSvg}
+            disabled={downloading !== null}
+            className="justify-start"
+          >
+            {downloading === "svg" ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Download className="size-4" />
+            )}
+            QR vector (SVG)
           </Button>
           <Button
             variant="outline"

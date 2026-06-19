@@ -24,7 +24,7 @@ import {
   X,
 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { PageContainer } from "@/components/ui/page-container";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -126,8 +126,37 @@ export default function QuickShareDetailPage() {
   const [qrMargin, setQrMargin] = useState(
     () => loadDefaultQrStyle()?.margin ?? 1,
   );
+  // Custom center logo: client-side only, raster formats only, never stored.
+  const [qrLogoSrc, setQrLogoSrc] = useState<string | null>(null);
+  const [qrLogoError, setQrLogoError] = useState<string | null>(null);
   const [styleSaved, setStyleSaved] = useState(false);
   const qrCustomEnabled = useFeature("qr_customization");
+
+  const LOGO_MAX_BYTES = 2 * 1024 * 1024;
+  const LOGO_TYPES = ["image/png", "image/jpeg", "image/webp"];
+
+  function onLogoFile(file: File | undefined) {
+    setQrLogoError(null);
+    if (!file) return;
+    if (!LOGO_TYPES.includes(file.type)) {
+      setQrLogoError("Use a PNG, JPEG, or WebP image.");
+      return;
+    }
+    if (file.size > LOGO_MAX_BYTES) {
+      setQrLogoError("Logo too large (max 2MB). It may also make the QR hard to scan.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setQrLogoSrc(reader.result);
+        setStyleSaved(false);
+      }
+    };
+    reader.onerror = () =>
+      setQrLogoError("Could not read that image. QR is unchanged.");
+    reader.readAsDataURL(file);
+  }
 
   const claimUrl =
     session && typeof window !== "undefined"
@@ -292,6 +321,7 @@ export default function QuickShareDetailPage() {
     light: qrLight,
     logo: qrLogo,
     margin: qrMargin,
+    logoSrc: qrLogoSrc ?? undefined,
   };
   // Honest, non-blocking scan-reliability assessment for the chosen colors.
   const qrReliability = assessQrContrast(qrColor, qrLight);
@@ -521,6 +551,53 @@ export default function QuickShareDetailPage() {
                       ))}
                     </div>
                   </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Custom logo
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {qrLogoSrc && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setQrLogoSrc(null);
+                            setQrLogoError(null);
+                          }}
+                          className="text-[0.7rem] text-muted-foreground underline-offset-2 hover:underline"
+                        >
+                          Remove
+                        </button>
+                      )}
+                      <label
+                        className={cn(
+                          buttonVariants({ variant: "outline", size: "sm" }),
+                          "cursor-pointer text-xs",
+                        )}
+                      >
+                        {qrLogoSrc ? "Replace" : "Upload"}
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp"
+                          className="sr-only"
+                          onChange={(e) => {
+                            onLogoFile(e.target.files?.[0]);
+                            e.target.value = "";
+                          }}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                  {qrLogoError ? (
+                    <p className="flex items-center gap-1.5 text-xs text-destructive">
+                      <AlertTriangle className="size-3.5 shrink-0" aria-hidden />
+                      {qrLogoError}
+                    </p>
+                  ) : qrLogoSrc ? (
+                    <p className="text-[0.7rem] text-muted-foreground">
+                      Keep logos small and simple for reliable scanning. PNG, JPEG,
+                      or WebP — processed on your device, never uploaded.
+                    </p>
+                  ) : null}
                   <p
                     className={cn(
                       "flex items-center gap-1.5 text-xs",
