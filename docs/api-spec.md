@@ -1382,7 +1382,9 @@ Checklist response includes a derived `progress` object:
 | `PATCH` | `/api/v1/document-bundles/:bundle_id/requirements/:requirement_id/` | Update a requirement |
 | `DELETE` | `/api/v1/document-bundles/:bundle_id/requirements/:requirement_id/` | Delete a requirement |
 | `POST` | `/api/v1/document-bundles/:bundle_id/requirements/:requirement_id/link-document/` | Link an owner-owned document |
-| `POST` | `/api/v1/document-bundles/:bundle_id/requirements/:requirement_id/link-file/` | Link an owner-owned file |
+| `POST` | `/api/v1/document-bundles/:bundle_id/requirements/:requirement_id/link-file/` | Link an owner-owned file (Vault or File Inbox) |
+| `GET` | `/api/v1/document-bundles/pack-templates/` | List generic, non-official pack templates (gated: `application_pack_templates`) |
+| `GET` | `/api/v1/document-bundles/:bundle_id/activity/` | Owner-only pack activity feed (gated: `application_pack_timeline`) |
 
 - **Readiness** (`readiness_score`, 0–100) is derived from required, non-skipped
   requirements: a bundle is "ready" only when every required requirement is
@@ -1391,8 +1393,30 @@ Checklist response includes a derived `progress` object:
   to optional ones. The score is recalculated whenever a requirement changes.
 - `link-document` / `link-file` accept `{ "document": <id> }` / `{ "file": <id> }`,
   verify ownership (`404` otherwise), set the link, and flip a `missing`
-  requirement to `attached`.
+  requirement to `attached`. Both also append a bundle-scoped activity event.
 - Requirement `status`: `missing`, `attached`, `completed`, `skipped`.
+
+**Application Pack Preparation (Application Packs).** Built on bundles and gated
+for controlled launch (all default `founder_only`, server-enforced):
+
+- `POST /document-bundles/` accepts an optional `template` key (e.g.
+  `scholarship`, `visa`, `university`, `job`, `travel`, `renewal`, `custom`).
+  When `application_pack_templates` is enabled for the caller, the backend seeds
+  an editable starter checklist of `DocumentBundleRequirement` rows and aligns
+  the bundle type. Templates are suggestions only — never presented as official
+  ("requirements vary — verify with the official source"). `custom` seeds nothing.
+- `GET /document-bundles/pack-templates/` returns each template's `key`, `label`,
+  `description`, `bundle_type`, `disclaimer`, and `items` (`title`, `is_required`).
+  `503` when the feature is unavailable to the caller.
+- `GET /document-bundles/:bundle_id/activity/` returns an owner-only, privacy-safe
+  feed (`{ "items": [...] }`) of pack events — created, template applied, item
+  added/removed/status-changed, document attached, status changed, exported,
+  shared via SafeSend. No file contents or recipient/link data. `503` when the
+  feature is unavailable.
+- **SafeSend handoff:** sharing a whole pack reuses the existing Quick Share
+  endpoint (`bundle_ids`, ownership enforced server-side); no link is created
+  until the user confirms. A `shared_via_safesend` activity event is recorded on
+  the bundle. The UI shortcut is gated by `application_pack_safesend`.
 
 Bundle response includes a `readiness` object:
 
@@ -3268,8 +3292,9 @@ A share link or room with `access_code_required` is unlocked as follows:
 
 ```
 GET  /api/v1/document-bundles/:id/files/                  # safe file metadata + missing items
-POST /api/v1/document-bundles/:id/export-files/           # ZIP of all files
-POST /api/v1/document-bundles/:id/export-selected-files/  # body: {file_ids:[…]}
+POST /api/v1/document-bundles/:id/export-files/           # ZIP of all files; body: {name?}
+POST /api/v1/document-bundles/:id/export-selected-files/  # body: {file_ids:[…], name?}
+POST /api/v1/document-bundles/:id/export-merged-pdf/      # single merged PDF; body: {name?}
 POST /api/v1/documents/files/export-selected/             # body: {file_ids:[…]} (normal bulk)
 ```
 
@@ -3278,6 +3303,18 @@ ZIPs are organised `Pack/Requirement/file.pdf` with a `bundle_manifest.json`
 items, proof/checklist summaries, warnings for expired docs / skipped missing
 files). Trashed/unavailable files and other users' files are never included;
 no internal paths, tokens, or access-code hashes appear in the manifest.
+
+- **`name` (optional)** on the bundle ZIP/merged-PDF exports sets an
+  application-friendly download filename. It is sanitized server-side
+  (`sanitize_export_basename`: word/space/hyphen only, collapsed to underscores,
+  case preserved, capped at 80 chars) and the extension is appended. Without it,
+  a dated default derived from the bundle title is used.
+- **`export-merged-pdf/`** (gated: `application_pack_preparation`) merges the
+  pack's PDF files in requirement order via `pypdf`. Non-PDF files (e.g. images)
+  and any unreadable PDF are skipped and counted, never silently dropped; the
+  `X-Export-Files-Count` / `X-Export-Skipped-Count` headers report the result.
+  Returns `400` (`state: "no_pdfs"`) when the pack has no PDFs to merge. Original
+  files are never modified; the merge happens on decrypted bytes in memory.
 
 ## 28.3 Share link access limits, view-only & watermarking
 
