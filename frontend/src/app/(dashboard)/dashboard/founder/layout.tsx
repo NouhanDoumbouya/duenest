@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   LockKeyhole,
   MessageSquare,
+  Rocket,
   ShieldCheck,
   Users,
 } from "lucide-react";
@@ -28,6 +29,7 @@ const founderNav = [
   { label: "Errors", href: "/dashboard/founder/errors", icon: AlertTriangle },
   { label: "Security", href: "/dashboard/founder/security", icon: ShieldCheck },
   { label: "Users", href: "/dashboard/founder/users", icon: Users },
+  { label: "Launch", href: "/dashboard/founder/launch", icon: Rocket },
 ];
 
 function FounderLoader() {
