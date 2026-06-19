@@ -1323,5 +1323,17 @@ approval), so the other two fold into it rather than the reverse:
   identical regardless of entry point.
 - **Backward compatibility:** `DocumentFileShareLink` and `ShareRoom` models and
   their public endpoints (`/share/files/:token`, `/rooms/:token`) are kept so
-  links already in the wild keep resolving. No data migration. Org Secure Rooms
-  and Emergency Packs remain separate, specialized flows and are out of scope.
+  links already in the wild keep resolving. No data migration.
+
+**Deliberately NOT unified — `OrganizationSecureRoom` and `EmergencyAccessPack`.**
+These look superficially similar (token-gated, access codes, expiry) but are
+different paradigms, so folding them into the personal share engine would damage
+them. `OrganizationSecureRoom` is **organization-owned** with member
+co-management (`organization` + `created_by`); a `QuickShareSession` is owned by a
+single user, so routing it through the wizard would strip org co-ownership.
+`EmergencyAccessPack` is a **break-glass** mechanism — trusted contacts, unlock
+modes (instant code / owner approval / delayed unlock with `unlock_delay_hours`),
+unlock requests, access duration, optional location capture — none of which the
+share engine models. Both remain separate by design (reaffirmed 2026-06). Any
+future convergence should be a shared *backend plumbing* refactor
+(token/access-code/watermark/limit helpers), not a merge of the user flows.
