@@ -422,10 +422,13 @@ async function postZipAndSave(
   saveBlob(await response.blob(), name);
 }
 
-export function exportBundleFilesZip(bundleId: number): Promise<void> {
+export function exportBundleFilesZip(
+  bundleId: number,
+  name?: string,
+): Promise<void> {
   return postZipAndSave(
     `/document-bundles/${bundleId}/export-files/`,
-    undefined,
+    name ? { name } : undefined,
     `duenest-bundle-${bundleId}.zip`,
   );
 }
@@ -433,10 +436,11 @@ export function exportBundleFilesZip(bundleId: number): Promise<void> {
 export function exportSelectedBundleFilesZip(
   bundleId: number,
   fileIds: number[],
+  name?: string,
 ): Promise<void> {
   return postZipAndSave(
     `/document-bundles/${bundleId}/export-selected-files/`,
-    { file_ids: fileIds },
+    name ? { file_ids: fileIds, name } : { file_ids: fileIds },
     `duenest-bundle-${bundleId}-selected.zip`,
   );
 }

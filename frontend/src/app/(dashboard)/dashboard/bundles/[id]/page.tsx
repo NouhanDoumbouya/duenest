@@ -719,7 +719,11 @@ export default function BundleDetailPage() {
 
           {resolvedTab === "files" && (
             <div className="content-fade-in">
-              <BundleFilesSection bundleId={bundle.id} />
+              <BundleFilesSection
+                bundleId={bundle.id}
+                bundleTitle={bundle.title}
+                targetDate={bundle.target_date}
+              />
             </div>
           )}
 

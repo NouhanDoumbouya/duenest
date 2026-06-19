@@ -2803,6 +2803,21 @@ def _slugify_filename(name: str, fallback: str = "export") -> str:
     return slug.strip("_") or fallback
 
 
+def sanitize_export_basename(name: str, fallback: str = "pack") -> str:
+    """
+    Clean a user-provided export name into a safe basename (no extension),
+    preserving case so application-friendly names like ``Scholarship_Pack_2026``
+    survive. Strips characters that aren't word/space/hyphen, collapses runs to
+    single underscores, trims, and caps length. Returns ``fallback`` when nothing
+    usable remains.
+    """
+    import re
+
+    cleaned = re.sub(r"[^\w\s-]", "", name or "", flags=re.UNICODE)
+    cleaned = re.sub(r"[\s-]+", "_", cleaned).strip("_")[:80]
+    return cleaned or fallback
+
+
 def _dedupe_arcname(arcname: str, used: set) -> str:
     """Return a unique arcname, appending ' (2)', ' (3)', … before the suffix."""
     if arcname not in used:
@@ -2888,7 +2903,7 @@ def build_bundle_manifest(
     }
 
 
-def build_bundle_zip(user, bundle, *, file_ids=None):
+def build_bundle_zip(user, bundle, *, file_ids=None, name=None):
     """
     Build a streamable ZIP of a bundle's files plus a manifest.
 
@@ -2896,6 +2911,10 @@ def build_bundle_zip(user, bundle, *, file_ids=None):
     are never included; selected exports keep only owned files in ``file_ids``;
     physically-missing files are skipped and reported in the manifest warnings.
     No internal storage path is ever exposed.
+
+    ``name`` is an optional user-chosen export name; when given it is sanitized
+    and used as the download filename. Otherwise a dated default derived from the
+    bundle title is used.
     """
     import tempfile
     import zipfile
@@ -2956,9 +2975,14 @@ def build_bundle_zip(user, bundle, *, file_ids=None):
         )
 
     spooled.seek(0)
-    zip_filename = (
-        f"{_slugify_filename(bundle.title, 'bundle')}_{today.isoformat()}.zip"
-    )
+    if name:
+        zip_filename = (
+            f"{sanitize_export_basename(name, _slugify_filename(bundle.title, 'bundle'))}.zip"
+        )
+    else:
+        zip_filename = (
+            f"{_slugify_filename(bundle.title, 'bundle')}_{today.isoformat()}.zip"
+        )
     summary = {
         "documents_count": len(
             {f["document"] for f in included_files if f.get("document")}

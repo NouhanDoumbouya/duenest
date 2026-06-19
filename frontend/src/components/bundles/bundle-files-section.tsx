@@ -25,7 +25,13 @@ import {
   FilePreviewDialog,
   type FilePreviewState,
 } from "@/components/ui/file-preview-dialog";
+import { Input } from "@/components/ui/input";
+import { useFeature } from "@/components/features/feature-flags-provider";
 import { ApiError } from "@/lib/api";
+import {
+  cleanPackName,
+  suggestPackExportName,
+} from "@/lib/files/pack-export-name";
 import {
   downloadDocumentFile,
   formatFileSize,
@@ -50,7 +56,21 @@ const MISSING_REASON_LABEL: Record<BundleMissingFileReason, string> = {
   document_trashed: "Document is in the trash",
 };
 
-export function BundleFilesSection({ bundleId }: { bundleId: number }) {
+export function BundleFilesSection({
+  bundleId,
+  bundleTitle,
+  targetDate,
+}: {
+  bundleId: number;
+  bundleTitle?: string;
+  targetDate?: string | null;
+}) {
+  // Application-friendly export naming (gated). The field defaults to a clean
+  // suggestion and stays fully editable; the preview matches the saved file.
+  const namingEnabled = useFeature("application_pack_preparation");
+  const [exportName, setExportName] = useState(() =>
+    suggestPackExportName(bundleTitle ?? "Pack", targetDate),
+  );
   const [data, setData] = useState<BundleFilesResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -122,16 +142,17 @@ export function BundleFilesSection({ bundleId }: { bundleId: number }) {
     setExportError(null);
     setExportDone(null);
     setExporting(mode);
+    const name = namingEnabled ? cleanPackName(exportName) : undefined;
     try {
       if (mode === "all") {
-        await exportBundleFilesZip(bundleId);
+        await exportBundleFilesZip(bundleId, name);
         setExportDone(
           `Prepared a ZIP of all ${data.summary.total_files} file${
             data.summary.total_files === 1 ? "" : "s"
           }.`,
         );
       } else {
-        await exportSelectedBundleFilesZip(bundleId, [...selected]);
+        await exportSelectedBundleFilesZip(bundleId, [...selected], name);
         setExportDone(
           `Prepared a ZIP of ${selected.size} selected file${
             selected.size === 1 ? "" : "s"
@@ -244,6 +265,27 @@ export function BundleFilesSection({ bundleId }: { bundleId: number }) {
         )}
       </CardHeader>
       <CardContent className="space-y-4">
+        {namingEnabled && data && data.summary.total_files > 0 && (
+          <div className="space-y-1.5 rounded-xl border border-border bg-muted/25 p-3">
+            <label htmlFor="pack-export-name" className="text-sm font-medium">
+              Export name
+            </label>
+            <Input
+              id="pack-export-name"
+              value={exportName}
+              onChange={(e) => setExportName(e.target.value)}
+              placeholder="Scholarship_Application_Pack_2026"
+              className="h-9"
+            />
+            <p className="text-xs text-muted-foreground">
+              Saves as{" "}
+              <span className="font-medium text-foreground">
+                {cleanPackName(exportName)}.zip
+              </span>
+              . Original documents are unchanged.
+            </p>
+          </div>
+        )}
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" />

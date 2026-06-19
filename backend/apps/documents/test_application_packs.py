@@ -124,6 +124,52 @@ class PackTemplateSeedingTest(ApplicationPackBaseTest):
         )
 
 
+class PackExportNamingTest(ApplicationPackBaseTest):
+    def _bundle_with_file(self):
+        bundle = self.client.post(
+            "/api/v1/document-bundles/", {"title": "My Pack"}, format="json"
+        ).data
+        req = self.client.post(
+            f"/api/v1/document-bundles/{bundle['id']}/requirements/",
+            {"title": "Doc", "is_required": True},
+            format="json",
+        ).data
+        inbox_file = DocumentFile.objects.create(
+            uploaded_by=self.owner,
+            file=SimpleUploadedFile("doc.pdf", b"%PDF-1.4 x"),
+            original_filename="doc.pdf",
+            content_type="application/pdf",
+        )
+        self.client.post(
+            f"/api/v1/document-bundles/{bundle['id']}/requirements/{req['id']}/link-file/",
+            {"file": inbox_file.id},
+            format="json",
+        )
+        return bundle
+
+    def test_custom_name_is_sanitized_and_used(self):
+        bundle = self._bundle_with_file()
+        response = self.client.post(
+            f"/api/v1/document-bundles/{bundle['id']}/export-files/",
+            {"name": "Scholarship / Application - 2026!"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        disposition = response.headers["Content-Disposition"]
+        self.assertIn("Scholarship_Application_2026.zip", disposition)
+
+    def test_default_name_used_without_custom(self):
+        bundle = self._bundle_with_file()
+        response = self.client.post(
+            f"/api/v1/document-bundles/{bundle['id']}/export-files/",
+            {},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # Falls back to a dated, slugified default derived from the title.
+        self.assertIn("my_pack", response.headers["Content-Disposition"].lower())
+
+
 class PackTemplatesEndpointTest(ApplicationPackBaseTest):
     URL = "/api/v1/document-bundles/pack-templates/"
 

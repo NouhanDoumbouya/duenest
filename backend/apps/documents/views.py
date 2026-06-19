@@ -2487,7 +2487,10 @@ class DocumentBundleExportFilesView(APIView):
         bundle = get_object_or_404(
             DocumentBundle, pk=bundle_id, owner=request.user
         )
-        spooled, filename, summary = build_bundle_zip(request.user, bundle)
+        name = request.data.get("name") if isinstance(request.data, dict) else None
+        spooled, filename, summary = build_bundle_zip(
+            request.user, bundle, name=name
+        )
         if summary["files_count"] == 0:
             spooled.close()
             return Response(
@@ -2522,8 +2525,9 @@ class DocumentBundleExportSelectedFilesView(APIView):
                 {"detail": "Select at least one file to export."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        name = request.data.get("name") if isinstance(request.data, dict) else None
         spooled, filename, summary = build_bundle_zip(
-            request.user, bundle, file_ids=file_ids
+            request.user, bundle, file_ids=file_ids, name=name
         )
         if summary["files_count"] == 0:
             spooled.close()
