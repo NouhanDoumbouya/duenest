@@ -13,11 +13,13 @@ import {
   Loader2,
   Plus,
   Search,
+  Table2,
   Trash2,
   X,
 } from "lucide-react";
 
 import { DocumentCard } from "@/components/documents/document-card";
+import { DocumentsTable } from "@/components/documents/documents-table";
 import { useFeature } from "@/components/features/feature-flags-provider";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -239,18 +241,22 @@ function DocumentsPageInner() {
   // Grid/list toggle, remembered locally (item 176/197). Lazy init reads the
   // saved choice on the client; this inner component renders under Suspense so
   // there is no SSR/hydration mismatch.
-  const [view, setView] = useState<"list" | "grid">(() => {
+  const tableViewEnabled = useFeature("vault_table_view");
+  const [view, setView] = useState<"list" | "grid" | "table">(() => {
     if (typeof window === "undefined") return "list";
-    return window.localStorage.getItem("duenest.documentsView") === "grid"
-      ? "grid"
-      : "list";
+    const saved = window.localStorage.getItem("duenest.documentsView");
+    if (saved === "grid" || saved === "table") return saved;
+    return "list";
   });
-  function changeView(next: "list" | "grid") {
+  function changeView(next: "list" | "grid" | "table") {
     setView(next);
     if (typeof window !== "undefined") {
       window.localStorage.setItem("duenest.documentsView", next);
     }
   }
+  // If the table view was persisted but the feature is now off, fall back so the
+  // user never lands on a hidden view.
+  const effectiveView = view === "table" && !tableViewEnabled ? "list" : view;
   // Client-side "most urgent first" sort over the loaded results (kept separate
   // from the server `ordering` param, which has a fixed set of values).
   const [riskSort, setRiskSort] = useState(false);
@@ -1107,11 +1113,11 @@ function DocumentsPageInner() {
               <button
                 type="button"
                 onClick={() => changeView("list")}
-                aria-pressed={view === "list"}
+                aria-pressed={effectiveView === "list"}
                 aria-label="List view"
                 className={cn(
                   "flex size-7 items-center justify-center rounded-md transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
-                  view === "list"
+                  effectiveView === "list"
                     ? "bg-primary text-primary-foreground"
                     : "text-muted-foreground hover:text-foreground",
                 )}
@@ -1121,38 +1127,64 @@ function DocumentsPageInner() {
               <button
                 type="button"
                 onClick={() => changeView("grid")}
-                aria-pressed={view === "grid"}
+                aria-pressed={effectiveView === "grid"}
                 aria-label="Grid view"
                 className={cn(
                   "flex size-7 items-center justify-center rounded-md transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
-                  view === "grid"
+                  effectiveView === "grid"
                     ? "bg-primary text-primary-foreground"
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 <LayoutGrid className="size-4" aria-hidden />
               </button>
+              {tableViewEnabled && (
+                <button
+                  type="button"
+                  onClick={() => changeView("table")}
+                  aria-pressed={effectiveView === "table"}
+                  aria-label="Table view"
+                  className={cn(
+                    "flex size-7 items-center justify-center rounded-md transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
+                    effectiveView === "table"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <Table2 className="size-4" aria-hidden />
+                </button>
+              )}
               </div>
             </div>
           </div>
-          <div
-            className={cn(
-              view === "grid"
-                ? "grid gap-4 lg:grid-cols-2"
-                : "flex flex-col gap-4",
-            )}
-          >
-            {displayedDocs.map((doc) => (
-              <DocumentCard
-                key={doc.id}
-                doc={doc}
-                onRequestDelete={setPendingDelete}
-                selectable={selectMode}
-                selected={selected.has(doc.id)}
-                onToggleSelect={toggleSelected}
-              />
-            ))}
-          </div>
+          {effectiveView === "table" ? (
+            <DocumentsTable
+              docs={displayedDocs}
+              selectable={selectMode}
+              selectedIds={selected}
+              onToggleSelect={toggleSelected}
+              onRequestDelete={setPendingDelete}
+            />
+          ) : (
+            <div
+              className={cn(
+                effectiveView === "grid"
+                  ? "grid gap-4 lg:grid-cols-2"
+                  : "flex flex-col gap-4",
+              )}
+            >
+              {displayedDocs.map((doc) => (
+                <DocumentCard
+                  key={doc.id}
+                  doc={doc}
+                  onRequestDelete={setPendingDelete}
+                  selectable={selectMode}
+                  selected={selected.has(doc.id)}
+                  onToggleSelect={toggleSelected}
+                />
+              ))}
+            </div>
+          )}
           {hasNext && (
             <div className="flex justify-center pt-2">
               <Button
