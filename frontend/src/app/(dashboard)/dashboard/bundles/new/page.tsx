@@ -305,16 +305,20 @@ export default function NewBundlePage() {
               </p>
             )}
 
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-col-reverse items-center gap-3 sm:flex-row sm:justify-end">
               <Link
                 href="/dashboard/bundles"
                 className="text-sm text-muted-foreground transition-colors hover:text-foreground"
               >
                 Cancel
               </Link>
-              <Button type="submit" disabled={submitting}>
+              <Button
+                type="submit"
+                disabled={submitting}
+                className="w-full sm:w-auto"
+              >
                 {submitting && <Loader2 className="size-4 animate-spin" />}
-                Create bundle
+                {submitting ? "Creating pack…" : "Create bundle"}
               </Button>
             </div>
           </form>
