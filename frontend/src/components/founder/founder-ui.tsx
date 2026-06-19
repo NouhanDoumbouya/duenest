@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, type ReactNode } from "react";
+import { useId, useRef, useState, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -98,6 +98,9 @@ export function FounderLineChart({
   color?: string;
 }) {
   const gradientId = useId();
+  const containerRef = useRef<HTMLDivElement>(null);
+  // Index of the point the user is hovering/focusing, for the readout tooltip.
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const max = Math.max(1, ...data.map((point) => point.count));
   const width = 640;
   const height = 180;
@@ -118,6 +121,17 @@ export function FounderLineChart({
       : "";
   const total = data.reduce((sum, point) => sum + point.count, 0);
   const last = points[points.length - 1];
+  const active =
+    activeIndex !== null && points[activeIndex] ? points[activeIndex] : null;
+
+  function pointerToIndex(clientX: number) {
+    const el = containerRef.current;
+    if (!el || points.length === 0) return;
+    const rect = el.getBoundingClientRect();
+    const frac = (clientX - rect.left) / rect.width;
+    const idx = Math.round(frac * (points.length - 1));
+    setActiveIndex(Math.max(0, Math.min(points.length - 1, idx)));
+  }
 
   return (
     <Card>
@@ -138,6 +152,12 @@ export function FounderLineChart({
           </div>
         ) : (
           <div>
+            <div
+              ref={containerRef}
+              className="relative"
+              onPointerMove={(e) => pointerToIndex(e.clientX)}
+              onPointerLeave={() => setActiveIndex(null)}
+            >
             <svg
               viewBox={`0 0 ${width} ${height}`}
               className="h-48 w-full overflow-visible"
@@ -173,13 +193,47 @@ export function FounderLineChart({
                 strokeWidth="2.5"
               />
               {/* Emphasise only the latest point instead of a dot on every node. */}
-              {last && (
+              {last && !active && (
                 <>
                   <circle cx={last.x} cy={last.y} r="5" fill="var(--card)" />
                   <circle cx={last.x} cy={last.y} r="3.5" fill={color} />
                 </>
               )}
+              {/* Hover/focus readout: a guide line + dot at the active point. */}
+              {active && (
+                <>
+                  <line
+                    x1={active.x}
+                    y1={top}
+                    x2={active.x}
+                    y2={baseline}
+                    stroke={color}
+                    strokeWidth="1"
+                    opacity="0.4"
+                  />
+                  <circle cx={active.x} cy={active.y} r="5" fill="var(--card)" />
+                  <circle cx={active.x} cy={active.y} r="3.5" fill={color} />
+                </>
+              )}
             </svg>
+            {active && (
+              <div
+                className="pointer-events-none absolute top-0 z-10 -translate-x-1/2 rounded-lg border border-border bg-card px-2 py-1 text-center shadow-md"
+                style={{
+                  left: `${Math.min(92, Math.max(8, (active.x / width) * 100))}%`,
+                }}
+                role="status"
+                aria-live="polite"
+              >
+                <p className="text-sm font-semibold tabular-nums">
+                  {nf.format(active.count)}
+                </p>
+                <p className="text-[0.7rem] text-muted-foreground">
+                  {active.date}
+                </p>
+              </div>
+            )}
+            </div>
             <div className="mt-2 flex justify-between text-xs text-muted-foreground">
               <span>{data[0]?.date}</span>
               <span>
