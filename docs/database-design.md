@@ -1898,10 +1898,12 @@ Owner-only trail: `owner`, `room`, `action`, `actor_type`, `ip_address`,
 through; `DocumentFileShareLink` and `ShareRoom` above remain only so links
 already in the wild keep resolving (no migration). A session carries the same
 controls as those models — `token`, `permission`, `expires_at`, `revoked_at`,
-`access_code_required`/`access_code_hash`, `watermark_enabled`, and
-**`privacy_screen_enabled`** (screenshot deterrence; added so file-link/room
-shares lose nothing through the engine) — plus claim/QR/DN-code/mode features the
-others lack.
+`access_code_required`/`access_code_hash`, `watermark_enabled`,
+**`privacy_screen_enabled`** (screenshot deterrence), and the per-access caps
+**`max_views`/`view_count`** and **`max_downloads`/`download_count`** with
+`limit_reached_at` (added so the single-file link's "limited number of
+views/downloads" survives the engine; counters increment server-side on every
+preview/download) — plus claim/QR/DN-code/mode features the others lack.
 
 `QuickShareItem` exposes one of `file` / `document` / `bundle` / **`proof`** FKs
 (all owner-owned). The `proof` FK was added so Share Rooms' proof items survive

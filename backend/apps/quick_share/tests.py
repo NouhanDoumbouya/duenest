@@ -981,3 +981,73 @@ class UnifiedEngineItemTests(QuickShareBaseTest):
         shared = {f["name"] for f in resp.data["files"]}
         self.assertEqual(shared, {"inbox.pdf", "passport.pdf", "visa.pdf"})
         self.assertEqual(session.items.count(), 3)
+
+
+class AccessLimitTests(QuickShareBaseTest):
+    """
+    Per-access view/download caps, ported from the single-file share link so it
+    keeps full parity through the engine. The owner may preview/download their own
+    share (view-as-recipient), which is enough to exercise the counters.
+    """
+
+    def _create(self, **extra):
+        self.client.force_authenticate(self.alice)
+        body = {
+            "permission": "download_allowed",
+            "expires_at": (timezone.now() + timedelta(minutes=10)).isoformat(),
+            "file_ids": [self.alice_file.id],
+        }
+        body.update(extra)
+        resp = self.client.post(
+            "/api/v1/quick-share/sessions/", body, format="json"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.data)
+        return QuickShareSession.objects.get(id=resp.data["id"])
+
+    def _preview(self, session):
+        return self.consume(
+            self.client.get(
+                f"/api/v1/quick-share/claim/{session.token}"
+                f"/files/{self.alice_file.id}/preview/"
+            )
+        )
+
+    def _download(self, session):
+        return self.consume(
+            self.client.get(
+                f"/api/v1/quick-share/claim/{session.token}"
+                f"/files/{self.alice_file.id}/download/"
+            )
+        )
+
+    def test_view_limit_blocks_after_cap(self):
+        session = self._create(max_views=1)
+        self.assertEqual(self._preview(session).status_code, status.HTTP_200_OK)
+        session.refresh_from_db()
+        self.assertEqual(session.view_count, 1)
+        self.assertIsNotNone(session.limit_reached_at)
+        blocked = self._preview(session)
+        self.assertEqual(blocked.status_code, status.HTTP_410_GONE)
+        self.assertEqual(blocked.data["state"], "limit_reached")
+
+    def test_download_limit_blocks_after_cap(self):
+        session = self._create(max_downloads=1)
+        self.assertEqual(self._download(session).status_code, status.HTTP_200_OK)
+        session.refresh_from_db()
+        self.assertEqual(session.download_count, 1)
+        self.assertTrue(session.is_download_limit_reached)
+        blocked = self._download(session)
+        self.assertEqual(blocked.status_code, status.HTTP_410_GONE)
+        self.assertEqual(blocked.data["state"], "limit_reached")
+        # The view cap is independent: previewing is still allowed.
+        self.assertEqual(self._preview(session).status_code, status.HTTP_200_OK)
+
+    def test_unlimited_by_default_is_not_counted(self):
+        session = self._create()
+        for _ in range(3):
+            self.assertEqual(
+                self._preview(session).status_code, status.HTTP_200_OK
+            )
+        session.refresh_from_db()
+        self.assertEqual(session.view_count, 0)
+        self.assertIsNone(session.limit_reached_at)

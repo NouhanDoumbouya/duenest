@@ -3690,10 +3690,12 @@ presentation only; every share supports all three), `title?`, `purpose?`,
 `recipient_label?` (optional sender note about who the share is for; echoed back
 to the recipient for trust context), `permission`, `expires_at`,
 `access_code_required`, `access_code?` (write-only; auto-generated when required
-but blank), `one_time`, `max_claims?`, `require_sender_approval`,
-`watermark_enabled`, `privacy_screen_enabled` (screenshot deterrence on the public
-viewer), and the item lists `file_ids[]`, `document_ids[]`, `bundle_ids[]`, and
-`proof_ids[]` (all must be owned by the requester; others are skipped, and a
+but blank), `one_time`, `max_claims?`, `max_views?` / `max_downloads?`
+(per-access caps, null = unlimited; counted server-side on every preview/download
+— reaching the view cap closes the share, reaching the download cap blocks
+further downloads), `require_sender_approval`, `watermark_enabled`,
+`privacy_screen_enabled` (screenshot deterrence on the public viewer), and the
+item lists `file_ids[]`, `document_ids[]`, `bundle_ids[]`, and `proof_ids[]` (all must be owned by the requester; others are skipped, and a
 session with no valid items is rejected). Quick Share is the single sharing
 engine, so these cover everything the legacy single-file link and Share Rooms
 exposed: a `document_id` shares the document's current active files, a `bundle_id`

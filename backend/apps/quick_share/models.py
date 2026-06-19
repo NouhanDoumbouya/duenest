@@ -148,6 +148,16 @@ class QuickShareSession(models.Model):
     max_claims = models.PositiveIntegerField(null=True, blank=True)
     claim_count = models.PositiveIntegerField(default=0)
 
+    # Per-access caps (independent of the per-recipient claim limits above), so a
+    # single-file link's "limited number of views/downloads" survives through the
+    # engine. Null = unlimited. Counters increment server-side on every
+    # preview/download; reaching the view cap closes the share.
+    max_views = models.PositiveIntegerField(null=True, blank=True)
+    view_count = models.PositiveIntegerField(default=0)
+    max_downloads = models.PositiveIntegerField(null=True, blank=True)
+    download_count = models.PositiveIntegerField(default=0)
+    limit_reached_at = models.DateTimeField(null=True, blank=True)
+
     require_sender_approval = models.BooleanField(default=False)
     watermark_enabled = models.BooleanField(default=True)
     # Screenshot deterrence on the public viewer (blurs when the tab loses focus).
@@ -218,12 +228,24 @@ class QuickShareSession(models.Model):
         return cap is not None and self.claim_count >= cap
 
     @property
+    def is_view_limit_reached(self) -> bool:
+        return self.max_views is not None and self.view_count >= self.max_views
+
+    @property
+    def is_download_limit_reached(self) -> bool:
+        return (
+            self.max_downloads is not None
+            and self.download_count >= self.max_downloads
+        )
+
+    @property
     def is_active(self) -> bool:
         return (
             not self.is_revoked
             and not self.is_expired
             and not self.is_consumed
             and not self.is_claim_limit_reached
+            and not self.is_view_limit_reached
         )
 
     @property
