@@ -112,6 +112,16 @@ affordances on the scanner success screen; the underlying risky actions reuse
 already server-gated flows (e.g. Quick Share create is enforced by `quick_share`
 regardless of `scan_to_safesend`). See `DOCUMENT_SCANNER.md`.
 
+The **Application Pack Preparation** keys also seed `founder_only`:
+`application_pack_preparation` (master gate; also enforces the merged-PDF export
+endpoint and gates the review screen + export-name field),
+`application_pack_templates` (the pack-template list endpoint + `template`
+seeding on bundle create), `application_pack_timeline` (the owner-only bundle
+activity feed endpoint), and `application_pack_safesend` (the "Share pack safely"
+shortcut into Quick Share). The template/timeline/merged-PDF endpoints are
+enforced server-side (`503`); the SafeSend shortcut reuses the already-gated
+`quick_share` flow. See `api-spec.md` §13B.3 / §28.2.
+
 Recommended beta postures a founder may choose: set newer/sensitive features
 (e.g. `emergency_public_viewer`, `secure_rooms`, `organizations`) to `beta_only`
 until real-user QA is done; `email_reminders` stays `enabled` in dev but

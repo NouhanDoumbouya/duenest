@@ -25,7 +25,13 @@ import {
   FilePreviewDialog,
   type FilePreviewState,
 } from "@/components/ui/file-preview-dialog";
+import { Input } from "@/components/ui/input";
+import { useFeature } from "@/components/features/feature-flags-provider";
 import { ApiError } from "@/lib/api";
+import {
+  cleanPackName,
+  suggestPackExportName,
+} from "@/lib/files/pack-export-name";
 import {
   downloadDocumentFile,
   formatFileSize,
@@ -35,6 +41,7 @@ import {
 import { formatDate } from "@/lib/documents";
 import {
   exportBundleFilesZip,
+  exportBundleMergedPdf,
   exportSelectedBundleFilesZip,
   getBundleFiles,
 } from "@/lib/renewal-workspace";
@@ -50,7 +57,21 @@ const MISSING_REASON_LABEL: Record<BundleMissingFileReason, string> = {
   document_trashed: "Document is in the trash",
 };
 
-export function BundleFilesSection({ bundleId }: { bundleId: number }) {
+export function BundleFilesSection({
+  bundleId,
+  bundleTitle,
+  targetDate,
+}: {
+  bundleId: number;
+  bundleTitle?: string;
+  targetDate?: string | null;
+}) {
+  // Application-friendly export naming (gated). The field defaults to a clean
+  // suggestion and stays fully editable; the preview matches the saved file.
+  const namingEnabled = useFeature("application_pack_preparation");
+  const [exportName, setExportName] = useState(() =>
+    suggestPackExportName(bundleTitle ?? "Pack", targetDate),
+  );
   const [data, setData] = useState<BundleFilesResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -58,7 +79,9 @@ export function BundleFilesSection({ bundleId }: { bundleId: number }) {
   const [actionError, setActionError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [selected, setSelected] = useState<Set<number>>(new Set());
-  const [exporting, setExporting] = useState<"all" | "selected" | null>(null);
+  const [exporting, setExporting] = useState<
+    "all" | "selected" | "merged" | null
+  >(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [exportDone, setExportDone] = useState<string | null>(null);
   const [previewFile, setPreviewFile] = useState<BundleFile | null>(null);
@@ -117,21 +140,27 @@ export function BundleFilesSection({ bundleId }: { bundleId: number }) {
     });
   }
 
-  async function runExport(mode: "all" | "selected") {
+  async function runExport(mode: "all" | "selected" | "merged") {
     if (!data) return;
     setExportError(null);
     setExportDone(null);
     setExporting(mode);
+    const name = namingEnabled ? cleanPackName(exportName) : undefined;
     try {
       if (mode === "all") {
-        await exportBundleFilesZip(bundleId);
+        await exportBundleFilesZip(bundleId, name);
         setExportDone(
           `Prepared a ZIP of all ${data.summary.total_files} file${
             data.summary.total_files === 1 ? "" : "s"
           }.`,
         );
+      } else if (mode === "merged") {
+        await exportBundleMergedPdf(bundleId, name);
+        setExportDone(
+          "Prepared a merged PDF of this pack's PDF files. Image files aren't included.",
+        );
       } else {
-        await exportSelectedBundleFilesZip(bundleId, [...selected]);
+        await exportSelectedBundleFilesZip(bundleId, [...selected], name);
         setExportDone(
           `Prepared a ZIP of ${selected.size} selected file${
             selected.size === 1 ? "" : "s"
@@ -228,22 +257,60 @@ export function BundleFilesSection({ bundleId }: { bundleId: number }) {
               {data.summary.total_files === 1 ? "" : "s"} ·{" "}
               {formatFileSize(data.summary.total_size)}
             </Badge>
-            <Button
-              size="sm"
-              onClick={() => runExport("all")}
-              disabled={exporting !== null}
-            >
-              {exporting === "all" ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <FileArchive className="size-4" />
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Button
+                size="sm"
+                onClick={() => runExport("all")}
+                disabled={exporting !== null}
+              >
+                {exporting === "all" ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <FileArchive className="size-4" />
+                )}
+                {exporting === "all" ? "Preparing ZIP…" : "Download ZIP"}
+              </Button>
+              {namingEnabled && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => runExport("merged")}
+                  disabled={exporting !== null}
+                >
+                  {exporting === "merged" ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <FileText className="size-4" />
+                  )}
+                  {exporting === "merged" ? "Merging…" : "Merged PDF"}
+                </Button>
               )}
-              {exporting === "all" ? "Preparing ZIP…" : "Download ZIP"}
-            </Button>
+            </div>
           </div>
         )}
       </CardHeader>
       <CardContent className="space-y-4">
+        {namingEnabled && data && data.summary.total_files > 0 && (
+          <div className="space-y-1.5 rounded-xl border border-border bg-muted/25 p-3">
+            <label htmlFor="pack-export-name" className="text-sm font-medium">
+              Export name
+            </label>
+            <Input
+              id="pack-export-name"
+              value={exportName}
+              onChange={(e) => setExportName(e.target.value)}
+              placeholder="Scholarship_Application_Pack_2026"
+              className="h-9"
+            />
+            <p className="text-xs text-muted-foreground">
+              Saves as{" "}
+              <span className="font-medium text-foreground">
+                {cleanPackName(exportName)}.zip
+              </span>
+              . Original documents are unchanged.
+            </p>
+          </div>
+        )}
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" />

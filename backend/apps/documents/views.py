@@ -33,7 +33,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.features.flags import require_feature_enabled
+from apps.features.flags import is_feature_enabled, require_feature_enabled
 
 from .models import (
     Document,
@@ -120,6 +120,11 @@ from apps.core.security.encryption import DecryptionError
 from apps.core.security import public_access
 from apps.core.security import file_validation
 from .file_encryption import encrypt_uploaded_file, read_plaintext
+from .pack_templates import (
+    get_pack_template,
+    seed_bundle_requirements,
+    serialize_pack_templates,
+)
 from .services import (
     APPLICABLE_EXTRACTION_FIELDS,
     EXPIRING_SOON_DAYS,
@@ -127,6 +132,7 @@ from .services import (
     ExportGenerationError,
     attention_sort_key,
     build_health_overview,
+    build_bundle_merged_pdf,
     build_bundle_zip,
     build_documents_zip,
     bundle_readiness,
@@ -2279,6 +2285,38 @@ class DocumentBundleListCreateView(_BundleScopedMixin, generics.ListCreateAPIVie
             object_id=bundle.id,
             metadata={"bundle_type": bundle.bundle_type},
         )
+        log_document_activity(
+            owner=self.request.user,
+            action=DocumentActivity.Action.BUNDLE_CREATED,
+            title="Pack created",
+            description=bundle.title,
+            related_bundle=bundle,
+        )
+        # Optional: seed a generic, editable checklist from a pack template. Only
+        # honoured when the templates feature is available to this user; the
+        # seeded requirements are real, fully-editable rows, never claimed as
+        # official (see pack_templates.TEMPLATE_DISCLAIMER).
+        template_key = self.request.data.get("template")
+        if template_key and is_feature_enabled(
+            "application_pack_templates", self.request.user
+        ):
+            template = get_pack_template(template_key)
+            if template is not None:
+                created = seed_bundle_requirements(bundle, template)
+                if created:
+                    # Keep the bundle type consistent with the chosen template.
+                    if bundle.bundle_type != template.bundle_type:
+                        bundle.bundle_type = template.bundle_type
+                        bundle.save(update_fields=["bundle_type", "updated_at"])
+                    bundle.recalculate_readiness()
+                    log_document_activity(
+                        owner=self.request.user,
+                        action=DocumentActivity.Action.BUNDLE_TEMPLATE_APPLIED,
+                        title="Template applied",
+                        description=f"{template.label} — {created} suggested items",
+                        related_bundle=bundle,
+                        metadata={"template": template.key, "items": created},
+                    )
 
 
 class DocumentBundleDetailView(
@@ -2287,6 +2325,71 @@ class DocumentBundleDetailView(
     """GET/PATCH/DELETE one owner-scoped bundle."""
 
     lookup_url_kwarg = "bundle_id"
+
+    def perform_update(self, serializer):
+        previous_status = serializer.instance.status
+        bundle = serializer.save()
+        if bundle.status != previous_status:
+            log_document_activity(
+                owner=self.request.user,
+                action=DocumentActivity.Action.BUNDLE_STATUS_CHANGED,
+                title="Pack status changed",
+                description=bundle.get_status_display(),
+                related_bundle=bundle,
+                metadata={"from": previous_status, "to": bundle.status},
+            )
+
+
+class PackTemplatesView(APIView):
+    """
+    List the generic, editable application-pack templates used to seed a new
+    bundle's checklist. Read-only and non-official (each carries a disclaimer).
+    Gated by ``application_pack_templates`` so it stays hidden until launched.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        require_feature_enabled("application_pack_templates", request.user)
+        return Response({"templates": serialize_pack_templates()})
+
+
+class BundleActivityTimelineView(APIView):
+    """
+    Owner-only activity feed for one bundle (created, template applied, items
+    added/removed/updated, documents attached, status changed, exported, shared).
+    Never exposes file contents or raw IPs. Gated by ``application_pack_timeline``.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, bundle_id):
+        require_feature_enabled("application_pack_timeline", request.user)
+        bundle = get_object_or_404(
+            DocumentBundle, pk=bundle_id, owner=request.user
+        )
+        events = [
+            {
+                "id": f"bundle:{activity.id}",
+                "action": activity.action,
+                "title": activity.title or activity.get_action_display(),
+                "description": activity.description,
+                "actor_type": activity.actor_type,
+                "timestamp": activity.created_at,
+                "related_file": activity.related_file_id,
+                "related_share": None,
+                "related_checklist": activity.related_checklist_id,
+                "related_bundle": activity.related_bundle_id,
+                "related_proof": activity.related_proof_id,
+                "metadata": activity.metadata or {},
+            }
+            for activity in DocumentActivity.objects.filter(
+                owner=request.user, related_bundle=bundle
+            )
+        ]
+        events.sort(key=lambda e: e["timestamp"], reverse=True)
+        serializer = DocumentActivityEventSerializer(events, many=True)
+        return Response({"items": serializer.data})
 
 
 class DocumentBundleFilesView(APIView):
@@ -2385,7 +2488,10 @@ class DocumentBundleExportFilesView(APIView):
         bundle = get_object_or_404(
             DocumentBundle, pk=bundle_id, owner=request.user
         )
-        spooled, filename, summary = build_bundle_zip(request.user, bundle)
+        name = request.data.get("name") if isinstance(request.data, dict) else None
+        spooled, filename, summary = build_bundle_zip(
+            request.user, bundle, name=name
+        )
         if summary["files_count"] == 0:
             spooled.close()
             return Response(
@@ -2420,8 +2526,9 @@ class DocumentBundleExportSelectedFilesView(APIView):
                 {"detail": "Select at least one file to export."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        name = request.data.get("name") if isinstance(request.data, dict) else None
         spooled, filename, summary = build_bundle_zip(
-            request.user, bundle, file_ids=file_ids
+            request.user, bundle, file_ids=file_ids, name=name
         )
         if summary["files_count"] == 0:
             spooled.close()
@@ -2443,6 +2550,54 @@ class DocumentBundleExportSelectedFilesView(APIView):
             },
         )
         return _zip_response(spooled, filename, summary)
+
+
+class DocumentBundleExportMergedPdfView(APIView):
+    """
+    POST → stream a single merged PDF of the pack's PDF files (in requirement
+    order). Non-PDF files are reported as skipped, never silently dropped.
+    Gated by the pack-preparation feature.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, bundle_id):
+        require_feature_enabled("application_pack_preparation", request.user)
+        bundle = get_object_or_404(
+            DocumentBundle, pk=bundle_id, owner=request.user
+        )
+        name = request.data.get("name") if isinstance(request.data, dict) else None
+        spooled, filename, summary = build_bundle_merged_pdf(
+            request.user, bundle, name=name
+        )
+        if summary["page_count"] == 0:
+            spooled.close()
+            return Response(
+                {
+                    "detail": (
+                        "This pack has no PDF files to merge yet. Image files "
+                        "can be exported in the ZIP."
+                    ),
+                    "state": "no_pdfs",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        _track_product_event(
+            request,
+            "export_requested",
+            object_type="document_bundle",
+            object_id=bundle.id,
+            metadata={"scope": "bundle_merged_pdf", "files": summary["files_count"]},
+        )
+        response = FileResponse(
+            spooled,
+            as_attachment=True,
+            filename=filename,
+            content_type="application/pdf",
+        )
+        response["X-Export-Files-Count"] = str(summary.get("files_count", 0))
+        response["X-Export-Skipped-Count"] = str(summary.get("skipped_count", 0))
+        return response
 
 
 class DocumentFilesExportSelectedView(APIView):
@@ -2509,6 +2664,13 @@ class DocumentBundleRequirementCreateView(
         serializer.is_valid(raise_exception=True)
         requirement = serializer.save(owner=request.user, bundle=bundle)
         bundle.recalculate_readiness()
+        log_document_activity(
+            owner=request.user,
+            action=DocumentActivity.Action.BUNDLE_REQUIREMENT_ADDED,
+            title="Checklist item added",
+            description=requirement.title,
+            related_bundle=bundle,
+        )
         return Response(
             self.get_serializer(requirement).data,
             status=status.HTTP_201_CREATED,
@@ -2523,13 +2685,31 @@ class DocumentBundleRequirementDetailView(
     lookup_url_kwarg = "requirement_id"
 
     def perform_update(self, serializer):
+        previous_status = serializer.instance.status
         requirement = serializer.save()
         requirement.bundle.recalculate_readiness()
+        if requirement.status != previous_status:
+            log_document_activity(
+                owner=self.request.user,
+                action=DocumentActivity.Action.BUNDLE_REQUIREMENT_STATUS_CHANGED,
+                title=requirement.title,
+                description=requirement.get_status_display(),
+                related_bundle=requirement.bundle,
+                metadata={"from": previous_status, "to": requirement.status},
+            )
 
     def perform_destroy(self, instance):
         bundle = instance.bundle
+        title = instance.title
         instance.delete()
         bundle.recalculate_readiness()
+        log_document_activity(
+            owner=self.request.user,
+            action=DocumentActivity.Action.BUNDLE_REQUIREMENT_REMOVED,
+            title="Checklist item removed",
+            description=title,
+            related_bundle=bundle,
+        )
 
 
 class _RequirementActionMixin(_BundleRequirementScopedMixin):
@@ -2603,6 +2783,15 @@ class BundleRequirementLinkFileView(_RequirementActionMixin, APIView):
             ]
         )
         requirement.bundle.recalculate_readiness()
+        log_document_activity(
+            owner=request.user,
+            document=file.document,
+            action=DocumentActivity.Action.ADDED_TO_BUNDLE,
+            title="Added to a bundle",
+            description=requirement.bundle.title,
+            related_bundle=requirement.bundle,
+            related_file=file,
+        )
         return Response(
             DocumentBundleRequirementSerializer(
                 requirement, context={"request": request}
@@ -3196,6 +3385,14 @@ class BundleExportListCreateView(generics.ListCreateAPIView):
                 "scope": "bundle",
                 "bundle_id": bundle.id,
             },
+        )
+        log_document_activity(
+            owner=request.user,
+            action=DocumentActivity.Action.BUNDLE_EXPORTED,
+            title="Pack exported",
+            description=export.get_export_type_display(),
+            related_bundle=bundle,
+            metadata={"export_type": export.export_type},
         )
 
         return Response(

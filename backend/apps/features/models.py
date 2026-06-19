@@ -78,6 +78,14 @@ FEATURE_DEFINITIONS: list[dict] = [
     {"key": "advanced_document_preview", "name": "Documents — advanced preview", "default": Visibility.FOUNDER_ONLY, "description": "Image preview zoom controls (fit / actual size / +-) in the file viewer. UI-only."},
     {"key": "batch_scan_actions", "name": "File Inbox — batch actions", "default": Visibility.FOUNDER_ONLY, "description": "Move multiple selected inbox files to the Vault at once (optionally under a category). Uses existing create-document; originals become documents."},
     {"key": "document_page_edit", "name": "Documents — replace/add PDF pages", "default": Visibility.FOUNDER_ONLY, "description": "Replace a bad page or add a page in a PDF (lossless via pdf-lib); saved as a new version. Original retained. Experimental; founder-only."},
+    # --- Application Pack Preparation -----------------------------------
+    # Built on the existing bundle system. Master gate + per-tool keys so the
+    # pack-preparation differentiators can be launched one at a time. Default
+    # FOUNDER_ONLY so nothing changes for normal users until deliberately flipped.
+    {"key": "application_pack_preparation", "name": "Application packs — preparation", "default": Visibility.FOUNDER_ONLY, "description": "Master gate for application-pack preparation features built on bundles."},
+    {"key": "application_pack_templates", "name": "Application packs — templates", "default": Visibility.FOUNDER_ONLY, "description": "Start a bundle from a generic, editable checklist template (scholarship/visa/university/job/travel/renewal). Suggestions only — never presented as official; requirements always vary."},
+    {"key": "application_pack_timeline", "name": "Application packs — activity timeline", "default": Visibility.FOUNDER_ONLY, "description": "Owner-only activity feed for a bundle (created, template applied, document attached/replaced/removed, status changed, exported). No file contents; never public."},
+    {"key": "application_pack_safesend", "name": "Application packs — share via SafeSend", "default": Visibility.FOUNDER_ONLY, "description": "Shortcut from a pack into the SafeSend (Quick Share) draft with the pack preselected. No link is created until the user confirms inside SafeSend."},
 ]
 
 FEATURE_KEYS = [d["key"] for d in FEATURE_DEFINITIONS]

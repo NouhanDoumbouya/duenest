@@ -2803,6 +2803,21 @@ def _slugify_filename(name: str, fallback: str = "export") -> str:
     return slug.strip("_") or fallback
 
 
+def sanitize_export_basename(name: str, fallback: str = "pack") -> str:
+    """
+    Clean a user-provided export name into a safe basename (no extension),
+    preserving case so application-friendly names like ``Scholarship_Pack_2026``
+    survive. Strips characters that aren't word/space/hyphen, collapses runs to
+    single underscores, trims, and caps length. Returns ``fallback`` when nothing
+    usable remains.
+    """
+    import re
+
+    cleaned = re.sub(r"[^\w\s-]", "", name or "", flags=re.UNICODE)
+    cleaned = re.sub(r"[\s-]+", "_", cleaned).strip("_")[:80]
+    return cleaned or fallback
+
+
 def _dedupe_arcname(arcname: str, used: set) -> str:
     """Return a unique arcname, appending ' (2)', ' (3)', … before the suffix."""
     if arcname not in used:
@@ -2839,6 +2854,87 @@ def _write_file_to_zip(zf, arcname, document_file) -> bool:
         return False
     zf.writestr(zipfile.ZipInfo(arcname), plaintext, zipfile.ZIP_DEFLATED)
     return True
+
+
+def build_bundle_merged_pdf(user, bundle, *, file_ids=None, name=None):
+    """
+    Build a single merged PDF from the pack's PDF files (in requirement order).
+
+    Returns ``(spooled_file, filename, summary)``. Only PDF files are merged;
+    non-PDF files (e.g. images) and unreadable/missing files are skipped and
+    counted in the summary so the caller can tell the user honestly. Decryption
+    is permission-first: callers must have verified bundle access. No internal
+    storage path is ever exposed.
+    """
+    import tempfile
+    from io import BytesIO
+
+    from pypdf import PdfReader, PdfWriter
+
+    from .file_encryption import read_plaintext
+
+    result = collect_bundle_files(bundle)
+    entries = result.files
+    if file_ids is not None:
+        wanted = {int(fid) for fid in file_ids}
+        entries = [e for e in entries if e.file.id in wanted]
+
+    writer = PdfWriter()
+    merged = 0
+    skipped_non_pdf = 0
+    skipped_unreadable = 0
+
+    for entry in entries:
+        is_pdf = entry.file.content_type == "application/pdf" or (
+            entry.file.original_filename.lower().endswith(".pdf")
+        )
+        if not is_pdf:
+            skipped_non_pdf += 1
+            continue
+        try:
+            plaintext = read_plaintext(entry.file)
+            reader = PdfReader(BytesIO(plaintext))
+            for page in reader.pages:
+                writer.add_page(page)
+            merged += 1
+        except Exception:  # noqa: BLE001 — one bad PDF must never break export
+            skipped_unreadable += 1
+            continue
+
+    spooled = tempfile.SpooledTemporaryFile(max_size=8 * 1024 * 1024)
+    page_count = len(writer.pages)
+    if page_count > 0:
+        writer.write(spooled)
+    spooled.seek(0)
+
+    if name:
+        pdf_filename = (
+            f"{sanitize_export_basename(name, _slugify_filename(bundle.title, 'bundle'))}.pdf"
+        )
+    else:
+        pdf_filename = (
+            f"{_slugify_filename(bundle.title, 'bundle')}_"
+            f"{timezone.localdate().isoformat()}.pdf"
+        )
+
+    summary = {
+        "files_count": merged,
+        "page_count": page_count,
+        "skipped_non_pdf": skipped_non_pdf,
+        "skipped_count": skipped_unreadable,
+        "missing_count": len(result.missing),
+    }
+
+    if merged > 0:
+        log_document_activity(
+            owner=user,
+            action=DocumentActivity.Action.BUNDLE_EXPORTED,
+            title="Pack exported (merged PDF)",
+            description=bundle.title,
+            related_bundle=bundle,
+            metadata={"scope": "bundle_merged_pdf", **summary},
+        )
+    return spooled, pdf_filename, summary
 
 
 def build_bundle_manifest(
@@ -2888,7 +2984,7 @@ def build_bundle_manifest(
     }
 
 
-def build_bundle_zip(user, bundle, *, file_ids=None):
+def build_bundle_zip(user, bundle, *, file_ids=None, name=None):
     """
     Build a streamable ZIP of a bundle's files plus a manifest.
 
@@ -2896,6 +2992,10 @@ def build_bundle_zip(user, bundle, *, file_ids=None):
     are never included; selected exports keep only owned files in ``file_ids``;
     physically-missing files are skipped and reported in the manifest warnings.
     No internal storage path is ever exposed.
+
+    ``name`` is an optional user-chosen export name; when given it is sanitized
+    and used as the download filename. Otherwise a dated default derived from the
+    bundle title is used.
     """
     import tempfile
     import zipfile
@@ -2956,9 +3056,14 @@ def build_bundle_zip(user, bundle, *, file_ids=None):
         )
 
     spooled.seek(0)
-    zip_filename = (
-        f"{_slugify_filename(bundle.title, 'bundle')}_{today.isoformat()}.zip"
-    )
+    if name:
+        zip_filename = (
+            f"{sanitize_export_basename(name, _slugify_filename(bundle.title, 'bundle'))}.zip"
+        )
+    else:
+        zip_filename = (
+            f"{_slugify_filename(bundle.title, 'bundle')}_{today.isoformat()}.zip"
+        )
     summary = {
         "documents_count": len(
             {f["document"] for f in included_files if f.get("document")}

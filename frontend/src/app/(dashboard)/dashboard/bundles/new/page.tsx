@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Check, FileText, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -16,9 +16,19 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useFeature } from "@/components/features/feature-flags-provider";
 import { ApiError } from "@/lib/api";
-import { BUNDLE_TYPE_LABELS, createBundle } from "@/lib/renewal-workspace";
-import type { BundleType, CreateBundleRequest } from "@/types/renewal-workspace";
+import {
+  BUNDLE_TYPE_LABELS,
+  createBundle,
+  getPackTemplates,
+} from "@/lib/renewal-workspace";
+import { cn } from "@/lib/utils";
+import type {
+  BundleType,
+  CreateBundleRequest,
+  PackTemplate,
+} from "@/types/renewal-workspace";
 
 const BUNDLE_TYPES: BundleType[] = [
   "renewal",
@@ -51,12 +61,47 @@ export default function NewBundlePage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Optional "Start from a template" picker. Hidden entirely unless the feature
+  // is available, so there is never a dead control. Selecting a template seeds
+  // an editable starter checklist server-side; "blank" seeds nothing.
+  const templatesEnabled = useFeature("application_pack_templates");
+  const [templates, setTemplates] = useState<PackTemplate[] | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!templatesEnabled) return;
+    let active = true;
+    getPackTemplates()
+      .then((res) => active && setTemplates(res.templates))
+      .catch(() => active && setTemplates([]));
+    return () => {
+      active = false;
+    };
+  }, [templatesEnabled]);
+
   function update<K extends keyof CreateBundleRequest>(
     key: K,
     value: CreateBundleRequest[K],
   ) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
+
+  function chooseTemplate(template: PackTemplate) {
+    setSelectedTemplate(template.key);
+    setForm((prev) => ({
+      ...prev,
+      template: template.key,
+      bundle_type: template.bundle_type,
+    }));
+  }
+
+  function chooseBlank() {
+    setSelectedTemplate(null);
+    setForm((prev) => ({ ...prev, template: undefined }));
+  }
+
+  const activeTemplate =
+    templates?.find((t) => t.key === selectedTemplate) ?? null;
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -103,6 +148,89 @@ export default function NewBundlePage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {templatesEnabled && templates && templates.length > 0 && (
+            <div className="mb-6 space-y-3">
+              <div>
+                <p className="text-sm font-medium">Start from a template</p>
+                <p className="text-xs text-muted-foreground">
+                  A starter checklist you can fully customize. Requirements vary
+                  — always verify with the official source.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                <button
+                  type="button"
+                  onClick={chooseBlank}
+                  aria-pressed={selectedTemplate === null}
+                  className={cn(
+                    "flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors",
+                    selectedTemplate === null
+                      ? "border-primary bg-primary/5"
+                      : "border-input hover:bg-muted/50",
+                  )}
+                >
+                  <span>Blank pack</span>
+                  {selectedTemplate === null && (
+                    <Check className="size-4 shrink-0 text-primary" />
+                  )}
+                </button>
+                {templates
+                  .filter((t) => t.key !== "custom")
+                  .map((template) => (
+                    <button
+                      key={template.key}
+                      type="button"
+                      onClick={() => chooseTemplate(template)}
+                      aria-pressed={selectedTemplate === template.key}
+                      className={cn(
+                        "flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors",
+                        selectedTemplate === template.key
+                          ? "border-primary bg-primary/5"
+                          : "border-input hover:bg-muted/50",
+                      )}
+                    >
+                      <span className="min-w-0 truncate">{template.label}</span>
+                      {selectedTemplate === template.key && (
+                        <Check className="size-4 shrink-0 text-primary" />
+                      )}
+                    </button>
+                  ))}
+              </div>
+              {activeTemplate && (
+                <div className="rounded-lg border border-border bg-muted/30 p-3">
+                  <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                    <FileText className="size-3.5" />
+                    {activeTemplate.items.length} suggested items — edit any of
+                    them after creating
+                  </p>
+                  <ul className="grid gap-1 sm:grid-cols-2">
+                    {activeTemplate.items.map((item) => (
+                      <li
+                        key={item.title}
+                        className="flex items-center justify-between gap-2 text-xs"
+                      >
+                        <span className="min-w-0 truncate">{item.title}</span>
+                        <span
+                          className={cn(
+                            "shrink-0 rounded-full px-1.5 py-0.5 text-[0.65rem] font-medium",
+                            item.is_required
+                              ? "bg-primary/10 text-primary"
+                              : "bg-muted text-muted-foreground",
+                          )}
+                        >
+                          {item.is_required ? "Required" : "Optional"}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-[0.7rem] text-muted-foreground">
+                    {activeTemplate.disclaimer}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="title">Title</Label>
@@ -177,16 +305,20 @@ export default function NewBundlePage() {
               </p>
             )}
 
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-col-reverse items-center gap-3 sm:flex-row sm:justify-end">
               <Link
                 href="/dashboard/bundles"
                 className="text-sm text-muted-foreground transition-colors hover:text-foreground"
               >
                 Cancel
               </Link>
-              <Button type="submit" disabled={submitting}>
+              <Button
+                type="submit"
+                disabled={submitting}
+                className="w-full sm:w-auto"
+              >
                 {submitting && <Loader2 className="size-4 animate-spin" />}
-                Create bundle
+                {submitting ? "Creating pack…" : "Create bundle"}
               </Button>
             </div>
           </form>

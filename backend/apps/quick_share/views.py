@@ -167,6 +167,15 @@ class QuickShareSessionListCreateView(APIView):
                 order=base_order + offset,
             )
             created_any = True
+            # Record a privacy-safe event on the bundle so the pack activity
+            # timeline reflects the share (no recipients/links are logged here).
+            log_document_activity(
+                owner=request.user,
+                action=DocumentActivity.Action.SHARED_VIA_SAFESEND,
+                title="Shared via SafeSend",
+                description=bundle.title,
+                related_bundle=bundle,
+            )
 
         if not created_any:
             session.delete()

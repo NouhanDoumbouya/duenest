@@ -8,10 +8,14 @@ import { getAccessToken } from "./auth";
 
 const CSRF_COOKIE_NAME =
   process.env.NEXT_PUBLIC_CSRF_COOKIE_NAME ?? "duenest_csrftoken";
-import type { Paginated } from "@/types/documents";
+import type {
+  DocumentActivityResponse,
+  Paginated,
+} from "@/types/documents";
 import type {
   ApplyExtractionResponse,
   Bundle,
+  PackTemplate,
   BundleExportRequest,
   BundleExportType,
   BundleFilesResponse,
@@ -160,6 +164,31 @@ export function createBundle(payload: CreateBundleRequest): Promise<Bundle> {
     body: payload,
     auth: true,
   });
+}
+
+/**
+ * Generic, non-official pack templates used to seed a starter checklist.
+ * Gated server-side by `application_pack_templates` (503 when unavailable).
+ */
+export function getPackTemplates(): Promise<{ templates: PackTemplate[] }> {
+  return apiFetch<{ templates: PackTemplate[] }>(
+    "/document-bundles/pack-templates/",
+    { auth: true },
+  );
+}
+
+/**
+ * Owner-only activity feed for one bundle. Gated server-side by
+ * `application_pack_timeline` (503 when unavailable). Never includes file
+ * contents.
+ */
+export function getBundleActivity(
+  bundleId: number,
+): Promise<DocumentActivityResponse> {
+  return apiFetch<DocumentActivityResponse>(
+    `/document-bundles/${bundleId}/activity/`,
+    { auth: true },
+  );
 }
 
 export function updateBundle(
@@ -393,10 +422,13 @@ async function postZipAndSave(
   saveBlob(await response.blob(), name);
 }
 
-export function exportBundleFilesZip(bundleId: number): Promise<void> {
+export function exportBundleFilesZip(
+  bundleId: number,
+  name?: string,
+): Promise<void> {
   return postZipAndSave(
     `/document-bundles/${bundleId}/export-files/`,
-    undefined,
+    name ? { name } : undefined,
     `duenest-bundle-${bundleId}.zip`,
   );
 }
@@ -404,11 +436,29 @@ export function exportBundleFilesZip(bundleId: number): Promise<void> {
 export function exportSelectedBundleFilesZip(
   bundleId: number,
   fileIds: number[],
+  name?: string,
 ): Promise<void> {
   return postZipAndSave(
     `/document-bundles/${bundleId}/export-selected-files/`,
-    { file_ids: fileIds },
+    name ? { file_ids: fileIds, name } : { file_ids: fileIds },
     `duenest-bundle-${bundleId}-selected.zip`,
+  );
+}
+
+/**
+ * Merge the pack's PDF files into a single PDF (server-side, in requirement
+ * order). Non-PDF files are reported as skipped by the server. Gated by
+ * application_pack_preparation (503 when unavailable). `postZipAndSave` saves
+ * whatever blob the server streams, using the Content-Disposition filename.
+ */
+export function exportBundleMergedPdf(
+  bundleId: number,
+  name?: string,
+): Promise<void> {
+  return postZipAndSave(
+    `/document-bundles/${bundleId}/export-merged-pdf/`,
+    name ? { name } : undefined,
+    `duenest-bundle-${bundleId}.pdf`,
   );
 }
 

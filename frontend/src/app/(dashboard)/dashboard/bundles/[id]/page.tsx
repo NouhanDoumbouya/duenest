@@ -11,12 +11,17 @@ import {
   Link2,
   Loader2,
   Plus,
+  ScanLine,
+  Share2,
   ShieldCheck,
   Trash2,
 } from "lucide-react";
 
+import { BundleActivityTab } from "@/components/bundles/bundle-activity-tab";
 import { BundleFilesSection } from "@/components/bundles/bundle-files-section";
+import { BundleReviewTab } from "@/components/bundles/bundle-review-tab";
 import { ReadinessRing } from "@/components/bundles/readiness-ring";
+import { useFeature } from "@/components/features/feature-flags-provider";
 import { DocumentAppointments } from "@/components/documents/document-appointments";
 import { DocumentPayments } from "@/components/documents/document-payments";
 import { DocumentProofRecords } from "@/components/documents/document-proof-records";
@@ -30,7 +35,7 @@ import {
 } from "@/components/ui/product-ui";
 import { SectionCard } from "@/components/ui/section-card";
 import { TimelineList } from "@/components/timeline/timeline-list";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -41,6 +46,7 @@ import {
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { ApiError } from "@/lib/api";
+import { getFileInbox } from "@/lib/document-files";
 import { formatDate, getDocuments } from "@/lib/documents";
 import {
   BUNDLE_STATUS_LABELS,
@@ -55,10 +61,12 @@ import {
   getBundleExports,
   getTimeline,
   linkRequirementDocument,
+  linkRequirementFile,
   updateBundle,
   updateBundleRequirement,
 } from "@/lib/renewal-workspace";
 import { cn } from "@/lib/utils";
+import type { DocumentFile } from "@/types/document-files";
 import type { DocumentRecord } from "@/types/documents";
 import type {
   Bundle,
@@ -91,7 +99,14 @@ const BUNDLE_EXPORT_LABELS: Record<BundleExportType, string> = {
   bundle_requirements_csv: "Requirements checklist (CSV)",
 };
 
-type BundleTab = "requirements" | "files" | "timeline" | "proofs" | "exports";
+type BundleTab =
+  | "review"
+  | "requirements"
+  | "files"
+  | "timeline"
+  | "proofs"
+  | "exports"
+  | "activity";
 
 const BUNDLE_TABS: { value: BundleTab; label: string }[] = [
   { value: "requirements", label: "Requirements" },
@@ -100,6 +115,17 @@ const BUNDLE_TABS: { value: BundleTab; label: string }[] = [
   { value: "proofs", label: "Proofs" },
   { value: "exports", label: "Exports" },
 ];
+
+// The Review and Activity tabs are appended only when their pack features are
+// enabled, so they never appear as dead tabs.
+const REVIEW_TAB: { value: BundleTab; label: string } = {
+  value: "review",
+  label: "Review",
+};
+const ACTIVITY_TAB: { value: BundleTab; label: string } = {
+  value: "activity",
+  label: "Activity",
+};
 
 /** Read the initial bundle tab from `?tab=` (e.g. a calendar deep-link). */
 function initialBundleTab(): BundleTab {
@@ -121,12 +147,16 @@ function RequirementRow({
   bundleId,
   requirement,
   documents,
+  inboxFiles,
+  scanEnabled,
   onChanged,
   onDeleted,
 }: {
   bundleId: number;
   requirement: BundleRequirement;
   documents: DocumentRecord[];
+  inboxFiles: DocumentFile[];
+  scanEnabled: boolean;
   onChanged: (req: BundleRequirement) => void;
   onDeleted: (id: number) => void;
 }) {
@@ -153,6 +183,20 @@ function RequirementRow({
         bundleId,
         requirement.id,
         documentId,
+      );
+      onChanged(updated);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function linkFile(fileId: number) {
+    setPending(true);
+    try {
+      const updated = await linkRequirementFile(
+        bundleId,
+        requirement.id,
+        fileId,
       );
       onChanged(updated);
     } finally {
@@ -242,7 +286,7 @@ function RequirementRow({
 
         {documents.length > 0 && (
           <select
-            aria-label="Link a document"
+            aria-label="Attach a document from your Vault"
             value={requirement.linked_document ?? ""}
             onChange={(e) =>
               e.target.value && linkDocument(Number(e.target.value))
@@ -250,13 +294,56 @@ function RequirementRow({
             disabled={pending}
             className="h-8 max-w-[200px] rounded-lg border border-input bg-card px-2 text-xs shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
           >
-            <option value="">Link a document…</option>
+            <option value="">Attach from Vault…</option>
             {documents.map((doc) => (
               <option key={doc.id} value={doc.id}>
                 {doc.title}
               </option>
             ))}
           </select>
+        )}
+
+        {inboxFiles.length > 0 && (
+          <select
+            aria-label="Attach a file from your File Inbox"
+            value=""
+            onChange={(e) =>
+              e.target.value && linkFile(Number(e.target.value))
+            }
+            disabled={pending}
+            className="h-8 max-w-[200px] rounded-lg border border-input bg-card px-2 text-xs shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <option value="">Attach from Inbox…</option>
+            {inboxFiles.map((file) => (
+              <option key={file.id} value={file.id}>
+                {file.original_filename}
+              </option>
+            ))}
+          </select>
+        )}
+
+        {/* Quick actions for items still missing a document. Calm, optional —
+            nothing here forces the user to complete the pack now. */}
+        {requirement.status === "missing" && (
+          <>
+            {scanEnabled && (
+              <Link
+                href="/dashboard/scanner"
+                className="inline-flex h-8 items-center gap-1 rounded-lg border border-input bg-card px-2 text-xs transition-colors hover:bg-muted/50"
+              >
+                <ScanLine className="size-3.5" />
+                Scan
+              </Link>
+            )}
+            <button
+              type="button"
+              onClick={() => changeStatus("skipped")}
+              disabled={pending}
+              className="inline-flex h-8 items-center rounded-lg border border-input bg-card px-2 text-xs text-muted-foreground transition-colors hover:bg-muted/50"
+            >
+              Mark not needed
+            </button>
+          </>
         )}
         {pending && <Loader2 className="size-3.5 animate-spin text-muted-foreground" />}
       </div>
@@ -272,6 +359,7 @@ export default function BundleDetailPage() {
 
   const [bundle, setBundle] = useState<Bundle | null>(null);
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
+  const [inboxFiles, setInboxFiles] = useState<DocumentFile[]>([]);
   const [events, setEvents] = useState<TimelineEvent[]>([]);
   const [bundleExports, setBundleExports] = useState<BundleExportRequest[]>([]);
   const [loadError, setLoadError] = useState<string | null>(
@@ -293,6 +381,20 @@ export default function BundleDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [activeTab, setActiveTab] = useState<BundleTab>(initialBundleTab);
 
+  const timelineEnabled = useFeature("application_pack_timeline");
+  const scanToBundleEnabled = useFeature("scan_to_bundle");
+  const safeSendEnabled = useFeature("application_pack_safesend");
+  const packPrepEnabled = useFeature("application_pack_preparation");
+  const visibleTabs = [
+    ...(packPrepEnabled ? [REVIEW_TAB] : []),
+    ...BUNDLE_TABS,
+    ...(timelineEnabled ? [ACTIVITY_TAB] : []),
+  ];
+  // A deep-link to a hidden tab (?tab=review/activity) must not strand the user.
+  const resolvedTab = visibleTabs.some((t) => t.value === activeTab)
+    ? activeTab
+    : "requirements";
+
   useEffect(() => {
     if (!validId) return;
     let active = true;
@@ -309,6 +411,9 @@ export default function BundleDetailPage() {
     getDocuments({ ordering: "title" })
       .then((page) => active && setDocuments(page.results))
       .catch(() => active && setDocuments([]));
+    getFileInbox()
+      .then((page) => active && setInboxFiles(page.results))
+      .catch(() => active && setInboxFiles([]));
     getTimeline({ bundle_id: bundleId })
       .then((res) => active && setEvents(res.items))
       .catch(() => active && setEvents([]));
@@ -516,13 +621,22 @@ export default function BundleDetailPage() {
 
           <SegmentedControl
             label="Bundle workspace"
-            value={activeTab}
-            options={BUNDLE_TABS}
+            value={resolvedTab}
+            options={visibleTabs}
             onChange={setActiveTab}
             className="max-w-full overflow-x-auto"
           />
 
-          {activeTab === "requirements" && (
+          {resolvedTab === "review" && (
+            <BundleReviewTab
+              bundle={bundle}
+              bundleId={bundleId}
+              safeSendEnabled={safeSendEnabled}
+              onExport={() => setActiveTab("files")}
+            />
+          )}
+
+          {resolvedTab === "requirements" && (
             <Card className="content-fade-in">
               <CardHeader>
                 <CardTitle className="text-lg">Requirements</CardTitle>
@@ -550,6 +664,8 @@ export default function BundleDetailPage() {
                         bundleId={bundleId}
                         requirement={requirement}
                         documents={documents}
+                        inboxFiles={inboxFiles}
+                        scanEnabled={scanToBundleEnabled}
                         onChanged={(updated) => {
                           setBundle((prev) =>
                             prev
@@ -620,13 +736,17 @@ export default function BundleDetailPage() {
             </Card>
           )}
 
-          {activeTab === "files" && (
+          {resolvedTab === "files" && (
             <div className="content-fade-in">
-              <BundleFilesSection bundleId={bundle.id} />
+              <BundleFilesSection
+                bundleId={bundle.id}
+                bundleTitle={bundle.title}
+                targetDate={bundle.target_date}
+              />
             </div>
           )}
 
-          {activeTab === "timeline" && (
+          {resolvedTab === "timeline" && (
             <div className="space-y-6 content-fade-in">
               <Card>
                 <CardHeader>
@@ -655,7 +775,7 @@ export default function BundleDetailPage() {
             </div>
           )}
 
-          {activeTab === "proofs" && (
+          {resolvedTab === "proofs" && (
             <Card className="content-fade-in">
               <CardHeader>
                 <CardTitle className="text-lg">Proof of submission</CardTitle>
@@ -670,7 +790,7 @@ export default function BundleDetailPage() {
             </Card>
           )}
 
-          {activeTab === "exports" && (
+          {resolvedTab === "exports" && (
             <Card className="content-fade-in">
               <CardHeader>
                 <div className="flex items-start gap-3">
@@ -802,6 +922,12 @@ export default function BundleDetailPage() {
               </CardContent>
             </Card>
           )}
+
+          {resolvedTab === "activity" && (
+            <div className="content-fade-in">
+              <BundleActivityTab bundleId={bundleId} />
+            </div>
+          )}
         </main>
 
         <aside className="space-y-4 lg:sticky lg:top-8 lg:self-start">
@@ -851,6 +977,22 @@ export default function BundleDetailPage() {
                   <CheckCircle2 className="size-4" />
                   All required items are ready.
                 </p>
+              )}
+
+              {safeSendEnabled && (
+                <div className="space-y-1.5">
+                  <Link
+                    href={`/dashboard/quick-share/new?bundle=${bundleId}`}
+                    className={cn(buttonVariants({ variant: "outline" }), "w-full")}
+                  >
+                    <Share2 className="size-4" />
+                    Share pack safely
+                  </Link>
+                  <p className="text-xs text-muted-foreground">
+                    Opens SafeSend with this pack selected. No public link is
+                    created until you confirm access there.
+                  </p>
+                </div>
               )}
 
               <dl className="space-y-2 text-sm">
