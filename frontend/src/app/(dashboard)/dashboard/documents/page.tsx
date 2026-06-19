@@ -897,7 +897,7 @@ function DocumentsPageInner() {
       <PageHeader
         eyebrow="Vault"
         title="Document vault"
-        description="A calm workspace for passports, visas, licences, certificates, policies, and the dates that make them risky."
+        description="Passports, visas, licences, certificates — organized by what's expiring and what needs you, not by folders to keep tidy."
         actions={
           <Link
             href="/dashboard/documents/new"
@@ -1199,7 +1199,7 @@ function DocumentsPageInner() {
                   ? "Try another category, clear filters, or add a document."
                   : filtersActive
                     ? "Try clearing filters or adjusting your search."
-                    : "Track passports, visas, licences, certificates, and important records around the dates that matter."
+                    : "Add a document and DueNest tracks its status and dates for you — no folders to keep tidy. Your vault surfaces what's expiring and what needs attention."
               }
               action={
                 filtersActive ? (
