@@ -27,6 +27,9 @@ means:
 | User checklists | Done | Checklist progress, item status, document/file links, and due dates are implemented. |
 | Renewal/application bundles | Done | Bundles support requirements, readiness scoring, target dates, statuses, and linked documents/files. |
 | Bundle-specific export | Done | Bundle JSON and CSV exports are owner-scoped, expiring, and downloadable through authenticated routes. |
+| Application pack preparation | Done (founder_only) | Editable non-official templates, pack activity timeline, merged-PDF + cover-sheet export, app-friendly export names, and SafeSend pack handoff. Gated by `application_pack_*`. |
+| Vault organization (bulk/smart views/table) | Done (founder_only) | Multi-select bulk actions (move/tag/archive/trash/export/add-to-pack/reminder) with Undo, Smart Views, and a compact table view. Gated by `vault_*`; reuses owner-scoped endpoints plus bulk export/add-documents. |
+| Customizable QR codes | Done (founder_only) | Custom colors with live scan-reliability (contrast) warnings, presets, quiet zone, saved style, client-side logo upload, SVG export. Gated by `qr_customization`; payload remains the tokenized SafeSend URL. Real-device scan QA still recommended. |
 | Vault-wide structured export | Done | Data controls can request metadata exports; raw files and secrets remain excluded. |
 | Authenticated export download | Done | Dashboard export downloads use token-authenticated blob fetches instead of plain links. |
 | Timeline | Done | Aggregated document, reminder, checklist, and bundle events are available and filterable. |
@@ -38,6 +41,7 @@ means:
 | Trust/security pages | Done | Trust, security, privacy, terms, and data control surfaces exist and match the implemented limitations. |
 | Account deletion request | Done | Account deletion is recorded as a cancellable request instead of immediate destructive deletion. |
 | Founder console V1 | Done | Founder overview, activation, feature adoption, feedback, templates, errors, security, and user summaries exist. |
+| Founder chart readability | Done | Line charts have a hover readout tooltip + y-axis value labels; growth KPI cards show the prior-period comparison; the funnel surfaces its biggest drop-off. |
 | Feedback capture | Done | Authenticated users can submit feedback; founder views can triage it. |
 | Categories management UI | Partial | Category model/API foundation exists; full end-user category management polish is not in this pass. |
 | Subscriptions/billing | Planned | Navigation labels this as future work. No billing or payment system is added. |
