@@ -286,7 +286,7 @@ export function FileToolsDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex justify-center overflow-y-auto p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="file-tools-title"
@@ -295,10 +295,10 @@ export function FileToolsDialog({
         type="button"
         aria-label="Close"
         tabIndex={-1}
-        className="absolute inset-0 cursor-default bg-foreground/40 backdrop-blur-sm"
+        className="fixed inset-0 cursor-default bg-foreground/40 backdrop-blur-sm"
         onClick={() => !busy && onClose()}
       />
-      <div className="relative w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl shadow-foreground/10">
+      <div className="relative my-auto w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl shadow-foreground/10">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h2

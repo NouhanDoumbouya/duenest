@@ -86,7 +86,7 @@ export function UpgradeModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex justify-center overflow-y-auto p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="upgrade-title"
@@ -95,10 +95,10 @@ export function UpgradeModal({
         type="button"
         aria-label="Close"
         tabIndex={-1}
-        className="absolute inset-0 cursor-default bg-foreground/40 backdrop-blur-sm"
+        className="fixed inset-0 cursor-default bg-foreground/40 backdrop-blur-sm"
         onClick={() => !submitting && onClose()}
       />
-      <div className="relative w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl shadow-foreground/10">
+      <div className="relative my-auto w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl shadow-foreground/10">
         <button
           type="button"
           onClick={() => !submitting && onClose()}

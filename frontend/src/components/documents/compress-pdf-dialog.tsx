@@ -49,7 +49,7 @@ export function CompressPdfDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex justify-center overflow-y-auto p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="compress-title"
@@ -58,10 +58,10 @@ export function CompressPdfDialog({
         type="button"
         aria-label="Close"
         tabIndex={-1}
-        className="absolute inset-0 cursor-default bg-foreground/40 backdrop-blur-sm"
+        className="fixed inset-0 cursor-default bg-foreground/40 backdrop-blur-sm"
         onClick={() => !busy && onCancel()}
       />
-      <div className="relative w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl shadow-foreground/10">
+      <div className="relative my-auto w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl shadow-foreground/10">
         <h2 id="compress-title" className="font-heading text-lg font-semibold">
           Shrink PDF
         </h2>
