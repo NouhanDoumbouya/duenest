@@ -527,6 +527,57 @@ function DocumentsPageInner() {
     }
   }
 
+  async function runBulkAddTag(tagId: number) {
+    if (selectedDocs.length === 0) return;
+    // Snapshot prior tag sets so the change is undoable; append (never replace).
+    const prior = selectedDocs.map((d) => ({
+      id: d.id,
+      tag_ids: d.tags.map((t) => t.id),
+    }));
+    setBulkBusy(true);
+    setError(null);
+    try {
+      await Promise.all(
+        prior.map((p) =>
+          updateDocument(p.id, {
+            tag_ids: Array.from(new Set([...p.tag_ids, tagId])),
+          }),
+        ),
+      );
+      const tagName = tags.find((t) => t.id === tagId)?.name ?? "tag";
+      const count = prior.length;
+      exitSelectMode();
+      reload();
+      setToast({
+        message: `Tagged ${count} document${count === 1 ? "" : "s"} with “${tagName}”.`,
+        kind: "success",
+        action: undoEnabled
+          ? {
+              label: "Undo",
+              onClick: () => {
+                void Promise.all(
+                  prior.map((p) => updateDocument(p.id, { tag_ids: p.tag_ids })),
+                )
+                  .then(() => {
+                    setToast({ message: "Tag change undone.", kind: "success" });
+                    reload();
+                  })
+                  .catch(() =>
+                    setToast({ message: "Could not undo tagging.", kind: "error" }),
+                  );
+              },
+            }
+          : undefined,
+      });
+    } catch {
+      setError(
+        "Could not tag the selected documents. They are unchanged in your Vault.",
+      );
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
   async function runBulkArchive() {
     if (selectedDocs.length === 0) return;
     const prior = selectedDocs.map((d) => ({
@@ -1263,6 +1314,24 @@ function DocumentsPageInner() {
                   </option>
                 ))}
               </select>
+              {tags.length > 0 && (
+                <select
+                  aria-label="Add a tag to selected"
+                  value=""
+                  disabled={bulkBusy}
+                  onChange={(e) => {
+                    if (e.target.value) void runBulkAddTag(Number(e.target.value));
+                  }}
+                  className="h-9 rounded-lg border border-input bg-card px-2 text-xs shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                >
+                  <option value="">Add tag…</option>
+                  {tags.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              )}
               <Button
                 type="button"
                 variant="outline"
