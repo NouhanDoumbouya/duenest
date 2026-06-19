@@ -6,6 +6,7 @@ import {
   Archive,
   CheckSquare,
   ChevronDown,
+  Download,
   FileText,
   Filter,
   LayoutGrid,
@@ -32,12 +33,18 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Toast, type ToastState } from "@/components/ui/toast";
 import { ApiError } from "@/lib/api";
 import {
+  createDocumentReminderRule,
   deleteDocument,
   getDocuments,
   listDocumentCategories,
   restoreDocument,
   updateDocument,
 } from "@/lib/documents";
+import {
+  addDocumentsToBundle,
+  exportSelectedDocuments,
+  getBundles,
+} from "@/lib/renewal-workspace";
 import { getTags } from "@/lib/tags";
 import { cn } from "@/lib/utils";
 import { getDeleteWarning, sortDocumentsByRisk } from "@/lib/vault";
@@ -48,6 +55,7 @@ import type {
   DocumentRecord,
   DocumentTag,
 } from "@/types/documents";
+import type { Bundle } from "@/types/renewal-workspace";
 
 type QuickFilter =
   | "all"
@@ -288,6 +296,8 @@ function DocumentsPageInner() {
   // Bumped to force a fresh reload of the current list after a bulk action.
   const [reloadKey, setReloadKey] = useState(0);
   const reload = () => setReloadKey((k) => k + 1);
+  // Bundles for the "Add to pack" picker — only loaded when bulk is available.
+  const [bundles, setBundles] = useState<Bundle[]>([]);
 
   function toggleSelected(doc: DocumentRecord) {
     setSelected((prev) => {
@@ -391,6 +401,19 @@ function DocumentsPageInner() {
       active = false;
     };
   }, []);
+
+  // Bundles power the bulk "Add to pack" picker; only fetched when the feature
+  // is available so normal users never pay for it.
+  useEffect(() => {
+    if (!bulkEnabled) return;
+    let active = true;
+    getBundles()
+      .then((page) => active && setBundles(page.results))
+      .catch(() => active && setBundles([]));
+    return () => {
+      active = false;
+    };
+  }, [bulkEnabled]);
 
   // Keep the URL query string in sync with the active filters so the view is
   // shareable and survives a refresh. The canonical param set is rebuilt from
@@ -573,6 +596,87 @@ function DocumentsPageInner() {
       setError(
         "Could not tag the selected documents. They are unchanged in your Vault.",
       );
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function runBulkExport() {
+    if (selectedDocs.length === 0) return;
+    const ids = selectedDocs.map((d) => d.id);
+    setBulkBusy(true);
+    setError(null);
+    try {
+      await exportSelectedDocuments(ids);
+      setToast({
+        message: `Preparing a ZIP of ${ids.length} document${ids.length === 1 ? "" : "s"}. Originals are unchanged.`,
+        kind: "success",
+      });
+      exitSelectMode();
+    } catch (err) {
+      const msg =
+        err instanceof ApiError && err.status === 400
+          ? "None of the selected documents have a file to export."
+          : "Could not export the selected documents. They are unchanged.";
+      setError(msg);
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function runBulkAddToPack(bundleId: number) {
+    if (selectedDocs.length === 0) return;
+    const ids = selectedDocs.map((d) => d.id);
+    setBulkBusy(true);
+    setError(null);
+    try {
+      const res = await addDocumentsToBundle(bundleId, ids);
+      const name = bundles.find((b) => b.id === bundleId)?.title ?? "pack";
+      exitSelectMode();
+      setToast({
+        message: `Added ${res.created} document${res.created === 1 ? "" : "s"} to ${name}. Original files are unchanged.`,
+        kind: "success",
+      });
+    } catch {
+      setError(
+        "Could not add the selected documents to the pack. They are unchanged.",
+      );
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function runBulkSetReminder(daysBefore: number) {
+    // Reminders only make sense for documents that have an expiry date.
+    const withExpiry = selectedDocs.filter((d) => d.expiry_date);
+    const skipped = selectedDocs.length - withExpiry.length;
+    if (withExpiry.length === 0) {
+      setToast({
+        message: "None of the selected documents have an expiry date to remind on.",
+        kind: "error",
+      });
+      return;
+    }
+    setBulkBusy(true);
+    setError(null);
+    try {
+      await Promise.all(
+        withExpiry.map((d) =>
+          createDocumentReminderRule(d.id, {
+            trigger_type: "before_expiry",
+            days_before: daysBefore,
+          }),
+        ),
+      );
+      exitSelectMode();
+      setToast({
+        message:
+          `Reminder set ${daysBefore} days before expiry for ${withExpiry.length} document${withExpiry.length === 1 ? "" : "s"}.` +
+          (skipped > 0 ? ` ${skipped} skipped (no expiry date).` : ""),
+        kind: "success",
+      });
+    } catch {
+      setError("Could not set reminders for the selected documents.");
     } finally {
       setBulkBusy(false);
     }
@@ -1332,6 +1436,49 @@ function DocumentsPageInner() {
                   ))}
                 </select>
               )}
+              {bundles.length > 0 && (
+                <select
+                  aria-label="Add selected to a pack"
+                  value=""
+                  disabled={bulkBusy}
+                  onChange={(e) => {
+                    if (e.target.value)
+                      void runBulkAddToPack(Number(e.target.value));
+                  }}
+                  className="h-9 max-w-[160px] rounded-lg border border-input bg-card px-2 text-xs shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                >
+                  <option value="">Add to pack…</option>
+                  {bundles.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.title}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <select
+                aria-label="Set a reminder for selected"
+                value=""
+                disabled={bulkBusy}
+                onChange={(e) => {
+                  if (e.target.value) void runBulkSetReminder(Number(e.target.value));
+                }}
+                className="h-9 rounded-lg border border-input bg-card px-2 text-xs shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <option value="">Set reminder…</option>
+                <option value="30">30 days before expiry</option>
+                <option value="60">60 days before expiry</option>
+                <option value="90">90 days before expiry</option>
+              </select>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={bulkBusy}
+                onClick={() => void runBulkExport()}
+              >
+                <Download className="size-4" />
+                Export
+              </Button>
               <Button
                 type="button"
                 variant="outline"
