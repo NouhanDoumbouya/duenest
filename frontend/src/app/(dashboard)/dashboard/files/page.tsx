@@ -900,13 +900,19 @@ export default function FileInboxPage() {
               <div className="grid gap-3">
                 <div className="min-w-0">
                   <div className="flex min-w-0 items-start gap-3">
-                    <input
-                      type="checkbox"
-                      checked={selected.has(file.id)}
-                      onChange={() => toggleSelect(file.id)}
+                    <button
+                      type="button"
+                      onClick={() => toggleSelect(file.id)}
+                      aria-pressed={selected.has(file.id)}
                       aria-label={`Select ${file.original_filename}`}
-                      className="mt-2.5 size-4 shrink-0 cursor-pointer accent-primary"
-                    />
+                      className="mt-2 shrink-0 rounded p-0.5 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+                    >
+                      {selected.has(file.id) ? (
+                        <CheckSquare className="size-4 text-primary" aria-hidden />
+                      ) : (
+                        <Square className="size-4 text-muted-foreground" aria-hidden />
+                      )}
+                    </button>
                     <FileThumbnail file={file} />
                     <div className="min-w-0">
                       <h3 className="truncate font-medium">
