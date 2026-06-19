@@ -275,7 +275,7 @@ function RequirementRow({
           value={requirement.status}
           onChange={(e) => changeStatus(e.target.value as RequirementStatus)}
           disabled={pending}
-          className="h-8 rounded-lg border border-input bg-card px-2 text-xs shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="h-9 w-full rounded-lg border border-input bg-card px-2 text-xs shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:h-8 sm:w-auto"
         >
           {REQUIREMENT_STATUSES.map((status) => (
             <option key={status} value={status}>
@@ -292,7 +292,7 @@ function RequirementRow({
               e.target.value && linkDocument(Number(e.target.value))
             }
             disabled={pending}
-            className="h-8 max-w-[200px] rounded-lg border border-input bg-card px-2 text-xs shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            className="h-9 w-full rounded-lg border border-input bg-card px-2 text-xs shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:h-8 sm:w-auto sm:max-w-[200px]"
           >
             <option value="">Attach from Vault…</option>
             {documents.map((doc) => (
@@ -311,7 +311,7 @@ function RequirementRow({
               e.target.value && linkFile(Number(e.target.value))
             }
             disabled={pending}
-            className="h-8 max-w-[200px] rounded-lg border border-input bg-card px-2 text-xs shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            className="h-9 w-full rounded-lg border border-input bg-card px-2 text-xs shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:h-8 sm:w-auto sm:max-w-[200px]"
           >
             <option value="">Attach from Inbox…</option>
             {inboxFiles.map((file) => (
@@ -329,7 +329,7 @@ function RequirementRow({
             {scanEnabled && (
               <Link
                 href="/dashboard/scanner"
-                className="inline-flex h-8 items-center gap-1 rounded-lg border border-input bg-card px-2 text-xs transition-colors hover:bg-muted/50"
+                className="inline-flex h-9 flex-1 items-center justify-center gap-1 rounded-lg border border-input bg-card px-2 text-xs transition-colors hover:bg-muted/50 sm:h-8 sm:flex-none"
               >
                 <ScanLine className="size-3.5" />
                 Scan
@@ -339,7 +339,7 @@ function RequirementRow({
               type="button"
               onClick={() => changeStatus("skipped")}
               disabled={pending}
-              className="inline-flex h-8 items-center rounded-lg border border-input bg-card px-2 text-xs text-muted-foreground transition-colors hover:bg-muted/50"
+              className="inline-flex h-9 flex-1 items-center justify-center rounded-lg border border-input bg-card px-2 text-xs text-muted-foreground transition-colors hover:bg-muted/50 sm:h-8 sm:flex-none"
             >
               Mark not needed
             </button>
