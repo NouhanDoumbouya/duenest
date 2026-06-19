@@ -140,6 +140,9 @@ export interface CreateQuickSharePayload {
   access_code?: string;
   one_time: boolean;
   max_claims?: number | null;
+  // Per-access caps (omit / undefined = unlimited).
+  max_views?: number;
+  max_downloads?: number;
   require_sender_approval: boolean;
   watermark_enabled: boolean;
   // Screenshot deterrence on the public viewer (blurs when the tab loses focus).

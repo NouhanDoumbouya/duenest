@@ -57,6 +57,8 @@ from .services import (
     accept_claim,
     approve_claim,
     attachment_file_response,
+    consume_download,
+    consume_view,
     decline_claim,
     deny_claim,
     get_or_create_receiver_claim,
@@ -737,6 +739,8 @@ class QuickShareFilePreviewView(_ClaimFileAccessMixin):
             session,
             viewer=request.user if request.user.is_authenticated else None,
         )
+        # Count the view after serving; the cap blocks the next request.
+        consume_view(session)
         return response
 
 
@@ -753,6 +757,14 @@ class QuickShareFileDownloadView(_ClaimFileAccessMixin):
                     "state": "download_not_allowed",
                 },
                 status=status.HTTP_403_FORBIDDEN,
+            )
+        if session.is_download_limit_reached:
+            return Response(
+                {
+                    "detail": "This Quick Share has reached its download limit.",
+                    "state": "limit_reached",
+                },
+                status=status.HTTP_410_GONE,
             )
         response = attachment_file_response(file)
         if response is None:
@@ -772,6 +784,8 @@ class QuickShareFileDownloadView(_ClaimFileAccessMixin):
             session,
             viewer=request.user if request.user.is_authenticated else None,
         )
+        # Count the download after serving; the cap blocks the next request.
+        consume_download(session)
         return response
 
 

@@ -83,6 +83,13 @@ class QuickShareCreateSerializer(serializers.Serializer):
     max_claims = serializers.IntegerField(
         required=False, allow_null=True, min_value=1, max_value=1000
     )
+    # Per-access caps (null = unlimited); preserve single-file link parity.
+    max_views = serializers.IntegerField(
+        required=False, allow_null=True, min_value=1, max_value=100000
+    )
+    max_downloads = serializers.IntegerField(
+        required=False, allow_null=True, min_value=1, max_value=100000
+    )
     require_sender_approval = serializers.BooleanField(default=False)
     watermark_enabled = serializers.BooleanField(default=True)
     privacy_screen_enabled = serializers.BooleanField(default=False)
@@ -205,6 +212,11 @@ class QuickShareSessionSerializer(serializers.ModelSerializer):
             "one_time",
             "max_claims",
             "claim_count",
+            "max_views",
+            "view_count",
+            "max_downloads",
+            "download_count",
+            "limit_reached_at",
             "require_sender_approval",
             "watermark_enabled",
             "privacy_screen_enabled",
