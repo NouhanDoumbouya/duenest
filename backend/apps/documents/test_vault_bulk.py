@@ -17,7 +17,9 @@ from .models import (
     Document,
     DocumentBundle,
     DocumentBundleRequirement,
+    DocumentCategory,
     DocumentFile,
+    DocumentTag,
 )
 
 User = get_user_model()
@@ -86,6 +88,92 @@ class DocumentsBulkExportTest(VaultBulkBaseTest):
     def test_requires_ids(self):
         response = self.client.post(self.URL, {}, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class DocumentsBulkActionTest(VaultBulkBaseTest):
+    URL = "/api/v1/documents/bulk-action/"
+
+    def test_move_category(self):
+        cat = DocumentCategory.objects.create(owner=self.owner, name="Travel")
+        a = self._doc("a", with_file=False)
+        b = self._doc("b", with_file=False)
+        response = self.client.post(
+            self.URL,
+            {"action": "move_category", "document_ids": [a.id, b.id], "category": cat.id},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["updated"], 2)
+        a.refresh_from_db()
+        b.refresh_from_db()
+        self.assertEqual(a.category_id, cat.id)
+        self.assertEqual(b.category_id, cat.id)
+
+    def test_archive(self):
+        a = self._doc("a", with_file=False)
+        response = self.client.post(
+            self.URL,
+            {"action": "archive", "document_ids": [a.id]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        a.refresh_from_db()
+        self.assertEqual(a.lifecycle_status, Document.Lifecycle.ARCHIVED)
+
+    def test_trash(self):
+        a = self._doc("a", with_file=False)
+        response = self.client.post(
+            self.URL,
+            {"action": "trash", "document_ids": [a.id]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        a.refresh_from_db()
+        self.assertTrue(a.is_trashed)
+
+    def test_add_tag(self):
+        tag = DocumentTag.objects.create(owner=self.owner, name="urgent")
+        a = self._doc("a", with_file=False)
+        response = self.client.post(
+            self.URL,
+            {"action": "add_tag", "document_ids": [a.id], "tag": tag.id},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn(tag, a.tags.all())
+
+    def test_owner_isolation(self):
+        mine = self._doc("mine", with_file=False)
+        theirs = self._doc("theirs", owner=self.other, with_file=False)
+        response = self.client.post(
+            self.URL,
+            {"action": "archive", "document_ids": [mine.id, theirs.id]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # Only my document is affected; the other user's is untouched.
+        self.assertEqual(response.data["updated"], 1)
+        theirs.refresh_from_db()
+        self.assertNotEqual(theirs.lifecycle_status, Document.Lifecycle.ARCHIVED)
+
+    def test_unknown_action_rejected(self):
+        a = self._doc("a", with_file=False)
+        response = self.client.post(
+            self.URL,
+            {"action": "nope", "document_ids": [a.id]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_cannot_use_another_users_category(self):
+        their_cat = DocumentCategory.objects.create(owner=self.other, name="Theirs")
+        a = self._doc("a", with_file=False)
+        response = self.client.post(
+            self.URL,
+            {"action": "move_category", "document_ids": [a.id], "category": their_cat.id},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 
 class BundleAddDocumentsTest(VaultBulkBaseTest):

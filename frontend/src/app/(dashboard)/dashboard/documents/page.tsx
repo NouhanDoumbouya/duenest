@@ -37,6 +37,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Toast, type ToastState } from "@/components/ui/toast";
 import { ApiError } from "@/lib/api";
 import {
+  bulkDocumentAction,
   createDocumentReminderRule,
   deleteDocument,
   getDocuments,
@@ -538,8 +539,10 @@ function DocumentsPageInner() {
     setBulkBusy(true);
     setError(null);
     try {
-      await Promise.all(
-        prior.map((p) => updateDocument(p.id, { category: categoryId })),
+      await bulkDocumentAction(
+        "move_category",
+        prior.map((p) => p.id),
+        { category: categoryId },
       );
       const name =
         categoryId === null
@@ -587,12 +590,10 @@ function DocumentsPageInner() {
     setBulkBusy(true);
     setError(null);
     try {
-      await Promise.all(
-        prior.map((p) =>
-          updateDocument(p.id, {
-            tag_ids: Array.from(new Set([...p.tag_ids, tagId])),
-          }),
-        ),
+      await bulkDocumentAction(
+        "add_tag",
+        prior.map((p) => p.id),
+        { tag: tagId },
       );
       const tagName = tags.find((t) => t.id === tagId)?.name ?? "tag";
       const count = prior.length;
@@ -719,8 +720,9 @@ function DocumentsPageInner() {
     setBulkConfirm(null);
     setError(null);
     try {
-      await Promise.all(
-        prior.map((p) => updateDocument(p.id, { lifecycle_status: "archived" })),
+      await bulkDocumentAction(
+        "archive",
+        prior.map((p) => p.id),
       );
       const count = prior.length;
       exitSelectMode();
@@ -764,7 +766,7 @@ function DocumentsPageInner() {
     setBulkConfirm(null);
     setError(null);
     try {
-      await Promise.all(ids.map((id) => deleteDocument(id)));
+      await bulkDocumentAction("trash", ids);
       const count = ids.length;
       exitSelectMode();
       reload();

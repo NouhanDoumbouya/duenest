@@ -8,7 +8,7 @@ from django.conf import settings
 from django.contrib.auth.hashers import check_password, make_password
 from django.core import signing
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.db.models import (
     Case,
     CharField,
@@ -684,6 +684,87 @@ class DocumentViewSet(viewsets.ModelViewSet):
                 metadata={"target": "document"},
             )
         return Response(self.get_serializer(document).data)
+
+    @action(detail=False, methods=["post"], url_path="bulk-action")
+    def bulk_action(self, request):
+        """
+        Apply one action to many owner-owned documents in a single request:
+        ``move_category`` ({category: id|null}), ``archive``, ``trash``, or
+        ``add_tag`` ({tag: id}). Owner-scoped throughout; non-trashed only.
+        Returns the number of documents affected. One request + one transaction
+        replaces the per-document calls the client previously looped.
+        """
+        action_name = request.data.get("action")
+        raw_ids = request.data.get("document_ids")
+        if not isinstance(raw_ids, (list, tuple)) or not raw_ids:
+            return Response(
+                {"detail": "Select at least one document."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        ids = []
+        for value in raw_ids:
+            try:
+                ids.append(int(value))
+            except (TypeError, ValueError):
+                continue
+        # get_queryset() is already owner-scoped and excludes trashed documents.
+        documents = list(self.get_queryset().filter(id__in=ids))
+        if not documents:
+            return Response({"updated": 0})
+
+        if action_name == "move_category":
+            raw_category = request.data.get("category")
+            category = None
+            if raw_category not in (None, "", "none"):
+                try:
+                    category = DocumentCategory.objects.get(
+                        Q(owner=request.user) | Q(owner__isnull=True),
+                        id=int(raw_category),
+                    )
+                except (DocumentCategory.DoesNotExist, TypeError, ValueError):
+                    return Response(
+                        {"detail": "Category not found."},
+                        status=status.HTTP_404_NOT_FOUND,
+                    )
+            with transaction.atomic():
+                for doc in documents:
+                    doc.category = category
+                    doc.save(update_fields=["category", "updated_at"])
+        elif action_name == "archive":
+            with transaction.atomic():
+                for doc in documents:
+                    doc.lifecycle_status = Document.Lifecycle.ARCHIVED
+                    doc.save(update_fields=["lifecycle_status", "updated_at"])
+        elif action_name == "add_tag":
+            try:
+                tag = DocumentTag.objects.get(
+                    id=int(request.data.get("tag")), owner=request.user
+                )
+            except (DocumentTag.DoesNotExist, TypeError, ValueError):
+                return Response(
+                    {"detail": "Tag not found."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            with transaction.atomic():
+                for doc in documents:
+                    doc.tags.add(tag)
+        elif action_name == "trash":
+            with transaction.atomic():
+                for doc in documents:
+                    self._trash_document(doc, request)
+        else:
+            return Response(
+                {"detail": "Unknown bulk action."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        _track_product_event(
+            request,
+            "documents_bulk_action",
+            object_type="document",
+            metadata={"action": action_name, "count": len(documents)},
+        )
+        return Response({"updated": len(documents)})
 
     @action(detail=True, methods=["post"], url_path="snooze")
     def snooze(self, request, pk=None):

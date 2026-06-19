@@ -109,6 +109,24 @@ export function updateDocument(
 }
 
 /**
+ * Apply one action to many owner-owned documents in a single request:
+ * move_category ({category}), archive, trash, or add_tag ({tag}). Owner-scoped
+ * server-side. Returns the number affected. Used by the Vault bulk bar so the
+ * forward action is one atomic call instead of N per-document requests.
+ */
+export function bulkDocumentAction(
+  action: "move_category" | "archive" | "trash" | "add_tag",
+  documentIds: number[],
+  params?: { category?: number | null; tag?: number },
+): Promise<{ updated: number }> {
+  return apiFetch<{ updated: number }>(`/documents/bulk-action/`, {
+    method: "POST",
+    body: { action, document_ids: documentIds, ...params },
+    auth: true,
+  });
+}
+
+/**
  * Move a document to trash (soft delete). DELETE on a document is a soft delete
  * on the backend — the record is hidden, recoverable, and can be permanently
  * removed later from the Trash.
