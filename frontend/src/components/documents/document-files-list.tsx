@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import {
   Download,
   Eye,
@@ -40,6 +41,7 @@ export function DocumentFilesList({
   onRequestDelete,
   onReplace,
   onEditPages,
+  renderTools,
 }: {
   files: DocumentFile[];
   downloadingId: number | null;
@@ -52,6 +54,8 @@ export function DocumentFilesList({
   onReplace?: (file: DocumentFile) => void;
   /** When provided, shows an "Edit pages" action for PDF files. */
   onEditPages?: (file: DocumentFile) => void;
+  /** Optional per-file tools (e.g. the unified FileToolsButton). */
+  renderTools?: (file: DocumentFile) => ReactNode;
 }) {
   if (files.length === 0) return <EmptyState />;
 
@@ -146,6 +150,7 @@ export function DocumentFilesList({
                   <span className="hidden sm:inline">Edit pages</span>
                 </Button>
               )}
+              {renderTools?.(file)}
               <Button
                 type="button"
                 variant="ghost"
