@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react";
 
 import { useFeature } from "@/components/features/feature-flags-provider";
 import { DocumentFilesList } from "@/components/documents/document-files-list";
+import { FileToolsButton } from "@/components/documents/file-tools-button";
 import { PageEditorDialog } from "@/components/documents/page-editor-dialog";
 import { DocumentFileShareDialog } from "@/components/documents/document-file-share-dialog";
 import { DocumentFileUploader } from "@/components/documents/document-file-uploader";
@@ -12,11 +13,13 @@ import { DocumentFileViewer } from "@/components/documents/document-file-viewer"
 import { DocumentTrashedFiles } from "@/components/documents/document-trashed-files";
 import { SectionCard } from "@/components/ui/section-card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Toast, type ToastState } from "@/components/ui/toast";
 import { ApiError } from "@/lib/api";
 import {
   createDocumentFileVersion,
   deleteDocumentFile,
   downloadDocumentFile,
+  getDocumentFileDownloadBlob,
   getDocumentFiles,
 } from "@/lib/document-files";
 import type { DocumentFile } from "@/types/document-files";
@@ -40,6 +43,7 @@ export function FilesTab({
   const [editingPagesFile, setEditingPagesFile] = useState<DocumentFile | null>(
     null,
   );
+  const [toast, setToast] = useState<ToastState | null>(null);
   const versioningEnabled = useFeature("document_versioning");
   const pageEditEnabled = useFeature("document_page_edit");
   const replaceInputRef = useRef<HTMLInputElement>(null);
@@ -78,6 +82,21 @@ export function FilesTab({
     } finally {
       setReplacingId(null);
     }
+  }
+
+  // Save a tool-produced blob (compress / export pages / redact) as a new
+  // version of the source file. The original file is kept as history.
+  async function saveToolResultAsVersion(
+    source: DocumentFile,
+    blob: Blob,
+    name: string,
+  ) {
+    const file = new File([blob], name, {
+      type: blob.type || "application/octet-stream",
+    });
+    const created = await createDocumentFileVersion(documentId, source.id, file);
+    setFiles((prev) => [created, ...(prev ?? [])]);
+    onChanged?.();
   }
 
   useEffect(() => {
@@ -171,6 +190,18 @@ export function FilesTab({
             onRequestDelete={setPendingDelete}
             onReplace={versioningEnabled ? handleReplace : undefined}
             onEditPages={pageEditEnabled ? setEditingPagesFile : undefined}
+            renderTools={(file) => (
+              <FileToolsButton
+                file={file}
+                variant="ghost"
+                loadBlob={() => getDocumentFileDownloadBlob(documentId, file.id)}
+                onSave={(blob, name) =>
+                  saveToolResultAsVersion(file, blob, name)
+                }
+                saveLabel="Save as new version"
+                onNotify={(message, kind) => setToast({ message, kind })}
+              />
+            )}
           />
         )}
 
@@ -230,6 +261,8 @@ export function FilesTab({
           }}
         />
       )}
+
+      <Toast toast={toast} onDismiss={() => setToast(null)} />
     </SectionCard>
   );
 }
