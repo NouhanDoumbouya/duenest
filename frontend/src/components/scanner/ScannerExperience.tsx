@@ -21,7 +21,6 @@ import {
   Maximize,
   Mic,
   MicOff,
-  MoreHorizontal,
   Plus,
   RefreshCw,
   RotateCcw,
@@ -31,6 +30,7 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Upload,
+  Wand2,
   WifiOff,
   X,
 } from "lucide-react";
@@ -45,6 +45,7 @@ import {
 } from "@/lib/scanner/capabilities";
 import {
   CameraError,
+  focusAt,
   setTorch,
   startCamera,
   trackSupportsTorch,
@@ -82,7 +83,7 @@ import { applyWatermark } from "@/lib/scanner/watermark";
 import { applyRedactions, type RedactionRect } from "@/lib/scanner/redaction";
 import { rasterizePdf } from "@/lib/pdf/rasterize";
 import { FILENAME_TYPE_CHIPS, suggestFilename } from "@/lib/scanner/filename";
-import { SCAN_MODES } from "@/lib/scanner/modes";
+import { SCAN_MODES, type ScanMode } from "@/lib/scanner/modes";
 import { uploadScan, flushQueuedScans } from "@/lib/scanner/client";
 import {
   enqueueScan,
@@ -212,6 +213,10 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
   const rafRef = useRef<number | null>(null);
   const lastDetectRef = useRef(0);
   const stableSinceRef = useRef<number | null>(null);
+  // While the lens is refocusing (e.g. just after a tap-to-focus), suppress
+  // auto-capture so we never freeze a half-focused frame. Holds a perf-now
+  // deadline; auto-capture resumes once the clock passes it.
+  const focusingUntilRef = useRef(0);
   const tiltRef = useRef<TiltState>("unavailable");
   const detectedQuadRef = useRef<Quad | null>(null);
   const voiceRef = useRef<VoiceController | null>(null);
@@ -340,7 +345,11 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
           })) as Quad;
           const aligned = tiltRef.current === "level" || tiltRef.current === "slight";
           setDetection(aligned ? "hold-steady" : "detected");
-          if (autoCaptureRef.current && aligned) {
+          const refocusing = now < focusingUntilRef.current;
+          if (refocusing) {
+            stableSinceRef.current = null;
+            setHoldProgress(0);
+          } else if (autoCaptureRef.current && aligned) {
             if (stableSinceRef.current == null) stableSinceRef.current = now;
             const held = now - stableSinceRef.current;
             setHoldProgress(Math.min(1, held / AUTO_CAPTURE_MS));
@@ -469,6 +478,16 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
       showToast("Torch toggle failed on this device.", "error");
     }
   }, [showToast, torchOn]);
+
+  // Tap-to-focus: drive the lens toward the tapped point and pause auto-capture
+  // briefly so it doesn't fire while the lens is still hunting. Coordinates are
+  // normalized (0..1); the overlay shows the ring optimistically either way.
+  const focusAtPoint = useCallback((nx: number, ny: number) => {
+    focusingUntilRef.current = performance.now() + 900;
+    stableSinceRef.current = null;
+    const track = cameraRef.current?.track;
+    if (track) void focusAt(track, nx, ny);
+  }, []);
 
   const handleClose = useCallback(() => {
     stopEverything();
@@ -725,6 +744,45 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
     },
     [adjust, showToast],
   );
+
+  // Select a scan mode (a preset over filter + export quality). Safe to call in
+  // the live camera phase, where there is no base canvas yet: it just sets the
+  // intended filter/quality, which capture → applyCrop then apply on the frozen
+  // frame. Re-used by the live overlay strip and the review screen.
+  const selectScanMode = useCallback((mode: ScanMode) => {
+    setScanMode(mode.id);
+    setFilterId(mode.filterId);
+    setExportQuality(mode.quality);
+    const base = baseCanvasRef.current;
+    if (!base) return;
+    // In review, a base already exists — re-derive the preview non-destructively.
+    try {
+      const filtered = applyFilter(base, mode.filterId);
+      filteredBaseRef.current = filtered;
+      setEnhancedCanvas(applyAdjustments(filtered, adjust));
+      setPdfSize(null);
+    } catch {
+      /* leave the current preview if the preset filter can't be applied */
+    }
+  }, [adjust]);
+
+  // Clear the chosen scan mode and return to the neutral default look. Mirrors
+  // selectScanMode so the strip has an honest "no preset" state.
+  const clearScanMode = useCallback(() => {
+    setScanMode(null);
+    setFilterId(DEFAULT_FILTER);
+    setExportQuality("standard");
+    const base = baseCanvasRef.current;
+    if (!base) return;
+    try {
+      const filtered = applyFilter(base, DEFAULT_FILTER);
+      filteredBaseRef.current = filtered;
+      setEnhancedCanvas(applyAdjustments(filtered, adjust));
+      setPdfSize(null);
+    } catch {
+      /* leave the current preview if the default filter can't be applied */
+    }
+  }, [adjust]);
 
   // Live brightness/contrast: only re-runs a cheap LUT pass on the cached
   // filtered base, so dragging stays smooth even on large captures.
@@ -1230,6 +1288,11 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
               onToggleAuto={() => setAutoCapture((v) => !v)}
               onCapture={capture}
               onImport={() => fileInputRef.current?.click()}
+              scanMode={scanMode}
+              scanModesEnabled={featureEnabled("scan_modes")}
+              onSelectMode={selectScanMode}
+              onClearMode={clearScanMode}
+              onFocusPoint={focusAtPoint}
             />
           )}
         </div>
@@ -1322,15 +1385,24 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
                     role="group"
                     aria-label="Scan mode"
                   >
+                    <button
+                      type="button"
+                      onClick={clearScanMode}
+                      aria-pressed={scanMode === null}
+                      className={cn(
+                        "inline-flex shrink-0 items-center rounded-full px-3 py-1.5 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none",
+                        scanMode === null
+                          ? "bg-teal-500/20 text-teal-100 ring-1 ring-teal-400/60"
+                          : "bg-white/5 text-slate-200 hover:bg-white/10",
+                      )}
+                    >
+                      None
+                    </button>
                     {SCAN_MODES.map((mode) => (
                       <button
                         key={mode.id}
                         type="button"
-                        onClick={() => {
-                          changeFilter(mode.filterId);
-                          setExportQuality(mode.quality);
-                          setScanMode(mode.id);
-                        }}
+                        onClick={() => selectScanMode(mode)}
                         aria-pressed={scanMode === mode.id}
                         className={cn(
                           "inline-flex shrink-0 items-center rounded-full px-3 py-1.5 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none",
@@ -1350,67 +1422,6 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
                   )}
                 </div>
               )}
-              <div
-                className="-mx-1 flex items-center gap-2 overflow-x-auto px-1 pb-1"
-                role="group"
-                aria-label="Document filter"
-              >
-                {FILTERS.filter((f) => f.primary).map((f) => (
-                  <FilterChip
-                    key={f.id}
-                    label={f.label}
-                    active={filterId === f.id}
-                    onClick={() => changeFilter(f.id)}
-                  />
-                ))}
-                <button
-                  type="button"
-                  onClick={() => setMoreOpen(true)}
-                  aria-haspopup="dialog"
-                  aria-expanded={moreOpen}
-                  className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white/5 px-3.5 py-1.5 text-xs font-medium text-slate-200 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
-                >
-                  <MoreHorizontal className="size-3.5" aria-hidden="true" /> More
-                </button>
-              </div>
-              <p className="text-center text-xs text-slate-400">
-                {getFilterMeta(filterId).description}
-              </p>
-              {/* Orientation & crop — a compact icon cluster, not three wide
-                  buttons, so the screen reads as "preview + one Save". */}
-              <div
-                className="flex items-center justify-center gap-2"
-                role="group"
-                aria-label="Edit scan"
-              >
-                <button
-                  type="button"
-                  onClick={() => rotatePreview(false)}
-                  aria-label="Rotate left"
-                  title="Rotate left"
-                  className="flex size-9 items-center justify-center rounded-lg border border-white/15 bg-white/5 text-slate-100 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
-                >
-                  <RotateCcw className="size-4" aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => rotatePreview(true)}
-                  aria-label="Rotate right"
-                  title="Rotate right"
-                  className="flex size-9 items-center justify-center rounded-lg border border-white/15 bg-white/5 text-slate-100 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
-                >
-                  <RotateCw className="size-4" aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  onClick={editCrop}
-                  aria-label="Edit crop"
-                  title="Edit crop"
-                  className="flex size-9 items-center justify-center rounded-lg border border-white/15 bg-white/5 text-slate-100 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
-                >
-                  <Crop className="size-4" aria-hidden="true" />
-                </button>
-              </div>
               {pdfSize != null && (
                 <p className="text-center text-xs text-slate-400">PDF size: {formatBytes(pdfSize)}</p>
               )}
@@ -1448,6 +1459,9 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
                           </button>
                           <span className="pointer-events-none absolute left-1 top-1 rounded bg-black/60 px-1 text-[0.6rem] font-medium text-white">
                             {i + 1}
+                          </span>
+                          <span className="pointer-events-none absolute inset-x-1 bottom-1 truncate rounded bg-black/60 px-1 text-center text-[0.55rem] font-medium text-slate-100">
+                            {getFilterMeta(p.filterId).label}
                           </span>
                           <button
                             type="button"
@@ -1490,41 +1504,62 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
                   </ul>
                 </div>
               )}
-              {/* Optional fine-tuning, paired and tucked away so a first-time
-                  user can just tap Save. */}
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
+              {/* Tool dock — per-page edits consolidated into one labeled-icon
+                  row (like a camera editor), so the screen reads as
+                  "preview → dock → Save" instead of a scrolling stack. Each
+                  edit stays non-destructive (re-derived from the base). */}
+              <div
+                className="-mx-1 flex items-stretch justify-center gap-1 overflow-x-auto px-1"
+                role="toolbar"
+                aria-label="Edit tools"
+              >
+                <ToolDockButton
+                  icon={<Wand2 className="size-5" aria-hidden="true" />}
+                  label="Filter"
+                  active={moreOpen}
+                  dot={filterId !== DEFAULT_FILTER}
+                  onClick={() => setMoreOpen(true)}
+                />
+                <ToolDockButton
+                  icon={<SlidersHorizontal className="size-5" aria-hidden="true" />}
+                  label="Adjust"
+                  active={adjustOpen}
+                  dot={!isNeutralAdjust(adjust)}
                   onClick={() => setAdjustOpen((v) => !v)}
-                  aria-expanded={adjustOpen}
-                  className="flex items-center justify-center gap-1.5 rounded-lg bg-white/5 px-3 py-2 text-xs font-medium text-slate-300 hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
-                >
-                  <SlidersHorizontal className="size-3.5" aria-hidden="true" />
-                  Adjust
-                  {!isNeutralAdjust(adjust) && (
-                    <span className="size-1.5 rounded-full bg-teal-300" aria-hidden="true" />
-                  )}
-                  <ChevronDown
-                    className={cn("size-3.5 transition-transform", adjustOpen && "rotate-180")}
-                    aria-hidden="true"
-                  />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSaveOptionsOpen((v) => !v)}
-                  aria-expanded={saveOptionsOpen}
-                  className="flex items-center justify-center gap-1.5 rounded-lg bg-white/5 px-3 py-2 text-xs font-medium text-slate-300 hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
-                >
-                  Save options
-                  {(docName.trim() !== "" || exportQuality !== "standard") && (
-                    <span className="size-1.5 rounded-full bg-teal-300" aria-hidden="true" />
-                  )}
-                  <ChevronDown
-                    className={cn("size-3.5 transition-transform", saveOptionsOpen && "rotate-180")}
-                    aria-hidden="true"
-                  />
-                </button>
+                />
+                <ToolDockButton
+                  icon={<RotateCcw className="size-5" aria-hidden="true" />}
+                  label="Rotate L"
+                  onClick={() => rotatePreview(false)}
+                />
+                <ToolDockButton
+                  icon={<RotateCw className="size-5" aria-hidden="true" />}
+                  label="Rotate R"
+                  onClick={() => rotatePreview(true)}
+                />
+                <ToolDockButton
+                  icon={<Crop className="size-5" aria-hidden="true" />}
+                  label="Crop"
+                  onClick={editCrop}
+                />
               </div>
+              {/* Name & quality — one quiet trigger; first-time users can skip
+                  it and just tap Save. */}
+              <button
+                type="button"
+                onClick={() => setSaveOptionsOpen((v) => !v)}
+                aria-expanded={saveOptionsOpen}
+                className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-white/5 px-3 py-2 text-xs font-medium text-slate-300 hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
+              >
+                Name &amp; quality
+                {(docName.trim() !== "" || exportQuality !== "standard") && (
+                  <span className="size-1.5 rounded-full bg-teal-300" aria-hidden="true" />
+                )}
+                <ChevronDown
+                  className={cn("size-3.5 transition-transform", saveOptionsOpen && "rotate-180")}
+                  aria-hidden="true"
+                />
+              </button>
               {adjustOpen && (
                 <div className="space-y-3 rounded-lg bg-white/5 p-3">
                   <AdjustSlider
@@ -1632,6 +1667,33 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
                   )}
                 </div>
               )}
+              {/* Advanced copy tools, also reachable here in review — not only
+                  after save. Founder-gated, so normal users never see them.
+                  Each produces a NEW file and never alters the page you save. */}
+              {featureEnabled("scanner_advanced_tools") &&
+                (featureEnabled("scan_safe_copy") ||
+                  featureEnabled("scan_redaction")) && (
+                  <div className="flex flex-wrap items-center justify-center gap-2 border-t border-white/10 pt-3">
+                    {featureEnabled("scan_safe_copy") && (
+                      <button
+                        type="button"
+                        onClick={() => setPrepareCopyOpen(true)}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-white/5 px-3 py-2 text-xs font-medium text-slate-200 hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
+                      >
+                        <Copy className="size-4" aria-hidden="true" /> Prepare copy
+                      </button>
+                    )}
+                    {featureEnabled("scan_redaction") && (
+                      <button
+                        type="button"
+                        onClick={openRedaction}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-white/5 px-3 py-2 text-xs font-medium text-slate-200 hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
+                      >
+                        <EyeOff className="size-4" aria-hidden="true" /> Redact area
+                      </button>
+                    )}
+                  </div>
+                )}
               <div className="grid grid-cols-2 gap-2">
                 <Button variant="outline" onClick={retake} className="border-white/20 bg-white/5 text-slate-100 hover:bg-white/10">
                   <RefreshCw className="size-4" aria-hidden="true" /> Retake
@@ -1847,15 +1909,62 @@ function CameraOverlay(props: {
   voiceOn: boolean;
   autoCapture: boolean;
   cvReady: boolean;
+  scanMode: string | null;
+  scanModesEnabled: boolean;
   onToggleTorch: () => void;
   onToggleVoice: () => void;
   onToggleAuto: () => void;
   onCapture: () => void;
   onImport: () => void;
+  onSelectMode: (mode: ScanMode) => void;
+  onClearMode: () => void;
+  onFocusPoint: (nx: number, ny: number) => void;
 }) {
   const detected = props.detection === "detected" || props.detection === "hold-steady";
+  const activeMode = props.scanMode
+    ? SCAN_MODES.find((m) => m.id === props.scanMode)
+    : null;
+  // Rule-of-thirds guide, toggled locally — pure presentation, no need to lift.
+  const [showGrid, setShowGrid] = useState(false);
+  // Transient focus ring at the last tapped point (pixel coords within the feed).
+  const [focusRing, setFocusRing] = useState<{ x: number; y: number; id: number } | null>(null);
+  const focusTimeoutRef = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (focusTimeoutRef.current) window.clearTimeout(focusTimeoutRef.current);
+    },
+    [],
+  );
+  const handleTapFocus = (e: React.MouseEvent<HTMLButtonElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const px = e.clientX - rect.left;
+    const py = e.clientY - rect.top;
+    props.onFocusPoint(px / rect.width, py / rect.height);
+    setFocusRing({ x: px, y: py, id: Date.now() });
+    if (focusTimeoutRef.current) window.clearTimeout(focusTimeoutRef.current);
+    focusTimeoutRef.current = window.setTimeout(() => setFocusRing(null), 900);
+  };
   return (
     <>
+      {/* Tap-to-focus catcher — full-area button beneath the controls (which
+          paint later and capture their own taps). Central taps drive the lens. */}
+      <button
+        type="button"
+        onClick={handleTapFocus}
+        aria-label="Tap to focus"
+        className="absolute inset-0 cursor-default focus:outline-none"
+      />
+
+      {/* Rule-of-thirds grid */}
+      {showGrid && (
+        <div className="pointer-events-none absolute inset-0">
+          <div className="absolute inset-y-0 left-1/3 w-px bg-white/20" />
+          <div className="absolute inset-y-0 left-2/3 w-px bg-white/20" />
+          <div className="absolute inset-x-0 top-1/3 h-px bg-white/20" />
+          <div className="absolute inset-x-0 top-2/3 h-px bg-white/20" />
+        </div>
+      )}
+
       {/* Document frame glow */}
       <div
         className={cn(
@@ -1907,8 +2016,64 @@ function CameraOverlay(props: {
         </div>
       )}
 
+      {/* Tap-to-focus ring */}
+      {focusRing && (
+        <div
+          key={focusRing.id}
+          className="pointer-events-none absolute size-16 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-teal-300/90 animate-in fade-in zoom-in-75 duration-200"
+          style={{ left: focusRing.x, top: focusRing.y }}
+          aria-hidden="true"
+        />
+      )}
+
       {/* Bottom controls */}
       <div className="absolute inset-x-0 bottom-0 flex flex-col gap-3 bg-gradient-to-t from-black/80 to-transparent px-6 pb-7 pt-12">
+        {/* Live scan-mode strip — choose the look while framing, like a camera
+            mode dial. The choice carries through capture into the review/save,
+            so framing and tool choice happen in one place. The filter is applied
+            on capture (not per video frame) to keep the preview cheap. */}
+        {props.scanModesEnabled && (
+          <div className="flex flex-col items-center gap-1">
+            <div
+              className="-mx-1 flex max-w-full items-center gap-2 overflow-x-auto px-1 pb-0.5"
+              role="group"
+              aria-label="Scan mode"
+            >
+              <button
+                type="button"
+                onClick={props.onClearMode}
+                aria-pressed={props.scanMode === null}
+                className={cn(
+                  "inline-flex shrink-0 items-center rounded-full px-3 py-1.5 text-xs font-medium backdrop-blur-md transition-colors focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none",
+                  props.scanMode === null
+                    ? "bg-teal-500/30 text-teal-50 ring-1 ring-teal-300/70"
+                    : "bg-white/10 text-slate-200 hover:bg-white/20",
+                )}
+              >
+                None
+              </button>
+              {SCAN_MODES.map((mode) => (
+                <button
+                  key={mode.id}
+                  type="button"
+                  onClick={() => props.onSelectMode(mode)}
+                  aria-pressed={props.scanMode === mode.id}
+                  className={cn(
+                    "inline-flex shrink-0 items-center rounded-full px-3 py-1.5 text-xs font-medium backdrop-blur-md transition-colors focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none",
+                    props.scanMode === mode.id
+                      ? "bg-teal-500/30 text-teal-50 ring-1 ring-teal-300/70"
+                      : "bg-white/10 text-slate-200 hover:bg-white/20",
+                  )}
+                >
+                  {mode.label}
+                </button>
+              ))}
+            </div>
+            {activeMode && (
+              <p className="text-[0.7rem] text-slate-300">{activeMode.hint}</p>
+            )}
+          </div>
+        )}
         <div className="flex items-center justify-center gap-3 text-xs text-slate-300">
           <button
             type="button"
@@ -1917,6 +2082,14 @@ function CameraOverlay(props: {
             className="rounded-full bg-white/10 px-3 py-1 backdrop-blur-md"
           >
             Auto-capture: {props.autoCapture ? "On" : "Off"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowGrid((v) => !v)}
+            aria-pressed={showGrid}
+            className="rounded-full bg-white/10 px-3 py-1 backdrop-blur-md"
+          >
+            Grid: {showGrid ? "On" : "Off"}
           </button>
         </div>
         <div className="flex items-center justify-between">
@@ -2242,14 +2415,19 @@ function AdjustSlider({
   );
 }
 
-function FilterChip({
+/** A labeled icon tool in the review dock. `dot` flags a non-default edit. */
+function ToolDockButton({
+  icon,
   label,
-  active,
   onClick,
+  active,
+  dot,
 }: {
+  icon: React.ReactNode;
   label: string;
-  active: boolean;
   onClick: () => void;
+  active?: boolean;
+  dot?: boolean;
 }) {
   return (
     <button
@@ -2257,13 +2435,20 @@ function FilterChip({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        "shrink-0 rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none",
+        "relative flex min-w-[3.75rem] shrink-0 flex-col items-center gap-1 rounded-xl px-2 py-2 text-[0.65rem] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none",
         active
-          ? "bg-teal-500 text-slate-950"
-          : "bg-white/5 text-slate-200 hover:bg-white/10",
+          ? "bg-teal-500/15 text-teal-100 ring-1 ring-teal-400/50"
+          : "text-slate-200 hover:bg-white/10",
       )}
     >
+      {icon}
       {label}
+      {dot && (
+        <span
+          className="absolute right-2 top-1.5 size-1.5 rounded-full bg-teal-300"
+          aria-hidden="true"
+        />
+      )}
     </button>
   );
 }

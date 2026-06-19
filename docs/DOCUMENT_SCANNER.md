@@ -22,7 +22,7 @@ All scanner code is isolated under:
 ```
 frontend/src/lib/scanner/        # framework-free logic modules
   capabilities.ts   feature detection + haptics + reduced-motion
-  camera.ts         getUserMedia, torch (typed CameraError)
+  camera.ts         getUserMedia, continuous autofocus, tap-to-focus, torch (typed CameraError)
   opencv.ts         CDN loader, edge detection, perspective warp (Mat-safe)
   orientation.ts    DeviceOrientation bubble level (smoothed)
   voice.ts          Web Speech command controller
@@ -72,6 +72,30 @@ preview rotates the base too, so a later filter change keeps the orientation.
   the user can always save anyway. All analysis is local; no image content
   leaves the browser.
 
+### Live camera capture
+
+The live camera view (`CameraOverlay`) keeps the feed dominant and offers
+framing-time tools so tool choice and framing happen together:
+
+- **Continuous autofocus** is requested at `getUserMedia` time and re-applied
+  once the track is live (`applyContinuousFocus`), which keeps close-up
+  documents sharp in the preview instead of only at capture. Capture resolution
+  is requested at `2560×1440` `ideal` (degrades gracefully on weaker cameras).
+- **Tap-to-focus**: tapping the feed drives the lens toward that point
+  (`focusAt` → `pointsOfInterest`, mainly Android Chrome; silent no-op
+  elsewhere) and shows a focus ring. Auto-capture is suppressed for ~900 ms
+  after a tap (`focusingUntilRef`) so it never freezes a half-focused frame.
+- **Live scan-mode strip** (gated by `scan_modes`): choose a preset
+  (Document / ID / Certificate / …, plus **None**) while framing. The choice
+  sets the filter + export quality and carries through capture → review → save.
+  The filter is applied **on capture**, not per video frame, to keep the
+  preview cheap; the selected mode + hint are shown so the choice is honest.
+- **Rule-of-thirds grid**, torch, and auto-capture toggles round out the
+  framing controls.
+
+All of these are progressive enhancements: each degrades to a no-op where the
+capability is missing, and manual capture always works.
+
 ### Multi-page scans
 
 Single-page scanning is unchanged and fast: capture → review → **Save to Vault**.
@@ -97,6 +121,16 @@ Scanned files land in the **File Inbox** as encrypted files; adding expiry /
 category / reminder / bundle happens when organizing the inbox file into a
 Document (the scanner links there from the done screen rather than faking
 attachment).
+
+### Review screen (tool dock)
+
+The review (`enhancing`) screen keeps the page preview dominant and groups the
+per-page edits into a single labeled-icon **tool dock** — **Filter**
+(opens the full filter sheet), **Adjust**, **Rotate L/R**, **Crop** — instead of
+a long scrolling stack of control rows. **Name & quality** is a single quiet
+trigger below the dock. Every dock edit stays non-destructive (re-derived from
+the base canvas). The multi-page strip shows each committed page's current
+filter as a small badge on its thumbnail.
 
 ### Capability detection & graceful degradation
 
@@ -279,9 +313,12 @@ fallbacks but should be QA'd on a physical phone over HTTPS.
 
 Beyond capture→save, the scanner offers optional **prepare / protect / organize /
 share** steps. The basic flow (capture → review → fix → save) is unchanged; every
-advanced affordance appears only on the post-save success screen and only when
-its feature flag is enabled for the viewer, so normal users never see an
-unlaunched tool.
+advanced affordance appears only when its feature flag is enabled for the viewer,
+so normal users never see an unlaunched tool. The **Prepare copy** and **Redact
+area** tools are reachable both in the review screen (before save) and on the
+post-save success screen; **Share safely** / **Add to bundle** / **Add reminder**
+remain on the success screen because they act on the saved inbox file. Each
+advanced tool produces a **new** file and never alters the page you save.
 
 All keys live in the central registry (`apps/features/models.py`) and default to
 **`founder_only`** — coded, testable, and deployable, but invisible until a

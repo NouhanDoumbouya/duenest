@@ -32,12 +32,25 @@ export async function startCamera(): Promise<CameraHandle> {
     const stream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: { ideal: "environment" },
-        width: { ideal: 1920 },
-        height: { ideal: 1080 },
+        // Documents are detail-dense (small print, signatures), so ask for a
+        // high capture resolution. `ideal` degrades gracefully on weaker
+        // cameras instead of failing.
+        width: { ideal: 2560 },
+        height: { ideal: 1440 },
+        // Continuous autofocus is the key fix for a soft live preview: without
+        // it, close-up documents stay out of focus until something forces a
+        // refocus. `advanced` entries are best-effort — ignored, never fatal,
+        // on devices that don't expose focus control.
+        advanced: [
+          { focusMode: "continuous" },
+        ] as unknown as MediaTrackConstraintSet[],
       },
       audio: false,
     });
     const track = stream.getVideoTracks()[0];
+    // Re-apply focus after the track is live; some browsers honour
+    // applyConstraints better than the initial getUserMedia advanced set.
+    await applyContinuousFocus(track);
     return {
       stream,
       track,
@@ -55,6 +68,63 @@ export async function startCamera(): Promise<CameraHandle> {
       throw new CameraError("unavailable", "No usable camera was found.");
     }
     throw new CameraError("unknown", "Could not start the camera.");
+  }
+}
+
+/**
+ * Best-effort request for continuous autofocus on a live track. Silently does
+ * nothing where the capability is unsupported, so it never breaks scanning.
+ */
+async function applyContinuousFocus(track: MediaStreamTrack): Promise<void> {
+  try {
+    const caps = track.getCapabilities?.() as
+      | (MediaTrackCapabilities & { focusMode?: string[] })
+      | undefined;
+    if (caps?.focusMode?.includes("continuous")) {
+      await track.applyConstraints({
+        advanced: [
+          { focusMode: "continuous" },
+        ] as unknown as MediaTrackConstraintSet[],
+      });
+    }
+  } catch {
+    /* focus control is optional — ignore and keep scanning */
+  }
+}
+
+/**
+ * Drive autofocus toward a normalized point (0..1, top-left origin) the user
+ * tapped on the live preview. Uses `pointsOfInterest` where supported (mainly
+ * Android Chrome); best-effort and silent elsewhere. Returns whether a focus
+ * constraint was actually applied, so the UI can decide whether to show a ring.
+ */
+export async function focusAt(
+  track: MediaStreamTrack,
+  x: number,
+  y: number,
+): Promise<boolean> {
+  try {
+    const caps = track.getCapabilities?.() as
+      | (MediaTrackCapabilities & {
+          focusMode?: string[];
+          pointsOfInterest?: unknown;
+        })
+      | undefined;
+    if (!caps || caps.pointsOfInterest === undefined) return false;
+    const cx = Math.min(1, Math.max(0, x));
+    const cy = Math.min(1, Math.max(0, y));
+    const supportsSingle = caps.focusMode?.includes("single-shot");
+    await track.applyConstraints({
+      advanced: [
+        {
+          pointsOfInterest: [{ x: cx, y: cy }],
+          ...(supportsSingle ? { focusMode: "single-shot" } : {}),
+        },
+      ] as unknown as MediaTrackConstraintSet[],
+    });
+    return true;
+  } catch {
+    return false;
   }
 }
 
