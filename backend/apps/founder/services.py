@@ -13,12 +13,12 @@ from typing import Any
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.mail import send_mail
 from django.db import transaction
 from django.db.models import Count, Exists, F, Max, Min, OuterRef, Q
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 
+from common.email import send_branded_email
 from apps.documents.models import (
     Document,
     DocumentActivity,
@@ -387,23 +387,12 @@ def send_waitlist_confirmation_email(entry: WaitlistEntry) -> None:
     if not (_email_enabled() and recipient):
         logger.info("Waitlist confirmation email deferred for entry %s", entry.id)
         return
-    try:
-        send_mail(
-            subject="You're on the DueNest waitlist",
-            message=(
-                "Thanks for joining the DueNest private beta waitlist.\n\n"
-                "DueNest keeps your important documents, renewals, and deadlines "
-                "in one calm place. We'll email you an invite as spots open up.\n\n"
-                "— The DueNest team"
-            ),
-            from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
-            recipient_list=[recipient],
-            fail_silently=True,
-        )
-    except Exception:  # noqa: BLE001 - email must never break waitlist signup
-        logger.warning(
-            "Waitlist confirmation email failed for entry %s", entry.id, exc_info=True
-        )
+    send_branded_email(
+        subject="You're on the DueNest waitlist",
+        template="waitlist_confirmation",
+        context={},
+        to=recipient,
+    )
 
 
 def send_invite_email(invite: InviteCode, entry: WaitlistEntry | None = None) -> None:
@@ -418,23 +407,12 @@ def send_invite_email(invite: InviteCode, entry: WaitlistEntry | None = None) ->
         )
         return
     link = f"{_frontend_base()}/invite/{invite.code}"
-    try:
-        send_mail(
-            subject="Your DueNest invite is ready",
-            message=(
-                "You're invited to the DueNest private beta.\n\n"
-                f"Accept your invite: {link}\n\n"
-                f"Or enter this code when you sign up: {invite.code}\n\n"
-                "— The DueNest team"
-            ),
-            from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
-            recipient_list=[recipient],
-            fail_silently=True,
-        )
-    except Exception:  # noqa: BLE001 - email must never break invite creation
-        logger.warning(
-            "Invite email failed for invite %s", invite.id, exc_info=True
-        )
+    send_branded_email(
+        subject="Your DueNest invite is ready",
+        template="invite",
+        context={"invite_url": link, "invite_code": invite.code},
+        to=recipient,
+    )
 
 
 def create_invite_code(

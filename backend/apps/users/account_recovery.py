@@ -21,10 +21,11 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
 from django.core import signing
-from django.core.mail import send_mail
 from django.utils import timezone
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
+
+from common.email import send_branded_email
 
 User = get_user_model()
 
@@ -45,16 +46,11 @@ def send_password_reset_email(user) -> None:
     uid = urlsafe_base64_encode(force_bytes(user.pk))
     token = default_token_generator.make_token(user)
     link = f"{_frontend_base()}/reset-password?uid={uid}&token={token}"
-    send_mail(
+    send_branded_email(
         subject="Reset your DueNest password",
-        message=(
-            "We received a request to reset your DueNest password.\n\n"
-            f"Reset it here: {link}\n\n"
-            "If you didn't request this, you can safely ignore this email."
-        ),
-        from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
-        recipient_list=[user.email],
-        fail_silently=True,
+        template="password_reset",
+        context={"reset_url": link},
+        to=user.email,
     )
 
 
@@ -110,16 +106,11 @@ def send_email_verification(user) -> None:
         return
     token = make_email_verification_token(user)
     link = f"{_frontend_base()}/verify-email?token={token}"
-    send_mail(
+    send_branded_email(
         subject="Verify your DueNest email",
-        message=(
-            "Confirm your email to finish setting up DueNest.\n\n"
-            f"Verify here: {link}\n\n"
-            "If you didn't create a DueNest account, you can ignore this email."
-        ),
-        from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
-        recipient_list=[user.email],
-        fail_silently=True,
+        template="email_verification",
+        context={"verify_url": link},
+        to=user.email,
     )
 
 
