@@ -272,6 +272,7 @@ Planned features:
 - automated tests
 - monitoring
 - production security hardening
+- optional opt-in TOTP two-factor authentication (authenticator app) before public launch; reuse existing field-level encryption to store the TOTP secret at rest; stays within Simple JWT (login gains a second verification step) and ships with hashed backup recovery codes
 - pricing page
 - billing foundation
 - case study and demo video
