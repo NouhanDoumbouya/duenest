@@ -10,12 +10,18 @@ These features default to FOUNDER_ONLY, so the tests enable them explicitly via
 """
 
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.features.models import FeatureFlag, Visibility
 
-from .models import DocumentActivity, DocumentBundle, DocumentBundleRequirement
+from .models import (
+    DocumentActivity,
+    DocumentBundle,
+    DocumentBundleRequirement,
+    DocumentFile,
+)
 
 User = get_user_model()
 
@@ -176,3 +182,31 @@ class PackActivityTimelineTest(ApplicationPackBaseTest):
             f"/api/v1/document-bundles/{bundle['id']}/activity/"
         )
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_inbox_file_attach_is_logged(self):
+        enable("application_pack_timeline")
+        bundle = self._make_bundle("Inbox pack")
+        req = self.client.post(
+            f"/api/v1/document-bundles/{bundle['id']}/requirements/",
+            {"title": "Transcript", "is_required": True},
+            format="json",
+        ).data
+        # A standalone File Inbox file (no parent document) owned by the user.
+        inbox_file = DocumentFile.objects.create(
+            uploaded_by=self.owner,
+            file=SimpleUploadedFile("transcript.pdf", b"%PDF-1.4 x"),
+            original_filename="transcript.pdf",
+            content_type="application/pdf",
+        )
+        link = self.client.post(
+            f"/api/v1/document-bundles/{bundle['id']}/requirements/{req['id']}/link-file/",
+            {"file": inbox_file.id},
+            format="json",
+        )
+        self.assertEqual(link.status_code, status.HTTP_200_OK)
+        self.assertEqual(link.data["status"], "attached")
+        response = self.client.get(
+            f"/api/v1/document-bundles/{bundle['id']}/activity/"
+        )
+        actions = {e["action"] for e in response.data["items"]}
+        self.assertIn(DocumentActivity.Action.ADDED_TO_BUNDLE, actions)

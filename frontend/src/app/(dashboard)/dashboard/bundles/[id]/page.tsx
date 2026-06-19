@@ -44,6 +44,7 @@ import {
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { ApiError } from "@/lib/api";
+import { getFileInbox } from "@/lib/document-files";
 import { formatDate, getDocuments } from "@/lib/documents";
 import {
   BUNDLE_STATUS_LABELS,
@@ -58,10 +59,12 @@ import {
   getBundleExports,
   getTimeline,
   linkRequirementDocument,
+  linkRequirementFile,
   updateBundle,
   updateBundleRequirement,
 } from "@/lib/renewal-workspace";
 import { cn } from "@/lib/utils";
+import type { DocumentFile } from "@/types/document-files";
 import type { DocumentRecord } from "@/types/documents";
 import type {
   Bundle,
@@ -137,6 +140,7 @@ function RequirementRow({
   bundleId,
   requirement,
   documents,
+  inboxFiles,
   scanEnabled,
   onChanged,
   onDeleted,
@@ -144,6 +148,7 @@ function RequirementRow({
   bundleId: number;
   requirement: BundleRequirement;
   documents: DocumentRecord[];
+  inboxFiles: DocumentFile[];
   scanEnabled: boolean;
   onChanged: (req: BundleRequirement) => void;
   onDeleted: (id: number) => void;
@@ -171,6 +176,20 @@ function RequirementRow({
         bundleId,
         requirement.id,
         documentId,
+      );
+      onChanged(updated);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function linkFile(fileId: number) {
+    setPending(true);
+    try {
+      const updated = await linkRequirementFile(
+        bundleId,
+        requirement.id,
+        fileId,
       );
       onChanged(updated);
     } finally {
@@ -277,6 +296,25 @@ function RequirementRow({
           </select>
         )}
 
+        {inboxFiles.length > 0 && (
+          <select
+            aria-label="Attach a file from your File Inbox"
+            value=""
+            onChange={(e) =>
+              e.target.value && linkFile(Number(e.target.value))
+            }
+            disabled={pending}
+            className="h-8 max-w-[200px] rounded-lg border border-input bg-card px-2 text-xs shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <option value="">Attach from Inbox…</option>
+            {inboxFiles.map((file) => (
+              <option key={file.id} value={file.id}>
+                {file.original_filename}
+              </option>
+            ))}
+          </select>
+        )}
+
         {/* Quick actions for items still missing a document. Calm, optional —
             nothing here forces the user to complete the pack now. */}
         {requirement.status === "missing" && (
@@ -314,6 +352,7 @@ export default function BundleDetailPage() {
 
   const [bundle, setBundle] = useState<Bundle | null>(null);
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
+  const [inboxFiles, setInboxFiles] = useState<DocumentFile[]>([]);
   const [events, setEvents] = useState<TimelineEvent[]>([]);
   const [bundleExports, setBundleExports] = useState<BundleExportRequest[]>([]);
   const [loadError, setLoadError] = useState<string | null>(
@@ -360,6 +399,9 @@ export default function BundleDetailPage() {
     getDocuments({ ordering: "title" })
       .then((page) => active && setDocuments(page.results))
       .catch(() => active && setDocuments([]));
+    getFileInbox()
+      .then((page) => active && setInboxFiles(page.results))
+      .catch(() => active && setInboxFiles([]));
     getTimeline({ bundle_id: bundleId })
       .then((res) => active && setEvents(res.items))
       .catch(() => active && setEvents([]));
@@ -601,6 +643,7 @@ export default function BundleDetailPage() {
                         bundleId={bundleId}
                         requirement={requirement}
                         documents={documents}
+                        inboxFiles={inboxFiles}
                         scanEnabled={scanToBundleEnabled}
                         onChanged={(updated) => {
                           setBundle((prev) =>

@@ -2730,6 +2730,15 @@ class BundleRequirementLinkFileView(_RequirementActionMixin, APIView):
             ]
         )
         requirement.bundle.recalculate_readiness()
+        log_document_activity(
+            owner=request.user,
+            document=file.document,
+            action=DocumentActivity.Action.ADDED_TO_BUNDLE,
+            title="Added to a bundle",
+            description=requirement.bundle.title,
+            related_bundle=requirement.bundle,
+            related_file=file,
+        )
         return Response(
             DocumentBundleRequirementSerializer(
                 requirement, context={"request": request}
