@@ -63,6 +63,19 @@ export function DocumentFileViewer({
   // Callers key this component by file id, so zoom resets naturally per file.
   const [fit, setFit] = useState(true);
   const [scale, setScale] = useState(1);
+  // Mobile browsers (coarse pointer) refuse to render PDFs inside an <iframe>
+  // and substitute a generic stub showing the blob id. Detect that and show a
+  // friendly "open in a new tab" fallback instead. Default to embedding so SSR
+  // and desktop keep the inline viewer.
+  const [canEmbedPdf, setCanEmbedPdf] = useState(true);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(pointer: coarse)");
+    const update = () => setCanEmbedPdf(!mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
 
   useEffect(() => {
     if (!file) return;
@@ -289,11 +302,27 @@ export function DocumentFileViewer({
                 </div>
               )}
             </div>
-          ) : objectUrl && kind === "pdf" ? (
+          ) : objectUrl && kind === "pdf" && canEmbedPdf ? (
             <iframe
               src={objectUrl}
               title={file.original_filename}
               className="h-full min-h-[70vh] w-full rounded-xl border border-border bg-card shadow-elevated"
+            />
+          ) : objectUrl && kind === "pdf" ? (
+            <Fallback
+              title="Open this PDF to read it"
+              message="Your browser can't show PDFs inline on this device. Open it in a new tab, or download a copy — both stay private to your account."
+              action={
+                <a
+                  href={objectUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={cn(buttonVariants())}
+                >
+                  <ExternalLink className="size-4" />
+                  Open PDF
+                </a>
+              }
             />
           ) : (
             <Fallback
