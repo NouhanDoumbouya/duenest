@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils";
 export interface ToastState {
   message: string;
   kind: "success" | "error";
+  /** Optional single action, e.g. an "Undo" button. */
+  action?: { label: string; onClick: () => void };
 }
 
 /**
@@ -40,7 +42,7 @@ export function Toast({
     >
       <div
         className={cn(
-          "pointer-events-auto flex max-w-md items-start gap-2.5 rounded-xl border px-4 py-3 text-sm shadow-lg shadow-foreground/10",
+          "vault-bar-in pointer-events-auto flex max-w-md items-start gap-2.5 rounded-xl border px-4 py-3 text-sm shadow-lg shadow-foreground/10",
           toast.kind === "error"
             ? "border-destructive/30 bg-destructive/10 text-destructive"
             : "border-brand-success/30 bg-card text-foreground",
@@ -54,6 +56,18 @@ export function Toast({
           )}
         </span>
         <span className="min-w-0 flex-1">{toast.message}</span>
+        {toast.action && (
+          <button
+            type="button"
+            onClick={() => {
+              toast.action?.onClick();
+              onDismiss();
+            }}
+            className="-my-0.5 shrink-0 rounded-md px-2 py-0.5 font-medium text-primary hover:bg-primary/10 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+          >
+            {toast.action.label}
+          </button>
+        )}
         <button
           type="button"
           onClick={onDismiss}

@@ -86,6 +86,15 @@ FEATURE_DEFINITIONS: list[dict] = [
     {"key": "application_pack_templates", "name": "Application packs — templates", "default": Visibility.FOUNDER_ONLY, "description": "Start a bundle from a generic, editable checklist template (scholarship/visa/university/job/travel/renewal). Suggestions only — never presented as official; requirements always vary."},
     {"key": "application_pack_timeline", "name": "Application packs — activity timeline", "default": Visibility.FOUNDER_ONLY, "description": "Owner-only activity feed for a bundle (created, template applied, document attached/replaced/removed, status changed, exported). No file contents; never public."},
     {"key": "application_pack_safesend", "name": "Application packs — share via SafeSend", "default": Visibility.FOUNDER_ONLY, "description": "Shortcut from a pack into the SafeSend (Quick Share) draft with the pack preselected. No link is created until the user confirms inside SafeSend."},
+    # --- Vault Organization Experience ----------------------------------
+    # UI-only enhancements to the existing Vault. They reuse existing,
+    # owner-scoped document endpoints (move category / set lifecycle / soft
+    # delete / restore); no new write surface. Default FOUNDER_ONLY for a
+    # controlled launch — the Vault behaves exactly as today when disabled.
+    {"key": "vault_bulk_actions", "name": "Vault — bulk actions", "default": Visibility.FOUNDER_ONLY, "description": "Select multiple documents in the Vault to move to a category, archive, or move to Trash at once. Reuses existing per-document endpoints; destructive actions confirm first."},
+    {"key": "vault_trash_undo", "name": "Vault — undo toast", "default": Visibility.FOUNDER_ONLY, "description": "Show an inline 'Undo' toast after moving a document to Trash or archiving it (single or bulk), reversing via the existing restore / lifecycle endpoints."},
+    {"key": "vault_smart_views", "name": "Vault — Smart Views", "default": Visibility.FOUNDER_ONLY, "description": "A Smart Views panel on the Vault overview (Expiring soon, Needs review, Shared, In packs, Pinned, Archived, …) with real counts, linking into the pre-filtered documents list. State-based filtering only — no AI."},
+    {"key": "vault_table_view", "name": "Vault — table view", "default": Visibility.FOUNDER_ONLY, "description": "A compact table view mode for the documents list (name/category/type/expiry/status) alongside the existing list and grid views. Horizontally scrollable on mobile."},
 ]
 
 FEATURE_KEYS = [d["key"] for d in FEATURE_DEFINITIONS]

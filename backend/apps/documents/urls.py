@@ -21,6 +21,8 @@ from .views import (
     DocumentBundleFilesView,
     DocumentBundleListCreateView,
     BundleActivityTimelineView,
+    BundleAddDocumentsView,
+    DocumentsBulkExportView,
     PackTemplatesView,
     CalendarEventsView,
     CalendarIcsExportView,
@@ -200,6 +202,11 @@ urlpatterns = [
         "documents/files/export-selected/",
         DocumentFilesExportSelectedView.as_view(),
         name="documents-files-export-selected",
+    ),
+    path(
+        "documents/export-documents/",
+        DocumentsBulkExportView.as_view(),
+        name="documents-bulk-export",
     ),
     path(
         f"{file_base}/<int:file_id>/trash/",
@@ -453,6 +460,11 @@ urlpatterns = [
         "document-bundles/<int:bundle_id>/requirements/",
         DocumentBundleRequirementCreateView.as_view(),
         name="document-bundle-requirements",
+    ),
+    path(
+        "document-bundles/<int:bundle_id>/add-documents/",
+        BundleAddDocumentsView.as_view(),
+        name="document-bundle-add-documents",
     ),
     path(
         "document-bundles/<int:bundle_id>/requirements/<int:requirement_id>/",

@@ -2632,6 +2632,128 @@ class DocumentFilesExportSelectedView(APIView):
         return _zip_response(spooled, filename, summary)
 
 
+def _parse_id_list(request, key):
+    """Return a clean list of int ids from ``request.data[key]``, or None."""
+    raw = request.data.get(key) if isinstance(request.data, dict) else None
+    if not isinstance(raw, (list, tuple)) or not raw:
+        return None
+    ids = []
+    for value in raw:
+        try:
+            ids.append(int(value))
+        except (TypeError, ValueError):
+            continue
+    return ids or None
+
+
+class DocumentsBulkExportView(APIView):
+    """
+    POST {document_ids:[…]} → stream a ZIP of every available file across the
+    selected owner-owned documents (Vault bulk export). Reuses build_documents_zip
+    after resolving the documents' non-trashed files. Owner-scoped throughout.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        doc_ids = _parse_id_list(request, "document_ids")
+        if doc_ids is None:
+            return Response(
+                {"detail": "Select at least one document to export."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        file_ids = list(
+            DocumentFile.objects.filter(
+                document__owner=request.user,
+                document__is_trashed=False,
+                document_id__in=doc_ids,
+                is_trashed=False,
+            ).values_list("id", flat=True)
+        )
+        if not file_ids:
+            return Response(
+                {
+                    "detail": "None of the selected documents have a file to export.",
+                    "state": "no_files",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        spooled, filename, summary = build_documents_zip(request.user, file_ids)
+        if summary["files_count"] == 0:
+            spooled.close()
+            return Response(
+                {
+                    "detail": "None of the selected documents have a file to export.",
+                    "state": "no_files",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        _track_product_event(
+            request,
+            "export_requested",
+            object_type="document",
+            metadata={
+                "scope": "documents_bulk_zip",
+                "files": summary["files_count"],
+            },
+        )
+        return _zip_response(spooled, filename, summary)
+
+
+class BundleAddDocumentsView(APIView):
+    """
+    POST {document_ids:[…]} → add each owner-owned document to a bundle as a new,
+    already-attached requirement. Additive only (never alters or removes existing
+    requirements), so no references are broken. Recomputes readiness and logs a
+    per-document activity event.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, bundle_id):
+        bundle = get_object_or_404(
+            DocumentBundle, pk=bundle_id, owner=request.user
+        )
+        doc_ids = _parse_id_list(request, "document_ids")
+        if doc_ids is None:
+            return Response(
+                {"detail": "Select at least one document to add."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        documents = list(
+            Document.objects.filter(
+                owner=request.user, is_trashed=False, id__in=doc_ids
+            )
+        )
+        sort_base = bundle.requirements.count()
+        created = 0
+        for offset, doc in enumerate(documents):
+            DocumentBundleRequirement.objects.create(
+                owner=request.user,
+                bundle=bundle,
+                title=doc.title,
+                requirement_type=DocumentBundleRequirement.RequirementType.DOCUMENT,
+                linked_document=doc,
+                status=DocumentBundleRequirement.Status.ATTACHED,
+                sort_order=sort_base + offset,
+            )
+            created += 1
+            log_document_activity(
+                owner=request.user,
+                document=doc,
+                action=DocumentActivity.Action.ADDED_TO_BUNDLE,
+                title="Added to a bundle",
+                description=bundle.title,
+                related_bundle=bundle,
+            )
+        if created:
+            bundle.recalculate_readiness()
+        return Response(
+            {"created": created, "bundle_id": bundle.id},
+            status=status.HTTP_201_CREATED,
+        )
+
+
 class _BundleRequirementScopedMixin:
     permission_classes = [IsAuthenticated]
     serializer_class = DocumentBundleRequirementSerializer

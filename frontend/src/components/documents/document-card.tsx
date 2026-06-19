@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   BellRing,
   CalendarClock,
+  Check,
   CheckCircle2,
   Edit3,
   FileUp,
@@ -85,9 +86,16 @@ function Signal({
 export function DocumentCard({
   doc,
   onRequestDelete,
+  selectable = false,
+  selected = false,
+  onToggleSelect,
 }: {
   doc: DocumentRecord;
   onRequestDelete: (doc: DocumentRecord) => void;
+  /** When true, the card shows a selection checkbox (Vault bulk-select mode). */
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (doc: DocumentRecord) => void;
 }) {
   const meta = [doc.document_type, doc.issuer, doc.country]
     .filter(Boolean)
@@ -171,9 +179,31 @@ export function DocumentCard({
   }
 
   return (
-    <Card className="!overflow-visible transition-all duration-200 hover:shadow-elevated">
+    <Card
+      className={cn(
+        "!overflow-visible transition-all duration-200 hover:shadow-elevated",
+        selected && "ring-2 ring-primary ring-offset-1",
+      )}
+    >
       <CardContent className="flex flex-col gap-3">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          {selectable && (
+            <button
+              type="button"
+              role="checkbox"
+              aria-checked={selected}
+              aria-label={selected ? "Deselect document" : "Select document"}
+              onClick={() => onToggleSelect?.(doc)}
+              className={cn(
+                "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md border transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
+                selected
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-input bg-card hover:border-primary/60",
+              )}
+            >
+              {selected && <Check className="size-3.5" aria-hidden />}
+            </button>
+          )}
           <Link
             href={`/dashboard/documents/${doc.id}`}
             className="-m-2 min-w-0 flex-1 rounded-lg p-2 outline-none transition-colors hover:bg-muted/40 focus-visible:ring-3 focus-visible:ring-ring/50"

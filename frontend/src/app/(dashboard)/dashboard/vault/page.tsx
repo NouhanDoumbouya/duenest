@@ -27,6 +27,8 @@ import {
   VaultSectionError,
 } from "@/components/vault/pieces";
 import { CategoryCreator } from "@/components/vault/category-creator";
+import { SmartViews } from "@/components/vault/smart-views";
+import { useFeature } from "@/components/features/feature-flags-provider";
 import { buttonVariants } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer } from "@/components/ui/page-container";
@@ -226,6 +228,8 @@ export default function VaultPage() {
     );
   }
 
+  const smartViewsEnabled = useFeature("vault_smart_views");
+
   return (
     <PageContainer width="wide">
       {/* Hero */}
@@ -377,6 +381,8 @@ export default function VaultPage() {
               />
             </div>
           )}
+
+          {smartViewsEnabled && <SmartViews />}
 
           {/* Main grid */}
           <div className="grid gap-6 lg:grid-cols-[1.55fr_1fr]">

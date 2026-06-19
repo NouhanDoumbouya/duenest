@@ -247,6 +247,12 @@
     animation: duenest-fade-up 180ms ease-out both;
   }
 
+  /* Subtle entrance for bottom-anchored surfaces (bulk action bar, toast):
+     slides up a touch and fades in. Neutralized under reduced-motion below. */
+  .vault-bar-in {
+    animation: duenest-slide-up 200ms ease-out both;
+  }
+
   /* Scroll-reveal: hidden until JS adds .is-visible when the element scrolls
      into view. Honors reduced-motion (shown instantly, no transform). */
   .reveal {
@@ -322,6 +328,17 @@
     from {
       opacity: 0;
       transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes duenest-slide-up {
+    from {
+      opacity: 0;
+      transform: translateY(16px);
     }
     to {
       opacity: 1;
@@ -486,6 +503,10 @@
   }
 
   .content-fade-in {
+    animation: none;
+  }
+
+  .vault-bar-in {
     animation: none;
   }
 

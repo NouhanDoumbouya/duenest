@@ -476,6 +476,29 @@ export function exportSelectedDocumentFilesZip(
   );
 }
 
+/** Export every file across the selected documents (Vault bulk export) as a ZIP. */
+export function exportSelectedDocuments(documentIds: number[]): Promise<void> {
+  return postZipAndSave(
+    `/documents/export-documents/`,
+    { document_ids: documentIds },
+    `duenest-documents.zip`,
+  );
+}
+
+/**
+ * Add owner-owned documents to a bundle as new, already-attached requirements.
+ * Additive only — existing requirements are untouched. Returns the created count.
+ */
+export function addDocumentsToBundle(
+  bundleId: number,
+  documentIds: number[],
+): Promise<{ created: number; bundle_id: number }> {
+  return apiFetch<{ created: number; bundle_id: number }>(
+    `/document-bundles/${bundleId}/add-documents/`,
+    { method: "POST", body: { document_ids: documentIds }, auth: true },
+  );
+}
+
 // ---- Timeline --------------------------------------------------------------
 
 export function getTimeline(

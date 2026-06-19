@@ -3,7 +3,10 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
+  Archive,
+  CheckSquare,
   ChevronDown,
+  Download,
   FileText,
   Filter,
   LayoutGrid,
@@ -11,10 +14,14 @@ import {
   Loader2,
   Plus,
   Search,
+  Table2,
+  Trash2,
   X,
 } from "lucide-react";
 
 import { DocumentCard } from "@/components/documents/document-card";
+import { DocumentsTable } from "@/components/documents/documents-table";
+import { useFeature } from "@/components/features/feature-flags-provider";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -23,12 +30,21 @@ import { Input } from "@/components/ui/input";
 import { PageContainer } from "@/components/ui/page-container";
 import { PageHeader } from "@/components/ui/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Toast, type ToastState } from "@/components/ui/toast";
 import { ApiError } from "@/lib/api";
 import {
+  createDocumentReminderRule,
   deleteDocument,
   getDocuments,
   listDocumentCategories,
+  restoreDocument,
+  updateDocument,
 } from "@/lib/documents";
+import {
+  addDocumentsToBundle,
+  exportSelectedDocuments,
+  getBundles,
+} from "@/lib/renewal-workspace";
 import { getTags } from "@/lib/tags";
 import { cn } from "@/lib/utils";
 import { getDeleteWarning, sortDocumentsByRisk } from "@/lib/vault";
@@ -39,6 +55,7 @@ import type {
   DocumentRecord,
   DocumentTag,
 } from "@/types/documents";
+import type { Bundle } from "@/types/renewal-workspace";
 
 type QuickFilter =
   | "all"
@@ -232,18 +249,22 @@ function DocumentsPageInner() {
   // Grid/list toggle, remembered locally (item 176/197). Lazy init reads the
   // saved choice on the client; this inner component renders under Suspense so
   // there is no SSR/hydration mismatch.
-  const [view, setView] = useState<"list" | "grid">(() => {
+  const tableViewEnabled = useFeature("vault_table_view");
+  const [view, setView] = useState<"list" | "grid" | "table">(() => {
     if (typeof window === "undefined") return "list";
-    return window.localStorage.getItem("duenest.documentsView") === "grid"
-      ? "grid"
-      : "list";
+    const saved = window.localStorage.getItem("duenest.documentsView");
+    if (saved === "grid" || saved === "table") return saved;
+    return "list";
   });
-  function changeView(next: "list" | "grid") {
+  function changeView(next: "list" | "grid" | "table") {
     setView(next);
     if (typeof window !== "undefined") {
       window.localStorage.setItem("duenest.documentsView", next);
     }
   }
+  // If the table view was persisted but the feature is now off, fall back so the
+  // user never lands on a hidden view.
+  const effectiveView = view === "table" && !tableViewEnabled ? "list" : view;
   // Client-side "most urgent first" sort over the loaded results (kept separate
   // from the server `ordering` param, which has a fixed set of values).
   const [riskSort, setRiskSort] = useState(false);
@@ -260,6 +281,37 @@ function DocumentsPageInner() {
 
   const [pendingDelete, setPendingDelete] = useState<DocumentRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // --- Vault bulk-select + undo (founder-gated) ---------------------------
+  const bulkEnabled = useFeature("vault_bulk_actions");
+  const undoEnabled = useFeature("vault_trash_undo");
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  // Pending destructive bulk action awaiting confirmation.
+  const [bulkConfirm, setBulkConfirm] = useState<null | "trash" | "archive">(
+    null,
+  );
+  const [toast, setToast] = useState<ToastState | null>(null);
+  // Bumped to force a fresh reload of the current list after a bulk action.
+  const [reloadKey, setReloadKey] = useState(0);
+  const reload = () => setReloadKey((k) => k + 1);
+  // Bundles for the "Add to pack" picker — only loaded when bulk is available.
+  const [bundles, setBundles] = useState<Bundle[]>([]);
+
+  function toggleSelected(doc: DocumentRecord) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(doc.id)) next.delete(doc.id);
+      else next.add(doc.id);
+      return next;
+    });
+  }
+
+  function exitSelectMode() {
+    setSelectMode(false);
+    setSelected(new Set());
+  }
 
   const listParams = useMemo(
     () =>
@@ -315,7 +367,7 @@ function DocumentsPageInner() {
     return () => {
       active = false;
     };
-  }, [listParams, queryKey]);
+  }, [listParams, queryKey, reloadKey]);
 
   async function loadMore() {
     const nextPage = page + 1;
@@ -349,6 +401,19 @@ function DocumentsPageInner() {
       active = false;
     };
   }, []);
+
+  // Bundles power the bulk "Add to pack" picker; only fetched when the feature
+  // is available so normal users never pay for it.
+  useEffect(() => {
+    if (!bulkEnabled) return;
+    let active = true;
+    getBundles()
+      .then((page) => active && setBundles(page.results))
+      .catch(() => active && setBundles([]));
+    return () => {
+      active = false;
+    };
+  }, [bulkEnabled]);
 
   // Keep the URL query string in sync with the active filters so the view is
   // shareable and survives a refresh. The canonical param set is rebuilt from
@@ -391,24 +456,319 @@ function DocumentsPageInner() {
 
   async function handleConfirmDelete() {
     if (!pendingDelete) return;
+    const doc = pendingDelete;
     setDeleting(true);
     setError(null);
     try {
-      await deleteDocument(pendingDelete.id);
-      setDocuments((prev) =>
-        (prev ?? []).filter((d) => d.id !== pendingDelete.id),
-      );
+      await deleteDocument(doc.id);
+      setDocuments((prev) => (prev ?? []).filter((d) => d.id !== doc.id));
       setTotal((n) => Math.max(0, n - 1));
       setPendingDelete(null);
+      if (undoEnabled) {
+        setToast({
+          message: `“${doc.title}” moved to Trash.`,
+          kind: "success",
+          action: {
+            label: "Undo",
+            onClick: () => {
+              void restoreDocument(doc.id)
+                .then(() => {
+                  setToast({ message: "Restored to Vault.", kind: "success" });
+                  reload();
+                })
+                .catch(() =>
+                  setToast({
+                    message: "Could not restore. Try again from Trash.",
+                    kind: "error",
+                  }),
+                );
+            },
+          },
+        });
+      }
     } catch (err) {
       setError(
         err instanceof ApiError
           ? err.message
-          : "Could not delete the document. Please try again.",
+          : "Could not move the document to Trash. Your document is unchanged.",
       );
       setPendingDelete(null);
     } finally {
       setDeleting(false);
+    }
+  }
+
+  // --- Bulk actions over the current selection ----------------------------
+  const selectedDocs = useMemo(
+    () => (documents ?? []).filter((d) => selected.has(d.id)),
+    [documents, selected],
+  );
+
+  async function runBulkMoveCategory(categoryId: number | null) {
+    if (selectedDocs.length === 0) return;
+    // Snapshot prior categories so the move is undoable.
+    const prior = selectedDocs.map((d) => ({ id: d.id, category: d.category }));
+    setBulkBusy(true);
+    setError(null);
+    try {
+      await Promise.all(
+        prior.map((p) => updateDocument(p.id, { category: categoryId })),
+      );
+      const name =
+        categoryId === null
+          ? "Uncategorized"
+          : (categories.find((c) => c.id === categoryId)?.name ?? "category");
+      exitSelectMode();
+      reload();
+      setToast({
+        message: `Moved ${prior.length} document${prior.length === 1 ? "" : "s"} to ${name}.`,
+        kind: "success",
+        action: undoEnabled
+          ? {
+              label: "Undo",
+              onClick: () => {
+                void Promise.all(
+                  prior.map((p) => updateDocument(p.id, { category: p.category })),
+                )
+                  .then(() => {
+                    setToast({ message: "Move undone.", kind: "success" });
+                    reload();
+                  })
+                  .catch(() =>
+                    setToast({ message: "Could not undo the move.", kind: "error" }),
+                  );
+              },
+            }
+          : undefined,
+      });
+    } catch {
+      setError(
+        "Could not move the selected documents. They are unchanged in your Vault.",
+      );
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function runBulkAddTag(tagId: number) {
+    if (selectedDocs.length === 0) return;
+    // Snapshot prior tag sets so the change is undoable; append (never replace).
+    const prior = selectedDocs.map((d) => ({
+      id: d.id,
+      tag_ids: d.tags.map((t) => t.id),
+    }));
+    setBulkBusy(true);
+    setError(null);
+    try {
+      await Promise.all(
+        prior.map((p) =>
+          updateDocument(p.id, {
+            tag_ids: Array.from(new Set([...p.tag_ids, tagId])),
+          }),
+        ),
+      );
+      const tagName = tags.find((t) => t.id === tagId)?.name ?? "tag";
+      const count = prior.length;
+      exitSelectMode();
+      reload();
+      setToast({
+        message: `Tagged ${count} document${count === 1 ? "" : "s"} with “${tagName}”.`,
+        kind: "success",
+        action: undoEnabled
+          ? {
+              label: "Undo",
+              onClick: () => {
+                void Promise.all(
+                  prior.map((p) => updateDocument(p.id, { tag_ids: p.tag_ids })),
+                )
+                  .then(() => {
+                    setToast({ message: "Tag change undone.", kind: "success" });
+                    reload();
+                  })
+                  .catch(() =>
+                    setToast({ message: "Could not undo tagging.", kind: "error" }),
+                  );
+              },
+            }
+          : undefined,
+      });
+    } catch {
+      setError(
+        "Could not tag the selected documents. They are unchanged in your Vault.",
+      );
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function runBulkExport() {
+    if (selectedDocs.length === 0) return;
+    const ids = selectedDocs.map((d) => d.id);
+    setBulkBusy(true);
+    setError(null);
+    try {
+      await exportSelectedDocuments(ids);
+      setToast({
+        message: `Preparing a ZIP of ${ids.length} document${ids.length === 1 ? "" : "s"}. Originals are unchanged.`,
+        kind: "success",
+      });
+      exitSelectMode();
+    } catch (err) {
+      const msg =
+        err instanceof ApiError && err.status === 400
+          ? "None of the selected documents have a file to export."
+          : "Could not export the selected documents. They are unchanged.";
+      setError(msg);
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function runBulkAddToPack(bundleId: number) {
+    if (selectedDocs.length === 0) return;
+    const ids = selectedDocs.map((d) => d.id);
+    setBulkBusy(true);
+    setError(null);
+    try {
+      const res = await addDocumentsToBundle(bundleId, ids);
+      const name = bundles.find((b) => b.id === bundleId)?.title ?? "pack";
+      exitSelectMode();
+      setToast({
+        message: `Added ${res.created} document${res.created === 1 ? "" : "s"} to ${name}. Original files are unchanged.`,
+        kind: "success",
+      });
+    } catch {
+      setError(
+        "Could not add the selected documents to the pack. They are unchanged.",
+      );
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function runBulkSetReminder(daysBefore: number) {
+    // Reminders only make sense for documents that have an expiry date.
+    const withExpiry = selectedDocs.filter((d) => d.expiry_date);
+    const skipped = selectedDocs.length - withExpiry.length;
+    if (withExpiry.length === 0) {
+      setToast({
+        message: "None of the selected documents have an expiry date to remind on.",
+        kind: "error",
+      });
+      return;
+    }
+    setBulkBusy(true);
+    setError(null);
+    try {
+      await Promise.all(
+        withExpiry.map((d) =>
+          createDocumentReminderRule(d.id, {
+            trigger_type: "before_expiry",
+            days_before: daysBefore,
+          }),
+        ),
+      );
+      exitSelectMode();
+      setToast({
+        message:
+          `Reminder set ${daysBefore} days before expiry for ${withExpiry.length} document${withExpiry.length === 1 ? "" : "s"}.` +
+          (skipped > 0 ? ` ${skipped} skipped (no expiry date).` : ""),
+        kind: "success",
+      });
+    } catch {
+      setError("Could not set reminders for the selected documents.");
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function runBulkArchive() {
+    if (selectedDocs.length === 0) return;
+    const prior = selectedDocs.map((d) => ({
+      id: d.id,
+      lifecycle_status: d.lifecycle_status,
+    }));
+    setBulkBusy(true);
+    setBulkConfirm(null);
+    setError(null);
+    try {
+      await Promise.all(
+        prior.map((p) => updateDocument(p.id, { lifecycle_status: "archived" })),
+      );
+      const count = prior.length;
+      exitSelectMode();
+      reload();
+      setToast({
+        message: `Archived ${count} document${count === 1 ? "" : "s"}.`,
+        kind: "success",
+        action: undoEnabled
+          ? {
+              label: "Undo",
+              onClick: () => {
+                void Promise.all(
+                  prior.map((p) =>
+                    updateDocument(p.id, { lifecycle_status: p.lifecycle_status }),
+                  ),
+                )
+                  .then(() => {
+                    setToast({ message: "Archive undone.", kind: "success" });
+                    reload();
+                  })
+                  .catch(() =>
+                    setToast({ message: "Could not undo archive.", kind: "error" }),
+                  );
+              },
+            }
+          : undefined,
+      });
+    } catch {
+      setError(
+        "Could not archive the selected documents. They are unchanged in your Vault.",
+      );
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function runBulkTrash() {
+    if (selectedDocs.length === 0) return;
+    const ids = selectedDocs.map((d) => d.id);
+    setBulkBusy(true);
+    setBulkConfirm(null);
+    setError(null);
+    try {
+      await Promise.all(ids.map((id) => deleteDocument(id)));
+      const count = ids.length;
+      exitSelectMode();
+      reload();
+      setToast({
+        message: `Moved ${count} document${count === 1 ? "" : "s"} to Trash.`,
+        kind: "success",
+        action: undoEnabled
+          ? {
+              label: "Undo",
+              onClick: () => {
+                void Promise.all(ids.map((id) => restoreDocument(id)))
+                  .then(() => {
+                    setToast({ message: "Restored to Vault.", kind: "success" });
+                    reload();
+                  })
+                  .catch(() =>
+                    setToast({
+                      message: "Could not restore. Try again from Trash.",
+                      kind: "error",
+                    }),
+                  );
+              },
+            }
+          : undefined,
+      });
+    } catch {
+      setError(
+        "Could not move the selected documents to Trash. They are unchanged.",
+      );
+    } finally {
+      setBulkBusy(false);
     }
   }
 
@@ -867,6 +1227,25 @@ function DocumentsPageInner() {
               {filtersActive ? "matching documents" : "documents"}
             </p>
             <div className="flex items-center gap-2">
+              {bulkEnabled &&
+                (selectMode ? (
+                  <button
+                    type="button"
+                    onClick={exitSelectMode}
+                    className="rounded-lg border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+                  >
+                    Cancel
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setSelectMode(true)}
+                    className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+                  >
+                    <CheckSquare className="size-3.5" aria-hidden />
+                    Select
+                  </button>
+                ))}
               <button
                 type="button"
                 onClick={() => setRiskSort((v) => !v)}
@@ -889,11 +1268,11 @@ function DocumentsPageInner() {
               <button
                 type="button"
                 onClick={() => changeView("list")}
-                aria-pressed={view === "list"}
+                aria-pressed={effectiveView === "list"}
                 aria-label="List view"
                 className={cn(
                   "flex size-7 items-center justify-center rounded-md transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
-                  view === "list"
+                  effectiveView === "list"
                     ? "bg-primary text-primary-foreground"
                     : "text-muted-foreground hover:text-foreground",
                 )}
@@ -903,35 +1282,64 @@ function DocumentsPageInner() {
               <button
                 type="button"
                 onClick={() => changeView("grid")}
-                aria-pressed={view === "grid"}
+                aria-pressed={effectiveView === "grid"}
                 aria-label="Grid view"
                 className={cn(
                   "flex size-7 items-center justify-center rounded-md transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
-                  view === "grid"
+                  effectiveView === "grid"
                     ? "bg-primary text-primary-foreground"
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 <LayoutGrid className="size-4" aria-hidden />
               </button>
+              {tableViewEnabled && (
+                <button
+                  type="button"
+                  onClick={() => changeView("table")}
+                  aria-pressed={effectiveView === "table"}
+                  aria-label="Table view"
+                  className={cn(
+                    "flex size-7 items-center justify-center rounded-md transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
+                    effectiveView === "table"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <Table2 className="size-4" aria-hidden />
+                </button>
+              )}
               </div>
             </div>
           </div>
-          <div
-            className={cn(
-              view === "grid"
-                ? "grid gap-4 lg:grid-cols-2"
-                : "flex flex-col gap-4",
-            )}
-          >
-            {displayedDocs.map((doc) => (
-              <DocumentCard
-                key={doc.id}
-                doc={doc}
-                onRequestDelete={setPendingDelete}
-              />
-            ))}
-          </div>
+          {effectiveView === "table" ? (
+            <DocumentsTable
+              docs={displayedDocs}
+              selectable={selectMode}
+              selectedIds={selected}
+              onToggleSelect={toggleSelected}
+              onRequestDelete={setPendingDelete}
+            />
+          ) : (
+            <div
+              className={cn(
+                effectiveView === "grid"
+                  ? "grid gap-4 lg:grid-cols-2"
+                  : "flex flex-col gap-4",
+              )}
+            >
+              {displayedDocs.map((doc) => (
+                <DocumentCard
+                  key={doc.id}
+                  doc={doc}
+                  onRequestDelete={setPendingDelete}
+                  selectable={selectMode}
+                  selected={selected.has(doc.id)}
+                  onToggleSelect={toggleSelected}
+                />
+              ))}
+            </div>
+          )}
           {hasNext && (
             <div className="flex justify-center pt-2">
               <Button
@@ -973,6 +1381,153 @@ function DocumentsPageInner() {
         onConfirm={handleConfirmDelete}
         onCancel={() => setPendingDelete(null)}
       />
+
+      {/* Bulk action bar — only in select mode with a non-empty selection. */}
+      {bulkEnabled && selectMode && selected.size > 0 && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
+          <div className="vault-bar-in pointer-events-auto flex w-full max-w-3xl flex-wrap items-center gap-2 rounded-2xl border border-border bg-card p-3 shadow-lg shadow-foreground/10">
+            <span className="px-1 text-sm font-medium">
+              {selected.size} selected
+            </span>
+            <button
+              type="button"
+              onClick={() =>
+                setSelected(new Set(displayedDocs.map((d) => d.id)))
+              }
+              className="rounded-lg px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+            >
+              Select all
+            </button>
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <select
+                aria-label="Move selected to category"
+                value=""
+                disabled={bulkBusy}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (!v) return;
+                  void runBulkMoveCategory(v === "none" ? null : Number(v));
+                }}
+                className="h-9 rounded-lg border border-input bg-card px-2 text-xs shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <option value="">Move to category…</option>
+                <option value="none">Uncategorized</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              {tags.length > 0 && (
+                <select
+                  aria-label="Add a tag to selected"
+                  value=""
+                  disabled={bulkBusy}
+                  onChange={(e) => {
+                    if (e.target.value) void runBulkAddTag(Number(e.target.value));
+                  }}
+                  className="h-9 rounded-lg border border-input bg-card px-2 text-xs shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                >
+                  <option value="">Add tag…</option>
+                  {tags.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {bundles.length > 0 && (
+                <select
+                  aria-label="Add selected to a pack"
+                  value=""
+                  disabled={bulkBusy}
+                  onChange={(e) => {
+                    if (e.target.value)
+                      void runBulkAddToPack(Number(e.target.value));
+                  }}
+                  className="h-9 max-w-[160px] rounded-lg border border-input bg-card px-2 text-xs shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                >
+                  <option value="">Add to pack…</option>
+                  {bundles.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.title}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <select
+                aria-label="Set a reminder for selected"
+                value=""
+                disabled={bulkBusy}
+                onChange={(e) => {
+                  if (e.target.value) void runBulkSetReminder(Number(e.target.value));
+                }}
+                className="h-9 rounded-lg border border-input bg-card px-2 text-xs shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <option value="">Set reminder…</option>
+                <option value="30">30 days before expiry</option>
+                <option value="60">60 days before expiry</option>
+                <option value="90">90 days before expiry</option>
+              </select>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={bulkBusy}
+                onClick={() => void runBulkExport()}
+              >
+                <Download className="size-4" />
+                Export
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={bulkBusy}
+                onClick={() => setBulkConfirm("archive")}
+              >
+                <Archive className="size-4" />
+                Archive
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={bulkBusy}
+                onClick={() => setBulkConfirm("trash")}
+                className="text-destructive hover:text-destructive"
+              >
+                {bulkBusy ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Trash2 className="size-4" />
+                )}
+                Trash
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={bulkConfirm !== null}
+        title={
+          bulkConfirm === "archive"
+            ? `Archive ${selected.size} document${selected.size === 1 ? "" : "s"}?`
+            : `Move ${selected.size} document${selected.size === 1 ? "" : "s"} to Trash?`
+        }
+        description={
+          bulkConfirm === "archive"
+            ? "Archived documents leave your active views but stay in your Vault. You can undo this."
+            : "They will be moved to Trash. You can restore them later, or delete them permanently from there. This will not remove them from packs automatically."
+        }
+        confirmLabel={bulkConfirm === "archive" ? "Archive" : "Move to trash"}
+        loading={bulkBusy}
+        onConfirm={bulkConfirm === "archive" ? runBulkArchive : runBulkTrash}
+        onCancel={() => setBulkConfirm(null)}
+      />
+
+      <Toast toast={toast} onDismiss={() => setToast(null)} duration={6000} />
     </PageContainer>
   );
 }
