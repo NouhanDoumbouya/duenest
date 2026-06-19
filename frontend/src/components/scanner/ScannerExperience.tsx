@@ -2019,7 +2019,7 @@ function IdleScreen(props: {
         <h1 className="text-xl font-semibold">Scan a document</h1>
         <p className="mt-2 text-sm text-slate-400">
           Point your camera at any document — DueNest cleans it up and saves a
-          clean PDF to your vault.
+          clean PDF to your File Inbox.
         </p>
         <p className="mt-3 inline-flex items-center gap-1.5 text-xs text-slate-500">
           <ShieldCheck className="size-3.5 text-teal-300/80" aria-hidden="true" />

@@ -8,11 +8,10 @@ import {
   Download,
   Eye,
   FolderInput,
-  EyeOff,
   Loader2,
   Minimize2,
   Plus,
-  Scissors,
+  ScanLine,
   Square,
   Trash2,
   Upload,
@@ -21,11 +20,9 @@ import {
 
 import { useFeature } from "@/components/features/feature-flags-provider";
 import { DocumentFileViewer } from "@/components/documents/document-file-viewer";
-import { ExtractPagesDialog } from "@/components/documents/extract-pages-dialog";
-import { CompressPdfDialog } from "@/components/documents/compress-pdf-dialog";
 import { DuplicateWarningDialog } from "@/components/documents/duplicate-warning-dialog";
 import { MoveToVaultDialog } from "@/components/documents/move-to-vault-dialog";
-import { RedactionEditor } from "@/components/scanner/RedactionEditor";
+import { FileToolsButton } from "@/components/documents/file-tools-button";
 import { FileThumbnail } from "@/components/documents/file-thumbnail";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -36,6 +33,7 @@ import { PageContainer } from "@/components/ui/page-container";
 import { PageHeader } from "@/components/ui/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { Toast, type ToastState } from "@/components/ui/toast";
 import { ApiError } from "@/lib/api";
 import {
   attachInboxFileToDocument,
@@ -55,11 +53,7 @@ import {
 } from "@/lib/document-files";
 import { getDocuments, listDocumentCategories } from "@/lib/documents";
 import { mergePdfs } from "@/lib/pdf/merge";
-import { extractPages, getPdfPageCount } from "@/lib/pdf/extract";
-import { rasterizePdf } from "@/lib/pdf/rasterize";
-import { compressPdf } from "@/lib/pdf/compress";
-import { generatePdfBlob } from "@/lib/scanner/pdf";
-import { applyRedactions, type RedactionRect } from "@/lib/scanner/redaction";
+import { isImage, isPdf, runCompress } from "@/lib/files/tools";
 import { cn } from "@/lib/utils";
 import type { DocumentFile } from "@/types/document-files";
 import type { DocumentCategory, DocumentRecord } from "@/types/documents";
@@ -114,22 +108,9 @@ export default function FileInboxPage() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [confirmBulk, setConfirmBulk] = useState(false);
-  // "Export selected pages" state: the PDF being split + its loaded bytes/count.
-  const [extractTarget, setExtractTarget] = useState<DocumentFile | null>(null);
-  const [extractBytes, setExtractBytes] = useState<ArrayBuffer | null>(null);
-  const [extractPageCount, setExtractPageCount] = useState<number | null>(null);
-  const [extractBusy, setExtractBusy] = useState(false);
-  // PDF redaction: the file being redacted + its rasterized page canvases.
-  const [redactTarget, setRedactTarget] = useState<DocumentFile | null>(null);
-  const [redactPages, setRedactPages] = useState<HTMLCanvasElement[] | null>(
-    null,
-  );
-  const [redactBusy, setRedactBusy] = useState(false);
-  // "Shrink PDF" (compress) target + busy state.
-  const [compressTarget, setCompressTarget] = useState<DocumentFile | null>(
-    null,
-  );
-  const [compressBusy, setCompressBusy] = useState(false);
+  // Transient feedback for file-tool results (lands on-screen near the action,
+  // unlike the top-of-page banners).
+  const [toast, setToast] = useState<ToastState | null>(null);
   // Duplicate warning prompt during upload (resolved by the dialog buttons).
   const [dupPrompt, setDupPrompt] = useState<{
     fileName: string;
@@ -523,162 +504,65 @@ export default function FileInboxPage() {
     }
   }
 
-  async function openExtract(file: DocumentFile) {
-    setBusyFileId(file.id);
-    setError(null);
-    try {
-      const buffer = await (
-        await getInboxFileDownloadBlob(file.id)
-      ).arrayBuffer();
-      const count = await getPdfPageCount(buffer);
-      setExtractBytes(buffer);
-      setExtractPageCount(count);
-      setExtractTarget(file);
-    } catch (err) {
-      setError(
-        err instanceof ApiError ? err.message : "Couldn't open that PDF.",
-      );
-    } finally {
-      setBusyFileId(null);
+  // Compress every selected PDF/image at the "smaller" tier, uploading each
+  // result as a new inbox file. Originals are untouched; copies that wouldn't be
+  // smaller are skipped honestly.
+  async function handleBulkCompress() {
+    const targets = (files ?? []).filter(
+      (file) => selected.has(file.id) && (isPdf(file) || isImage(file)),
+    );
+    if (targets.length === 0) {
+      setError("Select PDF or image files to compress.");
+      return;
     }
-  }
-
-  function closeExtract() {
-    setExtractTarget(null);
-    setExtractBytes(null);
-    setExtractPageCount(null);
-  }
-
-  async function confirmExtract(indices: number[]) {
-    if (!extractTarget || !extractBytes) return;
-    setExtractBusy(true);
+    setBulkBusy(true);
     setError(null);
     setNotice(null);
-    try {
-      const bytes = await extractPages(extractBytes, indices);
-      const buffer = bytes.buffer.slice(
-        bytes.byteOffset,
-        bytes.byteOffset + bytes.byteLength,
-      ) as ArrayBuffer;
-      const base = extractTarget.original_filename.replace(/\.[^/.]+$/, "");
-      const file = new File([buffer], `${base}-pages.pdf`, {
-        type: "application/pdf",
-      });
-      const result = await uploadInboxFile(file);
-      setFiles((current) => [result, ...(current ?? [])]);
-      closeExtract();
-      setNotice(
-        `Exported ${indices.length} page${indices.length === 1 ? "" : "s"} as a new PDF. Original preserved.`,
-      );
-    } catch (err) {
-      setError(
-        err instanceof ApiError
-          ? err.message
-          : "Couldn't export those pages. Your original is unchanged.",
-      );
-    } finally {
-      setExtractBusy(false);
-    }
-  }
-
-  async function openRedact(file: DocumentFile) {
-    setBusyFileId(file.id);
-    setError(null);
-    try {
-      const buffer = await (
-        await getInboxFileDownloadBlob(file.id)
-      ).arrayBuffer();
-      const pages = await rasterizePdf(buffer);
-      if (pages.length === 0) throw new Error("That PDF has no pages.");
-      setRedactPages(pages);
-      setRedactTarget(file);
-    } catch (err) {
-      setError(
-        err instanceof ApiError
-          ? err.message
-          : "Couldn't open that PDF for redaction.",
-      );
-    } finally {
-      setBusyFileId(null);
-    }
-  }
-
-  function closeRedact() {
-    setRedactTarget(null);
-    setRedactPages(null);
-  }
-
-  async function confirmRedact(rectsPerPage: RedactionRect[][]) {
-    if (!redactTarget || !redactPages) return;
-    setRedactBusy(true);
-    setError(null);
-    setNotice(null);
-    try {
-      // Burn opaque rectangles into the rasterized pages, then rebuild an
-      // image-only PDF. The output has no text layer, so redacted content is
-      // non-recoverable. The original file is never modified.
-      const burned = redactPages.map((canvas, i) =>
-        applyRedactions(canvas, rectsPerPage[i] ?? []),
-      );
-      const blob = await generatePdfBlob(burned, { quality: 0.85 });
-      const base = redactTarget.original_filename.replace(/\.[^/.]+$/, "");
-      const file = new File([blob], `${base}-redacted.pdf`, {
-        type: "application/pdf",
-      });
-      const result = await uploadInboxFile(file);
-      setFiles((current) => [result, ...(current ?? [])]);
-      closeRedact();
-      setNotice("Redacted copy created. Your original is unchanged.");
-    } catch (err) {
-      setError(
-        err instanceof ApiError
-          ? err.message
-          : "Couldn't create the redacted copy. Your original is unchanged.",
-      );
-    } finally {
-      setRedactBusy(false);
-    }
-  }
-
-  async function confirmCompress(quality: number) {
-    if (!compressTarget) return;
-    const original = compressTarget;
-    setCompressBusy(true);
-    setError(null);
-    setNotice(null);
-    try {
-      const buffer = await (
-        await getInboxFileDownloadBlob(original.id)
-      ).arrayBuffer();
-      const blob = await compressPdf(buffer, quality);
-      // Don't save a "compressed" copy that isn't actually smaller (text PDFs
-      // can grow when rasterized) — tell the user honestly instead.
-      if (blob.size >= original.file_size) {
-        setCompressTarget(null);
-        setNotice(
-          `This PDF is already compact (${formatFileSize(original.file_size)}). No smaller copy was created.`,
-        );
-        return;
+    let compressed = 0;
+    let skipped = 0;
+    const failures: string[] = [];
+    for (const file of targets) {
+      try {
+        const source = await getInboxFileDownloadBlob(file.id);
+        const { blob, name } = await runCompress(file, source, 0.5);
+        if (blob.size >= file.file_size) {
+          skipped += 1;
+          continue;
+        }
+        await saveToolResult(blob, name);
+        compressed += 1;
+      } catch {
+        failures.push(file.original_filename);
       }
-      const base = original.original_filename.replace(/\.[^/.]+$/, "");
-      const file = new File([blob], `${base}-compressed.pdf`, {
-        type: "application/pdf",
-      });
-      const result = await uploadInboxFile(file);
-      setFiles((current) => [result, ...(current ?? [])]);
-      setCompressTarget(null);
-      setNotice(
-        `Compressed: ${formatFileSize(original.file_size)} → ${formatFileSize(blob.size)}. Original preserved.`,
-      );
-    } catch (err) {
-      setError(
-        err instanceof ApiError
-          ? err.message
-          : "Couldn't compress that PDF. Your original is unchanged.",
-      );
-    } finally {
-      setCompressBusy(false);
     }
+    setBulkBusy(false);
+    clearSelection();
+    const parts: string[] = [];
+    if (compressed > 0) {
+      parts.push(
+        `Compressed ${compressed} file${compressed === 1 ? "" : "s"}. Originals preserved.`,
+      );
+    }
+    if (skipped > 0) {
+      parts.push(`${skipped} already compact.`);
+    }
+    if (parts.length > 0) setToast({ message: parts.join(" "), kind: "success" });
+    if (failures.length > 0) {
+      setToast({
+        message: `Couldn't compress ${failures.slice(0, 3).join(", ")}${failures.length > 3 ? `, and ${failures.length - 3} more` : ""}.`,
+        kind: "error",
+      });
+    }
+  }
+
+  // Persist a tool-produced blob as a new inbox file (used by FileToolsDialog).
+  // Originals are never touched — the result is always a fresh upload.
+  async function saveToolResult(blob: Blob, name: string) {
+    const file = new File([blob], name, {
+      type: blob.type || "application/octet-stream",
+    });
+    const result = await uploadInboxFile(file);
+    setFiles((current) => [result, ...(current ?? [])]);
   }
 
   async function handleMoveToVault(categoryId: number | null) {
@@ -731,9 +615,14 @@ export default function FileInboxPage() {
       ).length,
     [files, selected],
   );
+  const selectedCompressibleCount = useMemo(
+    () =>
+      (files ?? []).filter(
+        (file) => selected.has(file.id) && (isPdf(file) || isImage(file)),
+      ).length,
+    [files, selected],
+  );
   const mergeEnabled = useFeature("document_merge");
-  const pageExtractEnabled = useFeature("document_page_extract");
-  const redactionEnabled = useFeature("document_redaction");
   const compressEnabled = useFeature("document_compress");
   const dedupeEnabled = useFeature("duplicate_detection");
   const batchEnabled = useFeature("batch_scan_actions");
@@ -744,6 +633,15 @@ export default function FileInboxPage() {
         eyebrow="Workspace"
         title="Files waiting to be organized"
         description="Turn uploads into complete documents — attach them to the right document or create a new one."
+        actions={
+          <Link
+            href="/dashboard/scanner"
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+          >
+            <ScanLine className="size-4" />
+            Scan
+          </Link>
+        }
       />
 
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
@@ -922,6 +820,22 @@ export default function FileInboxPage() {
                   Merge {selectedPdfCount} PDFs
                 </Button>
               )}
+              {compressEnabled && selectedCompressibleCount > 0 && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handleBulkCompress}
+                  disabled={bulkBusy}
+                >
+                  {bulkBusy ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Minimize2 className="size-4" />
+                  )}
+                  Compress {selectedCompressibleCount}
+                </Button>
+              )}
               {batchEnabled && (
                 <Button
                   type="button"
@@ -1052,6 +966,13 @@ export default function FileInboxPage() {
                       )}
                       Download
                     </Button>
+                    <FileToolsButton
+                      file={file}
+                      loadBlob={() => getInboxFileDownloadBlob(file.id)}
+                      onSave={saveToolResult}
+                      saveLabel="Save to Inbox"
+                      onNotify={(message, kind) => setToast({ message, kind })}
+                    />
                     <Button
                       type="button"
                       variant="ghost"
@@ -1068,56 +989,6 @@ export default function FileInboxPage() {
 
                 {expandedFile === file.id && (
                 <div className="grid gap-3 border-t border-border pt-4">
-                  {file.content_type === "application/pdf" &&
-                    (pageExtractEnabled ||
-                      compressEnabled ||
-                      redactionEnabled) && (
-                      <div className="grid gap-2">
-                        <Label>Document tools</Label>
-                        <div className="flex flex-wrap gap-2">
-                          {pageExtractEnabled && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => openExtract(file)}
-                              disabled={busyFileId === file.id}
-                            >
-                              <Scissors className="size-4" />
-                              Export pages
-                            </Button>
-                          )}
-                          {compressEnabled && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setCompressTarget(file)}
-                              disabled={busyFileId === file.id}
-                            >
-                              <Minimize2 className="size-4" />
-                              Shrink
-                            </Button>
-                          )}
-                          {redactionEnabled && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => openRedact(file)}
-                              disabled={busyFileId === file.id}
-                            >
-                              <EyeOff className="size-4" />
-                              Redact
-                            </Button>
-                          )}
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          Each tool creates a new copy — your original is
-                          unchanged.
-                        </p>
-                      </div>
-                    )}
                   <div className="grid gap-2">
                     <Label htmlFor={`document-${file.id}`}>
                       Attach to an existing document
@@ -1316,35 +1187,6 @@ export default function FileInboxPage() {
         onShare={() => undefined}
       />
 
-      <ExtractPagesDialog
-        key={extractTarget?.id ?? "none"}
-        open={extractTarget !== null && extractPageCount !== null}
-        fileName={extractTarget?.original_filename ?? ""}
-        pageCount={extractPageCount ?? 0}
-        busy={extractBusy}
-        onCancel={closeExtract}
-        onConfirm={confirmExtract}
-      />
-
-      {redactTarget !== null && redactPages !== null && (
-        <RedactionEditor
-          pages={redactPages}
-          busy={redactBusy}
-          tone="surface"
-          onCancel={closeRedact}
-          onCreate={confirmRedact}
-        />
-      )}
-
-      <CompressPdfDialog
-        open={compressTarget !== null}
-        fileName={compressTarget?.original_filename ?? ""}
-        originalSize={compressTarget?.file_size ?? 0}
-        busy={compressBusy}
-        onCancel={() => setCompressTarget(null)}
-        onConfirm={confirmCompress}
-      />
-
       <MoveToVaultDialog
         key={moveOpen ? "move-open" : "move-closed"}
         open={moveOpen}
@@ -1363,6 +1205,8 @@ export default function FileInboxPage() {
         onKeepBoth={() => resolveDup("keep")}
         onSkip={() => resolveDup("skip")}
       />
+
+      <Toast toast={toast} onDismiss={() => setToast(null)} />
     </PageContainer>
   );
 }
