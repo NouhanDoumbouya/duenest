@@ -10,9 +10,10 @@ const CSRF_COOKIE_NAME =
   process.env.NEXT_PUBLIC_CSRF_COOKIE_NAME ?? "duenest_csrftoken";
 
 /**
- * Upload a file to the File Inbox with progress events. Mirrors apiFetch's
- * cookie auth (credentials + X-CSRFToken) but uses XMLHttpRequest so we can
- * report real per-file upload progress (fetch has no upload progress events).
+ * Upload a file to the File Inbox with progress events. Mirrors apiFetch's auth
+ * (cookie credentials + X-CSRFToken, or a Bearer header in the cross-origin
+ * deployment) but uses XMLHttpRequest so we can report real per-file upload
+ * progress (fetch has no upload progress events).
  */
 export function uploadInboxFileWithProgress(
   file: File,
@@ -25,6 +26,11 @@ export function uploadInboxFileWithProgress(
     xhr.setRequestHeader("Accept", "application/json");
     const csrf = readCookie(CSRF_COOKIE_NAME);
     if (csrf) xhr.setRequestHeader("X-CSRFToken", csrf);
+    // Bearer mode (split-origin): the access token isn't sent as a cookie, so
+    // attach it explicitly — matches apiFetch. Null/no-op in same-origin cookie
+    // mode. Without this, cross-origin uploads 401.
+    const token = getAccessToken();
+    if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
     // Do NOT set Content-Type — the browser adds the multipart boundary.
 
     xhr.upload.onprogress = (event) => {
