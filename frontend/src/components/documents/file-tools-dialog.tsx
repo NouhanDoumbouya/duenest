@@ -90,6 +90,9 @@ export function FileToolsDialog({
   // The current input for the next transform: the original at first, then the
   // last result when chaining. `working` also drives the result panel.
   const [working, setWorking] = useState<WorkingFile | null>(null);
+  // Size of the input that produced `working` — captured before the transform so
+  // the result panel shows a correct before → after (working is the AFTER).
+  const [resultBefore, setResultBefore] = useState(0);
   // Loaded lazily for extract/redact (page count / rasterized pages).
   const [pageCount, setPageCount] = useState<number | null>(null);
   const [redactPages, setRedactPages] = useState<HTMLCanvasElement[] | null>(
@@ -212,6 +215,9 @@ export function FileToolsDialog({
   }
 
   function finishWith(blob: Blob, name: string, contentType: string) {
+    // `working` still holds the input that produced this result — capture its
+    // size now so the result panel can show before → after correctly.
+    setResultBefore(working?.blob.size ?? file.file_size);
     setWorking({ blob, name, contentType });
     setStep("result");
   }
@@ -426,11 +432,11 @@ export function FileToolsDialog({
               <div className="min-w-0 text-sm">
                 <p className="truncate font-medium">{working.name}</p>
                 <p className="text-muted-foreground">
-                  {formatFileSize(originalSize)} → {formatFileSize(working.blob.size)}
+                  {formatFileSize(resultBefore)} → {formatFileSize(working.blob.size)}
                 </p>
               </div>
             </div>
-            {working.blob.size >= originalSize && (
+            {working.blob.size >= resultBefore && (
               <p className="mt-2 text-xs text-muted-foreground">
                 This copy isn&apos;t smaller than the original — you can still
                 keep it, or discard it.
