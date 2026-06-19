@@ -10,6 +10,7 @@ import {
   FileText,
   LayoutDashboard,
   LockKeyhole,
+  Mail,
   MessageSquare,
   Rocket,
   ShieldCheck,
@@ -29,6 +30,7 @@ const founderNav = [
   { label: "Errors", href: "/dashboard/founder/errors", icon: AlertTriangle },
   { label: "Security", href: "/dashboard/founder/security", icon: ShieldCheck },
   { label: "Users", href: "/dashboard/founder/users", icon: Users },
+  { label: "Emails", href: "/dashboard/founder/emails", icon: Mail },
   { label: "Launch", href: "/dashboard/founder/launch", icon: Rocket },
 ];
 

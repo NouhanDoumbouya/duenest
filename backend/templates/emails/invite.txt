@@ -1,7 +1,5 @@
 {% extends "emails/base.txt" %}
-{% block content %}You're invited to the DueNest private beta — the calm place to keep your
-important documents, renewals, and deadlines, and share them securely when
-life asks for proof.
+{% block content %}{{ email_body }}
 
 Accept your invite:
 {{ invite_url }}
