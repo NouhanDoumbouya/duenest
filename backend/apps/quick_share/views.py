@@ -31,6 +31,7 @@ from apps.documents.models import (
     DocumentActivity,
     DocumentBundle,
     DocumentFile,
+    ProofRecord,
 )
 from apps.documents.plan_usage import enforce_plan_limit
 from apps.documents.services import collect_bundle_files, log_document_activity
@@ -104,7 +105,9 @@ class QuickShareSessionListCreateView(APIView):
         data = serializer.validated_data
 
         file_ids = data.pop("file_ids", []) or []
+        document_ids = data.pop("document_ids", []) or []
         bundle_ids = data.pop("bundle_ids", []) or []
+        proof_ids = data.pop("proof_ids", []) or []
         plain_code = data.pop("access_code", "") or ""
         access_code_required = data.get("access_code_required", False)
 
@@ -149,9 +152,30 @@ class QuickShareSessionListCreateView(APIView):
                 shared_documents[file.document_id] = file.document
             created_any = True
 
+        # Attach whole documents — each must be owned by the requester and expose
+        # at least one active file. Shares the document's current files, like a
+        # Share Room document item.
+        doc_base = len(file_ids)
+        for offset, document_id in enumerate(document_ids):
+            document = Document.objects.filter(
+                id=document_id, owner=request.user, is_trashed=False
+            ).first()
+            if document is None:
+                continue
+            if not document.files.filter(is_trashed=False).exists():
+                continue
+            QuickShareItem.objects.create(
+                session=session,
+                document=document,
+                display_name=document.title,
+                order=doc_base + offset,
+            )
+            shared_documents[document.id] = document
+            created_any = True
+
         # Attach whole bundles — each must be owned by the requester and must
         # currently expose at least one available file.
-        base_order = len(file_ids)
+        base_order = len(file_ids) + len(document_ids)
         for offset, bundle_id in enumerate(bundle_ids):
             bundle = DocumentBundle.objects.filter(
                 id=bundle_id, owner=request.user
@@ -176,6 +200,30 @@ class QuickShareSessionListCreateView(APIView):
                 description=bundle.title,
                 related_bundle=bundle,
             )
+
+        # Attach proofs — each must be owned by the requester and expose a live
+        # linked file (mirrors Share Room proof items).
+        proof_base = len(file_ids) + len(document_ids) + len(bundle_ids)
+        for offset, proof_id in enumerate(proof_ids):
+            proof = (
+                ProofRecord.objects.filter(id=proof_id, owner=request.user)
+                .select_related("linked_file", "linked_file__document")
+                .first()
+            )
+            if proof is None or proof.linked_file is None:
+                continue
+            linked = proof.linked_file
+            if linked.is_trashed or (
+                linked.document_id and linked.document.is_trashed
+            ):
+                continue
+            QuickShareItem.objects.create(
+                session=session,
+                proof=proof,
+                display_name=f"Proof: {proof.title}",
+                order=proof_base + offset,
+            )
+            created_any = True
 
         if not created_any:
             session.delete()
