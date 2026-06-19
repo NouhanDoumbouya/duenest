@@ -3,6 +3,8 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
+  Archive,
+  CheckSquare,
   ChevronDown,
   FileText,
   Filter,
@@ -11,10 +13,12 @@ import {
   Loader2,
   Plus,
   Search,
+  Trash2,
   X,
 } from "lucide-react";
 
 import { DocumentCard } from "@/components/documents/document-card";
+import { useFeature } from "@/components/features/feature-flags-provider";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -23,11 +27,14 @@ import { Input } from "@/components/ui/input";
 import { PageContainer } from "@/components/ui/page-container";
 import { PageHeader } from "@/components/ui/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Toast, type ToastState } from "@/components/ui/toast";
 import { ApiError } from "@/lib/api";
 import {
   deleteDocument,
   getDocuments,
   listDocumentCategories,
+  restoreDocument,
+  updateDocument,
 } from "@/lib/documents";
 import { getTags } from "@/lib/tags";
 import { cn } from "@/lib/utils";
@@ -261,6 +268,35 @@ function DocumentsPageInner() {
   const [pendingDelete, setPendingDelete] = useState<DocumentRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // --- Vault bulk-select + undo (founder-gated) ---------------------------
+  const bulkEnabled = useFeature("vault_bulk_actions");
+  const undoEnabled = useFeature("vault_trash_undo");
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  // Pending destructive bulk action awaiting confirmation.
+  const [bulkConfirm, setBulkConfirm] = useState<null | "trash" | "archive">(
+    null,
+  );
+  const [toast, setToast] = useState<ToastState | null>(null);
+  // Bumped to force a fresh reload of the current list after a bulk action.
+  const [reloadKey, setReloadKey] = useState(0);
+  const reload = () => setReloadKey((k) => k + 1);
+
+  function toggleSelected(doc: DocumentRecord) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(doc.id)) next.delete(doc.id);
+      else next.add(doc.id);
+      return next;
+    });
+  }
+
+  function exitSelectMode() {
+    setSelectMode(false);
+    setSelected(new Set());
+  }
+
   const listParams = useMemo(
     () =>
       buildListParams({
@@ -315,7 +351,7 @@ function DocumentsPageInner() {
     return () => {
       active = false;
     };
-  }, [listParams, queryKey]);
+  }, [listParams, queryKey, reloadKey]);
 
   async function loadMore() {
     const nextPage = page + 1;
@@ -391,24 +427,187 @@ function DocumentsPageInner() {
 
   async function handleConfirmDelete() {
     if (!pendingDelete) return;
+    const doc = pendingDelete;
     setDeleting(true);
     setError(null);
     try {
-      await deleteDocument(pendingDelete.id);
-      setDocuments((prev) =>
-        (prev ?? []).filter((d) => d.id !== pendingDelete.id),
-      );
+      await deleteDocument(doc.id);
+      setDocuments((prev) => (prev ?? []).filter((d) => d.id !== doc.id));
       setTotal((n) => Math.max(0, n - 1));
       setPendingDelete(null);
+      if (undoEnabled) {
+        setToast({
+          message: `“${doc.title}” moved to Trash.`,
+          kind: "success",
+          action: {
+            label: "Undo",
+            onClick: () => {
+              void restoreDocument(doc.id)
+                .then(() => {
+                  setToast({ message: "Restored to Vault.", kind: "success" });
+                  reload();
+                })
+                .catch(() =>
+                  setToast({
+                    message: "Could not restore. Try again from Trash.",
+                    kind: "error",
+                  }),
+                );
+            },
+          },
+        });
+      }
     } catch (err) {
       setError(
         err instanceof ApiError
           ? err.message
-          : "Could not delete the document. Please try again.",
+          : "Could not move the document to Trash. Your document is unchanged.",
       );
       setPendingDelete(null);
     } finally {
       setDeleting(false);
+    }
+  }
+
+  // --- Bulk actions over the current selection ----------------------------
+  const selectedDocs = useMemo(
+    () => (documents ?? []).filter((d) => selected.has(d.id)),
+    [documents, selected],
+  );
+
+  async function runBulkMoveCategory(categoryId: number | null) {
+    if (selectedDocs.length === 0) return;
+    // Snapshot prior categories so the move is undoable.
+    const prior = selectedDocs.map((d) => ({ id: d.id, category: d.category }));
+    setBulkBusy(true);
+    setError(null);
+    try {
+      await Promise.all(
+        prior.map((p) => updateDocument(p.id, { category: categoryId })),
+      );
+      const name =
+        categoryId === null
+          ? "Uncategorized"
+          : (categories.find((c) => c.id === categoryId)?.name ?? "category");
+      exitSelectMode();
+      reload();
+      setToast({
+        message: `Moved ${prior.length} document${prior.length === 1 ? "" : "s"} to ${name}.`,
+        kind: "success",
+        action: undoEnabled
+          ? {
+              label: "Undo",
+              onClick: () => {
+                void Promise.all(
+                  prior.map((p) => updateDocument(p.id, { category: p.category })),
+                )
+                  .then(() => {
+                    setToast({ message: "Move undone.", kind: "success" });
+                    reload();
+                  })
+                  .catch(() =>
+                    setToast({ message: "Could not undo the move.", kind: "error" }),
+                  );
+              },
+            }
+          : undefined,
+      });
+    } catch {
+      setError(
+        "Could not move the selected documents. They are unchanged in your Vault.",
+      );
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function runBulkArchive() {
+    if (selectedDocs.length === 0) return;
+    const prior = selectedDocs.map((d) => ({
+      id: d.id,
+      lifecycle_status: d.lifecycle_status,
+    }));
+    setBulkBusy(true);
+    setBulkConfirm(null);
+    setError(null);
+    try {
+      await Promise.all(
+        prior.map((p) => updateDocument(p.id, { lifecycle_status: "archived" })),
+      );
+      const count = prior.length;
+      exitSelectMode();
+      reload();
+      setToast({
+        message: `Archived ${count} document${count === 1 ? "" : "s"}.`,
+        kind: "success",
+        action: undoEnabled
+          ? {
+              label: "Undo",
+              onClick: () => {
+                void Promise.all(
+                  prior.map((p) =>
+                    updateDocument(p.id, { lifecycle_status: p.lifecycle_status }),
+                  ),
+                )
+                  .then(() => {
+                    setToast({ message: "Archive undone.", kind: "success" });
+                    reload();
+                  })
+                  .catch(() =>
+                    setToast({ message: "Could not undo archive.", kind: "error" }),
+                  );
+              },
+            }
+          : undefined,
+      });
+    } catch {
+      setError(
+        "Could not archive the selected documents. They are unchanged in your Vault.",
+      );
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function runBulkTrash() {
+    if (selectedDocs.length === 0) return;
+    const ids = selectedDocs.map((d) => d.id);
+    setBulkBusy(true);
+    setBulkConfirm(null);
+    setError(null);
+    try {
+      await Promise.all(ids.map((id) => deleteDocument(id)));
+      const count = ids.length;
+      exitSelectMode();
+      reload();
+      setToast({
+        message: `Moved ${count} document${count === 1 ? "" : "s"} to Trash.`,
+        kind: "success",
+        action: undoEnabled
+          ? {
+              label: "Undo",
+              onClick: () => {
+                void Promise.all(ids.map((id) => restoreDocument(id)))
+                  .then(() => {
+                    setToast({ message: "Restored to Vault.", kind: "success" });
+                    reload();
+                  })
+                  .catch(() =>
+                    setToast({
+                      message: "Could not restore. Try again from Trash.",
+                      kind: "error",
+                    }),
+                  );
+              },
+            }
+          : undefined,
+      });
+    } catch {
+      setError(
+        "Could not move the selected documents to Trash. They are unchanged.",
+      );
+    } finally {
+      setBulkBusy(false);
     }
   }
 
@@ -867,6 +1066,25 @@ function DocumentsPageInner() {
               {filtersActive ? "matching documents" : "documents"}
             </p>
             <div className="flex items-center gap-2">
+              {bulkEnabled &&
+                (selectMode ? (
+                  <button
+                    type="button"
+                    onClick={exitSelectMode}
+                    className="rounded-lg border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+                  >
+                    Cancel
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setSelectMode(true)}
+                    className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+                  >
+                    <CheckSquare className="size-3.5" aria-hidden />
+                    Select
+                  </button>
+                ))}
               <button
                 type="button"
                 onClick={() => setRiskSort((v) => !v)}
@@ -929,6 +1147,9 @@ function DocumentsPageInner() {
                 key={doc.id}
                 doc={doc}
                 onRequestDelete={setPendingDelete}
+                selectable={selectMode}
+                selected={selected.has(doc.id)}
+                onToggleSelect={toggleSelected}
               />
             ))}
           </div>
@@ -973,6 +1194,92 @@ function DocumentsPageInner() {
         onConfirm={handleConfirmDelete}
         onCancel={() => setPendingDelete(null)}
       />
+
+      {/* Bulk action bar — only in select mode with a non-empty selection. */}
+      {bulkEnabled && selectMode && selected.size > 0 && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
+          <div className="pointer-events-auto flex w-full max-w-3xl flex-wrap items-center gap-2 rounded-2xl border border-border bg-card p-3 shadow-lg shadow-foreground/10">
+            <span className="px-1 text-sm font-medium">
+              {selected.size} selected
+            </span>
+            <button
+              type="button"
+              onClick={() =>
+                setSelected(new Set(displayedDocs.map((d) => d.id)))
+              }
+              className="rounded-lg px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+            >
+              Select all
+            </button>
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <select
+                aria-label="Move selected to category"
+                value=""
+                disabled={bulkBusy}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (!v) return;
+                  void runBulkMoveCategory(v === "none" ? null : Number(v));
+                }}
+                className="h-9 rounded-lg border border-input bg-card px-2 text-xs shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <option value="">Move to category…</option>
+                <option value="none">Uncategorized</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={bulkBusy}
+                onClick={() => setBulkConfirm("archive")}
+              >
+                <Archive className="size-4" />
+                Archive
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={bulkBusy}
+                onClick={() => setBulkConfirm("trash")}
+                className="text-destructive hover:text-destructive"
+              >
+                {bulkBusy ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Trash2 className="size-4" />
+                )}
+                Trash
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={bulkConfirm !== null}
+        title={
+          bulkConfirm === "archive"
+            ? `Archive ${selected.size} document${selected.size === 1 ? "" : "s"}?`
+            : `Move ${selected.size} document${selected.size === 1 ? "" : "s"} to Trash?`
+        }
+        description={
+          bulkConfirm === "archive"
+            ? "Archived documents leave your active views but stay in your Vault. You can undo this."
+            : "They will be moved to Trash. You can restore them later, or delete them permanently from there. This will not remove them from packs automatically."
+        }
+        confirmLabel={bulkConfirm === "archive" ? "Archive" : "Move to trash"}
+        loading={bulkBusy}
+        onConfirm={bulkConfirm === "archive" ? runBulkArchive : runBulkTrash}
+        onCancel={() => setBulkConfirm(null)}
+      />
+
+      <Toast toast={toast} onDismiss={() => setToast(null)} duration={6000} />
     </PageContainer>
   );
 }
