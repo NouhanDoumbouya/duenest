@@ -42,7 +42,7 @@ export function Toast({
     >
       <div
         className={cn(
-          "pointer-events-auto flex max-w-md items-start gap-2.5 rounded-xl border px-4 py-3 text-sm shadow-lg shadow-foreground/10",
+          "vault-bar-in pointer-events-auto flex max-w-md items-start gap-2.5 rounded-xl border px-4 py-3 text-sm shadow-lg shadow-foreground/10",
           toast.kind === "error"
             ? "border-destructive/30 bg-destructive/10 text-destructive"
             : "border-brand-success/30 bg-card text-foreground",

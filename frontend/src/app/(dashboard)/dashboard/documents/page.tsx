@@ -1230,7 +1230,7 @@ function DocumentsPageInner() {
       {/* Bulk action bar — only in select mode with a non-empty selection. */}
       {bulkEnabled && selectMode && selected.size > 0 && (
         <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
-          <div className="pointer-events-auto flex w-full max-w-3xl flex-wrap items-center gap-2 rounded-2xl border border-border bg-card p-3 shadow-lg shadow-foreground/10">
+          <div className="vault-bar-in pointer-events-auto flex w-full max-w-3xl flex-wrap items-center gap-2 rounded-2xl border border-border bg-card p-3 shadow-lg shadow-foreground/10">
             <span className="px-1 text-sm font-medium">
               {selected.size} selected
             </span>
