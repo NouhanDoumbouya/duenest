@@ -33,6 +33,7 @@ import { PageContainer } from "@/components/ui/page-container";
 import { InlineAlert } from "@/components/ui/product-ui";
 import { ApiError } from "@/lib/api";
 import { formatFileSize, getFileInbox } from "@/lib/document-files";
+import { getBundle } from "@/lib/renewal-workspace";
 import { createQuickShare } from "@/lib/quick-share";
 import { setQuickShareHandoff } from "@/lib/quick-share-handoff";
 import {
@@ -156,6 +157,39 @@ export default function NewQuickSharePage() {
       })
       .catch(() => {
         /* non-blocking: start empty if the handoff file can't be loaded */
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Preselect a whole pack handed off from the bundle detail
+  // (/dashboard/quick-share/new?bundle=<id>) so "Share pack safely" opens a
+  // draft with the pack already chosen. Best-effort and non-blocking; the user
+  // still reviews access, recipients, and expiry — no link is created here.
+  useEffect(() => {
+    const target = new URLSearchParams(window.location.search).get("bundle");
+    if (!target) return;
+    const id = Number(target);
+    if (!Number.isFinite(id)) return;
+    let active = true;
+    getBundle(id)
+      .then((bundle) => {
+        if (!active) return;
+        setSelectedBundles((prev) => {
+          if (prev.has(bundle.id)) return prev;
+          const next = new Map(prev);
+          next.set(bundle.id, {
+            id: bundle.id,
+            title: bundle.title,
+            requirementCount: bundle.requirement_count,
+            incomplete: bundle.missing_required_count > 0,
+          });
+          return next;
+        });
+      })
+      .catch(() => {
+        /* non-blocking: start empty if the handoff pack can't be loaded */
       });
     return () => {
       active = false;

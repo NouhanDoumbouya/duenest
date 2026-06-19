@@ -12,6 +12,7 @@ import {
   Loader2,
   Plus,
   ScanLine,
+  Share2,
   ShieldCheck,
   Trash2,
 } from "lucide-react";
@@ -33,7 +34,7 @@ import {
 } from "@/components/ui/product-ui";
 import { SectionCard } from "@/components/ui/section-card";
 import { TimelineList } from "@/components/timeline/timeline-list";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -376,6 +377,7 @@ export default function BundleDetailPage() {
 
   const timelineEnabled = useFeature("application_pack_timeline");
   const scanToBundleEnabled = useFeature("scan_to_bundle");
+  const safeSendEnabled = useFeature("application_pack_safesend");
   const visibleTabs = timelineEnabled
     ? [...BUNDLE_TABS, ACTIVITY_TAB]
     : BUNDLE_TABS;
@@ -952,6 +954,22 @@ export default function BundleDetailPage() {
                   <CheckCircle2 className="size-4" />
                   All required items are ready.
                 </p>
+              )}
+
+              {safeSendEnabled && (
+                <div className="space-y-1.5">
+                  <Link
+                    href={`/dashboard/quick-share/new?bundle=${bundleId}`}
+                    className={cn(buttonVariants({ variant: "outline" }), "w-full")}
+                  >
+                    <Share2 className="size-4" />
+                    Share pack safely
+                  </Link>
+                  <p className="text-xs text-muted-foreground">
+                    Opens SafeSend with this pack selected. No public link is
+                    created until you confirm access there.
+                  </p>
+                </div>
               )}
 
               <dl className="space-y-2 text-sm">

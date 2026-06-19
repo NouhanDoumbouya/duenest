@@ -85,6 +85,7 @@ FEATURE_DEFINITIONS: list[dict] = [
     {"key": "application_pack_preparation", "name": "Application packs — preparation", "default": Visibility.FOUNDER_ONLY, "description": "Master gate for application-pack preparation features built on bundles."},
     {"key": "application_pack_templates", "name": "Application packs — templates", "default": Visibility.FOUNDER_ONLY, "description": "Start a bundle from a generic, editable checklist template (scholarship/visa/university/job/travel/renewal). Suggestions only — never presented as official; requirements always vary."},
     {"key": "application_pack_timeline", "name": "Application packs — activity timeline", "default": Visibility.FOUNDER_ONLY, "description": "Owner-only activity feed for a bundle (created, template applied, document attached/replaced/removed, status changed, exported). No file contents; never public."},
+    {"key": "application_pack_safesend", "name": "Application packs — share via SafeSend", "default": Visibility.FOUNDER_ONLY, "description": "Shortcut from a pack into the SafeSend (Quick Share) draft with the pack preselected. No link is created until the user confirms inside SafeSend."},
 ]
 
 FEATURE_KEYS = [d["key"] for d in FEATURE_DEFINITIONS]

@@ -9,8 +9,11 @@ These features default to FOUNDER_ONLY, so the tests enable them explicitly via
 ``FeatureFlag`` rows to exercise the launched behaviour for a normal user.
 """
 
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -182,6 +185,47 @@ class PackActivityTimelineTest(ApplicationPackBaseTest):
             f"/api/v1/document-bundles/{bundle['id']}/activity/"
         )
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_sharing_bundle_via_safesend_logs_pack_event(self):
+        enable("application_pack_timeline")
+        bundle = self._make_bundle("Shareable pack")
+        req = self.client.post(
+            f"/api/v1/document-bundles/{bundle['id']}/requirements/",
+            {"title": "Passport", "is_required": True},
+            format="json",
+        ).data
+        # The bundle must expose at least one available file to be shareable.
+        inbox_file = DocumentFile.objects.create(
+            uploaded_by=self.owner,
+            file=SimpleUploadedFile("passport.pdf", b"%PDF-1.4 x"),
+            original_filename="passport.pdf",
+            content_type="application/pdf",
+        )
+        self.client.post(
+            f"/api/v1/document-bundles/{bundle['id']}/requirements/{req['id']}/link-file/",
+            {"file": inbox_file.id},
+            format="json",
+        )
+        share = self.client.post(
+            "/api/v1/quick-share/sessions/",
+            {
+                "mode": "account_to_account",
+                "permission": "view_only",
+                "expires_at": (
+                    timezone.now() + timedelta(minutes=10)
+                ).isoformat(),
+                "bundle_ids": [bundle["id"]],
+            },
+            format="json",
+        )
+        self.assertEqual(
+            share.status_code, status.HTTP_201_CREATED, share.data
+        )
+        response = self.client.get(
+            f"/api/v1/document-bundles/{bundle['id']}/activity/"
+        )
+        actions = {e["action"] for e in response.data["items"]}
+        self.assertIn(DocumentActivity.Action.SHARED_VIA_SAFESEND, actions)
 
     def test_inbox_file_attach_is_logged(self):
         enable("application_pack_timeline")
