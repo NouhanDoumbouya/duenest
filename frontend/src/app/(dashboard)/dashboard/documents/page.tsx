@@ -9,6 +9,7 @@ import {
   Download,
   FileText,
   Filter,
+  Folder,
   LayoutGrid,
   List,
   Loader2,
@@ -21,6 +22,7 @@ import {
 
 import { DocumentCard } from "@/components/documents/document-card";
 import { DocumentsTable } from "@/components/documents/documents-table";
+import { FoldersView } from "@/components/documents/folders-view";
 import { useFeature } from "@/components/features/feature-flags-provider";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -250,13 +252,20 @@ function DocumentsPageInner() {
   // saved choice on the client; this inner component renders under Suspense so
   // there is no SSR/hydration mismatch.
   const tableViewEnabled = useFeature("vault_table_view");
-  const [view, setView] = useState<"list" | "grid" | "table">(() => {
-    if (typeof window === "undefined") return "list";
+  const [view, setView] = useState<"list" | "grid" | "table" | "folders">(() => {
+    if (typeof window === "undefined") return "folders";
     const saved = window.localStorage.getItem("duenest.documentsView");
-    if (saved === "grid" || saved === "table") return saved;
-    return "list";
+    if (
+      saved === "grid" ||
+      saved === "table" ||
+      saved === "list" ||
+      saved === "folders"
+    ) {
+      return saved;
+    }
+    return "folders";
   });
-  function changeView(next: "list" | "grid" | "table") {
+  function changeView(next: "list" | "grid" | "table" | "folders") {
     setView(next);
     if (typeof window !== "undefined") {
       window.localStorage.setItem("duenest.documentsView", next);
@@ -264,7 +273,8 @@ function DocumentsPageInner() {
   }
   // If the table view was persisted but the feature is now off, fall back so the
   // user never lands on a hidden view.
-  const effectiveView = view === "table" && !tableViewEnabled ? "list" : view;
+  const effectiveView: "list" | "grid" | "table" | "folders" =
+    view === "table" && !tableViewEnabled ? "list" : view;
   // Client-side "most urgent first" sort over the loaded results (kept separate
   // from the server `ordering` param, which has a fixed set of values).
   const [riskSort, setRiskSort] = useState(false);
@@ -909,7 +919,8 @@ function DocumentsPageInner() {
         }
       />
 
-      <Card>
+      {effectiveView !== "folders" && (
+        <Card>
         <CardContent className="space-y-4">
           {/* Search is the single primary control; everything else is secondary
               (status chips) or tucked behind the "More filters" disclosure. */}
@@ -1135,6 +1146,7 @@ function DocumentsPageInner() {
           </div>
         </CardContent>
       </Card>
+      )}
 
       {activeChips.length > 0 && (
         <div
@@ -1174,7 +1186,15 @@ function DocumentsPageInner() {
         </p>
       )}
 
-      {initialLoading ? (
+      {effectiveView === "folders" ? (
+        <FoldersView
+          categories={categories}
+          onOpen={(selection) => {
+            setCategory(selection);
+            changeView("list");
+          }}
+        />
+      ) : initialLoading ? (
         <div className="flex flex-col gap-4">
           {Array.from({ length: 3 }).map((_, i) => (
             <Skeleton key={i} className="h-[150px] w-full rounded-xl" />
@@ -1279,6 +1299,15 @@ function DocumentsPageInner() {
                 role="group"
                 aria-label="Document view"
               >
+              <button
+                type="button"
+                onClick={() => changeView("folders")}
+                aria-label="Folders view"
+                title="Folders"
+                className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+              >
+                <Folder className="size-4" aria-hidden />
+              </button>
               <button
                 type="button"
                 onClick={() => changeView("list")}
