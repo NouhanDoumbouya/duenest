@@ -224,15 +224,17 @@ Planned features:
 - ZIP export improvements
 - application-specific checklists
 
-**Sharing consolidation (in progress):** the three parallel share systems
-(Quick Share, single-file links, Share Rooms) are unifying onto Quick Share as
-the single engine so sharing is identical wherever you start. The backend engine
-now covers all three systems' capabilities (privacy screen, document/proof
-items) and the single-file document Share routes through the Quick Share wizard.
-Remaining: File Inbox share entry, rerouting the Sharing tab + Share Rooms
-creation through the wizard, and a privacy-screen toggle in the wizard UI.
-Existing share links keep working (no migration). See
-`docs/architecture.md` §35 "Anatomy of Sharing".
+**Sharing consolidation:** the three parallel share systems (Quick Share,
+single-file links, Share Rooms) are unified onto Quick Share as the single
+engine, so sharing is identical wherever you start. The backend engine covers all
+three systems' capabilities (privacy screen, document/proof items), and every
+entry point — document files, the File Inbox, the document Sharing tab, and Share
+Rooms creation — opens the one Quick Share wizard, which now includes a
+privacy-screen toggle. Existing `DocumentFileShareLink` / `ShareRoom` links keep
+working (no migration); their public endpoints and the Share Rooms list remain
+for back-compat. Remaining (optional): exact `max_views`/`max_downloads`
+view-count parity for single-file links (Quick Share uses claim-based limits by
+design). See `docs/architecture.md` §35 "Anatomy of Sharing".
 
 ### v0.4 — Integrations
 
