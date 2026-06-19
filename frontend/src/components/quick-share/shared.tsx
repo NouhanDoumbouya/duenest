@@ -46,12 +46,14 @@ export { looksSensitive } from "@/lib/safesend";
 
 /**
  * Optional QR appearance. `dark` is the module color, `light` the background
- * (defaults to white), and `logo` centers a DueNest badge.
+ * (defaults to white), `logo` centers a DueNest badge, and `margin` is the
+ * quiet-zone width in modules (defaults to 1; wider helps print scanning).
  */
 export interface QrStyle {
   dark?: string;
   light?: string;
   logo?: boolean;
+  margin?: number;
 }
 
 export const QR_COLOR_PRESETS: { id: string; label: string; dark: string }[] = [
@@ -61,7 +63,75 @@ export const QR_COLOR_PRESETS: { id: string; label: string; dark: string }[] = [
   { id: "plum", label: "Plum", dark: "#6d28d9" },
 ];
 
+/**
+ * Named, scan-reliable style presets. Each fully defines a QR appearance; all
+ * keep dark-on-light, high contrast, and a sufficient quiet zone.
+ */
+export const QR_PRESETS: { id: string; label: string; style: QrStyle }[] = [
+  {
+    id: "classic",
+    label: "Classic",
+    style: { dark: "#0b1220", light: "#ffffff", logo: true, margin: 2 },
+  },
+  {
+    id: "minimal",
+    label: "Minimal",
+    style: { dark: "#0b1220", light: "#ffffff", logo: false, margin: 2 },
+  },
+  {
+    id: "contrast",
+    label: "High contrast",
+    style: { dark: "#000000", light: "#ffffff", logo: false, margin: 2 },
+  },
+  {
+    id: "print",
+    label: "Print-friendly",
+    style: { dark: "#000000", light: "#ffffff", logo: true, margin: 4 },
+  },
+];
+
 const DEFAULT_QR_DARK = "#0b1220";
+
+const QR_STYLE_STORAGE_KEY = "duenest.qrStyle";
+
+/**
+ * Load a saved default QR *style* (colors/logo/margin only — never a link or any
+ * secure data). Safe to persist in localStorage like other view preferences.
+ */
+export function loadDefaultQrStyle(): QrStyle | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(QR_STYLE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as QrStyle;
+    const style: QrStyle = {};
+    if (typeof parsed.dark === "string") style.dark = parsed.dark;
+    if (typeof parsed.light === "string") style.light = parsed.light;
+    if (typeof parsed.logo === "boolean") style.logo = parsed.logo;
+    if (typeof parsed.margin === "number") style.margin = parsed.margin;
+    return style;
+  } catch {
+    return null;
+  }
+}
+
+/** Persist a default QR style (appearance only). */
+export function saveDefaultQrStyle(style: QrStyle): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(
+      QR_STYLE_STORAGE_KEY,
+      JSON.stringify({
+        dark: style.dark,
+        light: style.light,
+        logo: style.logo,
+        margin: style.margin,
+      }),
+    );
+  } catch {
+    /* non-fatal: a saved style is a convenience, not required */
+  }
+}
 
 /**
  * Generate a PNG data URL for a QR encoding `value`. The heavy `qrcode` lib is
@@ -79,7 +149,7 @@ export async function generateQrDataUrl(
   const light = style?.light || "#ffffff";
   const base = await mod.toDataURL(value, {
     errorCorrectionLevel: style?.logo ? "H" : "M",
-    margin: 1,
+    margin: style?.margin ?? 1,
     width: size,
     color: { dark, light },
   });
@@ -164,7 +234,7 @@ export function QrCode({
 }) {
   // A single piece of state keyed to the value+style it was generated for, so we
   // never need a synchronous reset setState inside the effect.
-  const styleKey = `${style?.dark ?? ""}|${style?.light ?? ""}|${style?.logo ? "logo" : ""}`;
+  const styleKey = `${style?.dark ?? ""}|${style?.light ?? ""}|${style?.logo ? "logo" : ""}|${style?.margin ?? ""}`;
   const [gen, setGen] = useState<{
     forKey: string;
     url: string | null;

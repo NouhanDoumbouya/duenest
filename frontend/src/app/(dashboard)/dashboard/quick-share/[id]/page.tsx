@@ -42,9 +42,12 @@ import {
 import { takeQuickShareHandoff } from "@/lib/quick-share-handoff";
 import {
   CountdownPill,
+  loadDefaultQrStyle,
   PermissionChips,
   QrCode,
   QR_COLOR_PRESETS,
+  QR_PRESETS,
+  saveDefaultQrStyle,
 } from "@/components/quick-share/shared";
 import {
   ShareDistributionActions,
@@ -110,9 +113,20 @@ export default function QuickShareDetailPage() {
   const [pkg, setPkg] = useState<SharePackage | null>(null);
   const [showMessage, setShowMessage] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [qrColor, setQrColor] = useState<string>(QR_COLOR_PRESETS[0].dark);
-  const [qrLight, setQrLight] = useState("#ffffff");
-  const [qrLogo, setQrLogo] = useState(true);
+  // Seed from a saved default QR style (appearance only) when present.
+  const [qrColor, setQrColor] = useState<string>(
+    () => loadDefaultQrStyle()?.dark ?? QR_COLOR_PRESETS[0].dark,
+  );
+  const [qrLight, setQrLight] = useState(
+    () => loadDefaultQrStyle()?.light ?? "#ffffff",
+  );
+  const [qrLogo, setQrLogo] = useState(
+    () => loadDefaultQrStyle()?.logo ?? true,
+  );
+  const [qrMargin, setQrMargin] = useState(
+    () => loadDefaultQrStyle()?.margin ?? 1,
+  );
+  const [styleSaved, setStyleSaved] = useState(false);
   const qrCustomEnabled = useFeature("qr_customization");
 
   const claimUrl =
@@ -273,9 +287,27 @@ export default function QuickShareDetailPage() {
   );
   const permLabel = PERMISSION_LABEL[session.permission];
   const expiryLabel = humanizeExpiry(session.expires_at);
-  const qrStyle = { dark: qrColor, light: qrLight, logo: qrLogo };
+  const qrStyle = {
+    dark: qrColor,
+    light: qrLight,
+    logo: qrLogo,
+    margin: qrMargin,
+  };
   // Honest, non-blocking scan-reliability assessment for the chosen colors.
   const qrReliability = assessQrContrast(qrColor, qrLight);
+
+  function applyQrPreset(style: {
+    dark?: string;
+    light?: string;
+    logo?: boolean;
+    margin?: number;
+  }) {
+    if (style.dark) setQrColor(style.dark);
+    if (style.light) setQrLight(style.light);
+    if (typeof style.logo === "boolean") setQrLogo(style.logo);
+    if (typeof style.margin === "number") setQrMargin(style.margin);
+    setStyleSaved(false);
+  }
   // A recipient has asked for more time when the latest extension request is
   // newer than the latest extension we granted.
   const pendingExtension = (() => {
@@ -388,6 +420,31 @@ export default function QuickShareDetailPage() {
 
               {qrCustomEnabled && (
                 <div className="mt-3 flex w-full max-w-xs flex-col gap-2 rounded-xl border border-border bg-muted/25 p-3">
+                  <div className="flex flex-wrap gap-1.5">
+                    {QR_PRESETS.map((p) => {
+                      const active =
+                        qrColor === p.style.dark &&
+                        qrLight === p.style.light &&
+                        qrLogo === Boolean(p.style.logo) &&
+                        qrMargin === (p.style.margin ?? 1);
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => applyQrPreset(p.style)}
+                          aria-pressed={active}
+                          className={cn(
+                            "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                            active
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "border-border bg-card text-muted-foreground hover:bg-muted",
+                          )}
+                        >
+                          {p.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                   <div className="flex items-center justify-between gap-3">
                     <label
                       htmlFor="qr-fg"
@@ -431,6 +488,39 @@ export default function QuickShareDetailPage() {
                       />
                     </div>
                   </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Quiet zone
+                    </span>
+                    <div
+                      className="inline-flex rounded-lg border border-border p-0.5"
+                      role="group"
+                      aria-label="QR quiet zone"
+                    >
+                      {[
+                        { label: "Normal", value: 1 },
+                        { label: "Wide", value: 4 },
+                      ].map((q) => (
+                        <button
+                          key={q.value}
+                          type="button"
+                          onClick={() => {
+                            setQrMargin(q.value);
+                            setStyleSaved(false);
+                          }}
+                          aria-pressed={qrMargin === q.value}
+                          className={cn(
+                            "rounded-md px-2 py-0.5 text-xs transition-colors",
+                            qrMargin === q.value
+                              ? "bg-primary text-primary-foreground"
+                              : "text-muted-foreground hover:text-foreground",
+                          )}
+                        >
+                          {q.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <p
                     className={cn(
                       "flex items-center gap-1.5 text-xs",
@@ -453,6 +543,16 @@ export default function QuickShareDetailPage() {
                       </span>
                     )}
                   </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      saveDefaultQrStyle(qrStyle);
+                      setStyleSaved(true);
+                    }}
+                    className="text-xs font-medium text-primary underline-offset-2 hover:underline"
+                  >
+                    {styleSaved ? "Saved as your default ✓" : "Use this style next time"}
+                  </button>
                 </div>
               )}
             </div>
