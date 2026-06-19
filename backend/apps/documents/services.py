@@ -2856,7 +2856,121 @@ def _write_file_to_zip(zf, arcname, document_file) -> bool:
     return True
 
 
-def build_bundle_merged_pdf(user, bundle, *, file_ids=None, name=None):
+def _latin1(text: str) -> str:
+    """Make text safe for fpdf2 core (latin-1) fonts; unknown glyphs -> '?'."""
+    return (text or "").encode("latin-1", "replace").decode("latin-1")
+
+
+# Human labels for requirement statuses on the cover sheet.
+_COVER_STATUS_LABEL = {
+    "missing": "Missing",
+    "attached": "Attached",
+    "completed": "Completed",
+    "skipped": "Not needed",
+}
+
+
+def build_pack_cover_sheet_pdf(user, bundle) -> bytes:
+    """
+    Generate a one-page checklist cover sheet for a pack as PDF bytes.
+
+    Shows the pack title/type, generated date, readiness, and the checklist with
+    each item's required/optional flag and status, plus a non-official
+    disclaimer. Contains no file contents and no internal identifiers.
+    """
+    from fpdf import FPDF
+
+    readiness = bundle_readiness(bundle)
+    requirements = list(bundle.requirements.all())
+
+    pdf = FPDF(unit="mm", format="A4")
+    pdf.set_auto_page_break(auto=True, margin=18)
+    pdf.add_page()
+
+    pdf.set_font("Helvetica", "B", 18)
+    pdf.cell(0, 10, _latin1(bundle.title), new_x="LMARGIN", new_y="NEXT")
+
+    pdf.set_font("Helvetica", "", 11)
+    pdf.set_text_color(110, 110, 110)
+    subtitle = _latin1(
+        f"{bundle.get_bundle_type_display()} pack  -  "
+        f"prepared {timezone.localdate().isoformat()}"
+    )
+    pdf.cell(0, 7, subtitle, new_x="LMARGIN", new_y="NEXT")
+
+    if bundle.target_date:
+        pdf.cell(
+            0,
+            6,
+            _latin1(f"Target date: {bundle.target_date.isoformat()}"),
+            new_x="LMARGIN",
+            new_y="NEXT",
+        )
+
+    # Readiness summary.
+    pdf.ln(3)
+    pdf.set_text_color(20, 20, 20)
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.cell(
+        0,
+        8,
+        _latin1(
+            f"Readiness: {readiness.required_satisfied}/"
+            f"{readiness.required_total} required ready"
+        ),
+        new_x="LMARGIN",
+        new_y="NEXT",
+    )
+    if readiness.required_missing:
+        pdf.set_font("Helvetica", "", 11)
+        pdf.set_text_color(150, 90, 0)
+        pdf.cell(
+            0,
+            6,
+            _latin1(f"{readiness.required_missing} required item(s) still missing"),
+            new_x="LMARGIN",
+            new_y="NEXT",
+        )
+
+    # Checklist.
+    pdf.ln(3)
+    pdf.set_text_color(20, 20, 20)
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.cell(0, 8, "Checklist", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", "", 11)
+    if not requirements:
+        pdf.set_text_color(110, 110, 110)
+        pdf.cell(0, 6, "No checklist items yet.", new_x="LMARGIN", new_y="NEXT")
+    for req in requirements:
+        flag = "Required" if req.is_required else "Optional"
+        status = _COVER_STATUS_LABEL.get(req.status, req.status)
+        pdf.set_text_color(20, 20, 20)
+        pdf.multi_cell(
+            0,
+            6,
+            _latin1(f"- {req.title}  ({flag}, {status})"),
+            new_x="LMARGIN",
+            new_y="NEXT",
+        )
+
+    # Non-official disclaimer.
+    pdf.ln(4)
+    pdf.set_font("Helvetica", "I", 9)
+    pdf.set_text_color(120, 120, 120)
+    pdf.multi_cell(
+        0,
+        5,
+        _latin1(
+            "This cover sheet is a preparation helper, not official approval. "
+            "Requirements vary - always verify with the official institution or "
+            "source. Exported documents are copies; your originals are unchanged."
+        ),
+    )
+
+    return bytes(pdf.output())
+
+
+def build_bundle_merged_pdf(user, bundle, *, file_ids=None, name=None, cover=False):
     """
     Build a single merged PDF from the pack's PDF files (in requirement order).
 
@@ -2879,11 +2993,13 @@ def build_bundle_merged_pdf(user, bundle, *, file_ids=None, name=None):
         wanted = {int(fid) for fid in file_ids}
         entries = [e for e in entries if e.file.id in wanted]
 
-    writer = PdfWriter()
     merged = 0
     skipped_non_pdf = 0
     skipped_unreadable = 0
 
+    # First pass: read each mergeable PDF (kept in memory so a cover sheet, when
+    # requested, can be prepended ahead of the documents).
+    doc_readers = []
     for entry in entries:
         is_pdf = entry.file.content_type == "application/pdf" or (
             entry.file.original_filename.lower().endswith(".pdf")
@@ -2893,17 +3009,31 @@ def build_bundle_merged_pdf(user, bundle, *, file_ids=None, name=None):
             continue
         try:
             plaintext = read_plaintext(entry.file)
-            reader = PdfReader(BytesIO(plaintext))
-            for page in reader.pages:
-                writer.add_page(page)
+            doc_readers.append(PdfReader(BytesIO(plaintext)))
             merged += 1
         except Exception:  # noqa: BLE001 — one bad PDF must never break export
             skipped_unreadable += 1
             continue
 
+    writer = PdfWriter()
+    # A cover sheet only makes sense alongside real documents; never export a
+    # cover-only PDF (an empty pack still returns "no_pdfs" to the caller).
+    cover_added = False
+    if cover and merged > 0:
+        try:
+            cover_reader = PdfReader(BytesIO(build_pack_cover_sheet_pdf(user, bundle)))
+            for page in cover_reader.pages:
+                writer.add_page(page)
+            cover_added = True
+        except Exception:  # noqa: BLE001 — a cover failure must not block export
+            cover_added = False
+    for reader in doc_readers:
+        for page in reader.pages:
+            writer.add_page(page)
+
     spooled = tempfile.SpooledTemporaryFile(max_size=8 * 1024 * 1024)
     page_count = len(writer.pages)
-    if page_count > 0:
+    if merged > 0:
         writer.write(spooled)
     spooled.seek(0)
 
@@ -2923,6 +3053,7 @@ def build_bundle_merged_pdf(user, bundle, *, file_ids=None, name=None):
         "skipped_non_pdf": skipped_non_pdf,
         "skipped_count": skipped_unreadable,
         "missing_count": len(result.missing),
+        "cover_sheet": cover_added,
     }
 
     if merged > 0:

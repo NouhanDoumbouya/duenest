@@ -72,6 +72,7 @@ export function BundleFilesSection({
   const [exportName, setExportName] = useState(() =>
     suggestPackExportName(bundleTitle ?? "Pack", targetDate),
   );
+  const [coverSheet, setCoverSheet] = useState(false);
   const [data, setData] = useState<BundleFilesResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -155,9 +156,11 @@ export function BundleFilesSection({
           }.`,
         );
       } else if (mode === "merged") {
-        await exportBundleMergedPdf(bundleId, name);
+        await exportBundleMergedPdf(bundleId, name, coverSheet);
         setExportDone(
-          "Prepared a merged PDF of this pack's PDF files. Image files aren't included.",
+          coverSheet
+            ? "Prepared a merged PDF with a cover sheet. Image files aren't included."
+            : "Prepared a merged PDF of this pack's PDF files. Image files aren't included.",
         );
       } else {
         await exportSelectedBundleFilesZip(bundleId, [...selected], name);
@@ -307,8 +310,21 @@ export function BundleFilesSection({
               <span className="font-medium text-foreground">
                 {cleanPackName(exportName)}.zip
               </span>
+              {" / "}
+              <span className="font-medium text-foreground">
+                {cleanPackName(exportName)}.pdf
+              </span>
               . Original documents are unchanged.
             </p>
+            <label className="flex items-center gap-2 pt-1 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={coverSheet}
+                onChange={(e) => setCoverSheet(e.target.checked)}
+                className="size-4 rounded border-input"
+              />
+              Add a cover sheet (checklist summary) to the merged PDF
+            </label>
           </div>
         )}
         {loading ? (

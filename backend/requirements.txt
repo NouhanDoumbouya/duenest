@@ -35,6 +35,12 @@ pyasn1_modules==0.4.2
 pycparser==3.0
 PyJWT==2.13.0
 pypdf==6.13.2
+# fpdf2 generates the optional application-pack cover sheet (pure-Python, no
+# system deps). The cover page is built in memory and prepended to the merged
+# PDF via pypdf; the merged-PDF export still works without a cover sheet.
+fpdf2==2.8.7
+fonttools==4.63.0
+defusedxml==0.7.1
 pytesseract==0.3.13
 python-decouple==3.8
 # pywebpush powers PWA Web Push delivery. Imported lazily in
