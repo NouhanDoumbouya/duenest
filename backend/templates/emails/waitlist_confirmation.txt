@@ -1,0 +1,8 @@
+{% extends "emails/base.txt" %}
+{% block content %}Thanks for joining the DueNest private-beta waitlist.
+
+DueNest keeps your important documents, renewals, and deadlines in one calm
+place — and quietly watches them so nothing slips.
+
+We'll email you an invite as spots open up. Nothing to do for now.{% endblock %}
+{% block footer %}You're receiving this because you joined the DueNest waitlist.{% endblock %}

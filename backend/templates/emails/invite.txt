@@ -1,0 +1,10 @@
+{% extends "emails/base.txt" %}
+{% block content %}You're invited to the DueNest private beta — the calm place to keep your
+important documents, renewals, and deadlines, and share them securely when
+life asks for proof.
+
+Accept your invite:
+{{ invite_url }}
+
+Or enter this code when you sign up: {{ invite_code }}{% endblock %}
+{% block footer %}If you weren't expecting this invite, you can safely ignore this email.{% endblock %}
