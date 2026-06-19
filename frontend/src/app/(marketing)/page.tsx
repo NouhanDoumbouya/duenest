@@ -124,6 +124,7 @@ export default function LandingPage() {
       <SiteHeader />
       <main className="flex-1">
         <Hero />
+        <TrustBar />
         <Pain />
         <HowItWorks />
         <Connected />
@@ -226,6 +227,44 @@ function Hero() {
             </span>
           </div>
         </div>
+      </div>
+    </section>
+  );
+}
+
+// ---- Trust bar (verifiable facts, high in the page) ------------------------
+
+function TrustBar() {
+  const facts = [
+    { icon: Lock, label: "Encrypted at rest" },
+    { icon: ShieldCheck, label: "You control every share" },
+    { icon: Ban, label: "Export or delete anytime" },
+    { icon: Radar, label: "Rule-based — no AI guesswork" },
+  ];
+  return (
+    <section aria-label="How DueNest protects your documents" className="border-y border-border bg-card/50">
+      <div className="mx-auto flex w-full max-w-6xl flex-col items-center gap-4 px-4 py-5 sm:px-6 lg:flex-row lg:justify-between lg:py-4">
+        <ul className="grid w-full grid-cols-2 gap-x-6 gap-y-3 sm:flex sm:flex-wrap sm:items-center sm:justify-center sm:gap-x-7 lg:justify-start">
+          {facts.map((f) => {
+            const Icon = f.icon;
+            return (
+              <li
+                key={f.label}
+                className="flex items-center gap-2 text-sm font-medium text-muted-foreground"
+              >
+                <Icon className="size-4 shrink-0 text-brand-success" />
+                {f.label}
+              </li>
+            );
+          })}
+        </ul>
+        <Link
+          href="/security"
+          className="inline-flex shrink-0 items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+        >
+          How we keep documents safe
+          <ArrowRight className="size-4" />
+        </Link>
       </div>
     </section>
   );
