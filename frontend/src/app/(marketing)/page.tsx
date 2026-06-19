@@ -134,6 +134,7 @@ export default function LandingPage() {
         <MoneyRadar />
         <Capabilities />
         <Security />
+        <Principles />
         <UseCases />
         <Faq />
         <FinalCta />
@@ -866,6 +867,81 @@ function ControlledAccessCard() {
         </ul>
       </div>
     </div>
+  );
+}
+
+// ---- Principles (how we build) ---------------------------------------------
+
+function Principles() {
+  const principles = [
+    {
+      icon: Lock,
+      title: "Security-first, not an afterthought",
+      body: "Files are encrypted at rest, and every share, code, and expiry is enforced on the server — not just hidden in the interface. Revoked and expired access is blocked at the source.",
+    },
+    {
+      icon: Eye,
+      title: "Privacy is the default",
+      body: "Nothing is shared until you choose to, a share exposes only the items you pick, and we never sell your data. Export or permanently delete everything, anytime.",
+    },
+    {
+      icon: Radar,
+      title: "Honest by design",
+      body: "Reminders are rule-based — real expiry dates and renewal rules, no AI guesswork. When DueNest reads a file, it asks you to confirm before saving. We're clear about what we can and can't guarantee.",
+    },
+    {
+      icon: Sparkles,
+      title: "Built to be relied on",
+      body: "DueNest is built like software you trust with what matters: considered, fast, accessible, and steadily improved with the people using it. Details get the care your documents deserve.",
+    },
+  ];
+  return (
+    <section id="principles" className="scroll-mt-20">
+      <div className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:py-24">
+        <ScrollReveal>
+          <SectionHeader
+            eyebrow="How we build"
+            title="The standards behind your documents."
+            description="DueNest holds sensitive, sometimes irreplaceable paperwork. We build it the way that responsibility demands — and we're transparent about how."
+          />
+        </ScrollReveal>
+        <div className="mt-12 grid gap-5 sm:grid-cols-2">
+          {principles.map((p, i) => {
+            const Icon = p.icon;
+            return (
+              <ScrollReveal
+                key={p.title}
+                delay={(i % 2) * 90}
+                className="flex h-full gap-4 rounded-2xl border border-border bg-card p-6 shadow-card"
+              >
+                <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-brand-navy text-brand-teal">
+                  <Icon className="size-5" />
+                </span>
+                <div>
+                  <h3 className="font-heading text-lg font-semibold">
+                    {p.title}
+                  </h3>
+                  <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+                    {p.body}
+                  </p>
+                </div>
+              </ScrollReveal>
+            );
+          })}
+        </div>
+        <ScrollReveal
+          delay={120}
+          className="mx-auto mt-8 max-w-2xl text-center text-sm leading-relaxed text-muted-foreground"
+        >
+          <p>
+            Built by a small, independent team that treats your documents the way
+            we&apos;d want ours treated — with care, restraint, and a bias for
+            keeping you in control.{" "}
+            <span className="font-medium text-foreground">— The DueNest team</span>
+          </p>
+        </ScrollReveal>
+      </div>
+    </section>
   );
 }
 
