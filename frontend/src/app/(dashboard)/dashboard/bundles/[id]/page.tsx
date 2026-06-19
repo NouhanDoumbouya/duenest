@@ -19,6 +19,7 @@ import {
 
 import { BundleActivityTab } from "@/components/bundles/bundle-activity-tab";
 import { BundleFilesSection } from "@/components/bundles/bundle-files-section";
+import { BundleReviewTab } from "@/components/bundles/bundle-review-tab";
 import { ReadinessRing } from "@/components/bundles/readiness-ring";
 import { useFeature } from "@/components/features/feature-flags-provider";
 import { DocumentAppointments } from "@/components/documents/document-appointments";
@@ -99,6 +100,7 @@ const BUNDLE_EXPORT_LABELS: Record<BundleExportType, string> = {
 };
 
 type BundleTab =
+  | "review"
   | "requirements"
   | "files"
   | "timeline"
@@ -114,8 +116,12 @@ const BUNDLE_TABS: { value: BundleTab; label: string }[] = [
   { value: "exports", label: "Exports" },
 ];
 
-// The Activity tab is appended only when the pack timeline feature is enabled,
-// so it never appears as a dead tab.
+// The Review and Activity tabs are appended only when their pack features are
+// enabled, so they never appear as dead tabs.
+const REVIEW_TAB: { value: BundleTab; label: string } = {
+  value: "review",
+  label: "Review",
+};
 const ACTIVITY_TAB: { value: BundleTab; label: string } = {
   value: "activity",
   label: "Activity",
@@ -378,12 +384,16 @@ export default function BundleDetailPage() {
   const timelineEnabled = useFeature("application_pack_timeline");
   const scanToBundleEnabled = useFeature("scan_to_bundle");
   const safeSendEnabled = useFeature("application_pack_safesend");
-  const visibleTabs = timelineEnabled
-    ? [...BUNDLE_TABS, ACTIVITY_TAB]
-    : BUNDLE_TABS;
-  // A deep-link to ?tab=activity must not strand the user on a hidden tab.
-  const resolvedTab =
-    activeTab === "activity" && !timelineEnabled ? "requirements" : activeTab;
+  const packPrepEnabled = useFeature("application_pack_preparation");
+  const visibleTabs = [
+    ...(packPrepEnabled ? [REVIEW_TAB] : []),
+    ...BUNDLE_TABS,
+    ...(timelineEnabled ? [ACTIVITY_TAB] : []),
+  ];
+  // A deep-link to a hidden tab (?tab=review/activity) must not strand the user.
+  const resolvedTab = visibleTabs.some((t) => t.value === activeTab)
+    ? activeTab
+    : "requirements";
 
   useEffect(() => {
     if (!validId) return;
@@ -616,6 +626,15 @@ export default function BundleDetailPage() {
             onChange={setActiveTab}
             className="max-w-full overflow-x-auto"
           />
+
+          {resolvedTab === "review" && (
+            <BundleReviewTab
+              bundle={bundle}
+              bundleId={bundleId}
+              safeSendEnabled={safeSendEnabled}
+              onExport={() => setActiveTab("files")}
+            />
+          )}
 
           {resolvedTab === "requirements" && (
             <Card className="content-fade-in">
