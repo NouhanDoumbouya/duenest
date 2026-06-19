@@ -36,6 +36,7 @@ import { formatFileSize, getFileInbox } from "@/lib/document-files";
 import { getBundle } from "@/lib/renewal-workspace";
 import { createQuickShare } from "@/lib/quick-share";
 import { setQuickShareHandoff } from "@/lib/quick-share-handoff";
+import { takeSharePrefill } from "@/lib/quick-share-prefill";
 import {
   FilePicker,
   type SelectedBundle,
@@ -121,6 +122,13 @@ export default function NewQuickSharePage() {
       if (!active) return;
       setRecentRecipients(loadRecentRecipients());
       setSavedSettings(loadLastShareSettings());
+      // Pre-seed the selection when the user arrived here from a "Share" action
+      // elsewhere (a document file, the File Inbox). One-time handoff; consumed
+      // once. Deferred to a microtask with the others to avoid a sync setState.
+      const prefill = takeSharePrefill();
+      if (prefill?.files?.length) {
+        setSelected(new Map(prefill.files.map((file) => [file.id, file])));
+      }
     });
     return () => {
       active = false;

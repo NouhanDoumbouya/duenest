@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 
 import { useFeature } from "@/components/features/feature-flags-provider";
 import { DocumentFilesList } from "@/components/documents/document-files-list";
 import { FileToolsButton } from "@/components/documents/file-tools-button";
 import { PageEditorDialog } from "@/components/documents/page-editor-dialog";
-import { DocumentFileShareDialog } from "@/components/documents/document-file-share-dialog";
 import { DocumentFileUploader } from "@/components/documents/document-file-uploader";
 import { DocumentFileViewer } from "@/components/documents/document-file-viewer";
 import { DocumentTrashedFiles } from "@/components/documents/document-trashed-files";
@@ -15,6 +15,7 @@ import { SectionCard } from "@/components/ui/section-card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Toast, type ToastState } from "@/components/ui/toast";
 import { ApiError } from "@/lib/api";
+import { fileToSelected, setSharePrefill } from "@/lib/quick-share-prefill";
 import {
   createDocumentFileVersion,
   deleteDocumentFile,
@@ -36,7 +37,14 @@ export function FilesTab({
   const [fileError, setFileError] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<DocumentFile | null>(null);
   const [previewingFile, setPreviewingFile] = useState<DocumentFile | null>(null);
-  const [sharingFile, setSharingFile] = useState<DocumentFile | null>(null);
+  const router = useRouter();
+
+  // Sharing is unified on the Quick Share engine: a file's "Share" action seeds
+  // the share wizard with that file and opens it, instead of a separate dialog.
+  function handleShare(file: DocumentFile) {
+    setSharePrefill({ files: [fileToSelected(file)] });
+    router.push("/dashboard/quick-share/new");
+  }
   const [deleting, setDeleting] = useState(false);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [replacingId, setReplacingId] = useState<number | null>(null);
@@ -186,7 +194,7 @@ export function FilesTab({
             replacingId={replacingId}
             onPreview={setPreviewingFile}
             onDownload={handleDownload}
-            onShare={setSharingFile}
+            onShare={handleShare}
             onRequestDelete={setPendingDelete}
             onReplace={versioningEnabled ? handleReplace : undefined}
             onEditPages={pageEditEnabled ? setEditingPagesFile : undefined}
@@ -237,15 +245,8 @@ export function FilesTab({
           onDownload={handleDownload}
           onShare={(file) => {
             setPreviewingFile(null);
-            setSharingFile(file);
+            handleShare(file);
           }}
-        />
-      )}
-
-      {sharingFile && (
-        <DocumentFileShareDialog
-          file={sharingFile}
-          onClose={() => setSharingFile(null)}
         />
       )}
 
