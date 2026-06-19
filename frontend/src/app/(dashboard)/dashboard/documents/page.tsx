@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Archive,
@@ -298,6 +298,20 @@ function DocumentsPageInner() {
   const reload = () => setReloadKey((k) => k + 1);
   // Bundles for the "Add to pack" picker — only loaded when bulk is available.
   const [bundles, setBundles] = useState<Bundle[]>([]);
+  // Secondary bulk actions live under a "More" popover to keep the bar calm.
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!moreOpen) return;
+    function onDown(e: MouseEvent) {
+      if (moreRef.current && !moreRef.current.contains(e.target as Node)) {
+        setMoreOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [moreOpen]);
 
   function toggleSelected(doc: DocumentRecord) {
     setSelected((prev) => {
@@ -1399,6 +1413,7 @@ function DocumentsPageInner() {
               Select all
             </button>
             <div className="ml-auto flex flex-wrap items-center gap-2">
+              {/* Primary actions stay inline; everything else lives under More. */}
               <select
                 aria-label="Move selected to category"
                 value=""
@@ -1418,67 +1433,98 @@ function DocumentsPageInner() {
                   </option>
                 ))}
               </select>
-              {tags.length > 0 && (
-                <select
-                  aria-label="Add a tag to selected"
-                  value=""
+
+              <div className="relative" ref={moreRef}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
                   disabled={bulkBusy}
-                  onChange={(e) => {
-                    if (e.target.value) void runBulkAddTag(Number(e.target.value));
-                  }}
-                  className="h-9 rounded-lg border border-input bg-card px-2 text-xs shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                  aria-expanded={moreOpen}
+                  aria-haspopup="menu"
+                  onClick={() => setMoreOpen((v) => !v)}
                 >
-                  <option value="">Add tag…</option>
-                  {tags.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-              )}
-              {bundles.length > 0 && (
-                <select
-                  aria-label="Add selected to a pack"
-                  value=""
-                  disabled={bulkBusy}
-                  onChange={(e) => {
-                    if (e.target.value)
-                      void runBulkAddToPack(Number(e.target.value));
-                  }}
-                  className="h-9 max-w-[160px] rounded-lg border border-input bg-card px-2 text-xs shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                >
-                  <option value="">Add to pack…</option>
-                  {bundles.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.title}
-                    </option>
-                  ))}
-                </select>
-              )}
-              <select
-                aria-label="Set a reminder for selected"
-                value=""
-                disabled={bulkBusy}
-                onChange={(e) => {
-                  if (e.target.value) void runBulkSetReminder(Number(e.target.value));
-                }}
-                className="h-9 rounded-lg border border-input bg-card px-2 text-xs shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-              >
-                <option value="">Set reminder…</option>
-                <option value="30">30 days before expiry</option>
-                <option value="60">60 days before expiry</option>
-                <option value="90">90 days before expiry</option>
-              </select>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={bulkBusy}
-                onClick={() => void runBulkExport()}
-              >
-                <Download className="size-4" />
-                Export
-              </Button>
+                  {bulkBusy ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <ChevronDown className="size-4" />
+                  )}
+                  More
+                </Button>
+                {moreOpen && (
+                  <div
+                    role="menu"
+                    className="vault-bar-in absolute right-0 bottom-full z-10 mb-2 flex w-56 flex-col gap-2 rounded-xl border border-border bg-card p-2 shadow-lg shadow-foreground/10"
+                  >
+                    {tags.length > 0 && (
+                      <select
+                        aria-label="Add a tag to selected"
+                        value=""
+                        disabled={bulkBusy}
+                        onChange={(e) => {
+                          if (e.target.value)
+                            void runBulkAddTag(Number(e.target.value));
+                        }}
+                        className="h-9 w-full rounded-lg border border-input bg-card px-2 text-xs shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                      >
+                        <option value="">Add tag…</option>
+                        {tags.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    {bundles.length > 0 && (
+                      <select
+                        aria-label="Add selected to a pack"
+                        value=""
+                        disabled={bulkBusy}
+                        onChange={(e) => {
+                          if (e.target.value)
+                            void runBulkAddToPack(Number(e.target.value));
+                        }}
+                        className="h-9 w-full rounded-lg border border-input bg-card px-2 text-xs shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                      >
+                        <option value="">Add to pack…</option>
+                        {bundles.map((b) => (
+                          <option key={b.id} value={b.id}>
+                            {b.title}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    <select
+                      aria-label="Set a reminder for selected"
+                      value=""
+                      disabled={bulkBusy}
+                      onChange={(e) => {
+                        if (e.target.value)
+                          void runBulkSetReminder(Number(e.target.value));
+                      }}
+                      className="h-9 w-full rounded-lg border border-input bg-card px-2 text-xs shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                    >
+                      <option value="">Set reminder…</option>
+                      <option value="30">30 days before expiry</option>
+                      <option value="60">60 days before expiry</option>
+                      <option value="90">90 days before expiry</option>
+                    </select>
+                    <button
+                      type="button"
+                      disabled={bulkBusy}
+                      onClick={() => {
+                        setMoreOpen(false);
+                        void runBulkExport();
+                      }}
+                      className="flex h-9 items-center gap-2 rounded-lg px-2 text-left text-xs hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+                    >
+                      <Download className="size-4" />
+                      Export selected
+                    </button>
+                  </div>
+                )}
+              </div>
+
               <Button
                 type="button"
                 variant="outline"
@@ -1497,11 +1543,7 @@ function DocumentsPageInner() {
                 onClick={() => setBulkConfirm("trash")}
                 className="text-destructive hover:text-destructive"
               >
-                {bulkBusy ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <Trash2 className="size-4" />
-                )}
+                <Trash2 className="size-4" />
                 Trash
               </Button>
             </div>
