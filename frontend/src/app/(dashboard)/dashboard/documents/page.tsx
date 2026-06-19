@@ -15,6 +15,7 @@ import {
   Loader2,
   Plus,
   Search,
+  Share2,
   Table2,
   Trash2,
   X,
@@ -22,6 +23,7 @@ import {
 
 import { DocumentCard } from "@/components/documents/document-card";
 import { DocumentsTable } from "@/components/documents/documents-table";
+import { CategoryCreator } from "@/components/vault/category-creator";
 import { FoldersView } from "@/components/documents/folders-view";
 import { useFeature } from "@/components/features/feature-flags-provider";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -236,6 +238,7 @@ function DocumentsPageInner() {
   const [tags, setTags] = useState<DocumentTag[]>([]);
   const [category, setCategory] = useState<CategorySelection>(initialCategory);
   const [categories, setCategories] = useState<DocumentCategory[]>([]);
+  const [manageCategories, setManageCategories] = useState(false);
   const [ordering, setOrdering] = useState<DocumentOrdering>(initialOrdering);
 
   // Free-text inputs are debounced so we don't fetch (or rewrite the URL) on
@@ -961,14 +964,24 @@ function DocumentsPageInner() {
             ))}
           </div>
 
-          {(categories.length > 0 || categoryActive) && (
-            <div className="space-y-2">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3">
               <p
                 className="text-xs font-medium tracking-wide text-muted-foreground uppercase"
                 id="category-filter-label"
               >
                 Browse by category
               </p>
+              <button
+                type="button"
+                onClick={() => setManageCategories((v) => !v)}
+                aria-expanded={manageCategories}
+                className="text-xs font-medium text-primary underline-offset-2 hover:underline"
+              >
+                {manageCategories ? "Done" : "Manage categories"}
+              </button>
+            </div>
+            {(categories.length > 0 || categoryActive) && (
               <div
                 className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0"
                 role="group"
@@ -1008,8 +1021,23 @@ function DocumentsPageInner() {
                   Uncategorized
                 </Button>
               </div>
-            </div>
-          )}
+            )}
+            {manageCategories && (
+              <CategoryCreator
+                categories={categories}
+                onCreated={(c) => setCategories((prev) => [...prev, c])}
+                onUpdated={(c) =>
+                  setCategories((prev) =>
+                    prev.map((x) => (x.id === c.id ? c : x)),
+                  )
+                }
+                onDeleted={(id) => {
+                  setCategories((prev) => prev.filter((x) => x.id !== id));
+                  if (category === id) setCategory("");
+                }}
+              />
+            )}
+          </div>
 
           <div>
             <button
@@ -1550,6 +1578,18 @@ function DocumentsPageInner() {
                       <Download className="size-4" />
                       Export selected
                     </button>
+                    <Link
+                      href={`/dashboard/quick-share/new?documents=${[...selected].join(",")}`}
+                      onClick={() => setMoreOpen(false)}
+                      className="flex h-9 items-center gap-2 rounded-lg px-2 text-left text-xs hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+                    >
+                      <Share2 className="size-4" />
+                      Share safely
+                    </Link>
+                    <p className="px-2 pt-1 text-[0.7rem] text-muted-foreground">
+                      Opens SafeSend with these documents selected. No link is
+                      created until you confirm.
+                    </p>
                   </div>
                 )}
               </div>

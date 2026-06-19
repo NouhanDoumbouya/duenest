@@ -32,7 +32,11 @@ import { Label } from "@/components/ui/label";
 import { PageContainer } from "@/components/ui/page-container";
 import { InlineAlert } from "@/components/ui/product-ui";
 import { ApiError } from "@/lib/api";
-import { formatFileSize, getFileInbox } from "@/lib/document-files";
+import {
+  formatFileSize,
+  getDocumentFiles,
+  getFileInbox,
+} from "@/lib/document-files";
 import { getBundle } from "@/lib/renewal-workspace";
 import { createQuickShare } from "@/lib/quick-share";
 import { setQuickShareHandoff } from "@/lib/quick-share-handoff";
@@ -191,6 +195,49 @@ export default function NewQuickSharePage() {
       .catch(() => {
         /* non-blocking: start empty if the handoff pack can't be loaded */
       });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Preselect Vault documents handed off from the bulk "Share safely" action
+  // (/dashboard/quick-share/new?documents=1,2,3). Each document's files are
+  // added to the draft; the user still reviews recipients/access/expiry and
+  // confirms — no link is created here.
+  useEffect(() => {
+    const raw = new URLSearchParams(window.location.search).get("documents");
+    if (!raw) return;
+    const ids = raw
+      .split(",")
+      .map((v) => Number(v))
+      .filter((n) => Number.isFinite(n));
+    if (ids.length === 0) return;
+    let active = true;
+    Promise.all(
+      ids.map((id) =>
+        getDocumentFiles(id)
+          .then((page) => page.results)
+          .catch(() => []),
+      ),
+    ).then((lists) => {
+      if (!active) return;
+      const files = lists.flat().filter((f) => !f.is_trashed);
+      if (files.length === 0) return;
+      setSelected((prev) => {
+        const next = new Map(prev);
+        for (const f of files) {
+          if (!next.has(f.id)) {
+            next.set(f.id, {
+              id: f.id,
+              name: f.original_filename,
+              size: f.file_size,
+              documentTitle: f.document_title || f.original_filename,
+            });
+          }
+        }
+        return next;
+      });
+    });
     return () => {
       active = false;
     };
