@@ -254,7 +254,7 @@ function DocumentsPageInner() {
   const tableViewEnabled = useFeature("vault_table_view");
   const [view, setView] = useState<"list" | "grid" | "table" | "folders">(() => {
     if (typeof window === "undefined") return "folders";
-    const saved = window.localStorage.getItem("duenest.documentsView");
+    const saved = window.localStorage.getItem("duenest.documentsView.v2");
     if (
       saved === "grid" ||
       saved === "table" ||
@@ -268,7 +268,7 @@ function DocumentsPageInner() {
   function changeView(next: "list" | "grid" | "table" | "folders") {
     setView(next);
     if (typeof window !== "undefined") {
-      window.localStorage.setItem("duenest.documentsView", next);
+      window.localStorage.setItem("duenest.documentsView.v2", next);
     }
   }
   // If the table view was persisted but the feature is now off, fall back so the
