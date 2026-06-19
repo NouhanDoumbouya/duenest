@@ -381,11 +381,11 @@ export function DocumentFileShareDialog({
   if (file.document === null) {
     return (
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm"
+        className="fixed inset-0 z-50 flex justify-center overflow-y-auto bg-background/80 p-4 backdrop-blur-sm"
         role="dialog"
         aria-modal="true"
       >
-        <div className="max-w-md rounded-xl border border-border bg-card p-5 shadow-floating">
+        <div className="my-auto max-w-md rounded-xl border border-border bg-card p-5 shadow-floating">
           <h2 className="font-heading text-lg font-semibold">
             Attach file before sharing
           </h2>
