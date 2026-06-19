@@ -2567,8 +2567,9 @@ class DocumentBundleExportMergedPdfView(APIView):
             DocumentBundle, pk=bundle_id, owner=request.user
         )
         name = request.data.get("name") if isinstance(request.data, dict) else None
+        cover = bool(request.data.get("cover")) if isinstance(request.data, dict) else False
         spooled, filename, summary = build_bundle_merged_pdf(
-            request.user, bundle, name=name
+            request.user, bundle, name=name, cover=cover
         )
         if summary["page_count"] == 0:
             spooled.close()

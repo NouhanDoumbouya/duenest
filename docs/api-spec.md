@@ -3294,7 +3294,7 @@ A share link or room with `access_code_required` is unlocked as follows:
 GET  /api/v1/document-bundles/:id/files/                  # safe file metadata + missing items
 POST /api/v1/document-bundles/:id/export-files/           # ZIP of all files; body: {name?}
 POST /api/v1/document-bundles/:id/export-selected-files/  # body: {file_ids:[…], name?}
-POST /api/v1/document-bundles/:id/export-merged-pdf/      # single merged PDF; body: {name?}
+POST /api/v1/document-bundles/:id/export-merged-pdf/      # single merged PDF; body: {name?, cover?}
 POST /api/v1/documents/files/export-selected/             # body: {file_ids:[…]} (normal bulk)
 ```
 
@@ -3315,6 +3315,11 @@ no internal paths, tokens, or access-code hashes appear in the manifest.
   `X-Export-Files-Count` / `X-Export-Skipped-Count` headers report the result.
   Returns `400` (`state: "no_pdfs"`) when the pack has no PDFs to merge. Original
   files are never modified; the merge happens on decrypted bytes in memory.
+  With `cover: true`, a one-page checklist **cover sheet** (pack title/type,
+  readiness, each item's required/optional flag + status, non-official
+  disclaimer; generated via `fpdf2`) is prepended ahead of the documents. A
+  cover sheet is only added when there is at least one document page — a
+  cover-only export is never produced.
 
 ## 28.3 Share link access limits, view-only & watermarking
 

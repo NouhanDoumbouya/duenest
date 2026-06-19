@@ -254,6 +254,56 @@ class PackMergedPdfTest(ApplicationPackBaseTest):
         merged = PdfReader(BytesIO(b"".join(response.streaming_content)))
         self.assertEqual(len(merged.pages), 2)
 
+    def test_cover_sheet_prepends_a_page(self):
+        enable("application_pack_preparation")
+        bundle = self._bundle()
+        self._attach_file(
+            bundle,
+            filename="doc.pdf",
+            content=_one_page_pdf_bytes(),
+            content_type="application/pdf",
+        )
+        from io import BytesIO
+
+        from pypdf import PdfReader
+
+        # Without a cover: one document page.
+        plain = self.client.post(
+            f"/api/v1/document-bundles/{bundle['id']}/export-merged-pdf/", {}
+        )
+        self.assertEqual(
+            len(PdfReader(BytesIO(b"".join(plain.streaming_content))).pages), 1
+        )
+        # With a cover: an extra page is prepended.
+        with_cover = self.client.post(
+            f"/api/v1/document-bundles/{bundle['id']}/export-merged-pdf/",
+            {"cover": True},
+            format="json",
+        )
+        self.assertEqual(with_cover.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            len(PdfReader(BytesIO(b"".join(with_cover.streaming_content))).pages),
+            2,
+        )
+
+    def test_cover_only_export_without_documents_is_rejected(self):
+        # A cover sheet must never be exported on its own.
+        enable("application_pack_preparation")
+        bundle = self._bundle()
+        self._attach_file(
+            bundle,
+            filename="scan.png",
+            content=b"\x89PNG\r\n fake png",
+            content_type="image/png",
+        )
+        response = self.client.post(
+            f"/api/v1/document-bundles/{bundle['id']}/export-merged-pdf/",
+            {"cover": True},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["state"], "no_pdfs")
+
     def test_non_pdf_files_are_skipped_not_merged(self):
         enable("application_pack_preparation")
         bundle = self._bundle()

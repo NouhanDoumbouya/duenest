@@ -454,10 +454,14 @@ export function exportSelectedBundleFilesZip(
 export function exportBundleMergedPdf(
   bundleId: number,
   name?: string,
+  cover?: boolean,
 ): Promise<void> {
+  const body: Record<string, unknown> = {};
+  if (name) body.name = name;
+  if (cover) body.cover = true;
   return postZipAndSave(
     `/document-bundles/${bundleId}/export-merged-pdf/`,
-    name ? { name } : undefined,
+    Object.keys(body).length > 0 ? body : undefined,
     `duenest-bundle-${bundleId}.pdf`,
   );
 }
