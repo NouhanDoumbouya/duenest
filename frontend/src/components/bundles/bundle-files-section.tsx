@@ -41,6 +41,7 @@ import {
 import { formatDate } from "@/lib/documents";
 import {
   exportBundleFilesZip,
+  exportBundleMergedPdf,
   exportSelectedBundleFilesZip,
   getBundleFiles,
 } from "@/lib/renewal-workspace";
@@ -78,7 +79,9 @@ export function BundleFilesSection({
   const [actionError, setActionError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [selected, setSelected] = useState<Set<number>>(new Set());
-  const [exporting, setExporting] = useState<"all" | "selected" | null>(null);
+  const [exporting, setExporting] = useState<
+    "all" | "selected" | "merged" | null
+  >(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [exportDone, setExportDone] = useState<string | null>(null);
   const [previewFile, setPreviewFile] = useState<BundleFile | null>(null);
@@ -137,7 +140,7 @@ export function BundleFilesSection({
     });
   }
 
-  async function runExport(mode: "all" | "selected") {
+  async function runExport(mode: "all" | "selected" | "merged") {
     if (!data) return;
     setExportError(null);
     setExportDone(null);
@@ -150,6 +153,11 @@ export function BundleFilesSection({
           `Prepared a ZIP of all ${data.summary.total_files} file${
             data.summary.total_files === 1 ? "" : "s"
           }.`,
+        );
+      } else if (mode === "merged") {
+        await exportBundleMergedPdf(bundleId, name);
+        setExportDone(
+          "Prepared a merged PDF of this pack's PDF files. Image files aren't included.",
         );
       } else {
         await exportSelectedBundleFilesZip(bundleId, [...selected], name);
@@ -249,18 +257,35 @@ export function BundleFilesSection({
               {data.summary.total_files === 1 ? "" : "s"} ·{" "}
               {formatFileSize(data.summary.total_size)}
             </Badge>
-            <Button
-              size="sm"
-              onClick={() => runExport("all")}
-              disabled={exporting !== null}
-            >
-              {exporting === "all" ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <FileArchive className="size-4" />
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Button
+                size="sm"
+                onClick={() => runExport("all")}
+                disabled={exporting !== null}
+              >
+                {exporting === "all" ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <FileArchive className="size-4" />
+                )}
+                {exporting === "all" ? "Preparing ZIP…" : "Download ZIP"}
+              </Button>
+              {namingEnabled && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => runExport("merged")}
+                  disabled={exporting !== null}
+                >
+                  {exporting === "merged" ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <FileText className="size-4" />
+                  )}
+                  {exporting === "merged" ? "Merging…" : "Merged PDF"}
+                </Button>
               )}
-              {exporting === "all" ? "Preparing ZIP…" : "Download ZIP"}
-            </Button>
+            </div>
           </div>
         )}
       </CardHeader>

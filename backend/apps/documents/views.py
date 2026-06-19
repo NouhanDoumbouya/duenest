@@ -132,6 +132,7 @@ from .services import (
     ExportGenerationError,
     attention_sort_key,
     build_health_overview,
+    build_bundle_merged_pdf,
     build_bundle_zip,
     build_documents_zip,
     bundle_readiness,
@@ -2549,6 +2550,54 @@ class DocumentBundleExportSelectedFilesView(APIView):
             },
         )
         return _zip_response(spooled, filename, summary)
+
+
+class DocumentBundleExportMergedPdfView(APIView):
+    """
+    POST → stream a single merged PDF of the pack's PDF files (in requirement
+    order). Non-PDF files are reported as skipped, never silently dropped.
+    Gated by the pack-preparation feature.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, bundle_id):
+        require_feature_enabled("application_pack_preparation", request.user)
+        bundle = get_object_or_404(
+            DocumentBundle, pk=bundle_id, owner=request.user
+        )
+        name = request.data.get("name") if isinstance(request.data, dict) else None
+        spooled, filename, summary = build_bundle_merged_pdf(
+            request.user, bundle, name=name
+        )
+        if summary["page_count"] == 0:
+            spooled.close()
+            return Response(
+                {
+                    "detail": (
+                        "This pack has no PDF files to merge yet. Image files "
+                        "can be exported in the ZIP."
+                    ),
+                    "state": "no_pdfs",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        _track_product_event(
+            request,
+            "export_requested",
+            object_type="document_bundle",
+            object_id=bundle.id,
+            metadata={"scope": "bundle_merged_pdf", "files": summary["files_count"]},
+        )
+        response = FileResponse(
+            spooled,
+            as_attachment=True,
+            filename=filename,
+            content_type="application/pdf",
+        )
+        response["X-Export-Files-Count"] = str(summary.get("files_count", 0))
+        response["X-Export-Skipped-Count"] = str(summary.get("skipped_count", 0))
+        return response
 
 
 class DocumentFilesExportSelectedView(APIView):

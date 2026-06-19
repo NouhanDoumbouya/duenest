@@ -445,6 +445,23 @@ export function exportSelectedBundleFilesZip(
   );
 }
 
+/**
+ * Merge the pack's PDF files into a single PDF (server-side, in requirement
+ * order). Non-PDF files are reported as skipped by the server. Gated by
+ * application_pack_preparation (503 when unavailable). `postZipAndSave` saves
+ * whatever blob the server streams, using the Content-Disposition filename.
+ */
+export function exportBundleMergedPdf(
+  bundleId: number,
+  name?: string,
+): Promise<void> {
+  return postZipAndSave(
+    `/document-bundles/${bundleId}/export-merged-pdf/`,
+    name ? { name } : undefined,
+    `duenest-bundle-${bundleId}.pdf`,
+  );
+}
+
 export function exportSelectedDocumentFilesZip(
   fileIds: number[],
 ): Promise<void> {

@@ -170,6 +170,107 @@ class PackExportNamingTest(ApplicationPackBaseTest):
         self.assertIn("my_pack", response.headers["Content-Disposition"].lower())
 
 
+def _one_page_pdf_bytes() -> bytes:
+    from io import BytesIO
+
+    from pypdf import PdfWriter
+
+    writer = PdfWriter()
+    writer.add_blank_page(width=200, height=200)
+    buffer = BytesIO()
+    writer.write(buffer)
+    return buffer.getvalue()
+
+
+class PackMergedPdfTest(ApplicationPackBaseTest):
+    def _bundle(self, title="Merge pack"):
+        return self.client.post(
+            "/api/v1/document-bundles/", {"title": title}, format="json"
+        ).data
+
+    def _attach_file(self, bundle, *, filename, content, content_type):
+        req = self.client.post(
+            f"/api/v1/document-bundles/{bundle['id']}/requirements/",
+            {"title": filename, "is_required": True},
+            format="json",
+        ).data
+        f = DocumentFile.objects.create(
+            uploaded_by=self.owner,
+            file=SimpleUploadedFile(filename, content, content_type=content_type),
+            original_filename=filename,
+            content_type=content_type,
+        )
+        self.client.post(
+            f"/api/v1/document-bundles/{bundle['id']}/requirements/{req['id']}/link-file/",
+            {"file": f.id},
+            format="json",
+        )
+
+    def test_blocked_when_feature_disabled(self):
+        bundle = self._bundle()
+        self._attach_file(
+            bundle,
+            filename="a.pdf",
+            content=_one_page_pdf_bytes(),
+            content_type="application/pdf",
+        )
+        response = self.client.post(
+            f"/api/v1/document-bundles/{bundle['id']}/export-merged-pdf/", {}
+        )
+        self.assertEqual(
+            response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE
+        )
+
+    def test_merges_pdf_pages_in_order(self):
+        enable("application_pack_preparation")
+        bundle = self._bundle()
+        self._attach_file(
+            bundle,
+            filename="first.pdf",
+            content=_one_page_pdf_bytes(),
+            content_type="application/pdf",
+        )
+        self._attach_file(
+            bundle,
+            filename="second.pdf",
+            content=_one_page_pdf_bytes(),
+            content_type="application/pdf",
+        )
+        response = self.client.post(
+            f"/api/v1/document-bundles/{bundle['id']}/export-merged-pdf/",
+            {"name": "My Merged Pack 2026"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertIn(
+            "My_Merged_Pack_2026.pdf", response["Content-Disposition"]
+        )
+        # The two single-page PDFs should merge into a two-page document.
+        from io import BytesIO
+
+        from pypdf import PdfReader
+
+        merged = PdfReader(BytesIO(b"".join(response.streaming_content)))
+        self.assertEqual(len(merged.pages), 2)
+
+    def test_non_pdf_files_are_skipped_not_merged(self):
+        enable("application_pack_preparation")
+        bundle = self._bundle()
+        self._attach_file(
+            bundle,
+            filename="scan.png",
+            content=b"\x89PNG\r\n fake png",
+            content_type="image/png",
+        )
+        response = self.client.post(
+            f"/api/v1/document-bundles/{bundle['id']}/export-merged-pdf/", {}
+        )
+        # No PDFs to merge -> honest 400, not an empty/broken file.
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["state"], "no_pdfs")
+
+
 class PackTemplatesEndpointTest(ApplicationPackBaseTest):
     URL = "/api/v1/document-bundles/pack-templates/"
 

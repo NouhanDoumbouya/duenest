@@ -16,6 +16,7 @@ from .views import (
     DocumentAppointmentViewSet,
     DocumentBundleDetailView,
     DocumentBundleExportFilesView,
+    DocumentBundleExportMergedPdfView,
     DocumentBundleExportSelectedFilesView,
     DocumentBundleFilesView,
     DocumentBundleListCreateView,
@@ -427,6 +428,11 @@ urlpatterns = [
         "document-bundles/<int:bundle_id>/export-selected-files/",
         DocumentBundleExportSelectedFilesView.as_view(),
         name="document-bundle-export-selected-files",
+    ),
+    path(
+        "document-bundles/<int:bundle_id>/export-merged-pdf/",
+        DocumentBundleExportMergedPdfView.as_view(),
+        name="document-bundle-export-merged-pdf",
     ),
     path(
         "document-bundles/<int:bundle_id>/exports/",

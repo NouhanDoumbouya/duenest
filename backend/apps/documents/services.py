@@ -2856,6 +2856,87 @@ def _write_file_to_zip(zf, arcname, document_file) -> bool:
     return True
 
 
+def build_bundle_merged_pdf(user, bundle, *, file_ids=None, name=None):
+    """
+    Build a single merged PDF from the pack's PDF files (in requirement order).
+
+    Returns ``(spooled_file, filename, summary)``. Only PDF files are merged;
+    non-PDF files (e.g. images) and unreadable/missing files are skipped and
+    counted in the summary so the caller can tell the user honestly. Decryption
+    is permission-first: callers must have verified bundle access. No internal
+    storage path is ever exposed.
+    """
+    import tempfile
+    from io import BytesIO
+
+    from pypdf import PdfReader, PdfWriter
+
+    from .file_encryption import read_plaintext
+
+    result = collect_bundle_files(bundle)
+    entries = result.files
+    if file_ids is not None:
+        wanted = {int(fid) for fid in file_ids}
+        entries = [e for e in entries if e.file.id in wanted]
+
+    writer = PdfWriter()
+    merged = 0
+    skipped_non_pdf = 0
+    skipped_unreadable = 0
+
+    for entry in entries:
+        is_pdf = entry.file.content_type == "application/pdf" or (
+            entry.file.original_filename.lower().endswith(".pdf")
+        )
+        if not is_pdf:
+            skipped_non_pdf += 1
+            continue
+        try:
+            plaintext = read_plaintext(entry.file)
+            reader = PdfReader(BytesIO(plaintext))
+            for page in reader.pages:
+                writer.add_page(page)
+            merged += 1
+        except Exception:  # noqa: BLE001 — one bad PDF must never break export
+            skipped_unreadable += 1
+            continue
+
+    spooled = tempfile.SpooledTemporaryFile(max_size=8 * 1024 * 1024)
+    page_count = len(writer.pages)
+    if page_count > 0:
+        writer.write(spooled)
+    spooled.seek(0)
+
+    if name:
+        pdf_filename = (
+            f"{sanitize_export_basename(name, _slugify_filename(bundle.title, 'bundle'))}.pdf"
+        )
+    else:
+        pdf_filename = (
+            f"{_slugify_filename(bundle.title, 'bundle')}_"
+            f"{timezone.localdate().isoformat()}.pdf"
+        )
+
+    summary = {
+        "files_count": merged,
+        "page_count": page_count,
+        "skipped_non_pdf": skipped_non_pdf,
+        "skipped_count": skipped_unreadable,
+        "missing_count": len(result.missing),
+    }
+
+    if merged > 0:
+        log_document_activity(
+            owner=user,
+            action=DocumentActivity.Action.BUNDLE_EXPORTED,
+            title="Pack exported (merged PDF)",
+            description=bundle.title,
+            related_bundle=bundle,
+            metadata={"scope": "bundle_merged_pdf", **summary},
+        )
+    return spooled, pdf_filename, summary
+
+
 def build_bundle_manifest(
     user, bundle, included_files: list, missing: list, warnings: list
 ) -> dict:
