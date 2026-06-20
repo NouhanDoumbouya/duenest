@@ -239,9 +239,14 @@ remain for back-compat. See `docs/architecture.md` §35 "Anatomy of Sharing".
 DueNest-signed tamper-evident share. The recipient gets a public `/verify/<token>`
 page confirming the files are an unaltered copy shared from a DueNest account
 (provenance + integrity — not real-world document authenticity). Ed25519; the
-public key is published so independent/offline verification can follow. Next
-candidates in the same vein: inbound **Share Requests** (fulfilment loop) and
-**minimal-disclosure** (purpose-redacted) shares.
+public key is published so independent/offline verification can follow.
+
+**Share Requests (differentiator, behind `share_requests`):** sharing inverted into
+fulfilment — a requester lists the documents they need; a logged-in recipient fills
+the checklist from their vault in a few taps, delivered through the Quick Share
+engine into the requester's "Shared with me". v1 is DueNest-user-to-DueNest-user; a
+growth loop and a showcase for application packs. Next in the same vein:
+**minimal-disclosure** (purpose-redacted) shares, then anonymous responders.
 
 ### v0.4 — Integrations
 

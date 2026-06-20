@@ -1917,6 +1917,18 @@ carries `verified`, `verification_manifest` (JSON: the signed list of
 `DocumentFile.checksum` (plaintext SHA-256). The signing key is server-only; the
 public verify endpoints expose metadata + per-file match booleans, never bytes.
 
+### Share Requests (`apps/share_requests`)
+
+Inbound "please provide X, Y, Z" fulfilment. `ShareRequest` (owner, title, message,
+`token`, `status` [open/responded/closed/expired], expires_at) holds a checklist of
+`ShareRequestItem` rows (label, description, is_required, expected_document_type,
+sort_order) — modelled on `DocumentBundleRequirement`. A `ShareRequestResponse`
+(unique per request+responder) records a fulfilment: it points at the delivered
+`quick_share.QuickShareSession` and stores a per-item `summary`. No new delivery
+table — the response is a Quick Share session owned by the responder with a
+pre-accepted `QuickShareClaim` for the requester, so it surfaces in the requester's
+existing "Shared with me". The request stays open to collect multiple responses.
+
 ### Calendar
 
 DueNest Calendar V1 adds **no new table** — events are aggregated on demand from
