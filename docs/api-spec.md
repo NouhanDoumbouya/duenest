@@ -3696,7 +3696,10 @@ but blank), `one_time`, `max_claims?`, `max_views?` / `max_downloads?`
 (per-access caps, null = unlimited; counted server-side on every preview/download
 — reaching the view cap closes the share, reaching the download cap blocks
 further downloads), `require_sender_approval`, `watermark_enabled`,
-`privacy_screen_enabled` (screenshot deterrence on the public viewer), and the
+`privacy_screen_enabled` (screenshot deterrence on the public viewer),
+`verified` (request a tamper-evident, DueNest-signed share — honoured only when
+the `verified_shares` feature flag is enabled for the caller; otherwise silently
+ignored), and the
 item lists `file_ids[]`, `document_ids[]`, `bundle_ids[]`, and `proof_ids[]` (all must be owned by the requester; others are skipped, and a
 session with no valid items is rejected). Quick Share is the single sharing
 engine, so these cover everything the legacy single-file link and Share Rooms
@@ -3718,6 +3721,28 @@ past time, and a revoked or consumed share (returns `state: "revoked"` /
 `"consumed"`); the action is recorded in the activity log as `session_extended`.
 The owner list rows now also include `dn_code` and `claim_path` so list cards can
 offer copy-link and quick actions without re-fetching each session.
+
+### 31.1a Verifiable Shares — public verification
+
+```txt
+GET /api/v1/verify/key/            # { algorithm: "ed25519", public_key: <base64> }
+GET /api/v1/verify/<token>/        # tamper-evidence result for a share
+```
+
+A **verified** share carries an Ed25519-signed manifest of its files' SHA-256
+hashes (DueNest holds the private key; only the public key is exposed, so
+verification can become independent/offline later). Both endpoints are public
+(`AllowAny`, rate-limited) and return **metadata only — never document bytes**.
+
+`GET /api/v1/verify/<token>/` recomputes the currently served files' hashes,
+compares them to the signed manifest, and checks the signature. Response:
+`{ verified, status, signature_valid, content_intact, share, sender, issued_at,
+files:[{name, sha256, matches}] }`. `status` is `verified` (signature valid and
+every file matches), `altered` (signature valid but a file changed),
+`not_verified` (the share was not created as a verified share), or `not_found`
+(404). Verification asserts **provenance + integrity only** — that these exact
+files are an unaltered copy shared from a DueNest account — not the document's
+real-world authenticity.
 
 ## 31.2b Receive by DueNest code — public
 

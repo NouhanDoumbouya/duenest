@@ -235,6 +235,14 @@ and access-limit controls. Existing `DocumentFileShareLink` / `ShareRoom` links
 keep working (no migration); their public endpoints and the Share Rooms list
 remain for back-compat. See `docs/architecture.md` §35 "Anatomy of Sharing".
 
+**Verifiable Shares (differentiator, behind `verified_shares`):** an opt-in,
+DueNest-signed tamper-evident share. The recipient gets a public `/verify/<token>`
+page confirming the files are an unaltered copy shared from a DueNest account
+(provenance + integrity — not real-world document authenticity). Ed25519; the
+public key is published so independent/offline verification can follow. Next
+candidates in the same vein: inbound **Share Requests** (fulfilment loop) and
+**minimal-disclosure** (purpose-redacted) shares.
+
 ### v0.4 — Integrations
 
 Focus: connecting DueNest with user workflows.

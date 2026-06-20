@@ -1304,3 +1304,20 @@ Non-goals / limitations: QR codes cannot prevent OS-level screenshots
 (watermarking is deterrence only); saved copies cannot be revoked after the
 receiver saves them; in-browser camera scanning is not implemented; emergency
 and organization-collection QR surfaces are deferred to later iterations.
+
+### Verifiable Shares signing key
+
+* A verified share is signed with an **Ed25519 private key** held only on the
+  server (`SHARE_SIGNING_PRIVATE_KEY`, PEM via env; never committed). Only the
+  **public** key is ever exposed (`GET /api/v1/verify/key/`), so a leaked response
+  cannot forge signatures.
+* When the key is unset the app generates an **ephemeral dev key** and logs a
+  warning — fine for local dev, but signatures do not persist across restarts, so
+  the key must be set for any shared/production deployment.
+* The public verify endpoints (`/api/v1/verify/<token>/`, `/verify/key/`) are
+  `AllowAny`, rate-limited, and return **metadata + per-file match booleans only —
+  never document bytes**; no access code is required (the token already grants the
+  recipient the share).
+* Verification asserts **provenance + integrity only** (an unaltered copy shared
+  from a DueNest account), never the document's real-world authenticity; the UI
+  states this explicitly to avoid over-claiming.
