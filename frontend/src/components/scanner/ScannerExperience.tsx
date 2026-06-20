@@ -78,6 +78,7 @@ import {
   analyzeCanvasQuality,
   type ScanQualityWarning,
 } from "@/lib/scanner/quality";
+import { assessFraming, FRAMING_COPY } from "@/lib/scanner/autocapture";
 import { formatBytes, generatePdfBlob } from "@/lib/scanner/pdf";
 import { applyWatermark } from "@/lib/scanner/watermark";
 import { applyRedactions, type RedactionRect } from "@/lib/scanner/redaction";
@@ -145,6 +146,9 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
   const [caps] = useState<ScannerCapabilities>(() => detectCapabilities());
   const [ariaStatus, setAriaStatus] = useState("Scanner ready");
   const [detection, setDetection] = useState<DetectionState>("searching");
+  // Live framing guidance ("Move closer" / "Center the document" / …) derived
+  // from the detected quad. Display-only — it doesn't change the capture trigger.
+  const [coaching, setCoaching] = useState<string | null>(null);
   const [tilt, setTilt] = useState<TiltState>("unavailable");
   const [torchOn, setTorchOn] = useState(false);
   const [torchAvailable, setTorchAvailable] = useState(false);
@@ -343,6 +347,12 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
             x: p.x * scaleUp,
             y: p.y * scaleUp,
           })) as Quad;
+          // Live framing coaching from the detected quad (in detect-canvas
+          // coordinates). Cleared once the page is well framed.
+          const framing = assessFraming(found, dw, dh);
+          setCoaching(
+            framing.state === "ready" ? null : FRAMING_COPY[framing.state],
+          );
           const aligned = tiltRef.current === "level" || tiltRef.current === "slight";
           setDetection(aligned ? "hold-steady" : "detected");
           const refocusing = now < focusingUntilRef.current;
@@ -368,6 +378,7 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
           stableSinceRef.current = null;
           setHoldProgress(0);
           setDetection("searching");
+          setCoaching(null);
         }
       }
     }
@@ -1275,6 +1286,7 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
           {phase === "camera" && (
             <CameraOverlay
               detection={detection}
+              coaching={coaching}
               tilt={tilt}
               holdProgress={holdProgress}
               torchOn={torchOn}
@@ -1901,6 +1913,7 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
 
 function CameraOverlay(props: {
   detection: DetectionState;
+  coaching: string | null;
   tilt: TiltState;
   holdProgress: number;
   torchOn: boolean;
@@ -1980,10 +1993,14 @@ function CameraOverlay(props: {
         <span
           className={cn(
             "rounded-full px-3.5 py-1.5 text-xs font-medium backdrop-blur-md",
-            detected ? "bg-teal-500/20 text-teal-100" : "bg-black/40 text-slate-200",
+            detected && !props.coaching
+              ? "bg-teal-500/20 text-teal-100"
+              : "bg-black/40 text-slate-200",
           )}
         >
-          {DETECTION_COPY[props.detection]}
+          {/* Specific framing guidance when the page isn't well placed yet,
+              otherwise the detection status. */}
+          {props.coaching ?? DETECTION_COPY[props.detection]}
         </span>
         {props.caps.orientation && (
           <BubbleLevel tilt={props.tilt} />
