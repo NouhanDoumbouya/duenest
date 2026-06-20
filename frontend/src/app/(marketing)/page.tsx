@@ -52,6 +52,19 @@ export const metadata: Metadata = {
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://duenest.app";
 
+// Private-beta vs public-launch messaging. Defaults to beta (waitlist-gated) so
+// nothing changes until launch; set NEXT_PUBLIC_PRIVATE_BETA_ENABLED=false at
+// build time to flip the hero/CTAs to the public "14-day free trial" flow.
+// Build-time (not the runtime API) keeps this page fully static + resilient.
+const PRIVATE_BETA =
+  (process.env.NEXT_PUBLIC_PRIVATE_BETA_ENABLED ?? "true").toLowerCase() !==
+  "false";
+
+// CTA shared by the hero and final call-to-action.
+const PRIMARY_CTA = PRIVATE_BETA
+  ? { href: "/waitlist", label: "Join the beta" }
+  : { href: "/register", label: "Start your 14-day free trial" };
+
 // Shared by the FAQ section and the FAQPage structured data below, so the two
 // can never drift apart.
 const FAQ_ITEMS: { q: string; a: string }[] = [
@@ -177,13 +190,13 @@ function Hero() {
 
           <div className="mt-9 flex flex-col gap-3 sm:flex-row">
             <Link
-              href="/waitlist"
+              href={PRIMARY_CTA.href}
               className={cn(
                 buttonVariants({ size: "lg" }),
                 "cta-sheen h-12 px-7 text-base",
               )}
             >
-              Join the beta
+              {PRIMARY_CTA.label}
               <ArrowRight className="size-4" />
             </Link>
             <Link
@@ -1110,13 +1123,13 @@ function FinalCta() {
           </p>
           <div className="flex flex-col gap-3 sm:flex-row">
             <Link
-              href="/waitlist"
+              href={PRIMARY_CTA.href}
               className={cn(
                 buttonVariants({ size: "lg" }),
                 "cta-sheen h-12 bg-white px-7 text-base text-brand-navy shadow-sm hover:bg-white/90",
               )}
             >
-              Join the beta
+              {PRIMARY_CTA.label}
               <ArrowRight className="size-4" />
             </Link>
             <Link
@@ -1130,20 +1143,29 @@ function FinalCta() {
             </Link>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm text-white/75">
-            {[
-              "Free during the private beta",
-              "No credit card",
-              "Private by default — export anytime",
-            ].map((item) => (
+            {(PRIVATE_BETA
+              ? [
+                  "Free during the private beta",
+                  "No credit card",
+                  "Private by default — export anytime",
+                ]
+              : [
+                  "14-day free trial",
+                  "No credit card required",
+                  "Private by default — export anytime",
+                ]
+            ).map((item) => (
               <span key={item} className="inline-flex items-center gap-1.5">
                 <Check className="size-4 text-brand-teal" />
                 {item}
               </span>
             ))}
           </div>
-          <p className="text-xs text-white/50">
-            Private beta · rolls out gradually to selected users.
-          </p>
+          {PRIVATE_BETA && (
+            <p className="text-xs text-white/50">
+              Private beta · rolls out gradually to selected users.
+            </p>
+          )}
         </div>
       </ScrollReveal>
     </section>
