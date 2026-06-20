@@ -5795,3 +5795,51 @@ class AiBriefingView(APIView):
             },
         )
         return Response(result, status=status.HTTP_200_OK)
+
+
+class AiChatView(APIView):
+    """
+    Conversational assistant — chat grounded in the user's vault.
+
+    POST ``{"message": "...", "history": [{role, content}]}`` → a reply plus
+    **confirm-gated action suggestions** (draft / pack / open_document /
+    briefing) the UI renders as buttons into existing flows. The endpoint
+    performs no writes or shares itself.
+
+    Gated by ``ai_features`` + ``ai_chat`` (503 when off) and platform config
+    (no key → ``200 {available:false, reason:"not_configured"}``). Owner-scoped;
+    per-user rate limited.
+    """
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "ai_chat"
+
+    def post(self, request):
+        require_feature_enabled("ai_features", request.user)
+        require_feature_enabled("ai_chat", request.user)
+
+        message = (request.data.get("message") or "").strip()
+        if not message:
+            return Response(
+                {"detail": "A message is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        history = request.data.get("history")
+        if not isinstance(history, list):
+            history = []
+
+        from .ai_chat import chat
+
+        result = chat(request.user, message=message, history=history)
+        _track_product_event(
+            request,
+            "ai_chat_message",
+            object_type="ai_chat",
+            metadata={
+                "available": result.get("available"),
+                "reason": result.get("reason"),
+                "actions": len(result.get("actions") or []),
+            },
+        )
+        return Response(result, status=status.HTTP_200_OK)

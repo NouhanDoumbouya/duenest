@@ -412,6 +412,8 @@ REST_FRAMEWORK = {
         "ai_pack_copilot": _throttle_rate("15/min"),
         # AI proactive briefing (per authenticated user) — bounds model cost.
         "ai_briefing": _throttle_rate("10/min"),
+        # AI conversational assistant (per authenticated user) — bounds model cost.
+        "ai_chat": _throttle_rate("30/min"),
     },
 }
 

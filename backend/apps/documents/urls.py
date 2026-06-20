@@ -73,6 +73,7 @@ from .views import (
     DocumentFileTrashListView,
     DocumentFileTrashView,
     AiBriefingView,
+    AiChatView,
     DocumentDraftView,
     DocumentProofRecordListView,
     DocumentQAView,
@@ -349,6 +350,11 @@ urlpatterns = [
         "documents/ai-briefing/",
         AiBriefingView.as_view(),
         name="document-ai-briefing",
+    ),
+    path(
+        "documents/ai-chat/",
+        AiChatView.as_view(),
+        name="document-ai-chat",
     ),
     # ---- Intelligence polish: renewal history (nested under a document) ----
     path(
