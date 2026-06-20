@@ -64,8 +64,6 @@ export function uploadInboxFileWithProgress(
   });
 }
 import type {
-  CreateShareLinkPayload,
-  CreatedDocumentFileShareLink,
   DocumentFile,
   DocumentFileActivity,
   DocumentFileShareLink,
@@ -464,21 +462,6 @@ export function listDocumentFileShareLinks(
   return apiFetch<DocumentFileShareLink[]>(
     `/documents/${documentId}/files/${fileId}/share-links/`,
     { auth: true },
-  );
-}
-
-export function createDocumentFileShareLink(
-  documentId: number,
-  fileId: number,
-  payload: CreateShareLinkPayload,
-): Promise<CreatedDocumentFileShareLink> {
-  return apiFetch<CreatedDocumentFileShareLink>(
-    `/documents/${documentId}/files/${fileId}/share-links/`,
-    {
-      method: "POST",
-      body: payload,
-      auth: true,
-    },
   );
 }
 
