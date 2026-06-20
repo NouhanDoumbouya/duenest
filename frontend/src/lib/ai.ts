@@ -111,3 +111,31 @@ export function analyzePack(
     body: { goal, deadline: deadline || null },
   });
 }
+
+export interface CreatePackRequirement {
+  name: string;
+  description: string;
+  document_ids: number[];
+}
+
+export interface CreatePackResult {
+  bundle_id: number;
+  title: string;
+  readiness_score: number;
+}
+
+/** Turn a copilot analysis into a real draft bundle (one requirement per item). */
+export function createPackBundle(input: {
+  goal: string;
+  deadline?: string | null;
+  requirements: CreatePackRequirement[];
+}): Promise<CreatePackResult> {
+  return apiFetch<CreatePackResult>("/documents/pack-copilot/create-bundle/", {
+    method: "POST",
+    body: {
+      goal: input.goal,
+      deadline: input.deadline || null,
+      requirements: input.requirements,
+    },
+  });
+}

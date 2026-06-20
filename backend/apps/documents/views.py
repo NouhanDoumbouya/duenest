@@ -2473,6 +2473,25 @@ class BundleActivityTimelineView(APIView):
         return Response({"items": serializer.data})
 
 
+class BundleShareReadinessView(APIView):
+    """
+    AI-assisted "is this pack ready to send?" check for one bundle. Returns the
+    deterministic readiness facts always; when AI is configured + the
+    ``ai_share_readiness`` flag is on, Claude adds a purpose-aware review. Never
+    500s on an AI failure — it falls back to the deterministic report. Owner-only.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, bundle_id):
+        bundle = get_object_or_404(
+            DocumentBundle, pk=bundle_id, owner=request.user
+        )
+        from .ai_readiness import build_readiness_report
+
+        return Response(build_readiness_report(bundle, user=request.user))
+
+
 class DocumentBundleFilesView(APIView):
     """
     List every available file reachable from a bundle's requirements, plus the

@@ -190,6 +190,24 @@ export interface BundleReadiness {
   missing_required_titles: string[];
 }
 
+export type ReadinessSeverity = "blocker" | "warning" | "suggestion";
+export type ReadinessOverall = "ready" | "issues" | "blocked";
+
+export interface ReadinessFinding {
+  severity: ReadinessSeverity;
+  title: string;
+  detail: string;
+  fix: string;
+}
+
+export interface ShareReadinessReport {
+  /** True when Claude reviewed the pack; false = deterministic facts only. */
+  ai: boolean;
+  overall: ReadinessOverall;
+  summary: string;
+  findings: ReadinessFinding[];
+}
+
 export interface Bundle {
   id: number;
   owner: number;
