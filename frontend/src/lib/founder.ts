@@ -452,3 +452,33 @@ export function updateFounderFeatureFlag(
     auth: true,
   });
 }
+
+// ---- Transactional email settings (founder-editable) -----------------------
+
+export interface TransactionalEmailSetting {
+  id: number;
+  key: string;
+  name: string;
+  enabled: boolean;
+  subject: string;
+  body: string;
+  default_subject: string;
+  default_body: string;
+  updated_at: string;
+}
+
+export function getEmailSettings(): Promise<TransactionalEmailSetting[]> {
+  return apiFetch<TransactionalEmailSetting[]>("/founder/email-settings/", {
+    auth: true,
+  });
+}
+
+export function updateEmailSetting(
+  key: string,
+  payload: Partial<Pick<TransactionalEmailSetting, "enabled" | "subject" | "body">>,
+): Promise<TransactionalEmailSetting> {
+  return apiFetch<TransactionalEmailSetting>(
+    `/founder/email-settings/${key}/`,
+    { method: "PATCH", body: payload, auth: true },
+  );
+}

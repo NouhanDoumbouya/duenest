@@ -224,6 +224,17 @@ Planned features:
 - ZIP export improvements
 - application-specific checklists
 
+**Sharing consolidation (complete):** the three parallel share systems (Quick
+Share, single-file links, Share Rooms) are unified onto Quick Share as the single
+engine, so sharing is identical wherever you start. The engine covers all three
+systems' capabilities — privacy screen, document/proof items, and per-access
+view/download caps (`max_views`/`max_downloads`, enforced server-side) — and every
+entry point (document files, the File Inbox, the document Sharing tab, and Share
+Rooms creation) opens the one Quick Share wizard, which surfaces privacy-screen
+and access-limit controls. Existing `DocumentFileShareLink` / `ShareRoom` links
+keep working (no migration); their public endpoints and the Share Rooms list
+remain for back-compat. See `docs/architecture.md` §35 "Anatomy of Sharing".
+
 ### v0.4 — Integrations
 
 Focus: connecting DueNest with user workflows.

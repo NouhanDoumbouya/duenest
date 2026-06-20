@@ -1,0 +1,8 @@
+{% extends "emails/base.txt" %}
+{% block content %}{{ email_body }}
+
+Accept your invite:
+{{ invite_url }}
+
+Or enter this code when you sign up: {{ invite_code }}{% endblock %}
+{% block footer %}If you weren't expecting this invite, you can safely ignore this email.{% endblock %}

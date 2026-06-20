@@ -11,6 +11,7 @@ import {
   ChevronDown,
   Download,
   Eye,
+  EyeOff,
   FileText,
   IdCard,
   KeyRound,
@@ -40,6 +41,7 @@ import {
 import { getBundle } from "@/lib/renewal-workspace";
 import { createQuickShare } from "@/lib/quick-share";
 import { setQuickShareHandoff } from "@/lib/quick-share-handoff";
+import { takeSharePrefill } from "@/lib/quick-share-prefill";
 import {
   FilePicker,
   type SelectedBundle,
@@ -106,6 +108,10 @@ export default function NewQuickSharePage() {
   const [oneTime, setOneTime] = useState(false);
   const [requireApproval, setRequireApproval] = useState(false);
   const [watermark, setWatermark] = useState(true);
+  const [privacyScreen, setPrivacyScreen] = useState(false);
+  // Per-access caps (blank = unlimited). Kept as strings for the inputs.
+  const [maxViews, setMaxViews] = useState("");
+  const [maxDownloads, setMaxDownloads] = useState("");
   const [showCustom, setShowCustom] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
@@ -125,6 +131,13 @@ export default function NewQuickSharePage() {
       if (!active) return;
       setRecentRecipients(loadRecentRecipients());
       setSavedSettings(loadLastShareSettings());
+      // Pre-seed the selection when the user arrived here from a "Share" action
+      // elsewhere (a document file, the File Inbox). One-time handoff; consumed
+      // once. Deferred to a microtask with the others to avoid a sync setState.
+      const prefill = takeSharePrefill();
+      if (prefill?.files?.length) {
+        setSelected(new Map(prefill.files.map((file) => [file.id, file])));
+      }
     });
     return () => {
       active = false;
@@ -349,6 +362,9 @@ export default function NewQuickSharePage() {
       require_sender_approval:
         mode === "account_to_account" ? requireApproval : false,
       watermark_enabled: watermark,
+      privacy_screen_enabled: privacyScreen,
+      max_views: maxViews.trim() ? Number(maxViews) : undefined,
+      max_downloads: maxDownloads.trim() ? Number(maxDownloads) : undefined,
       file_ids: selectedList.map((f) => f.id),
       bundle_ids: selectedBundleList.map((b) => b.id),
     };
@@ -748,6 +764,59 @@ export default function NewQuickSharePage() {
                     }}
                   />
                   {watermark && <WatermarkPreview />}
+                  <ToggleRow
+                    icon={<EyeOff className="size-4" />}
+                    title="Privacy screen"
+                    description="Blur the preview when the viewer switches tabs — extra deterrence against screenshots."
+                    checked={privacyScreen}
+                    onChange={(v) => {
+                      setPrivacyScreen(v);
+                      markCustom();
+                    }}
+                  />
+                  <div className="rounded-lg border border-border p-3">
+                    <p className="text-sm font-medium">Access limits</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Cap how many times the files can be viewed or downloaded.
+                      Leave blank for unlimited.
+                    </p>
+                    <div className="mt-3 grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label htmlFor="max-views" className="text-xs">
+                          Max views
+                        </Label>
+                        <Input
+                          id="max-views"
+                          type="number"
+                          min={1}
+                          inputMode="numeric"
+                          placeholder="Unlimited"
+                          value={maxViews}
+                          onChange={(event) => {
+                            setMaxViews(event.target.value);
+                            markCustom();
+                          }}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="max-downloads" className="text-xs">
+                          Max downloads
+                        </Label>
+                        <Input
+                          id="max-downloads"
+                          type="number"
+                          min={1}
+                          inputMode="numeric"
+                          placeholder="Unlimited"
+                          value={maxDownloads}
+                          onChange={(event) => {
+                            setMaxDownloads(event.target.value);
+                            markCustom();
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </Field>
             </div>

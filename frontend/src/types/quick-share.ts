@@ -140,11 +140,20 @@ export interface CreateQuickSharePayload {
   access_code?: string;
   one_time: boolean;
   max_claims?: number | null;
+  // Per-access caps (omit / undefined = unlimited).
+  max_views?: number;
+  max_downloads?: number;
   require_sender_approval: boolean;
   watermark_enabled: boolean;
+  // Screenshot deterrence on the public viewer (blurs when the tab loses focus).
+  privacy_screen_enabled?: boolean;
   file_ids: number[];
+  // Whole documents to share; each exposes its current active files.
+  document_ids?: number[];
   // Whole bundles to share; each exposes its currently available files.
   bundle_ids?: number[];
+  // Proofs to share; each exposes the proof's linked file.
+  proof_ids?: number[];
 }
 
 export interface QuickSharePublic {
@@ -156,6 +165,7 @@ export interface QuickSharePublic {
   download_allowed: boolean;
   save_copy_allowed: boolean;
   watermark_enabled: boolean;
+  privacy_screen_enabled: boolean;
   watermark_text: string;
   require_sender_approval: boolean;
   access_code_required: boolean;

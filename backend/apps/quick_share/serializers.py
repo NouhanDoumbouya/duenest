@@ -83,14 +83,30 @@ class QuickShareCreateSerializer(serializers.Serializer):
     max_claims = serializers.IntegerField(
         required=False, allow_null=True, min_value=1, max_value=1000
     )
+    # Per-access caps (null = unlimited); preserve single-file link parity.
+    max_views = serializers.IntegerField(
+        required=False, allow_null=True, min_value=1, max_value=100000
+    )
+    max_downloads = serializers.IntegerField(
+        required=False, allow_null=True, min_value=1, max_value=100000
+    )
     require_sender_approval = serializers.BooleanField(default=False)
     watermark_enabled = serializers.BooleanField(default=True)
+    privacy_screen_enabled = serializers.BooleanField(default=False)
     # File ids to attach on creation (owner-owned; validated in the view).
     file_ids = serializers.ListField(
         child=serializers.IntegerField(), required=False, default=list
     )
+    # Document ids to attach whole (owner-owned; each shares its current files).
+    document_ids = serializers.ListField(
+        child=serializers.IntegerField(), required=False, default=list
+    )
     # Bundle ids to attach whole (owner-owned; each shares its current files).
     bundle_ids = serializers.ListField(
+        child=serializers.IntegerField(), required=False, default=list
+    )
+    # Proof ids to attach (owner-owned; each shares the proof's linked file).
+    proof_ids = serializers.ListField(
         child=serializers.IntegerField(), required=False, default=list
     )
 
@@ -196,8 +212,14 @@ class QuickShareSessionSerializer(serializers.ModelSerializer):
             "one_time",
             "max_claims",
             "claim_count",
+            "max_views",
+            "view_count",
+            "max_downloads",
+            "download_count",
+            "limit_reached_at",
             "require_sender_approval",
             "watermark_enabled",
+            "privacy_screen_enabled",
             "short_id",
             "file_count",
             "files",
@@ -298,6 +320,7 @@ class QuickSharePublicSerializer(serializers.Serializer):
     download_allowed = serializers.BooleanField()
     save_copy_allowed = serializers.BooleanField()
     watermark_enabled = serializers.BooleanField()
+    privacy_screen_enabled = serializers.BooleanField()
     watermark_text = serializers.CharField()
     require_sender_approval = serializers.BooleanField()
     access_code_required = serializers.BooleanField()
@@ -325,6 +348,7 @@ def build_public_payload(session, *, claim=None, viewer=None) -> dict:
         "download_allowed": session.download_allowed,
         "save_copy_allowed": session.save_copy_allowed,
         "watermark_enabled": session.watermark_enabled,
+        "privacy_screen_enabled": session.privacy_screen_enabled,
         "watermark_text": session.watermark_text,
         "require_sender_approval": session.require_sender_approval,
         "access_code_required": session.access_code_required,

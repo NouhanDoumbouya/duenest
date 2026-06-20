@@ -106,7 +106,9 @@ DUENEST_APP_BASE_URL=https://app.duenest.com
 DUENEST_ACTIVE_KEK_VERSION=v1
 DUENEST_KEK_V1_B64=<base64 32-byte key>   # generate_encryption_key
 # + all STORAGE_* vars from section 2
-# + EMAIL_* vars (see docs/EMAIL_REMINDERS.md) for real reminder delivery
+# + EMAIL_* vars (see docs/EMAIL_REMINDERS.md) for all transactional email
+#   (invite, waitlist, password reset, email verification, reminders)
+# + FRONTEND_APP_URL=https://app.duenest.com  (links in invite/reset/verification emails)
 ```
 
 Production settings **fail closed** if the encryption KEK is missing/malformed.
@@ -173,7 +175,7 @@ This copies ciphertext as-is, never decrypts, skips already-present objects, and
 - [ ] Set `DJANGO_CORS_ALLOWED_ORIGINS` + `DJANGO_CSRF_TRUSTED_ORIGINS` (frontend domain)
 - [ ] Set `DUENEST_ACTIVE_KEK_VERSION` + `DUENEST_KEK_V1_B64`
 - [ ] Set all `STORAGE_*` vars (`STORAGE_BACKEND=s3`, private bucket)
-- [ ] Set `EMAIL_*` for real reminder delivery
+- [ ] Set `EMAIL_*` (+ `FRONTEND_APP_URL`) for all transactional email — invite, waitlist, password reset, email verification, reminders
 - [ ] Run migrations
 - [ ] Run collectstatic
 - [ ] Create superuser (if needed)

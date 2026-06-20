@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   DoorClosed,
   Eye,
   FileText,
-  Loader2,
   Lock,
   Plus,
   ShieldCheck,
@@ -16,8 +15,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { PageContainer } from "@/components/ui/page-container";
 import { PageHeader } from "@/components/ui/page-header";
 import {
@@ -31,9 +28,9 @@ import { SectionCard } from "@/components/ui/section-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/lib/api";
 import { formatDate } from "@/lib/documents";
-import { createShareRoom, listShareRooms } from "@/lib/share-rooms";
+import { listShareRooms } from "@/lib/share-rooms";
 import { cn } from "@/lib/utils";
-import type { RoomPermission, RoomStatus, ShareRoom } from "@/types/share-rooms";
+import type { RoomStatus, ShareRoom } from "@/types/share-rooms";
 
 const statusClass: Record<RoomStatus, string> = {
   active: "bg-brand-success/10 text-brand-success",
@@ -53,13 +50,13 @@ export default function ShareRoomsPage() {
   const router = useRouter();
   const [rooms, setRooms] = useState<ShareRoom[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [showCreate, setShowCreate] = useState(false);
 
-  const [title, setTitle] = useState("");
-  const [permission, setPermission] = useState<RoomPermission>("view_only");
-  const [expiryDays, setExpiryDays] = useState("7");
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
+  // Creating a new multi-item share is unified on the Quick Share engine: a new
+  // "room" is a multi-item Quick Share session, built in the one share wizard.
+  // Existing rooms below keep working and open on their own detail page.
+  function startNewShare() {
+    router.push("/dashboard/quick-share/new");
+  }
 
   useEffect(() => {
     let active = true;
@@ -87,32 +84,6 @@ export default function ShareRoomsPage() {
     };
   }, [rooms]);
 
-  async function handleCreate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!title.trim()) return;
-    setCreating(true);
-    setCreateError(null);
-    try {
-      const expires =
-        expiryDays === "never"
-          ? null
-          : new Date(
-              Date.now() + Number(expiryDays) * 24 * 60 * 60 * 1000,
-            ).toISOString();
-      const room = await createShareRoom({
-        title: title.trim(),
-        permission,
-        expires_at: expires,
-      });
-      router.push(`/dashboard/share-rooms/${room.id}`);
-    } catch (err) {
-      setCreateError(
-        err instanceof ApiError ? err.message : "Could not create this room.",
-      );
-      setCreating(false);
-    }
-  }
-
   return (
     <PageContainer width="wide">
       <PageHeader
@@ -120,7 +91,7 @@ export default function ShareRoomsPage() {
         title="Secure rooms"
         description="Create private rooms that expose only the documents and files you choose, with expiry, view-only controls, access codes, and watermarking."
         actions={
-          <Button onClick={() => setShowCreate((value) => !value)}>
+          <Button onClick={startNewShare}>
             <Plus className="size-4" />
             New room
           </Button>
@@ -184,7 +155,7 @@ export default function ShareRoomsPage() {
                 title="No secure rooms yet"
                 description="Create a room when you need to share a curated document set without exposing the rest of your vault."
                 action={
-                  <Button onClick={() => setShowCreate(true)}>
+                  <Button onClick={startNewShare}>
                     <Plus className="size-4" />
                     Create a room
                   </Button>
@@ -250,79 +221,12 @@ export default function ShareRoomsPage() {
         </div>
 
         <aside className="space-y-4">
-          {showCreate ? (
-            <SectionCard
-              title="Create secure room"
-              description="Start with safe defaults, then add files and access controls on the room detail page."
-            >
-              <form onSubmit={handleCreate} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="room-title">Room title</Label>
-                  <Input
-                    id="room-title"
-                    value={title}
-                    onChange={(event) => setTitle(event.target.value)}
-                    placeholder="Visa application pack"
-                    autoFocus
-                  />
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
-                  <div className="space-y-2">
-                    <Label htmlFor="room-permission">Permission</Label>
-                    <select
-                      id="room-permission"
-                      value={permission}
-                      onChange={(event) =>
-                        setPermission(event.target.value as RoomPermission)
-                      }
-                      className="h-10 w-full rounded-lg border border-input bg-card px-3 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                    >
-                      <option value="view_only">View only</option>
-                      <option value="download_allowed">View and download</option>
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="room-expiry">Expires in</Label>
-                    <select
-                      id="room-expiry"
-                      value={expiryDays}
-                      onChange={(event) => setExpiryDays(event.target.value)}
-                      className="h-10 w-full rounded-lg border border-input bg-card px-3 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                    >
-                      <option value="1">1 day</option>
-                      <option value="7">7 days</option>
-                      <option value="30">30 days</option>
-                      <option value="never">No expiry</option>
-                    </select>
-                  </div>
-                </div>
-                {createError && <InlineAlert>{createError}</InlineAlert>}
-                <div className="flex justify-end gap-2">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => setShowCreate(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={creating || !title.trim()}>
-                    {creating ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    ) : (
-                      <ShieldCheck className="size-4" />
-                    )}
-                    Create room
-                  </Button>
-                </div>
-              </form>
-            </SectionCard>
-          ) : (
-            <TrustNotice icon={ShieldCheck} title="Recipient safety model">
-              A room is a curated share space. Public recipients can only see
-              items explicitly added to that room, and owner controls decide
-              expiry, downloads, watermarking, and access-code requirements.
-            </TrustNotice>
-          )}
+          <TrustNotice icon={ShieldCheck} title="Recipient safety model">
+            A room is a curated share space. Public recipients can only see items
+            explicitly added to that room, and owner controls decide expiry,
+            downloads, watermarking, and access-code requirements. New rooms are
+            created in the secure share wizard.
+          </TrustNotice>
 
           <SectionToolbar>
             <div>

@@ -202,7 +202,40 @@ def resolve_session(token: str):
             detail="This Quick Share has reached its access limit.",
             http_status=410,
         )
+    if session.is_view_limit_reached:
+        return session, SessionState(
+            ok=False,
+            state="limit_reached",
+            detail="This Quick Share has reached its view limit.",
+            http_status=410,
+        )
     return session, SessionState(ok=True)
+
+
+def consume_view(session: QuickShareSession) -> None:
+    """Atomically count one preview and stamp the limit if it is now reached."""
+    if session.max_views is None:
+        return
+    QuickShareSession.objects.filter(pk=session.pk).update(
+        view_count=F("view_count") + 1
+    )
+    session.refresh_from_db(fields=["view_count"])
+    if session.is_view_limit_reached and session.limit_reached_at is None:
+        session.limit_reached_at = timezone.now()
+        session.save(update_fields=["limit_reached_at"])
+
+
+def consume_download(session: QuickShareSession) -> None:
+    """Atomically count one download and stamp the limit if it is now reached."""
+    if session.max_downloads is None:
+        return
+    QuickShareSession.objects.filter(pk=session.pk).update(
+        download_count=F("download_count") + 1
+    )
+    session.refresh_from_db(fields=["download_count"])
+    if session.is_download_limit_reached and session.limit_reached_at is None:
+        session.limit_reached_at = timezone.now()
+        session.save(update_fields=["limit_reached_at"])
 
 
 # ---- Items -----------------------------------------------------------------
@@ -217,7 +250,9 @@ def session_files(session: QuickShareSession):
     """
     files = []
     seen = set()
-    items = session.items.select_related("file", "document", "bundle").all()
+    items = session.items.select_related(
+        "file", "document", "bundle", "proof", "proof__linked_file"
+    ).all()
     for item in items:
         file = item.file
         if file is None and item.bundle_id:
@@ -240,6 +275,18 @@ def session_files(session: QuickShareSession):
                 if doc_file.id not in seen:
                     seen.add(doc_file.id)
                     files.append((item, doc_file))
+            continue
+        if file is None and item.proof_id:
+            # Proof item: expose the proof's linked file (owner isolation was
+            # enforced when the proof was attached). Mirrors collect_room_files.
+            proof_file = item.proof.linked_file if item.proof else None
+            if proof_file is None or proof_file.is_trashed:
+                continue
+            if proof_file.document_id and proof_file.document.is_trashed:
+                continue
+            if proof_file.id not in seen:
+                seen.add(proof_file.id)
+                files.append((item, proof_file))
             continue
         if file is None:
             continue

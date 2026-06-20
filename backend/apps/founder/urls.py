@@ -45,6 +45,8 @@ from .views import (
     FounderInviteCodeDetailView,
     FounderInviteCodeDisableView,
     FounderInviteCodeListCreateView,
+    FounderEmailSettingDetailView,
+    FounderEmailSettingListView,
     FounderLaunchReadinessDetailView,
     FounderLaunchReadinessListView,
     FounderMeView,
@@ -288,5 +290,15 @@ urlpatterns = [
         "growth/attribution/",
         GrowthAttributionCaptureView.as_view(),
         name="growth-attribution-capture",
+    ),
+    path(
+        "founder/email-settings/",
+        FounderEmailSettingListView.as_view(),
+        name="founder-email-settings",
+    ),
+    path(
+        "founder/email-settings/<slug:key>/",
+        FounderEmailSettingDetailView.as_view(),
+        name="founder-email-settings-detail",
     ),
 ]

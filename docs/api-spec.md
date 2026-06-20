@@ -3692,13 +3692,18 @@ presentation only; every share supports all three), `title?`, `purpose?`,
 `recipient_label?` (optional sender note about who the share is for; echoed back
 to the recipient for trust context), `permission`, `expires_at`,
 `access_code_required`, `access_code?` (write-only; auto-generated when required
-but blank), `one_time`, `max_claims?`, `require_sender_approval`,
-`watermark_enabled`, `file_ids[]`, and `bundle_ids[]` (both must be owned by the
-requester; others are skipped, and a session with no valid files/bundles is
-rejected). A bundle is attached as a single item that exposes all of its
-currently available files (the same file-set as `document-bundles/:id/files/`),
-so the share reflects the bundle's contents over time; an empty bundle is
-skipped. The create response
+but blank), `one_time`, `max_claims?`, `max_views?` / `max_downloads?`
+(per-access caps, null = unlimited; counted server-side on every preview/download
+— reaching the view cap closes the share, reaching the download cap blocks
+further downloads), `require_sender_approval`, `watermark_enabled`,
+`privacy_screen_enabled` (screenshot deterrence on the public viewer), and the
+item lists `file_ids[]`, `document_ids[]`, `bundle_ids[]`, and `proof_ids[]` (all must be owned by the requester; others are skipped, and a
+session with no valid items is rejected). Quick Share is the single sharing
+engine, so these cover everything the legacy single-file link and Share Rooms
+exposed: a `document_id` shares the document's current active files, a `bundle_id`
+shares all of the bundle's currently available files (the same file-set as
+`document-bundles/:id/files/`), and a `proof_id` shares the proof's linked file —
+all reflecting their contents over time; empty/trashed items are skipped. The create response
 includes the one-time plain `access_code` (when generated), the session `token`
 for the owner to build the QR, and the `dn_code` — a short, human-typable DueNest
 code (e.g. `DN-4KQ7-PXMR`) the owner can read out for the "Receive code" flow.

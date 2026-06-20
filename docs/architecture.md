@@ -1298,3 +1298,42 @@ log in, and existing accounts can still be linked to Google.
 Invite code enforcement happens on the backend. The frontend invite field is a
 UX affordance only; the backend checks active status, expiry, and max-use limits
 before creating the user account.
+
+## 35. Anatomy of Sharing
+
+DueNest grew three overlapping ways to share documents: Quick Share
+(`apps/quick_share` — `QuickShareSession`), the single-file share link
+(`DocumentFileShareLink`, app `documents`), and Share Rooms (`ShareRoom`, app
+`documents`). All three reused `generate_share_token` and the same permission /
+expiry / revoke / access-code / watermark / limit shape, but each had its own
+model, public token page, and frontend, so sharing one file felt different
+depending on where you started.
+
+**Quick Share is now the single sharing engine.** It is already a superset
+(multi-item sessions, claims, QR, DN-code, access codes, limits, sender
+approval), so the other two fold into it rather than the reverse:
+
+- The engine gained the only capabilities it lacked — `privacy_screen_enabled`
+  on the session and a `proof` item type — plus `document_ids` / `proof_ids`
+  create inputs (see `docs/database-design.md`).
+- New shares are created as Quick Share sessions. A "Share" action anywhere
+  (e.g. a document file) seeds the one creation wizard
+  (`/dashboard/quick-share/new`) via an in-memory prefill handoff
+  (`frontend/src/lib/quick-share-prefill.ts`) and opens it, so the experience is
+  identical regardless of entry point.
+- **Backward compatibility:** `DocumentFileShareLink` and `ShareRoom` models and
+  their public endpoints (`/share/files/:token`, `/rooms/:token`) are kept so
+  links already in the wild keep resolving. No data migration.
+
+**Deliberately NOT unified — `OrganizationSecureRoom` and `EmergencyAccessPack`.**
+These look superficially similar (token-gated, access codes, expiry) but are
+different paradigms, so folding them into the personal share engine would damage
+them. `OrganizationSecureRoom` is **organization-owned** with member
+co-management (`organization` + `created_by`); a `QuickShareSession` is owned by a
+single user, so routing it through the wizard would strip org co-ownership.
+`EmergencyAccessPack` is a **break-glass** mechanism — trusted contacts, unlock
+modes (instant code / owner approval / delayed unlock with `unlock_delay_hours`),
+unlock requests, access duration, optional location capture — none of which the
+share engine models. Both remain separate by design (reaffirmed 2026-06). Any
+future convergence should be a shared *backend plumbing* refactor
+(token/access-code/watermark/limit helpers), not a merge of the user flows.
