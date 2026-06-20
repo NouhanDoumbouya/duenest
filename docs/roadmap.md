@@ -115,9 +115,9 @@ DueNest will be built in this order:
 | API specification | Completed |
 | Security plan | Completed |
 | Roadmap | In Progress |
-| Backend setup | Not Started |
-| Frontend setup | Not Started |
-| MVP implementation | Not Started |
+| Backend setup | Completed |
+| Frontend setup | Completed |
+| MVP implementation | In Progress |
 | Documents module gaps (trash/restore, bundles, proof of submission, physical location, emergency access packs, plan limits foundation) | Completed |
 | Document intelligence polish (confidence score, what-is-missing scanner, health overview, last safe action date, tags, custom fields, lifecycle status, renewal history, appointments, cost tracking) | Completed |
 | Organization / Team Workspace V1 | Completed |

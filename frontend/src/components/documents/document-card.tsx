@@ -21,7 +21,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import { ConfidencePill } from "@/components/documents/confidence-indicator";
 import { LifecycleBadge } from "@/components/documents/lifecycle-badge";
 import { DocumentStatusBadge } from "@/components/documents/status-badge";
 import { UrgencyBadge } from "@/components/documents/urgency-badge";
@@ -221,12 +220,6 @@ export function DocumentCard({
               </span>
               <span className="hidden sm:inline-flex">
                 <UrgencyBadge level={doc.urgency_level} />
-              </span>
-              <span className="hidden sm:inline-flex">
-                <ConfidencePill
-                  score={doc.confidence_score}
-                  label={doc.confidence_label}
-                />
               </span>
               {doc.is_shared_externally && (
                 <span
