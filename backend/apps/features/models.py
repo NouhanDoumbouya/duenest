@@ -121,6 +121,7 @@ FEATURE_DEFINITIONS: list[dict] = [
     {"key": "ai_share_readiness", "name": "AI — share readiness", "default": Visibility.FOUNDER_ONLY, "description": "Claude reviews an application pack against its purpose and flags likely-rejection issues (missing items, expiring documents) before sharing. Assistive; deterministic facts shown regardless."},
     {"key": "ai_document_drafting", "name": "AI — drafting assistant", "default": Visibility.FOUNDER_ONLY, "description": "Draft letters/forms from the user's records. Drafts are editable suggestions; nothing is sent or saved automatically."},
     {"key": "ai_pack_copilot", "name": "AI — application pack copilot", "default": Visibility.FOUNDER_ONLY, "description": "For a goal (visa/scholarship/job/mortgage), build the requirement checklist, match it against the user's vault (have/missing), and flag documents expiring before the deadline. Suggestions only; never presented as official — requirements always vary and must be verified."},
+    {"key": "ai_briefing", "name": "AI — proactive briefing", "default": Visibility.FOUNDER_ONLY, "description": "A prioritized 'what to do now' briefing across the vault. Statuses/dates are the real computed health; Claude prioritizes and phrases the suggested actions. Read-only suggestions; nothing is changed automatically."},
 ]
 
 FEATURE_KEYS = [d["key"] for d in FEATURE_DEFINITIONS]

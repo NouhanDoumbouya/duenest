@@ -72,6 +72,7 @@ from .views import (
     DocumentFileShareLinkRevokeView,
     DocumentFileTrashListView,
     DocumentFileTrashView,
+    AiBriefingView,
     DocumentDraftView,
     DocumentProofRecordListView,
     DocumentQAView,
@@ -342,6 +343,12 @@ urlpatterns = [
         "documents/pack-copilot/create-bundle/",
         PackCopilotCreateBundleView.as_view(),
         name="document-pack-copilot-create-bundle",
+    ),
+    # ---- AI: proactive briefing (what to do now; opt-in, key+flag gated) ----
+    path(
+        "documents/ai-briefing/",
+        AiBriefingView.as_view(),
+        name="document-ai-briefing",
     ),
     # ---- Intelligence polish: renewal history (nested under a document) ----
     path(

@@ -1973,6 +1973,45 @@ Assistive — the UI labels AI findings and asks the user to review before submi
 
 ---
 
+## 13B.10 AI: Proactive briefing ("what to do now")
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/api/v1/documents/ai-briefing/` | A prioritized, plain-language action briefing across the user's vault |
+
+Opt-in, **key-gated**. Returns a short, prioritized briefing built from the
+user's **real** document health (Python computes statuses/day counts via
+`get_document_health`; Claude prioritizes and phrases the suggested actions —
+it never changes a date or status). Read-only — nothing is modified. When
+nothing needs attention, returns a positive, empty briefing **without** calling
+the model. Gated by `ai_features` + `ai_briefing` (503 when off) and platform
+config (no key → `200 {available:false, reason:"not_configured"}`); owner-scoped;
+per-user rate limited (`ai_briefing` scope).
+
+```json
+{
+  "available": true,
+  "reason": "ok",
+  "summary": "Two things worth handling this week.",
+  "items": [
+    {
+      "title": "Renew your passport",
+      "detail": "It expires in 20 days.",
+      "urgency": "high",
+      "action_label": "Renew now",
+      "document_id": 12,
+      "document_title": "UK Passport"
+    }
+  ],
+  "attention_count": 2
+}
+```
+
+`reason` is `ok` / `not_configured` / `error`; `urgency` is `high` / `medium` /
+`low`.
+
+---
+
 ## 13C.7 Document intelligence polish
 
 Intelligence fields are computed read-only on every document (`GET/LIST
