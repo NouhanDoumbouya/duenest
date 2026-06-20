@@ -81,9 +81,11 @@ class BillingCoreTests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertTrue(resp.data["manual"])
         self.user.refresh_from_db()
+        # Pro grants paid access immediately — but now starts as a 14-day trial.
         self.assertEqual(self.user.plan, "pro_placeholder")
         sub = UserSubscription.objects.get(user=self.user)
-        self.assertEqual(sub.status, "active")
+        self.assertEqual(sub.status, "trialing")
+        self.assertIsNotNone(sub.trial_end)
 
     def test_checkout_rejects_unknown_plan(self):
         self.client.force_authenticate(self.user)

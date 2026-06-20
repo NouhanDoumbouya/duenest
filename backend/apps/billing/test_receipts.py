@@ -67,6 +67,9 @@ class ReceiptServiceTests(APITestCase):
 
     def test_manual_checkout_sends_receipt_when_enabled(self):
         self._enable()
+        # This exercises immediate paid activation (no trial), where a receipt
+        # is sent; trial starts are covered separately and send no receipt.
+        Plan.objects.filter(key="pro").update(trial_days=0)
         self.client.force_authenticate(self.user)
         self.client.post(
             "/api/v1/billing/checkout/",
@@ -81,6 +84,7 @@ class ReceiptServiceTests(APITestCase):
 
     def test_manual_skipped_when_send_for_manual_false(self):
         self._enable(send_for_manual=False)
+        Plan.objects.filter(key="pro").update(trial_days=0)
         self.client.force_authenticate(self.user)
         self.client.post(
             "/api/v1/billing/checkout/",

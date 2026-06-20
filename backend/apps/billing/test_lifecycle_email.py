@@ -82,6 +82,39 @@ class LifecycleEmailTests(APITestCase):
         self.assertFalse(lifecycle_email.send_renewal_upcoming_email(self.user, sub))
         self.assertEqual(len(mail.outbox), 0)
 
+    def test_pro_plan_has_14_day_trial(self):
+        self.assertEqual(self.pro.trial_days, 14)
+
+    def test_cron_expires_manual_trial_to_free_and_emails(self):
+        sub = self._sub(
+            status="trialing",
+            trial_end=timezone.now() - timedelta(hours=1),
+            provider_subscription_id="",
+        )
+        call_command("sync_billing_access")
+        sub.refresh_from_db()
+        self.assertEqual(sub.status, "free")
+        self.assertEqual(
+            EmailLog.objects.filter(
+                email_type="billing_trial_ended", status="sent"
+            ).count(),
+            1,
+        )
+
+    def test_cron_leaves_stripe_trial_alone(self):
+        # A provider-backed trial is governed by Stripe webhooks, not the cron.
+        sub = self._sub(
+            status="trialing",
+            trial_end=timezone.now() - timedelta(hours=1),
+            provider_subscription_id="sub_stripe_1",
+        )
+        call_command("sync_billing_access")
+        sub.refresh_from_db()
+        self.assertEqual(sub.status, "trialing")
+        self.assertFalse(
+            EmailLog.objects.filter(email_type="billing_trial_ended").exists()
+        )
+
     def test_refund_email(self):
         self.assertTrue(
             lifecycle_email.send_refund_email(

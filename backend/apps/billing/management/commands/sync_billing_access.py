@@ -88,6 +88,25 @@ class Command(BaseCommand):
 
                 send_subscription_canceled_email(sub.user, sub)
 
+        # 3b) Trials whose end has passed with no conversion -> Free. Scoped to
+        # manual / no-provider trials; Stripe-backed trials are governed by
+        # provider webhooks (trial-end invoice -> active or dunning).
+        trials_expired = 0
+        for sub in UserSubscription.objects.filter(
+            status=UserSubscription.Status.TRIALING,
+            trial_end__isnull=False,
+            trial_end__lte=now,
+            provider_subscription_id="",
+        ).select_related("user"):
+            trials_expired += 1
+            affected_users.add(sub.user_id)
+            if not dry_run:
+                sub.status = UserSubscription.Status.FREE
+                sub.save(update_fields=["status", "updated_at"])
+                from apps.billing.lifecycle_email import send_trial_ended_email
+
+                send_trial_ended_email(sub.user, sub)
+
         # 4) Trial-ending reminders (within 3 days). Deduped by trial date.
         trial_notices = 0
         soon = now + timezone.timedelta(days=3)
@@ -146,7 +165,8 @@ class Command(BaseCommand):
             self.style.SUCCESS(
                 f"billing access sync{' (dry-run)' if dry_run else ''}: "
                 f"grants_expired={expired_grants} grace_expired={expired_grace} "
-                f"period_canceled={expired_canceled} trial_notices={trial_notices} "
-                f"renewal_notices={renewal_notices} users_resynced={synced}"
+                f"period_canceled={expired_canceled} trials_expired={trials_expired} "
+                f"trial_notices={trial_notices} renewal_notices={renewal_notices} "
+                f"users_resynced={synced}"
             )
         )

@@ -46,7 +46,7 @@ const FALLBACK_PLANS: BillingPlan[] = [
     currency: "usd",
     monthly_price: 599,
     yearly_price: 5900,
-    trial_days: 0,
+    trial_days: 14,
     sort_order: 1,
     entitlements: [],
     metadata: {},
@@ -113,7 +113,11 @@ function planCta(plan: BillingPlan): { label: string; href: string } {
   if (plan.tier === "free") return { label: "Start free", href: "/register" };
   if (plan.tier === "organization")
     return { label: "Join organization pilot", href: "/contact" };
-  return { label: "Upgrade to Pro", href: "/dashboard/settings/billing?upgrade=pro" };
+  const label =
+    plan.trial_days > 0
+      ? `Start ${plan.trial_days}-day free trial`
+      : "Upgrade to Pro";
+  return { label, href: "/dashboard/settings/billing?upgrade=pro" };
 }
 
 export function PricingPlans() {
@@ -229,6 +233,11 @@ export function PricingPlans() {
                         ? `Billed yearly${savings ? ` · save ${savings}%` : ""}`
                         : "Billed monthly"}
                     </p>
+                    {plan.trial_days > 0 && (
+                      <p className="mt-1 text-xs font-medium text-brand-success">
+                        {plan.trial_days}-day free trial · no card required
+                      </p>
+                    )}
                   </>
                 )}
               </div>

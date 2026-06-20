@@ -143,6 +143,18 @@ TRANSACTIONAL_EMAILS: dict[str, TransactionalEmail] = {
         # Essential financial confirmation.
         category="transactional",
     ),
+    "billing_trial_ended": TransactionalEmail(
+        key="billing_trial_ended",
+        name="Trial ended",
+        template="billing_lifecycle",
+        subject="Your DueNest trial has ended",
+        body=(
+            "Your free trial has ended, so your account is now on the Free plan. "
+            "Your documents and data are exactly where you left them — upgrade any "
+            "time to bring back Pro features."
+        ),
+        category="lifecycle",
+    ),
 }
 
 

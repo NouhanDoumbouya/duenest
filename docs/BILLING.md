@@ -64,6 +64,21 @@ org_active, org_past_due`. A `cancel_at_period_end` subscription still grants
 access until `current_period_end`; a `grace_period` grants access until
 `grace_period_until`.
 
+### Free trials
+
+The **Pro** plan ships with a **14-day, no-card free trial** (`Plan.trial_days=14`,
+set in migration `0006`; `trialing` grants paid access). Stripe checkout passes
+`trial_period_days`; the manual provider starts a `trialing` sub directly. The
+pricing UI shows "14-day free trial · no card required" and a "Start 14-day free
+trial" CTA. Trial end:
+
+- **Stripe** is provider-driven (trial-end invoice → `active`, or dunning if no card).
+- **Manual / no-provider** trials are expired by the `sync_billing_access` cron
+  when `trial_end` passes → status `free` + a `billing_trial_ended` email. Scoped
+  to `provider_subscription_id=""` so it never fights Stripe webhooks.
+
+Adjust or disable per plan via `Plan.trial_days` (admin) or reverse migration `0006`.
+
 ## Local development (manual provider)
 
 Default config (`BILLING_PROVIDER=manual`, `BILLING_TEST_MODE=true`) needs no
@@ -161,6 +176,7 @@ founder **Emails** page) and flow through the shared suppression-aware sender:
 | `billing_renewal_upcoming` | `sync_billing_access` cron, active sub renews ≤3 days | lifecycle |
 | `billing_subscription_canceled` | `customer.subscription.deleted` webhook + cron cancel-at-period-end expiry | lifecycle |
 | `billing_refund` | `charge.refunded` webhook (`_handle_refund`) | transactional (essential) |
+| `billing_trial_ended` | `sync_billing_access` cron, manual trial expired → Free | lifecycle |
 
 Cron emails are **deduped** per cycle via `sub.metadata['lifecycle_emails']`, so
 the daily run emails once per trial/renewal — not every run. Dunning is

@@ -88,6 +88,10 @@ def send_subscription_canceled_email(user, sub) -> bool:
     )
 
 
+def send_trial_ended_email(user, sub) -> bool:
+    return _send("billing_trial_ended", user, action_label="Upgrade to Pro")
+
+
 def send_refund_email(user, *, amount_minor: int, currency: str) -> bool:
     from .receipts import format_money
 
