@@ -19,7 +19,6 @@ import {
   FilePlus2,
   FileText,
   Loader2,
-  RefreshCw,
   ScanLine,
   Search,
   Share2,
@@ -41,7 +40,6 @@ interface Command {
 
 const RESULT_ICON: Record<SearchResult["type"], LucideIcon> = {
   document: FileText,
-  subscription: RefreshCw,
   organization: Building2,
 };
 

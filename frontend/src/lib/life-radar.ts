@@ -12,16 +12,10 @@ import type { CalendarSummary } from "@/types/calendar";
 import type { DocumentRecord } from "@/types/documents";
 import type { EmergencyPack } from "@/types/emergency";
 import type { QuickShareListItem } from "@/types/quick-share";
-import type {
-  SubscriptionAttentionItem,
-  SubscriptionSummary,
-  TopUpcomingRenewal,
-} from "@/types/subscriptions";
 
 export type Severity = "critical" | "soon" | "review" | "safe";
 export type RiskType =
   | "document"
-  | "subscription"
   | "share"
   | "emergency"
   | "bundle"
@@ -50,7 +44,7 @@ export interface FixFirstItem {
    * When set, the UI can offer a "snooze" action that hides this item from the
    * radar for a while (the underlying expiry/renewal facts are unchanged).
    */
-  snooze?: { kind: "document" | "subscription"; targetId: number };
+  snooze?: { kind: "document"; targetId: number };
   /** Lower sorts first within a severity bucket (days until / age). */
   sortKey: number;
 }
@@ -79,24 +73,6 @@ export function formatRelativeDeadline(
   return `in ${days} days`;
 }
 
-/** "$20.00", "£12.00", falling back to "<code> 20.00" for unknown currencies. */
-export function formatMoneyRisk(
-  amount: string | number | null | undefined,
-  currency = "USD",
-): string {
-  const value = typeof amount === "string" ? Number(amount) : amount;
-  if (value === null || value === undefined || Number.isNaN(value)) return "—";
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency,
-      maximumFractionDigits: value % 1 === 0 ? 0 : 2,
-    }).format(value);
-  } catch {
-    return `${currency} ${value.toFixed(2)}`;
-  }
-}
-
 function daysBetweenNow(iso: string | null | undefined): number | null {
   if (!iso) return null;
   const target = new Date(iso).getTime();
@@ -123,19 +99,6 @@ export function computeDocumentSeverity(doc: DocumentRecord): Severity {
     doc.computed_status === "renewal_due"
   )
     return "soon";
-  return "review";
-}
-
-export function computeSubscriptionSeverity(
-  item: SubscriptionAttentionItem,
-): Severity {
-  const cancelDays = daysBetweenNow(item.cancellation_deadline);
-  if (cancelDays !== null && cancelDays >= 0 && cancelDays <= 3)
-    return "critical";
-  if (item.urgency === "overdue" || item.urgency === "renews_today")
-    return "critical";
-  if (item.urgency === "renews_soon") return "soon";
-  if (item.urgency === "upcoming") return "review";
   return "review";
 }
 
@@ -187,38 +150,6 @@ export function buildDocumentItems(docs: DocumentRecord[]): FixFirstItem[] {
       actionLabel: doc.is_expired ? "Update document" : "Open document",
       snooze: { kind: "document", targetId: doc.id },
       sortKey: doc.days_until_expiry ?? 9_999,
-    };
-  });
-}
-
-export function buildSubscriptionItems(
-  items: SubscriptionAttentionItem[],
-): FixFirstItem[] {
-  return items.map((item) => {
-    const severity = computeSubscriptionSeverity(item);
-    const cancelDays = daysBetweenNow(item.cancellation_deadline);
-    const reason =
-      item.reasons[0] ||
-      (cancelDays !== null && cancelDays <= 7
-        ? "Cancellation deadline is approaching."
-        : "Review this subscription before it renews.");
-    const time =
-      item.days_until_renewal !== null
-        ? `Renews ${formatRelativeDeadline(item.days_until_renewal)}`
-        : cancelDays !== null
-          ? `Cancel by ${formatRelativeDeadline(cancelDays)}`
-          : "";
-    return {
-      id: `subscription-${item.id}`,
-      type: "subscription" as const,
-      severity,
-      title: `${item.name}${item.amount ? ` · ${formatMoneyRisk(item.amount, item.currency)}` : ""}`,
-      reason,
-      timeContext: time,
-      href: `/dashboard/subscriptions/${item.id}`,
-      actionLabel: "Review subscription",
-      snooze: { kind: "subscription", targetId: item.id },
-      sortKey: item.days_until_renewal ?? cancelDays ?? 9_999,
     };
   });
 }
@@ -325,16 +256,6 @@ export function getActiveShareRisk(shares: QuickShareListItem[]): {
   };
 }
 
-export function getNextCharge(
-  summary: SubscriptionSummary | null,
-): TopUpcomingRenewal | null {
-  const renewals = summary?.top_upcoming_renewals;
-  if (!renewals || renewals.length === 0) return null;
-  return [...renewals].sort(
-    (a, b) => a.days_until_renewal - b.days_until_renewal,
-  )[0];
-}
-
 export interface NextDeadline {
   label: string;
   relative: string;
@@ -393,7 +314,6 @@ export function computeDashboardReadinessScore(input: {
 
 const TYPE_NOUNS: Record<RiskType, [string, string]> = {
   document: ["document issue", "document issues"],
-  subscription: ["subscription deadline", "subscription deadlines"],
   share: ["active share", "active shares"],
   emergency: ["emergency setup step", "emergency setup steps"],
   bundle: ["bundle", "bundles"],
@@ -428,7 +348,6 @@ export function buildLifeRadarStatusSentence(
 
 export interface LifeRadarSummaryInput {
   attentionDocuments: DocumentRecord[];
-  subscriptionAttention: SubscriptionAttentionItem[];
   activeShares: QuickShareListItem[];
   emergency: EmergencyReadiness;
 }
@@ -442,7 +361,6 @@ export function buildLifeRadarSummary(input: LifeRadarSummaryInput): {
   const emergencyItem = buildEmergencyItem(input.emergency);
   const items = sortAttentionItems([
     ...buildDocumentItems(input.attentionDocuments),
-    ...buildSubscriptionItems(input.subscriptionAttention),
     ...buildShareItems(input.activeShares),
     ...(emergencyItem ? [emergencyItem] : []),
   ]);

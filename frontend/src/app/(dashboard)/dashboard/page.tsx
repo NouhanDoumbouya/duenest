@@ -237,11 +237,7 @@ export default function DashboardPage() {
   }, []);
 
   const handleSnooze = useCallback(
-    async (snooze: { kind: "document" | "subscription"; targetId: number }) => {
-      // Only documents are snoozable now that Subscription Radar is gone; the
-      // Fix First list never produces subscription items, but the shared type
-      // still carries the union, so guard defensively.
-      if (snooze.kind !== "document") return;
+    async (snooze: { kind: "document"; targetId: number }) => {
       const itemId = `${snooze.kind}-${snooze.targetId}`;
       setSnoozingId(itemId);
       try {
@@ -279,7 +275,6 @@ export default function DashboardPage() {
     () =>
       buildLifeRadarSummary({
         attentionDocuments: state?.attentionDocs ?? [],
-        subscriptionAttention: [],
         activeShares: state?.shares ?? [],
         emergency,
       }),

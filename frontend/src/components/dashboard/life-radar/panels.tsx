@@ -1,25 +1,20 @@
 import Link from "next/link";
 import {
   CalendarDays,
-  CreditCard,
   FileText,
   LifeBuoy,
   Share2,
-  TrendingUp,
 } from "lucide-react";
 
 import { SectionCard } from "@/components/ui/section-card";
 import { formatDate } from "@/lib/documents";
 import {
-  formatMoneyRisk,
   formatRelativeDeadline,
-  getNextCharge,
   type EmergencyReadiness,
 } from "@/lib/life-radar";
 import { cn } from "@/lib/utils";
 import type { CalendarEvent, CalendarSummary } from "@/types/calendar";
 import type { DocumentRecord } from "@/types/documents";
-import type { SubscriptionSummary } from "@/types/subscriptions";
 import { DashboardEmptyState, DashboardSectionError } from "./states";
 
 function relativeFromDate(iso: string | null | undefined): string {
@@ -31,15 +26,6 @@ function relativeFromDate(iso: string | null | undefined): string {
   return formatRelativeDeadline(
     Math.round((target - start.getTime()) / 86_400_000),
   );
-}
-
-function firstCurrencyAmount(
-  map: Record<string, string> | null | undefined,
-): { amount: string; currency: string } | null {
-  const entries = Object.entries(map ?? {});
-  if (entries.length === 0) return null;
-  const [currency, amount] = entries[0];
-  return { currency, amount };
 }
 
 // ---------------------------------------------------------------------------
@@ -110,126 +96,6 @@ export function ThisWeekPanel({
         </ul>
       )}
     </SectionCard>
-  );
-}
-
-// ---------------------------------------------------------------------------
-
-export function MoneyRadarPanel({
-  summary,
-  error,
-  onRetry,
-}: {
-  summary: SubscriptionSummary | null;
-  error: boolean;
-  onRetry?: () => void;
-}) {
-  const monthly = summary ? firstCurrencyAmount(summary.monthly_cost_by_currency) : null;
-  const yearly = summary ? firstCurrencyAmount(summary.yearly_cost_by_currency) : null;
-  const nextCharge = getNextCharge(summary);
-
-  return (
-    <SectionCard
-      title="Money Radar"
-      action={
-        <Link
-          href="/dashboard/subscriptions"
-          className="text-sm font-medium text-primary hover:underline"
-        >
-          Open
-        </Link>
-      }
-    >
-      {error ? (
-        <DashboardSectionError
-          message="Money Radar could not load. Try again."
-          onRetry={onRetry}
-        />
-      ) : !summary || summary.total_count === 0 ? (
-        <DashboardEmptyState
-          icon={CreditCard}
-          title="No subscriptions tracked"
-          description="Track subscriptions to catch silent renewals before they charge you."
-        />
-      ) : (
-        <div className="space-y-3">
-          <div className="flex items-end justify-between gap-2 rounded-lg bg-muted/40 px-3 py-2.5">
-            <div>
-              <p className="text-xs text-muted-foreground">Monthly tracked</p>
-              <p className="text-lg font-semibold">
-                {monthly
-                  ? formatMoneyRisk(monthly.amount, monthly.currency)
-                  : "—"}
-              </p>
-            </div>
-            {yearly && (
-              <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                <TrendingUp className="size-3.5" aria-hidden />
-                {formatMoneyRisk(yearly.amount, yearly.currency)}/yr
-              </p>
-            )}
-          </div>
-
-          {nextCharge && (
-            <div className="flex items-center justify-between gap-2 text-sm">
-              <span className="min-w-0 truncate">
-                Next charge ·{" "}
-                <span className="font-medium">{nextCharge.name}</span>
-              </span>
-              <span className="shrink-0 text-xs font-medium text-muted-foreground">
-                {formatMoneyRisk(nextCharge.amount, nextCharge.currency)} ·{" "}
-                {formatRelativeDeadline(nextCharge.days_until_renewal)}
-              </span>
-            </div>
-          )}
-
-          <div className="flex flex-wrap gap-1.5">
-            {summary.trials_ending_soon > 0 && (
-              <MoneyChip
-                tone="amber"
-                label={`${summary.trials_ending_soon} trial${summary.trials_ending_soon === 1 ? "" : "s"} ending`}
-              />
-            )}
-            {summary.cancellation_deadlines_soon > 0 && (
-              <MoneyChip
-                tone="red"
-                label={`${summary.cancellation_deadlines_soon} cancel deadline${summary.cancellation_deadlines_soon === 1 ? "" : "s"}`}
-              />
-            )}
-            {summary.review_recommended_count > 0 && (
-              <MoneyChip
-                tone="slate"
-                label={`${summary.review_recommended_count} to review`}
-              />
-            )}
-          </div>
-        </div>
-      )}
-    </SectionCard>
-  );
-}
-
-function MoneyChip({
-  label,
-  tone,
-}: {
-  label: string;
-  tone: "amber" | "red" | "slate";
-}) {
-  const cls = {
-    amber: "bg-brand-amber/10 text-brand-amber",
-    red: "bg-destructive/10 text-destructive",
-    slate: "bg-muted text-muted-foreground",
-  }[tone];
-  return (
-    <span
-      className={cn(
-        "rounded-full px-2 py-0.5 text-[0.68rem] font-medium",
-        cls,
-      )}
-    >
-      {label}
-    </span>
   );
 }
 

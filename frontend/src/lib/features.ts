@@ -22,7 +22,6 @@ export function getFeatureMap(): Promise<FeatureMap> {
 export const FEATURE_BY_NAV_HREF: Record<string, string> = {
   "/dashboard/files": "file_inbox",
   "/dashboard/notifications": "notification_center",
-  "/dashboard/subscriptions": "subscriptions",
   "/dashboard/organizations": "organizations",
   "/dashboard/bundles": "bundles",
   "/dashboard/quick-share": "quick_share",

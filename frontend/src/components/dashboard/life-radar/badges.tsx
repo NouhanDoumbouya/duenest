@@ -4,7 +4,6 @@ import {
   CalendarClock,
   CheckCircle2,
   Clock,
-  CreditCard,
   FileText,
   LifeBuoy,
   Package,
@@ -43,7 +42,6 @@ const SEVERITY_META: Record<
 
 const RISK_TYPE_META: Record<RiskType, { label: string; icon: LucideIcon }> = {
   document: { label: "Document", icon: FileText },
-  subscription: { label: "Subscription", icon: CreditCard },
   share: { label: "Share", icon: Share2 },
   emergency: { label: "Emergency", icon: LifeBuoy },
   bundle: { label: "Bundle", icon: Package },

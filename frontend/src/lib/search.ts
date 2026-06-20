@@ -1,10 +1,10 @@
 // Unified quick-search used by the command palette. Wraps the owner-scoped
 // `/search/` endpoint, which returns a small, capped list of "go here" results
-// across documents, subscriptions, and organizations.
+// across documents and organizations.
 
 import { apiFetch } from "./api";
 
-export type SearchResultType = "document" | "subscription" | "organization";
+export type SearchResultType = "document" | "organization";
 
 export interface SearchResult {
   type: SearchResultType;
