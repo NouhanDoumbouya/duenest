@@ -113,7 +113,7 @@ describe("buildFirstLifeRadarPreview", () => {
 describe("getPersonalizedNextAction", () => {
   it("gives exactly one action per goal", () => {
     expect(getPersonalizedNextAction("international_student").href).toBe("/dashboard/bundles");
-    expect(getPersonalizedNextAction("subscriptions").href).toBe("/dashboard/subscriptions");
+    expect(getPersonalizedNextAction("subscriptions").href).toBe("/dashboard/reminders");
     expect(getPersonalizedNextAction("emergency").href).toBe("/dashboard/emergency");
     expect(getPersonalizedNextAction("vault").href).toBe("/dashboard/files");
     expect(getPersonalizedNextAction(null).href).toBe("/dashboard");
@@ -173,7 +173,7 @@ describe("computeReadinessChecklist", () => {
     );
     expect(items.find((i) => i.key === "first_document")?.completed).toBe(true);
     expect(items.find((i) => i.key === "try_safesend")?.completed).toBe(false);
-    expect(items).toHaveLength(6);
+    expect(items).toHaveLength(5);
   });
 });
 

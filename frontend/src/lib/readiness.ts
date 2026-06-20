@@ -138,8 +138,8 @@ export function getOnboardingGoalOptions(): GoalOption[] {
     },
     {
       key: "subscriptions",
-      label: "Subscriptions and renewals",
-      description: "Track bills, subscriptions, trial endings, and renewal dates.",
+      label: "Renewals and deadlines",
+      description: "Track renewal dates, document expiries, and important deadlines.",
     },
     {
       key: "emergency",
@@ -174,7 +174,7 @@ export function getDocumentSuggestionsForGoal(goal: ReadinessGoal): string[] {
     case "emergency":
       return ["Passport / ID", "Insurance", "Emergency note", "Important contact document"];
     case "subscriptions":
-      return ["Subscription or bill", "Insurance renewal", "Membership"];
+      return ["Insurance renewal", "Membership", "Bill or statement"];
     case "vault":
     case "unsure":
     default:
@@ -311,7 +311,7 @@ export function getPersonalizedNextAction(goal: ReadinessGoal | null): NextActio
     case "family":
       return { label: "Prepare emergency access", href: "/dashboard/emergency" };
     case "subscriptions":
-      return { label: "Add your first subscription", href: "/dashboard/subscriptions" };
+      return { label: "Add your first renewal reminder", href: "/dashboard/reminders" };
     case "emergency":
       return { label: "Add this to Emergency Access", href: "/dashboard/emergency" };
     case "vault":
@@ -375,13 +375,6 @@ export function computeReadinessChecklist(
       title: "Prepare Emergency Access",
       completed: Boolean((state?.metadata as Record<string, unknown>)?.emergency_pack_created_at),
       href: "/dashboard/emergency",
-    },
-    {
-      key: "add_subscription",
-      title: "Add a subscription or renewal",
-      completed: Boolean((state?.metadata as Record<string, unknown>)?.first_subscription_added_at),
-      href: "/dashboard/subscriptions",
-      optional: true,
     },
   ];
 }
