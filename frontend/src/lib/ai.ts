@@ -197,3 +197,35 @@ export function chatWithAssistant(
     body: { message, history },
   });
 }
+
+export type IntakeSuggestionType =
+  | "create_document"
+  | "set_reminder"
+  | "add_to_pack"
+  | "draft";
+
+export interface IntakeSuggestion {
+  type: IntakeSuggestionType;
+  label: string;
+  goal?: string;
+}
+
+export interface IntakeSuggestedFields {
+  title?: string;
+  document_type?: string;
+  expiry_date?: string;
+  reference_number?: string;
+}
+
+export interface IntakeResult {
+  available: boolean;
+  reason: AiReason;
+  summary: string;
+  suggested_fields: IntakeSuggestedFields;
+  suggestions: IntakeSuggestion[];
+}
+
+/** Understand an uploaded file and get confirm-gated next-action suggestions. */
+export function getFileIntake(fileId: number): Promise<IntakeResult> {
+  return apiFetch<IntakeResult>(`/files/${fileId}/intake/`, { method: "POST" });
+}
