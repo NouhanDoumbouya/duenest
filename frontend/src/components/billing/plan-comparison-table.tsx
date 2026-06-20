@@ -19,10 +19,8 @@ const ROWS: Row[] = [
   { key: "quick_shares_per_month", label: "Quick Shares / month", kind: "number" },
   { key: "bundles_limit", label: "Application bundles", kind: "number" },
   { key: "reminders_limit", label: "Reminders", kind: "number" },
-  { key: "tracked_subscriptions_limit", label: "Tracked subscriptions", kind: "number" },
   { key: "emergency_protocol_enabled", label: "Emergency Protocol", kind: "bool" },
   { key: "smart_intake_enabled", label: "Smart Intake (OCR)", kind: "bool" },
-  { key: "full_money_radar", label: "Full Money Radar", kind: "bool" },
   { key: "organizations_enabled", label: "Organizations", kind: "bool" },
   { key: "priority_features", label: "Priority beta features", kind: "bool" },
 ];

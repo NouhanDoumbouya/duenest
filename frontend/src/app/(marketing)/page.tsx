@@ -34,7 +34,7 @@ import {
   EmergencyMockup,
   FixFirstCard,
   LifeRadarMockup,
-  MoneyRadarMockup,
+  DeadlinesRenewalsMockup,
   SafeSendMockup,
   VaultMockup,
 } from "@/components/marketing/mockups";
@@ -161,7 +161,7 @@ export default function LandingPage() {
         <Vault />
         <SafeSend />
         <Emergency />
-        <MoneyRadar />
+        <DeadlinesRenewals />
         <Capabilities />
         {AI_ENABLED && <AiAssist />}
         <Security />
@@ -391,13 +391,13 @@ function Pain() {
   const before = [
     "Files scattered across WhatsApp, email, Drive, and your gallery",
     "No idea what expires or renews soon",
-    "Subscriptions charge you by surprise",
+    "Scrambling to assemble documents for an application",
     "Shared files are impossible to take back",
   ];
   const after = [
     "Important documents in one organized place",
     "Deadlines and renewals visible at a glance",
-    "Renewals caught before money leaves your account",
+    "Application packs ready before the deadline",
     "Secure sharing you can revoke anytime",
   ];
   return (
@@ -461,7 +461,7 @@ function LifeRadar() {
   const watches = [
     "Documents",
     "Renewals",
-    "Subscriptions",
+    "Deadlines",
     "Shares",
     "Bundles",
     "Emergency setup",
@@ -490,7 +490,7 @@ function LifeRadar() {
           <SectionHeader
             eyebrow="Life Radar"
             title="Know what needs attention before it becomes a problem."
-            description="Life Radar watches your documents, renewals, subscriptions, shares, bundles, and emergency setup — then tells you what to fix first."
+            description="Life Radar watches your documents, renewals, deadlines, shares, bundles, and emergency setup — then tells you what to fix first."
           />
         </ScrollReveal>
         <div className="mt-14 grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
@@ -701,21 +701,21 @@ function Emergency() {
   );
 }
 
-function MoneyRadar() {
+function DeadlinesRenewals() {
   return (
     <ProductSection
-      id="money-radar"
+      id="deadlines-renewals"
       reverse
-      eyebrow="Money Radar"
-      title="Catch silent renewals before they charge you."
-      description="Track subscriptions, trials, cancellation deadlines, and upcoming charges before the money leaves your account."
+      eyebrow="Deadlines & Renewals"
+      title="Never miss an expiry, renewal, or application deadline."
+      description="Track passport and visa expiries, ID and licence renewals, insurance, certificates, and application deadlines — with reminders before they pass."
       bullets={[
-        "Next charge, monthly spend, and yearly estimate",
-        "Trial-ending and cancellation-deadline reminders",
-        "“Still using this?” prompts to review what you pay for",
-        "DueNest tracks renewals — it never processes payments",
+        "Expiry, renewal, and deadline reminders in one place",
+        "Choose when to be reminded — 7, 30, 60, or 90 days before",
+        "Recurring reminders for anything that comes back around",
+        "Linked to the document or application pack it belongs to",
       ]}
-      visual={<MoneyRadarMockup />}
+      visual={<DeadlinesRenewalsMockup />}
     />
   );
 }
@@ -1101,7 +1101,7 @@ function UseCases() {
     {
       title: "Young professionals",
       description:
-        "Track contracts, certificates, subscriptions, and the deadlines that matter for your career.",
+        "Track contracts, certificates, and the renewal deadlines that matter for your career.",
     },
     {
       title: "Freelancers",

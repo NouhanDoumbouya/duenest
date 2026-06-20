@@ -16,7 +16,7 @@ const sections: LegalSection[] = [
   },
   {
     title: "2. Description of service",
-    body: "DueNest helps you organize and track important documents, dates, renewals, subscriptions, application bundles, reminders, and controlled sharing. It is an organization and tracking tool.",
+    body: "DueNest helps you organize and track important documents, dates, renewals, application bundles, reminders, and controlled sharing. It is a document organization and readiness tool.",
   },
   {
     title: "3. Beta status",
@@ -51,8 +51,8 @@ const sections: LegalSection[] = [
     body: "Emergency Access is a document access aid that exposes selected items you prepare in advance. It is not a medical, legal, or emergency response service, and must not be relied on as one.",
   },
   {
-    title: "10. Subscription and payment tracking limitation",
-    body: "DueNest helps you track subscriptions and renewals. It does not process payments and does not cancel subscriptions on your behalf unless a real integration is clearly stated. You remain responsible for managing your subscriptions with their providers.",
+    title: "10. Renewal and deadline tracking limitation",
+    body: "DueNest helps you track renewals, expiries, and deadlines by sending reminders. It does not process payments, connect to your bank or card accounts, or act on your behalf with any provider or institution. You remain responsible for completing renewals and applications with the relevant providers.",
   },
   {
     title: "11. Document intelligence limitation",

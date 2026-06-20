@@ -14,7 +14,7 @@ import type { BillingInterval } from "@/types/billing";
 const PRO_UNLOCKS = [
   "Unlimited documents & high storage",
   "Full premium scanner & Smart Intake",
-  "Full Life Radar, Money Radar & Emergency Protocol",
+  "Full Life Radar, Application Packs & Emergency Protocol",
   "Higher secure-sharing limits",
 ];
 

@@ -108,7 +108,7 @@ function planHighlights(plan: BillingPlan): string[] {
     "Unlimited documents & high storage",
     "Full premium scanner & Smart Intake",
     ...(AI_ENABLED ? ["AI document assist — extract & ask, you confirm"] : []),
-    "Full Life Radar & Money Radar",
+    "Full Life Radar & Application Packs",
     "Full Emergency Protocol",
     "Higher secure-sharing limits",
     "Priority beta features",

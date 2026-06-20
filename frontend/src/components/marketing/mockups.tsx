@@ -3,7 +3,6 @@ import {
   Ban,
   CalendarClock,
   Check,
-  CreditCard,
   Eye,
   FileText,
   Inbox,
@@ -15,7 +14,6 @@ import {
   Search,
   ShieldCheck,
   Timer,
-  TrendingUp,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -187,9 +185,9 @@ export function LifeRadarMockup() {
       chip: <StatusChip tone="expiring">Expiring</StatusChip>,
     },
     {
-      icon: CreditCard,
-      title: "Spotify",
-      meta: "Renews tomorrow · £11.99",
+      icon: CalendarClock,
+      title: "Car insurance",
+      meta: "Renews in 12 days",
       tone: "blue",
       chip: <StatusChip tone="info">Renews</StatusChip>,
     },
@@ -216,7 +214,7 @@ export function LifeRadarMockup() {
 
   const stats = [
     { label: "Next deadline", value: "23 days", icon: CalendarClock },
-    { label: "Next charge", value: "Tomorrow", icon: CreditCard },
+    { label: "Renewals due", value: "3 soon", icon: RefreshCw },
     { label: "Active shares", value: "1", icon: Link2 },
     { label: "Emergency", value: "Almost", icon: LifeBuoy },
   ];
@@ -316,9 +314,9 @@ export function FixFirstCard() {
       chip: <StatusChip tone="expiring">Expiring</StatusChip>,
     },
     {
-      icon: CreditCard,
-      title: "Spotify",
-      meta: "Renews tomorrow",
+      icon: CalendarClock,
+      title: "Car insurance",
+      meta: "Renews in 12 days",
       tone: "blue",
       chip: <StatusChip tone="info">Renews</StatusChip>,
     },
@@ -604,56 +602,55 @@ export function EmergencyMockup() {
   );
 }
 
-// ---- Money Radar -----------------------------------------------------------
+// ---- Deadlines & Renewals --------------------------------------------------
 
-export function MoneyRadarMockup() {
-  const subs = [
+export function DeadlinesRenewalsMockup() {
+  const items = [
     {
-      title: "Spotify",
-      meta: "Renews tomorrow",
-      amount: "£11.99",
+      title: "Passport",
+      meta: "Expires in 3 weeks",
       tone: "amber",
       chip: <StatusChip tone="expiring">Soon</StatusChip>,
     },
     {
-      title: "Notion trial",
-      meta: "Cancel by 14 Jun",
-      amount: "£0.00",
+      title: "Visa application",
+      meta: "Deadline 14 Jun",
       tone: "blue",
-      chip: <StatusChip tone="info">Trial ends</StatusChip>,
+      chip: <StatusChip tone="info">Deadline</StatusChip>,
     },
     {
-      title: "iCloud+",
-      meta: "Still using this?",
-      amount: "£2.99",
+      title: "Car insurance",
+      meta: "Renews 28 Jun",
       tone: "neutral",
-      chip: <StatusChip tone="info">Review</StatusChip>,
+      chip: <StatusChip tone="info">Renewal</StatusChip>,
     },
   ];
   return (
-    <BrowserFrame url="app.duenest.com/subscriptions">
+    <BrowserFrame url="app.duenest.com/reminders">
       <div className="space-y-4 p-4 sm:p-5">
         <div className="flex items-center justify-between">
-          <p className="font-heading text-sm font-semibold">Money Radar</p>
+          <p className="font-heading text-sm font-semibold">
+            Deadlines &amp; Renewals
+          </p>
           <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary">
-            <TrendingUp className="size-3" />
-            Tracking 7
+            <CalendarClock className="size-3" />
+            5 upcoming
           </span>
         </div>
 
         <div className="grid grid-cols-2 gap-2">
           <div className="rounded-xl border border-border bg-background px-3 py-2.5">
-            <p className="text-[11px] text-muted-foreground">Monthly spend</p>
-            <p className="mt-0.5 text-lg font-semibold tabular-nums">£42.18</p>
+            <p className="text-[11px] text-muted-foreground">This week</p>
+            <p className="mt-0.5 text-lg font-semibold tabular-nums">2</p>
           </div>
           <div className="rounded-xl border border-border bg-background px-3 py-2.5">
-            <p className="text-[11px] text-muted-foreground">Yearly estimate</p>
-            <p className="mt-0.5 text-lg font-semibold tabular-nums">£506</p>
+            <p className="text-[11px] text-muted-foreground">Next 30 days</p>
+            <p className="mt-0.5 text-lg font-semibold tabular-nums">5</p>
           </div>
         </div>
 
         <div className="space-y-2">
-          {subs.map((s) => (
+          {items.map((s) => (
             <div
               key={s.title}
               className="flex items-center gap-3 rounded-xl border border-border bg-background px-3 py-2.5"
@@ -664,21 +661,18 @@ export function MoneyRadarMockup() {
                   iconTone[s.tone],
                 )}
               >
-                <RefreshCw className="size-4" />
+                <CalendarClock className="size-4" />
               </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{s.title}</p>
                 <p className="truncate text-xs text-muted-foreground">{s.meta}</p>
               </div>
-              <span className="text-sm font-semibold tabular-nums">
-                {s.amount}
-              </span>
               {s.chip}
             </div>
           ))}
         </div>
         <p className="text-[11px] text-muted-foreground">
-          DueNest tracks renewals and charges — it never processes payments.
+          DueNest reminds you before documents expire and deadlines pass.
         </p>
       </div>
     </BrowserFrame>

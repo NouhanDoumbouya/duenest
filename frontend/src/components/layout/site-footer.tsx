@@ -12,7 +12,7 @@ const columns: { heading: string; links: FooterLink[] }[] = [
       { label: "Vault", href: "/#vault" },
       { label: "SafeSend", href: "/#safesend" },
       { label: "Emergency Protocol", href: "/#emergency" },
-      { label: "Money Radar", href: "/#money-radar" },
+      { label: "Deadlines & Renewals", href: "/#deadlines-renewals" },
       { label: "Pricing", href: "/pricing" },
     ],
   },

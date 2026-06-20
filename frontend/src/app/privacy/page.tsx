@@ -12,11 +12,11 @@ export const metadata: Metadata = {
 const sections: LegalSection[] = [
   {
     title: "1. Introduction",
-    body: "This Privacy draft explains what information DueNest collects, how it is used, and the choices you have. DueNest is a tool for organizing important documents, renewals, applications, subscriptions, and secure sharing. This draft is product-specific but not final legal text.",
+    body: "This Privacy draft explains what information DueNest collects, how it is used, and the choices you have. DueNest is a tool for organizing important documents, renewals, applications, and secure sharing. This draft is product-specific but not final legal text.",
   },
   {
     title: "2. Information you provide",
-    body: "Account details you enter (such as name and email), the document records, dates, notes, and files you create or upload, reminders and bundles you build, subscription entries you track, and any feedback or support messages you send.",
+    body: "Account details you enter (such as name and email), the document records, dates, notes, and files you create or upload, reminders and bundles you build, and any feedback or support messages you send.",
   },
   {
     title: "3. Files and documents",
@@ -31,8 +31,8 @@ const sections: LegalSection[] = [
     body: "If you join the waitlist, DueNest stores the details you submit (such as name, email, country, persona, and any message) to evaluate and roll out private-beta access.",
   },
   {
-    title: "6. Subscription tracking information",
-    body: "Subscription entries you add are used to track renewals and remind you of upcoming charges. DueNest does not process payments and does not store full card numbers or banking credentials.",
+    title: "6. Reminders and deadline information",
+    body: "Dates you add (such as document expiry, renewal, and application deadlines) are used to remind you before they pass. DueNest does not process payments and does not connect to your bank or card accounts.",
   },
   {
     title: "7. Organization / workspace information",

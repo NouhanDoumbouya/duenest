@@ -73,7 +73,7 @@ const limitations = [
 const notDoing = [
   "We do not claim zero-knowledge or 'military-grade' encryption.",
   "We do not claim to make screenshots impossible.",
-  "We do not process payments or cancel subscriptions on your behalf.",
+  "We do not process payments or connect to your bank or card accounts.",
   "We do not sell your documents.",
   "We do not show raw IP addresses in normal internal product views.",
 ];

@@ -1,6 +1,6 @@
 import { type CSSProperties } from "react";
 import {
-  CreditCard,
+  CalendarClock,
   FileText,
   LifeBuoy,
   QrCode,
@@ -14,7 +14,7 @@ const nodes = [
   { icon: Radar, label: "Life Radar", tag: "Stays watched" },
   { icon: QrCode, label: "SafeSend", tag: "Share on demand" },
   { icon: LifeBuoy, label: "Emergency", tag: "Ready if needed" },
-  { icon: CreditCard, label: "Money Radar", tag: "Catch charges" },
+  { icon: CalendarClock, label: "Deadlines", tag: "Never missed" },
 ];
 
 /**

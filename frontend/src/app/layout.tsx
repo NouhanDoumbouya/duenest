@@ -18,7 +18,7 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://duenest.app";
 const SITE_TITLE =
   "DueNest — Stay ready for important documents, renewals, and secure sharing";
 const SITE_DESCRIPTION =
-  "DueNest helps you organize important files, track renewals, build bundles, manage subscriptions, and share selected documents securely — all from one calm, secure place.";
+  "DueNest helps you organize, prepare, track, generate, and safely share important documents before deadlines, applications, renewals, and emergencies — all from one calm, secure place.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -30,9 +30,9 @@ export const metadata: Metadata = {
   applicationName: "DueNest",
   keywords: [
     "document organizer",
+    "document scanner",
     "renewal reminders",
     "secure document sharing",
-    "subscription tracker",
     "application packs",
     "emergency document access",
   ],
