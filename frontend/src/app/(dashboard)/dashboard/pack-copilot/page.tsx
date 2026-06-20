@@ -2,11 +2,13 @@
 
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   CheckCircle2,
   CircleDashed,
   CircleHelp,
   FileText,
+  FolderPlus,
   Info,
   Loader2,
   PenLine,
@@ -25,6 +27,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { ApiError } from "@/lib/api";
 import {
   analyzePack,
+  createPackBundle,
   type PackRequirement,
   type PackResult,
   type PackStatus,
@@ -219,6 +222,35 @@ export default function PackCopilotPage() {
 }
 
 function ResultView({ result }: { result: PackResult }) {
+  const router = useRouter();
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  async function createPack() {
+    if (creating) return;
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const res = await createPackBundle({
+        goal: result.goal,
+        deadline: result.deadline,
+        requirements: result.requirements.map((r) => ({
+          name: r.name,
+          description: r.description,
+          document_ids: r.documents.map((d) => d.document_id),
+        })),
+      });
+      router.push(`/dashboard/bundles/${res.bundle_id}`);
+    } catch (err) {
+      setCreateError(
+        err instanceof ApiError
+          ? err.message
+          : "Couldn't create the pack. Please try again.",
+      );
+      setCreating(false);
+    }
+  }
+
   if (!result.available) {
     if (result.reason === "not_configured") {
       return (
@@ -270,9 +302,30 @@ function ResultView({ result }: { result: PackResult }) {
                 )}
               </p>
             </div>
-            <Link href={draftHref} className={buttonVariants({ size: "sm" })}>
-              <PenLine /> Draft a cover letter
-            </Link>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                onClick={createPack}
+                disabled={creating || total === 0}
+              >
+                {creating ? (
+                  <>
+                    <Loader2 className="animate-spin" /> Creating…
+                  </>
+                ) : (
+                  <>
+                    <FolderPlus /> Create this pack
+                  </>
+                )}
+              </Button>
+              <Link
+                href={draftHref}
+                className={buttonVariants({ variant: "outline", size: "sm" })}
+              >
+                <PenLine /> Draft a cover letter
+              </Link>
+            </div>
           </div>
 
           {total > 0 && (
@@ -289,6 +342,13 @@ function ResultView({ result }: { result: PackResult }) {
           {result.summary && (
             <p className="text-sm leading-relaxed text-muted-foreground">
               {result.summary}
+            </p>
+          )}
+
+          {createError && (
+            <p className="flex items-start gap-2 text-xs text-destructive">
+              <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
+              {createError}
             </p>
           )}
         </CardContent>
