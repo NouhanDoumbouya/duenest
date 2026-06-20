@@ -5843,3 +5843,43 @@ class AiChatView(APIView):
             },
         )
         return Response(result, status=status.HTTP_200_OK)
+
+
+class FileIntakeView(APIView):
+    """
+    Smart Intake — understand an owned file and propose next actions.
+
+    POST ``/api/v1/files/<id>/intake/`` → a one-line summary, the suggested
+    fields (reused from extraction), and **confirm-gated** next-action
+    suggestions (create_document / set_reminder / add_to_pack / draft). The
+    endpoint performs no writes; the user confirms any action in its flow.
+
+    Owner-scoped; gated by ``ai_features`` + ``ai_intake`` (503 when off) and
+    platform config (no key → ``200 {available:false}``). Per-user rate limited.
+    """
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "ai_intake"
+
+    def post(self, request, pk):
+        require_feature_enabled("ai_features", request.user)
+        require_feature_enabled("ai_intake", request.user)
+
+        file = get_object_or_404(_owned_file_queryset(request.user), pk=pk)
+
+        from .ai_intake import suggest_intake
+
+        result = suggest_intake(request.user, file)
+        _track_product_event(
+            request,
+            "file_intake_suggested",
+            object_type="document_file",
+            object_id=file.id,
+            metadata={
+                "available": result.get("available"),
+                "reason": result.get("reason"),
+                "suggestions": len(result.get("suggestions") or []),
+            },
+        )
+        return Response(result, status=status.HTTP_200_OK)

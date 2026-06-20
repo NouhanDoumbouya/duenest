@@ -73,6 +73,7 @@ from .views import (
     DocumentFileTrashListView,
     DocumentFileTrashView,
     AiBriefingView,
+    FileIntakeView,
     AiChatView,
     DocumentDraftView,
     DocumentProofRecordListView,
@@ -169,6 +170,11 @@ urlpatterns = [
         "files/<int:pk>/permanent-delete/",
         FileInboxPermanentDeleteView.as_view(),
         name="file-inbox-permanent-delete",
+    ),
+    path(
+        "files/<int:pk>/intake/",
+        FileIntakeView.as_view(),
+        name="file-inbox-intake",
     ),
     path(
         "files/<int:pk>/attach-document/",
