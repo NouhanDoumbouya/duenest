@@ -7,6 +7,7 @@ import sys
 
 from decouple import Csv, config
 
+from apps.ai.config import resolve_ai_settings
 from apps.notifications.email_config import resolve_email_settings
 from config.storage import build_storages
 
@@ -115,6 +116,7 @@ LOCAL_APPS = [
     "apps.notifications.apps.NotificationsConfig",
     "apps.features.apps.FeaturesConfig",
     "apps.billing.apps.BillingConfig",
+    "apps.ai.apps.AiConfig",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -277,6 +279,20 @@ EMAIL_TIMEOUT = config("EMAIL_TIMEOUT", default=10, cast=int)
 DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="DueNest <noreply@localhost>")
 SERVER_EMAIL = config("SERVER_EMAIL", default=DEFAULT_FROM_EMAIL)
 SUPPORT_EMAIL = config("SUPPORT_EMAIL", default="support@duenest.com")
+
+# ---------------------------------------------------------------------------
+# AI (Claude / document intelligence) — KEY-GATED, built dark by default.
+# Set ANTHROPIC_API_KEY to activate; with no key AI_CONFIGURED is False and
+# every AI feature degrades to a clear "not configured" result (apps.ai.client)
+# instead of crashing. The per-feature flags in apps.features still control
+# who sees each AI feature once a key is present. See apps/ai/config.py.
+# ---------------------------------------------------------------------------
+_ai = resolve_ai_settings(lambda key, default="": config(key, default=default))
+AI_PROVIDER = _ai["AI_PROVIDER"]
+ANTHROPIC_API_KEY = _ai["ANTHROPIC_API_KEY"]
+AI_MODEL = _ai["AI_MODEL"]
+AI_MAX_TOKENS = _ai["AI_MAX_TOKENS"]
+AI_CONFIGURED = _ai["AI_CONFIGURED"]
 
 # Resend delivery webhook (bounce/complaint/delivered/opened). Svix-signed; the
 # secret (``whsec_...``) is verified before any event is applied. Empty disables

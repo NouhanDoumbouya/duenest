@@ -104,6 +104,17 @@ FEATURE_DEFINITIONS: list[dict] = [
     # payload, security model, and existing color presets/logo are unchanged;
     # this only gates the NEW custom-color pickers + warnings. FOUNDER_ONLY.
     {"key": "qr_customization", "name": "QR — custom colors + scan warnings", "default": Visibility.FOUNDER_ONLY, "description": "Custom foreground/background QR colors with live contrast + scan-reliability warnings on the SafeSend link screen. UI-only; the QR still encodes only the secure SafeSend URL and follows the same access rules."},
+    # --- AI (Claude-powered document intelligence) ----------------------
+    # KEY-GATED at the platform level: these only do anything when
+    # ANTHROPIC_API_KEY is set (settings.AI_CONFIGURED). They default
+    # FOUNDER_ONLY so nothing is exposed until a founder deliberately launches
+    # each one — AND, with no key, AI calls degrade to a clear "not configured"
+    # result. `ai_features` is the master gate for the whole AI surface; the
+    # per-feature keys allow launching capabilities one at a time.
+    {"key": "ai_features", "name": "AI — master gate", "default": Visibility.FOUNDER_ONLY, "description": "Master gate for all Claude-powered AI features. No effect unless ANTHROPIC_API_KEY is configured (AI degrades gracefully without a key)."},
+    {"key": "ai_document_extraction", "name": "AI — document extraction", "default": Visibility.FOUNDER_ONLY, "description": "Use Claude to read a scanned/uploaded document and suggest structured fields (e.g. expiry date) for review. Suggestions only — never auto-saved without the user confirming."},
+    {"key": "ai_document_qa", "name": "AI — ask your documents", "default": Visibility.FOUNDER_ONLY, "description": "Ask natural-language questions grounded in the user's own documents (e.g. 'when does my visa expire?'). Owner-scoped; answers cite the source document."},
+    {"key": "ai_document_drafting", "name": "AI — drafting assistant", "default": Visibility.FOUNDER_ONLY, "description": "Draft letters/forms from the user's records. Drafts are editable suggestions; nothing is sent or saved automatically."},
 ]
 
 FEATURE_KEYS = [d["key"] for d in FEATURE_DEFINITIONS]
