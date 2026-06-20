@@ -142,6 +142,16 @@ SVG export on the SafeSend link screen. UI-only: the QR still encodes only the
 tokenized SafeSend URL and follows the same access/expiry/revoke rules. The
 existing color presets and DueNest badge are unchanged when the flag is off.
 
+The **AI** keys seed `founder_only`: `ai_features` (master gate),
+`ai_document_extraction`, `ai_document_qa`, and `ai_document_drafting`. These
+gate the Claude-powered document-intelligence features. They are gated **twice**:
+by these flags AND at the platform level by `ANTHROPIC_API_KEY` — with no key
+set, `settings.AI_CONFIGURED` is `False` and every AI call degrades to a clear
+"not configured" result (`apps.ai.client`) regardless of the flags. Adding the
+key activates the features with no code change; the flags then control who sees
+each one. See `docs/architecture.md` (AI foundation) for the privacy note —
+unlike local OCR, keyed AI calls send the relevant document text to Anthropic.
+
 Recommended beta postures a founder may choose: set newer/sensitive features
 (e.g. `emergency_public_viewer`, `secure_rooms`, `organizations`) to `beta_only`
 until real-user QA is done; `email_reminders` stays `enabled` in dev but
