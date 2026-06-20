@@ -1468,7 +1468,10 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
 
         {phase === "cropping" && frozenCanvas && quad && (
           <div className="flex h-full flex-col">
-            <div className="flex-1 overflow-auto p-4">
+            {/* Extra horizontal/bottom room so the corner handles, which extend
+                ~22px beyond the image edges, never sit clipped or hidden behind
+                the action bar — especially the bottom corners on a tall scan. */}
+            <div className="flex-1 overflow-auto px-6 pt-4 pb-12">
               <p className="mb-3 text-center text-sm text-slate-300">
                 Drag the corners to match the document edges.
               </p>
