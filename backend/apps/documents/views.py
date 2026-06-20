@@ -5685,3 +5685,55 @@ class PackCopilotView(APIView):
             },
         )
         return Response(result, status=status.HTTP_200_OK)
+
+
+class PackCopilotCreateBundleView(APIView):
+    """
+    Turn a Pack Copilot analysis into a real DueNest bundle (one tap).
+
+    POST ``{"goal", "deadline"?, "requirements": [{name, description,
+    document_ids}]}`` → creates a draft application bundle with one requirement
+    per item, matched owned documents linked (ATTACHED) and the rest MISSING.
+    Pure CRUD (no model call); document links are re-validated server-side
+    against the owner's vault. Gated by ``ai_features`` + ``ai_pack_copilot``.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        require_feature_enabled("ai_features", request.user)
+        require_feature_enabled("ai_pack_copilot", request.user)
+
+        goal = (request.data.get("goal") or "").strip()
+        if not goal:
+            return Response(
+                {"detail": "A goal is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        requirements = request.data.get("requirements")
+        if not isinstance(requirements, list):
+            requirements = []
+
+        from .ai_pack_copilot import create_bundle_from_copilot
+
+        bundle = create_bundle_from_copilot(
+            request.user,
+            goal=goal,
+            deadline=request.data.get("deadline"),
+            requirements=requirements,
+        )
+        _track_product_event(
+            request,
+            "pack_copilot_bundle_created",
+            object_type="document_bundle",
+            object_id=bundle.id,
+            metadata={"requirements": bundle.requirements.count()},
+        )
+        return Response(
+            {
+                "bundle_id": bundle.id,
+                "title": bundle.title,
+                "readiness_score": bundle.readiness_score,
+            },
+            status=status.HTTP_201_CREATED,
+        )
