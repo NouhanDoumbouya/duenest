@@ -22,13 +22,18 @@ DueNest helps users answer one important question:
 
 ## 1.5 Documents-First Strategy
 
+> **Refocus (2026-06-21):** DueNest is now a **private life-document readiness
+> platform**, not a subscription/finance tracker. The legacy Subscription Radar
+> is deprecated (see `docs/roadmap.md` §0); recurring renewals live under
+> **Deadlines & Renewals**. Older "subscriptions" references below are historical.
+
 DueNest is now sequenced as a **documents-first product**. The long-term vision
 (below) is unchanged, but the path to it starts by making **one module** —
 the Documents module — strong enough to stand alone as a paid product.
 
 - **Primary MVP:** a premium **document renewal and expiry management vault**.
-- **Future expansion:** subscriptions, application packs, an AI assistant, and
-  broader life-admin tasks — layered on top of a proven vault.
+- **Future expansion:** application packs, deadlines & renewals, an AI assistant,
+  and broader document-readiness workflows — layered on top of a proven vault.
 
 The vault's job is not "store documents." It is to help users see which
 documents are **safe, incomplete, expiring soon, expired, or ready for

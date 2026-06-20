@@ -11,6 +11,27 @@
 
 ---
 
+## 0. Product refocus — life-document readiness platform (2026-06-21)
+
+DueNest is now focused as a **private life-document readiness platform**: store,
+scan, organize, prepare, track, generate, understand, and safely share important
+documents before deadlines, applications, renewals, and emergencies.
+
+It is **not** a subscription tracker, finance, budgeting, or bank/card-connected
+app. The legacy **Subscription Radar** is **deprecated**:
+
+- The `subscriptions` feature flag now defaults to `disabled`; the subscriptions
+  API returns a controlled 503 by default (tables are retained, not dropped, so
+  no beta data is lost — a founder can re-enable to inspect legacy data).
+- Subscription Radar is removed from navigation, the dashboard, command palette,
+  quick search, and public/marketing/legal copy.
+- Generic recurring reminders and renewal tracking are **preserved** and now live
+  under **Deadlines & Renewals** (`/dashboard/reminders`).
+- DueNest's own paid plans (Stripe `billing` app) are unchanged.
+
+Items below that describe subscription/finance tracking as a product feature are
+superseded by this refocus and Deadlines & Renewals.
+
 ## 1. Roadmap Summary
 
 This roadmap defines how DueNest will move from a well-documented product concept to a working MVP.
