@@ -27,6 +27,7 @@ import {
   LayoutDashboard,
   LifeBuoy,
   MessageSquare,
+  MessagesSquare,
   Package,
   PenLine,
   QrCode,
@@ -282,6 +283,12 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
   {
     heading: "Assistant",
     items: [
+      {
+        label: "Chat",
+        href: "/dashboard/assistant",
+        icon: MessagesSquare,
+        featureKey: "ai_chat",
+      },
       {
         label: "Briefing",
         href: "/dashboard/briefing",
