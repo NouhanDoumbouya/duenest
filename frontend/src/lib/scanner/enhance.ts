@@ -200,6 +200,103 @@ export function grayWorldWhiteBalanceInPlace(
   return data;
 }
 
+/**
+ * CLAHE-style local contrast (Contrast-Limited Adaptive Histogram Equalization)
+ * on luminance, the trick that makes faded / unevenly-lit documents "pop" the
+ * way a global contrast curve can't. The image is split into a grid of tiles;
+ * each tile gets a clipped, equalized tone map; every pixel is remapped by
+ * bilinearly blending the four nearest tile maps (so there are no tile seams).
+ * Colour is preserved by scaling each channel by the luminance change.
+ */
+export function localContrastInPlace(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  opts: { tiles?: number; clipLimit?: number; strength?: number } = {},
+): Uint8ClampedArray {
+  const tiles = Math.max(2, opts.tiles ?? 8);
+  const clipLimit = opts.clipLimit ?? 0.08;
+  const strength = opts.strength ?? 1;
+  if (width < tiles || height < tiles) return data;
+
+  const tw = Math.ceil(width / tiles);
+  const th = Math.ceil(height / tiles);
+  const gray = toLuminance(data, width, height);
+
+  // Per-tile tone map (256-entry LUT) from a clipped, equalized histogram.
+  const maps: Uint8ClampedArray[] = [];
+  for (let ty = 0; ty < tiles; ty += 1) {
+    for (let tx = 0; tx < tiles; tx += 1) {
+      const x0 = tx * tw;
+      const y0 = ty * th;
+      const x1 = Math.min(x0 + tw, width);
+      const y1 = Math.min(y0 + th, height);
+      const hist = new Uint32Array(256);
+      let count = 0;
+      for (let y = y0; y < y1; y += 1) {
+        const row = y * width;
+        for (let x = x0; x < x1; x += 1) {
+          hist[gray[row + x] | 0] += 1;
+          count += 1;
+        }
+      }
+      const map = new Uint8ClampedArray(256);
+      if (count === 0) {
+        for (let i = 0; i < 256; i += 1) map[i] = i;
+        maps.push(map);
+        continue;
+      }
+      // Clip the histogram and redistribute the excess uniformly.
+      const limit = Math.max(1, Math.floor(clipLimit * count));
+      let excess = 0;
+      for (let i = 0; i < 256; i += 1) {
+        if (hist[i] > limit) {
+          excess += hist[i] - limit;
+          hist[i] = limit;
+        }
+      }
+      const bonus = excess / 256;
+      // Equalize: normalized CDF → 0..255.
+      let cdf = 0;
+      for (let i = 0; i < 256; i += 1) {
+        cdf += hist[i] + bonus;
+        map[i] = clamp8((cdf / count) * 255);
+      }
+      maps.push(map);
+    }
+  }
+
+  const mapAt = (tx: number, ty: number, v: number) =>
+    maps[Math.max(0, Math.min(tiles - 1, ty)) * tiles + Math.max(0, Math.min(tiles - 1, tx))][v];
+
+  for (let y = 0; y < height; y += 1) {
+    // Tile coordinate of this row relative to tile CENTERS.
+    const fy = (y - th / 2) / th;
+    const ty0 = Math.floor(fy);
+    const wy = fy - ty0;
+    for (let x = 0; x < width; x += 1) {
+      const idx = y * width + x;
+      const g = gray[idx] | 0;
+      const fx = (x - tw / 2) / tw;
+      const tx0 = Math.floor(fx);
+      const wx = fx - tx0;
+      // Bilinear blend of the four neighbouring tile maps.
+      const top =
+        mapAt(tx0, ty0, g) * (1 - wx) + mapAt(tx0 + 1, ty0, g) * wx;
+      const bot =
+        mapAt(tx0, ty0 + 1, g) * (1 - wx) + mapAt(tx0 + 1, ty0 + 1, g) * wx;
+      const mapped = top * (1 - wy) + bot * wy;
+      const target = gray[idx] + (mapped - gray[idx]) * strength;
+      const ratio = target / Math.max(gray[idx], 1);
+      const i = idx * 4;
+      data[i] = clamp8(data[i] * ratio);
+      data[i + 1] = clamp8(data[i + 1] * ratio);
+      data[i + 2] = clamp8(data[i + 2] * ratio);
+    }
+  }
+  return data;
+}
+
 /** Otsu's optimal global threshold (0–255) from the luminance histogram. */
 export function otsuThreshold(
   data: Uint8ClampedArray,

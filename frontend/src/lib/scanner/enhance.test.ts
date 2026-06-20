@@ -5,10 +5,29 @@ import {
   boxMean,
   flattenIlluminationInPlace,
   grayWorldWhiteBalanceInPlace,
+  localContrastInPlace,
   otsuThreshold,
   toLuminance,
   unsharpMaskInPlace,
 } from "./enhance";
+
+/** Std of the luminance over an 8×8 region at (rx,ry). */
+function tileStd(
+  data: Uint8ClampedArray,
+  w: number,
+  rx: number,
+  ry: number,
+): number {
+  const vals: number[] = [];
+  for (let y = ry; y < ry + 8; y += 1) {
+    for (let x = rx; x < rx + 8; x += 1) {
+      const i = (y * w + x) * 4;
+      vals.push(data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114);
+    }
+  }
+  const m = vals.reduce((a, b) => a + b, 0) / vals.length;
+  return Math.sqrt(vals.reduce((a, b) => a + (b - m) ** 2, 0) / vals.length);
+}
 
 /** Build an RGBA buffer from a per-pixel gray function. */
 function grayImage(
@@ -145,6 +164,31 @@ describe("unsharpMaskInPlace", () => {
     const dark = data[(4 * w + 3) * 4];
     const light = data[(4 * w + 4) * 4];
     expect(light - dark).toBeGreaterThan(beforeJump);
+  });
+});
+
+describe("localContrastInPlace (CLAHE)", () => {
+  it("amplifies faint local detail in a low-contrast image", () => {
+    const w = 128;
+    const h = 128;
+    // A gentle gradient with large tiles → each region's narrow value range is
+    // stretched, raising local contrast.
+    const data = grayImage(w, h, (x) => 100 + Math.round((x / (w - 1)) * 100));
+    const before = tileStd(data, w, 48, 48);
+    localContrastInPlace(data, w, h, { tiles: 4 });
+    const after = tileStd(data, w, 48, 48);
+    expect(after).toBeGreaterThan(before * 1.5);
+  });
+
+  it("keeps pixels in range", () => {
+    const w = 32;
+    const h = 32;
+    const data = grayImage(w, h, (x, y) => (x + y) % 50);
+    localContrastInPlace(data, w, h);
+    for (let i = 0; i < data.length; i += 4) {
+      expect(data[i]).toBeGreaterThanOrEqual(0);
+      expect(data[i]).toBeLessThanOrEqual(255);
+    }
   });
 });
 

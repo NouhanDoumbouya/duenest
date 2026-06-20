@@ -21,6 +21,7 @@ import {
   adaptiveMeanBinarizeInPlace,
   flattenIlluminationInPlace,
   grayWorldWhiteBalanceInPlace,
+  localContrastInPlace,
   unsharpMaskInPlace,
 } from "./enhance";
 
@@ -74,6 +75,8 @@ interface FilterParams {
   whiteBalance?: boolean;
   /** Divide out the background light field (shadow gradient / vignette). */
   flattenIllumination?: boolean;
+  /** CLAHE-style local contrast — makes faded / unevenly-lit documents pop. */
+  localContrast?: boolean;
   /** Mild unsharp mask to crisp text after enhancement. */
   autoSharpen?: boolean;
   /** Local adaptive-mean binarization (replaces the global B&W threshold). */
@@ -97,8 +100,8 @@ const PARAMS: Record<FilterId, FilterParams> = {
   "scan-hd": {
     whiteBalance: true,
     flattenIllumination: true,
+    localContrast: true,
     autoSharpen: true,
-    contrast: 1.05,
   },
   // Color-preserving modes never threshold, so faces/stamps/signatures survive.
   "id-passport": { brightness: 8, contrast: 1.05, saturation: 1.08 },
@@ -274,6 +277,10 @@ export function applyFilterToImageData(
   // input the tone curve then polishes). Adaptive binarization is terminal.
   if (p.whiteBalance) grayWorldWhiteBalanceInPlace(data);
   if (p.flattenIllumination) flattenIlluminationInPlace(data, width, height);
+  if (p.localContrast) {
+    // Conservative strength — a gentle boost that needs no per-image tuning.
+    localContrastInPlace(data, width, height, { clipLimit: 0.06, strength: 0.7 });
+  }
   if (p.adaptiveBinarize) return adaptiveMeanBinarizeInPlace(data, width, height);
 
   // Adaptive white point: find the brightest histogram peak so whitening adapts
