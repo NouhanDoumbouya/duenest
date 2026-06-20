@@ -16,6 +16,7 @@ export type AiReason =
   | "no_documents"
   | "empty_question"
   | "empty_instructions"
+  | "empty_goal"
   | "error";
 
 export interface DocumentCitation {
@@ -65,5 +66,48 @@ export function draftDocument(input: DraftInput): Promise<DraftResult> {
       document_ids: input.documentIds ?? [],
       tone: input.tone ?? "formal",
     },
+  });
+}
+
+export type PackStatus = "have" | "missing" | "unclear";
+
+export interface PackDocumentRef {
+  document_id: number;
+  title: string;
+  expiry_date: string | null;
+  expires_before_deadline: boolean;
+}
+
+export interface PackRequirement {
+  name: string;
+  description: string;
+  status: PackStatus;
+  documents: PackDocumentRef[];
+}
+
+export interface PackResult {
+  available: boolean;
+  reason: AiReason;
+  goal: string;
+  deadline: string | null;
+  summary: string;
+  requirements: PackRequirement[];
+  document_count: number;
+  have_count: number;
+  missing_count: number;
+}
+
+/**
+ * Application Pack Copilot: for a goal, get the requirement checklist matched
+ * against the user's own vault, with documents expiring before the deadline
+ * flagged. Suggestions only — never official.
+ */
+export function analyzePack(
+  goal: string,
+  deadline?: string,
+): Promise<PackResult> {
+  return apiFetch<PackResult>("/documents/pack-copilot/", {
+    method: "POST",
+    body: { goal, deadline: deadline || null },
   });
 }
