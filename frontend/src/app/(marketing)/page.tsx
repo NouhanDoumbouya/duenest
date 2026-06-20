@@ -65,6 +65,12 @@ const PRIMARY_CTA = PRIVATE_BETA
   ? { href: "/waitlist", label: "Join the beta" }
   : { href: "/register", label: "Start your 14-day free trial" };
 
+// AI marketing is gated on its OWN flag (default off), independent of the
+// beta/launch flag, so the AI story can be turned on the moment AI features are
+// actually available to users — set NEXT_PUBLIC_AI_ENABLED=true at build time.
+const AI_ENABLED =
+  (process.env.NEXT_PUBLIC_AI_ENABLED ?? "false").toLowerCase() === "true";
+
 // Shared by the FAQ section and the FAQPage structured data below, so the two
 // can never drift apart.
 const FAQ_ITEMS: { q: string; a: string }[] = [
@@ -96,16 +102,16 @@ const FAQ_ITEMS: { q: string; a: string }[] = [
     q: "What happens after the beta?",
     a: "We'll email you before anything changes. Organizing and tracking your documents is built to stay useful, and we'll be clear about any plan limits ahead of time.",
   },
-  // AI FAQ appears only at public launch (flag off), since the AI features are
-  // gated until then. Reconciles with the rule-based "no AI guesswork" stance.
-  ...(PRIVATE_BETA
-    ? []
-    : [
+  // AI FAQ appears only when AI is enabled (its own flag), since the AI
+  // features are gated until then. Reconciles with the "no AI guesswork" stance.
+  ...(AI_ENABLED
+    ? [
         {
           q: "Does DueNest use AI?",
           a: "Optionally, and only to assist you. AI can read your own documents to extract details and answer questions you ask — always as suggestions you confirm, never auto-saved. Your reminders and deadline checks stay rule-based, so nothing important is left to a guess. AI only ever sees your own documents; it is never used to train models or sold.",
         },
-      ]),
+      ]
+    : []),
 ];
 
 const STRUCTURED_DATA = {
@@ -157,7 +163,7 @@ export default function LandingPage() {
         <Emergency />
         <MoneyRadar />
         <Capabilities />
-        {!PRIVATE_BETA && <AiAssist />}
+        {AI_ENABLED && <AiAssist />}
         <Security />
         <Principles />
         <UseCases />

@@ -9,11 +9,10 @@ import { getPlans, formatMoney, annualSavingsPercent } from "@/lib/billing";
 import { cn } from "@/lib/utils";
 import type { BillingInterval, BillingPlan } from "@/types/billing";
 
-// Mirror the landing flag: the AI-assist plan highlight stays dark during the
-// private beta and appears when NEXT_PUBLIC_PRIVATE_BETA_ENABLED=false at launch.
-const PRIVATE_BETA =
-  (process.env.NEXT_PUBLIC_PRIVATE_BETA_ENABLED ?? "true").toLowerCase() !==
-  "false";
+// The AI-assist plan highlight is gated on its own flag (default off), matching
+// the landing page — set NEXT_PUBLIC_AI_ENABLED=true when AI is available.
+const AI_ENABLED =
+  (process.env.NEXT_PUBLIC_AI_ENABLED ?? "false").toLowerCase() === "true";
 
 /**
  * Static fallback plans so the public pricing page always renders complete,
@@ -108,7 +107,7 @@ function planHighlights(plan: BillingPlan): string[] {
   return [
     "Unlimited documents & high storage",
     "Full premium scanner & Smart Intake",
-    ...(PRIVATE_BETA ? [] : ["AI document assist — extract & ask, you confirm"]),
+    ...(AI_ENABLED ? ["AI document assist — extract & ask, you confirm"] : []),
     "Full Life Radar & Money Radar",
     "Full Emergency Protocol",
     "Higher secure-sharing limits",
