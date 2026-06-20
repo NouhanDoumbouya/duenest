@@ -13,6 +13,8 @@ export interface ScanQualityMetrics {
   contrast: number;
   /** Variance of the Laplacian; low ≈ blurry/out of focus. */
   sharpness: number;
+  /** Fraction (0–1) of near-clipped highlight pixels ≈ glare/specular hotspot. */
+  glare: number;
   /** Total pixel count of the analyzed image. */
   pixels: number;
 }
@@ -20,7 +22,7 @@ export interface ScanQualityMetrics {
 export type WarningSeverity = "info" | "warn";
 
 export interface ScanQualityWarning {
-  id: "dark" | "bright" | "low-contrast" | "blurry" | "low-resolution";
+  id: "dark" | "bright" | "low-contrast" | "blurry" | "low-resolution" | "glare";
   severity: WarningSeverity;
   message: string;
 }
@@ -31,6 +33,13 @@ const BRIGHT_ABOVE = 220;
 const LOW_CONTRAST_BELOW = 26;
 const BLUR_BELOW = 55;
 const LOW_RES_PIXELS = 480 * 480;
+// Glare = a localized blown-out hotspot: a meaningful but not dominant fraction
+// of clipped highlights on a page that isn't uniformly bright. Below GLARE_MIN
+// is just normal white paper; above GLARE_MAX it's a bright/white image, not a
+// reflection. Pixels are "clipped" at/above GLARE_CLIP luminance.
+const GLARE_CLIP = 252;
+const GLARE_MIN = 0.02;
+const GLARE_MAX = 0.45;
 
 /** Compute quality metrics from raw RGBA data. Pure; safe in Node. */
 export function analyzeImageData(
@@ -40,18 +49,21 @@ export function analyzeImageData(
 ): ScanQualityMetrics {
   const pixels = width * height;
   if (pixels === 0) {
-    return { brightness: 0, contrast: 0, sharpness: 0, pixels: 0 };
+    return { brightness: 0, contrast: 0, sharpness: 0, glare: 0, pixels: 0 };
   }
 
   // Grayscale buffer for brightness/contrast/Laplacian.
   const gray = new Float32Array(pixels);
   let sum = 0;
+  let clipped = 0;
   for (let i = 0, g = 0; i < data.length; i += 4, g += 1) {
     const l = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
     gray[g] = l;
     sum += l;
+    if (l >= GLARE_CLIP) clipped += 1;
   }
   const brightness = sum / pixels;
+  const glare = clipped / pixels;
 
   let varSum = 0;
   for (let g = 0; g < pixels; g += 1) {
@@ -81,7 +93,7 @@ export function analyzeImageData(
   const lapMean = lapCount ? lapSum / lapCount : 0;
   const sharpness = lapCount ? lapSqSum / lapCount - lapMean * lapMean : 0;
 
-  return { brightness, contrast, sharpness, pixels };
+  return { brightness, contrast, sharpness, glare, pixels };
 }
 
 /** Turn metrics into friendly, non-blocking warnings. */
@@ -117,6 +129,20 @@ export function qualityWarnings(metrics: ScanQualityMetrics): ScanQualityWarning
       id: "blurry",
       severity: "warn",
       message: "This scan may be blurry. You can retake it or save anyway.",
+    });
+  }
+
+  // Localized glare (a reflection hotspot), but not a uniformly bright image.
+  if (
+    metrics.glare >= GLARE_MIN &&
+    metrics.glare <= GLARE_MAX &&
+    metrics.brightness < BRIGHT_ABOVE
+  ) {
+    warnings.push({
+      id: "glare",
+      severity: "warn",
+      message:
+        "There may be glare or a reflection. Tilt the page or move the light, then retake.",
     });
   }
 

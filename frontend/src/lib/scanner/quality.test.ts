@@ -69,4 +69,20 @@ describe("qualityWarnings", () => {
     const warnings = qualityWarnings(analyzeImageData(checkerboard(480), 480, 480));
     expect(warnings).toEqual([]);
   });
+
+  it("flags a localized blown-out hotspot as glare", () => {
+    // Mid-grey page with a clipped white reflection over ~10% of the area.
+    const w = 64;
+    const h = 64;
+    const data = solid(w, h, 130);
+    for (let y = 10; y < 30; y += 1) {
+      for (let x = 10; x < 30; x += 1) {
+        const i = (y * w + x) * 4;
+        data[i] = data[i + 1] = data[i + 2] = 255;
+      }
+    }
+    const m = analyzeImageData(data, w, h);
+    expect(m.glare).toBeGreaterThan(0.02);
+    expect(qualityWarnings(m).map((warn) => warn.id)).toContain("glare");
+  });
 });
