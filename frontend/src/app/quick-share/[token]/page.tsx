@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
+  BadgeCheck,
   Check,
   Clock,
   Download,
@@ -461,6 +462,15 @@ export default function QuickShareClaimPage() {
                     permission={metadata.permission}
                     watermark={metadata.watermark_enabled}
                   />
+                  {metadata.verified && (
+                    <Link
+                      href={`/verify/${token}`}
+                      className="inline-flex items-center gap-1 rounded-full border border-brand-success/30 bg-brand-success/10 px-2.5 py-1 text-xs font-medium text-brand-success transition-colors hover:bg-brand-success/15"
+                    >
+                      <BadgeCheck className="size-3.5" />
+                      Verified by DueNest
+                    </Link>
+                  )}
                 </div>
 
                 <p className="mt-4 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
