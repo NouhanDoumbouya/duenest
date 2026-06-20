@@ -1,3 +1,4 @@
+import { deskewImageData } from "./deskew";
 import type { Point, Quad } from "./types";
 
 /**
@@ -239,6 +240,31 @@ export function warpToCanvas(
     srcTri.delete();
     dstTri.delete();
     transform.delete();
+  }
+
+  // Auto-straighten residual skew (text not parallel to the cropped edges).
+  // Best-effort and self-correcting: it only rotates when it clearly improves
+  // row alignment, and never the wrong way — so a clean page is left untouched.
+  try {
+    const octx = out.getContext("2d");
+    if (octx) {
+      const img = octx.getImageData(0, 0, out.width, out.height);
+      const fixed = deskewImageData(img.data, out.width, out.height);
+      if (fixed.data !== img.data) {
+        const straight = document.createElement("canvas");
+        straight.width = fixed.width;
+        straight.height = fixed.height;
+        const sctx = straight.getContext("2d");
+        if (sctx) {
+          const id = sctx.createImageData(fixed.width, fixed.height);
+          id.data.set(fixed.data);
+          sctx.putImageData(id, 0, 0);
+          return straight;
+        }
+      }
+    }
+  } catch {
+    // Deskew is optional polish — fall back to the un-rotated page on any error.
   }
   return out;
 }
