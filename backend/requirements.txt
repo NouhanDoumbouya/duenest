@@ -1,4 +1,8 @@
 amqp==5.3.1
+# anthropic powers the optional, KEY-GATED AI features (apps.ai). It is imported
+# lazily and only used when ANTHROPIC_API_KEY is set, so lean installs that omit
+# it still run — AI just reports "not configured" (see apps/ai/client.py).
+anthropic==0.111.0
 asgiref==3.11.1
 billiard==4.2.4
 boto3==1.35.99

@@ -104,8 +104,13 @@ endpoints are enforced server-side, not just hidden), `filename_templates`
 filter+quality presets; user-chosen, not auto-recognition), and
 `advanced_document_preview` (image zoom controls in the file viewer; UI-only),
 `batch_scan_actions` (move multiple selected inbox files to the Vault at once,
-optionally under a category), and `document_page_edit` (replace a bad page / add
-a page in a PDF, lossless via pdf-lib, saved as a new version; experimental).
+optionally under a category), `document_page_edit` (replace a bad page / add
+a page in a PDF, lossless via pdf-lib, saved as a new version; experimental),
+`scan_ocr` (on-device text extraction from a scanned page via Tesseract.js — the
+image never leaves the browser; user-triggered, nothing auto-filled), and
+`scan_hands_free` (continuous auto-capture batch mode: once a page is framed and
+steady it is captured and committed, then the camera keeps going for the next
+page; opt-in toggle, manual capture unchanged).
 These stay invisible to normal users until a founder launches each one
 (`beta_only` / `enabled`). They mostly gate UI
 affordances on the scanner success screen; the underlying risky actions reuse
@@ -136,6 +141,16 @@ presets, quiet-zone control, saved default style, client-side logo upload, and
 SVG export on the SafeSend link screen. UI-only: the QR still encodes only the
 tokenized SafeSend URL and follows the same access/expiry/revoke rules. The
 existing color presets and DueNest badge are unchanged when the flag is off.
+
+The **AI** keys seed `founder_only`: `ai_features` (master gate),
+`ai_document_extraction`, `ai_document_qa`, and `ai_document_drafting`. These
+gate the Claude-powered document-intelligence features. They are gated **twice**:
+by these flags AND at the platform level by `ANTHROPIC_API_KEY` — with no key
+set, `settings.AI_CONFIGURED` is `False` and every AI call degrades to a clear
+"not configured" result (`apps.ai.client`) regardless of the flags. Adding the
+key activates the features with no code change; the flags then control who sees
+each one. See `docs/architecture.md` (AI foundation) for the privacy note —
+unlike local OCR, keyed AI calls send the relevant document text to Anthropic.
 
 Recommended beta postures a founder may choose: set newer/sensitive features
 (e.g. `emergency_public_viewer`, `secure_rooms`, `organizations`) to `beta_only`

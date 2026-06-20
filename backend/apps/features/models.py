@@ -76,6 +76,8 @@ FEATURE_DEFINITIONS: list[dict] = [
     {"key": "document_versioning", "name": "Documents — version history", "default": Visibility.FOUNDER_ONLY, "description": "View a document's version history and restore previous metadata. Originals/previous files are preserved."},
     {"key": "filename_templates", "name": "Scanner — filename templates", "default": Visibility.FOUNDER_ONLY, "description": "Quick clean-name chips (document type + year) when saving a scan. Editable; nothing invented."},
     {"key": "scan_modes", "name": "Scanner — scan modes", "default": Visibility.FOUNDER_ONLY, "description": "Friendly presets (Document/ID/Certificate/Receipt/Application/Photo) that set safe filter + quality defaults. User-chosen; not auto-recognition."},
+    {"key": "scan_ocr", "name": "Scanner — extract text (OCR)", "default": Visibility.FOUNDER_ONLY, "description": "On-device text extraction (Tesseract.js) from a scanned page. Runs in the browser; no image leaves the device. User-triggered; nothing is auto-filled."},
+    {"key": "scan_hands_free", "name": "Scanner — hands-free batch", "default": Visibility.FOUNDER_ONLY, "description": "Continuous auto-capture: once a page is framed/steady it is captured and committed, then the camera keeps going for the next page. Opt-in toggle; manual capture is unchanged."},
     {"key": "advanced_document_preview", "name": "Documents — advanced preview", "default": Visibility.FOUNDER_ONLY, "description": "Image preview zoom controls (fit / actual size / +-) in the file viewer. UI-only."},
     {"key": "batch_scan_actions", "name": "File Inbox — batch actions", "default": Visibility.FOUNDER_ONLY, "description": "Move multiple selected inbox files to the Vault at once (optionally under a category). Uses existing create-document; originals become documents."},
     {"key": "document_page_edit", "name": "Documents — replace/add PDF pages", "default": Visibility.FOUNDER_ONLY, "description": "Replace a bad page or add a page in a PDF (lossless via pdf-lib); saved as a new version. Original retained. Experimental; founder-only."},
@@ -102,6 +104,17 @@ FEATURE_DEFINITIONS: list[dict] = [
     # payload, security model, and existing color presets/logo are unchanged;
     # this only gates the NEW custom-color pickers + warnings. FOUNDER_ONLY.
     {"key": "qr_customization", "name": "QR — custom colors + scan warnings", "default": Visibility.FOUNDER_ONLY, "description": "Custom foreground/background QR colors with live contrast + scan-reliability warnings on the SafeSend link screen. UI-only; the QR still encodes only the secure SafeSend URL and follows the same access rules."},
+    # --- AI (Claude-powered document intelligence) ----------------------
+    # KEY-GATED at the platform level: these only do anything when
+    # ANTHROPIC_API_KEY is set (settings.AI_CONFIGURED). They default
+    # FOUNDER_ONLY so nothing is exposed until a founder deliberately launches
+    # each one — AND, with no key, AI calls degrade to a clear "not configured"
+    # result. `ai_features` is the master gate for the whole AI surface; the
+    # per-feature keys allow launching capabilities one at a time.
+    {"key": "ai_features", "name": "AI — master gate", "default": Visibility.FOUNDER_ONLY, "description": "Master gate for all Claude-powered AI features. No effect unless ANTHROPIC_API_KEY is configured (AI degrades gracefully without a key)."},
+    {"key": "ai_document_extraction", "name": "AI — document extraction", "default": Visibility.FOUNDER_ONLY, "description": "Use Claude to read a scanned/uploaded document and suggest structured fields (e.g. expiry date) for review. Suggestions only — never auto-saved without the user confirming."},
+    {"key": "ai_document_qa", "name": "AI — ask your documents", "default": Visibility.FOUNDER_ONLY, "description": "Ask natural-language questions grounded in the user's own documents (e.g. 'when does my visa expire?'). Owner-scoped; answers cite the source document."},
+    {"key": "ai_document_drafting", "name": "AI — drafting assistant", "default": Visibility.FOUNDER_ONLY, "description": "Draft letters/forms from the user's records. Drafts are editable suggestions; nothing is sent or saved automatically."},
 ]
 
 FEATURE_KEYS = [d["key"] for d in FEATURE_DEFINITIONS]

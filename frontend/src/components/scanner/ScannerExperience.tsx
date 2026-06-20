@@ -26,6 +26,7 @@ import {
   RotateCcw,
   RotateCw,
   ScanSearch,
+  ScanText,
   Share2,
   ShieldCheck,
   SlidersHorizontal,
@@ -79,6 +80,7 @@ import {
   type ScanQualityWarning,
 } from "@/lib/scanner/quality";
 import { assessFraming, FRAMING_COPY } from "@/lib/scanner/autocapture";
+import { recognizeText, hasUsableText, type OcrResult } from "@/lib/scanner/ocr";
 import { formatBytes, generatePdfBlob } from "@/lib/scanner/pdf";
 import { applyWatermark } from "@/lib/scanner/watermark";
 import { applyRedactions, type RedactionRect } from "@/lib/scanner/redaction";
@@ -154,6 +156,11 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
   const [torchAvailable, setTorchAvailable] = useState(false);
   const [voiceOn, setVoiceOn] = useState(false);
   const [autoCapture, setAutoCapture] = useState(true);
+  // Hands-free batch mode: once a page is framed + steady it is captured AND
+  // committed automatically, then the camera keeps going for the next page —
+  // no taps between pages. Opt-in (default off) and only offered when the
+  // `scan_hands_free` flag is on. Manual/auto single-capture is unchanged.
+  const [handsFree, setHandsFree] = useState(false);
   const [holdProgress, setHoldProgress] = useState(0);
   const [flash, setFlash] = useState(false);
   const [filterId, setFilterId] = useState<FilterId>(DEFAULT_FILTER);
@@ -162,6 +169,12 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
   // auto-detected. null = no explicit mode picked.
   const [scanMode, setScanMode] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<ScanQualityWarning[]>([]);
+  // On-device OCR result for the page in review (text + confidence), plus the
+  // open/busy/progress UI state. Runs only when the user taps "Extract text".
+  const [ocr, setOcr] = useState<OcrResult | null>(null);
+  const [ocrOpen, setOcrOpen] = useState(false);
+  const [ocrBusy, setOcrBusy] = useState(false);
+  const [ocrStatus, setOcrStatus] = useState<string | null>(null);
   const [pages, setPages] = useState<ScanPage[]>([]);
   const [adjust, setAdjust] = useState<Adjustments>(NEUTRAL_ADJUST);
   const [adjustOpen, setAdjustOpen] = useState(false);
@@ -228,7 +241,11 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
   const phaseRef = useRef<Phase>("idle");
   const reducedMotion = useRef(false);
   const autoCaptureRef = useRef(true);
+  const handsFreeRef = useRef(false);
+  // Live page count for the detection loop (which closes over a stale `pages`).
+  const pageCountRef = useRef(0);
   const captureRef = useRef<() => void>(() => {});
+  const handsFreeCaptureRef = useRef<() => void>(() => {});
 
   const announce = useCallback((msg: string) => setAriaStatus(msg), []);
 
@@ -240,6 +257,12 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     autoCaptureRef.current = autoCapture;
   }, [autoCapture]);
+  useEffect(() => {
+    handsFreeRef.current = handsFree;
+  }, [handsFree]);
+  useEffect(() => {
+    pageCountRef.current = pages.length;
+  }, [pages.length]);
 
   const refreshQueue = useCallback(async () => {
     try {
@@ -359,15 +382,21 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
           if (refocusing) {
             stableSinceRef.current = null;
             setHoldProgress(0);
-          } else if (autoCaptureRef.current && aligned) {
+          } else if ((autoCaptureRef.current || handsFreeRef.current) && aligned) {
             if (stableSinceRef.current == null) stableSinceRef.current = now;
             const held = now - stableSinceRef.current;
             setHoldProgress(Math.min(1, held / AUTO_CAPTURE_MS));
             if (held >= AUTO_CAPTURE_MS) {
               stableSinceRef.current = null;
               setHoldProgress(0);
-              captureRef.current();
-              return;
+              if (handsFreeRef.current) {
+                // Commit this page and keep the camera running for the next
+                // one (a cooldown inside prevents an immediate double-capture).
+                handsFreeCaptureRef.current();
+              } else {
+                captureRef.current();
+                return;
+              }
             }
           } else {
             stableSinceRef.current = null;
@@ -427,6 +456,61 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     captureRef.current = capture;
   }, [capture]);
+
+  // Hands-free batch capture: freeze the current frame, warp/crop it with the
+  // live-detected quad, and commit it straight into the page list WITHOUT
+  // leaving the camera — so the user can keep laying down pages one after
+  // another. A short cooldown (reusing the focus-suppression window the loop
+  // already honors) stops a single page from being captured twice.
+  const handsFreeCapture = useCallback(() => {
+    const video = videoRef.current;
+    if (!video || !video.videoWidth) return;
+    if (pageCountRef.current >= MAX_PAGES) {
+      setHandsFree(false);
+      showToast(`A scan can hold up to ${MAX_PAGES} pages.`, "info");
+      return;
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0);
+
+    const pageQuad: Quad = detectedQuadRef.current ?? fullQuad(canvas);
+    const cv = cvRef.current;
+    let base: HTMLCanvasElement;
+    try {
+      base = cv ? warpToCanvas(cv, canvas, pageQuad) : cropBoundingBox(canvas, pageQuad);
+    } catch {
+      base = cropBoundingBox(canvas, pageQuad);
+    }
+    const page: ScanPage = {
+      id: makeId(),
+      frozen: canvas,
+      quad: pageQuad,
+      base,
+      filterId,
+      adjust: NEUTRAL_ADJUST,
+      thumb: makeThumbnail(base, filterId, NEUTRAL_ADJUST),
+    };
+    setPages((prev) => (prev.length >= MAX_PAGES ? prev : [...prev, page]));
+
+    haptic([40]);
+    if (!reducedMotion.current) {
+      setFlash(true);
+      window.setTimeout(() => setFlash(false), 180);
+    }
+    announce("Page captured");
+    // Quiet period before the next auto-capture so one page isn't double-shot.
+    stableSinceRef.current = null;
+    setHoldProgress(0);
+    focusingUntilRef.current = performance.now() + 1500;
+  }, [announce, filterId, showToast]);
+
+  useEffect(() => {
+    handsFreeCaptureRef.current = handsFreeCapture;
+  }, [handsFreeCapture]);
 
   // ---- start camera -----------------------------------------------------
   const startScanning = useCallback(async () => {
@@ -717,6 +801,8 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
         filteredBaseRef.current = filtered;
         setEnhancedCanvas(applyAdjustments(filtered, adjust));
         setWarnings(analyzeCanvasQuality(base));
+        setOcr(null);
+        setOcrOpen(false);
         setPdfSize(null);
         setPhase("enhancing");
         announce("Scan ready to review");
@@ -803,6 +889,56 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
     const filtered = filteredBaseRef.current;
     if (filtered) setEnhancedCanvas(applyAdjustments(filtered, next));
   }, []);
+
+  // ---- OCR (on-device text extraction) ---------------------------------
+  // Reads text from the page currently in review using Tesseract.js, entirely
+  // in the browser (the image never leaves the device). User-triggered; the
+  // result is shown for copy / use-as-name and never auto-applied.
+  const runOcr = useCallback(async () => {
+    if (!enhancedCanvas) return;
+    setOcrOpen(true);
+    setOcrBusy(true);
+    setOcr(null);
+    setOcrStatus("Starting…");
+    announce("Extracting text");
+    try {
+      const result = await recognizeText(enhancedCanvas, (p) => {
+        if (p.status === "recognizing text") setOcrStatus("Reading text…");
+        else if (p.status.includes("load") || p.status.includes("initiali"))
+          setOcrStatus("Loading text engine…");
+      });
+      setOcr(result);
+      setOcrStatus(null);
+      announce(hasUsableText(result) ? "Text extracted" : "No text found");
+    } catch {
+      setOcrStatus(null);
+      showToast("Couldn't read text from this page.", "error");
+    } finally {
+      setOcrBusy(false);
+    }
+  }, [announce, enhancedCanvas, showToast]);
+
+  const copyOcrText = useCallback(async () => {
+    if (!ocr) return;
+    try {
+      await navigator.clipboard.writeText(ocr.text);
+      showToast("Text copied to clipboard.", "success");
+    } catch {
+      showToast("Couldn't copy. Select and copy the text manually.", "error");
+    }
+  }, [ocr, showToast]);
+
+  const useOcrAsName = useCallback(() => {
+    if (!ocr) return;
+    const firstLine = ocr.text
+      .split("\n")
+      .map((l) => l.trim())
+      .find((l) => l.length > 0);
+    if (!firstLine) return;
+    setDocName(firstLine.slice(0, 80));
+    setSaveOptionsOpen(true);
+    showToast("Used the first text line as the document name.", "info");
+  }, [ocr, showToast]);
 
   // Paint the current enhanced canvas into the visible preview canvas.
   useEffect(() => {
@@ -1005,6 +1141,9 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
     baseCanvasRef.current = null;
     filteredBaseRef.current = null;
     setWarnings([]);
+    setOcr(null);
+    setOcrOpen(false);
+    setOcrStatus(null);
     setFilterId(DEFAULT_FILTER);
     setAdjust(NEUTRAL_ADJUST);
     setAdjustOpen(false);
@@ -1088,6 +1227,8 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
       filteredBaseRef.current = filtered;
       setEnhancedCanvas(applyAdjustments(filtered, p.adjust));
       setWarnings(analyzeCanvasQuality(p.base));
+      setOcr(null);
+      setOcrOpen(false);
       setMoreOpen(false);
       setPdfSize(null);
       setPhase("enhancing");
@@ -1095,6 +1236,17 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
     },
     [announce, pages],
   );
+
+  // Stop hands-free batching and move into the standard review/save screen with
+  // every captured page present. The last committed page becomes the working
+  // page (the rest stay in the page strip), so save / add / re-edit all work
+  // exactly as they do after a normal multi-page scan.
+  const finishHandsFree = useCallback(() => {
+    setHandsFree(false);
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    rafRef.current = null;
+    if (pages.length > 0) startEditPage(pages.length - 1);
+  }, [pages.length, startEditPage]);
 
   // Back to the corner editor for the current page (re-crop). Frozen frame and
   // quad are still in state, so this works for fresh captures and re-edits alike.
@@ -1294,10 +1446,15 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
               caps={caps}
               voiceOn={voiceOn}
               autoCapture={autoCapture}
+              handsFree={handsFree}
+              handsFreeEnabled={featureEnabled("scan_hands_free")}
+              pageCount={pages.length}
               cvReady={cvReady}
               onToggleTorch={toggleTorch}
               onToggleVoice={toggleVoice}
               onToggleAuto={() => setAutoCapture((v) => !v)}
+              onToggleHandsFree={() => setHandsFree((v) => !v)}
+              onFinishHandsFree={finishHandsFree}
               onCapture={capture}
               onImport={() => fileInputRef.current?.click()}
               scanMode={scanMode}
@@ -1554,6 +1711,22 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
                   label="Crop"
                   onClick={editCrop}
                 />
+                {featureEnabled("scan_ocr") && (
+                  <ToolDockButton
+                    icon={<ScanText className="size-5" aria-hidden="true" />}
+                    label="Text"
+                    active={ocrOpen}
+                    dot={ocr !== null}
+                    onClick={() => {
+                      if (ocrOpen) {
+                        setOcrOpen(false);
+                        return;
+                      }
+                      setOcrOpen(true);
+                      if (!ocr && !ocrBusy) void runOcr();
+                    }}
+                  />
+                )}
               </div>
               {/* Name & quality — one quiet trigger; first-time users can skip
                   it and just tap Save. */}
@@ -1611,6 +1784,93 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
                       Reset adjustments
                     </button>
                   </div>
+                </div>
+              )}
+              {featureEnabled("scan_ocr") && ocrOpen && (
+                <div className="space-y-2 rounded-lg bg-white/5 p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-slate-200">
+                      Extracted text
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setOcrOpen(false)}
+                      className="text-xs text-slate-400 hover:text-white focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
+                    >
+                      Hide
+                    </button>
+                  </div>
+                  {ocrBusy ? (
+                    <p className="flex items-center gap-2 text-xs text-slate-300">
+                      <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                      {ocrStatus ?? "Reading…"}
+                    </p>
+                  ) : ocr ? (
+                    hasUsableText(ocr) ? (
+                      <div className="space-y-2">
+                        <textarea
+                          readOnly
+                          value={ocr.text}
+                          aria-label="Extracted text"
+                          className="h-32 w-full resize-y rounded-lg border border-white/15 bg-slate-950/40 px-3 py-2 text-xs text-slate-100 focus-visible:border-teal-300 focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
+                        />
+                        {ocr.confidence < 60 && (
+                          <p className="text-[0.7rem] text-amber-300">
+                            Low confidence — please check the text before using it.
+                          </p>
+                        )}
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="text-[0.7rem] text-slate-500">
+                            {ocr.confidence}% confidence · stays on your device
+                          </span>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={copyOcrText}
+                              className="inline-flex items-center gap-1 rounded-lg bg-white/10 px-2.5 py-1 text-xs text-slate-100 hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
+                            >
+                              <Copy className="size-3.5" aria-hidden="true" /> Copy
+                            </button>
+                            <button
+                              type="button"
+                              onClick={useOcrAsName}
+                              className="rounded-lg bg-white/10 px-2.5 py-1 text-xs text-slate-100 hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
+                            >
+                              Use as name
+                            </button>
+                            <button
+                              type="button"
+                              onClick={runOcr}
+                              className="rounded-lg bg-white/10 px-2.5 py-1 text-xs text-slate-100 hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
+                            >
+                              Redo
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <p className="text-xs text-slate-400">
+                          No readable text found on this page.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={runOcr}
+                          className="rounded-lg bg-white/10 px-2.5 py-1 text-xs text-slate-100 hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
+                        >
+                          Try again
+                        </button>
+                      </div>
+                    )
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={runOcr}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-teal-500/20 px-3 py-1.5 text-xs font-medium text-teal-100 ring-1 ring-teal-400/40 hover:bg-teal-500/30 focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
+                    >
+                      <ScanText className="size-4" aria-hidden="true" /> Extract text
+                    </button>
+                  )}
                 </div>
               )}
               {saveOptionsOpen && (
@@ -1921,12 +2181,17 @@ function CameraOverlay(props: {
   caps: ScannerCapabilities;
   voiceOn: boolean;
   autoCapture: boolean;
+  handsFree: boolean;
+  handsFreeEnabled: boolean;
+  pageCount: number;
   cvReady: boolean;
   scanMode: string | null;
   scanModesEnabled: boolean;
   onToggleTorch: () => void;
   onToggleVoice: () => void;
   onToggleAuto: () => void;
+  onToggleHandsFree: () => void;
+  onFinishHandsFree: () => void;
   onCapture: () => void;
   onImport: () => void;
   onSelectMode: (mode: ScanMode) => void;
@@ -2091,6 +2356,23 @@ function CameraOverlay(props: {
             )}
           </div>
         )}
+        {props.handsFree && (
+          <div className="flex items-center justify-between gap-3 rounded-xl bg-teal-500/15 px-3 py-2 ring-1 ring-teal-300/40 backdrop-blur-md">
+            <span className="text-xs font-medium text-teal-50">
+              {props.pageCount > 0
+                ? `${props.pageCount} page${props.pageCount === 1 ? "" : "s"} captured — place the next one`
+                : "Hands-free on — frame a page and hold steady"}
+            </span>
+            <button
+              type="button"
+              onClick={props.onFinishHandsFree}
+              disabled={props.pageCount === 0}
+              className="shrink-0 rounded-full bg-teal-400 px-3 py-1 text-xs font-semibold text-slate-950 transition-colors hover:bg-teal-300 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
+            >
+              Finish{props.pageCount > 0 ? ` (${props.pageCount})` : ""}
+            </button>
+          </div>
+        )}
         <div className="flex items-center justify-center gap-3 text-xs text-slate-300">
           <button
             type="button"
@@ -2108,6 +2390,21 @@ function CameraOverlay(props: {
           >
             Grid: {showGrid ? "On" : "Off"}
           </button>
+          {props.handsFreeEnabled && (
+            <button
+              type="button"
+              onClick={props.onToggleHandsFree}
+              aria-pressed={props.handsFree}
+              className={cn(
+                "rounded-full px-3 py-1 backdrop-blur-md",
+                props.handsFree
+                  ? "bg-teal-500/30 text-teal-50 ring-1 ring-teal-300/70"
+                  : "bg-white/10",
+              )}
+            >
+              Hands-free: {props.handsFree ? "On" : "Off"}
+            </button>
+          )}
         </div>
         <div className="flex items-center justify-between">
           <ControlButton

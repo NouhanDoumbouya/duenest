@@ -1164,6 +1164,18 @@ justifies extraction.
   only written after explicit owner review/apply. This deliberately reuses the
   existing request/response cycle so no queue or worker is introduced yet — the
   same provider seam can later be swapped for an async worker.
+- **AI foundation (optional, key-gated):** `apps.ai` is a thin, honest wrapper
+  around Claude (`apps.ai.client.generate`) with a pure settings resolver
+  (`apps.ai.config.resolve_ai_settings`). It mirrors the email pattern: a single
+  `ANTHROPIC_API_KEY` drives `settings.AI_CONFIGURED`, and with **no key set**
+  every AI feature is built but dark — calls return a structured "not configured"
+  result instead of crashing. The `anthropic` SDK is imported lazily, so lean
+  installs that omit it still run. Per-feature visibility is governed by the
+  `ai_features` / `ai_document_*` flags in `apps.features` (default
+  `founder_only`). **Privacy note:** unlike the local-only OCR path above, when a
+  key *is* configured the relevant document text/fields are sent to Anthropic's
+  API to produce a result; AI is therefore off by default and opt-in per feature.
+  Outputs are review-gated suggestions — never auto-saved or auto-sent.
 
 ### Mid-term (Phase 3–4)
 
