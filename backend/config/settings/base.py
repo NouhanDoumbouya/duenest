@@ -404,6 +404,8 @@ REST_FRAMEWORK = {
         "public_access_code": _throttle_rate("60/min"),
         # Public organization document-request uploads (anti abuse / DoS).
         "public_document_upload": _throttle_rate("10/hour"),
+        # AI "ask your documents" Q&A (per authenticated user) — bounds model cost.
+        "ai_qa": _throttle_rate("20/min"),
     },
 }
 

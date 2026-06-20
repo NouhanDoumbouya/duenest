@@ -5388,3 +5388,50 @@ class CalendarIcsExportView(APIView):
             'attachment; filename="duenest-calendar.ics"'
         )
         return response
+
+
+class DocumentQAView(APIView):
+    """
+    "Ask your documents" — grounded natural-language Q&A over the owner's vault.
+
+    POST ``{"question": "..."}`` → Claude answers using ONLY the asking user's own
+    documents and cites the ones it used. Owner-scoped; the model never sees
+    another user's data.
+
+    Gated three ways: the ``ai_features`` master gate AND ``ai_document_qa`` flags
+    (503 when either is off), plus platform configuration — if no
+    ``ANTHROPIC_API_KEY`` is set the call returns ``200`` with
+    ``{"available": false, "reason": "not_configured"}`` so the UI can explain it
+    rather than erroring. Per-user rate limited to bound model cost.
+    """
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "ai_qa"
+
+    def post(self, request):
+        require_feature_enabled("ai_features", request.user)
+        require_feature_enabled("ai_document_qa", request.user)
+
+        question = (request.data.get("question") or "").strip()
+        if not question:
+            return Response(
+                {"detail": "A question is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from .ai_qa import answer_question
+
+        result = answer_question(request.user, question)
+        _track_product_event(
+            request,
+            "document_qa_asked",
+            object_type="document_qa",
+            metadata={
+                "available": result.get("available"),
+                "reason": result.get("reason"),
+                "answered": result.get("answered"),
+                "document_count": result.get("document_count"),
+            },
+        )
+        return Response(result, status=status.HTTP_200_OK)
