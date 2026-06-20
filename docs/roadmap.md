@@ -250,9 +250,14 @@ growth loop and a showcase for application packs.
 **Minimal-disclosure shares (differentiator, behind `private_share`):** redact a
 copy of a document and share *that* in one flow — original never exposed —
 reusing the redaction tool + the share engine (client-side; no new backend). v1 is
-manual redaction one tap from sharing; auto purpose-presets (field-aware redaction)
-need OCR and come later. Remaining sharing-vision items: anonymous responders for
-Share Requests, then verifiable-credential / offline verification.
+manual redaction one tap from sharing.
+
+**Smart redaction (assistive, behind `smart_redaction`):** the redaction editor's
+**Auto-find** OCRs the page on-device and pre-draws boxes over bank/card numbers,
+emails, phones, or a custom term — the user reviews before applying. Pattern-based
+and assistive (not layout AI); client-side, no backend. Remaining sharing-vision
+items: layout-aware redaction, anonymous responders for Share Requests, then
+verifiable-credential / offline verification.
 
 ### v0.4 — Integrations
 

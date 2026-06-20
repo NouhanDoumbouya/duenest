@@ -5388,3 +5388,112 @@ class CalendarIcsExportView(APIView):
             'attachment; filename="duenest-calendar.ics"'
         )
         return response
+
+
+class DocumentQAView(APIView):
+    """
+    "Ask your documents" — grounded natural-language Q&A over the owner's vault.
+
+    POST ``{"question": "..."}`` → Claude answers using ONLY the asking user's own
+    documents and cites the ones it used. Owner-scoped; the model never sees
+    another user's data.
+
+    Gated three ways: the ``ai_features`` master gate AND ``ai_document_qa`` flags
+    (503 when either is off), plus platform configuration — if no
+    ``ANTHROPIC_API_KEY`` is set the call returns ``200`` with
+    ``{"available": false, "reason": "not_configured"}`` so the UI can explain it
+    rather than erroring. Per-user rate limited to bound model cost.
+    """
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "ai_qa"
+
+    def post(self, request):
+        require_feature_enabled("ai_features", request.user)
+        require_feature_enabled("ai_document_qa", request.user)
+
+        question = (request.data.get("question") or "").strip()
+        if not question:
+            return Response(
+                {"detail": "A question is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from .ai_qa import answer_question
+
+        result = answer_question(request.user, question)
+        _track_product_event(
+            request,
+            "document_qa_asked",
+            object_type="document_qa",
+            metadata={
+                "available": result.get("available"),
+                "reason": result.get("reason"),
+                "answered": result.get("answered"),
+                "document_count": result.get("document_count"),
+            },
+        )
+        return Response(result, status=status.HTTP_200_OK)
+
+
+class DocumentDraftView(APIView):
+    """
+    AI drafting assistant — write a letter/email from the owner's records.
+
+    POST ``{"instructions": "...", "document_ids": [..], "tone": "formal"}`` →
+    Claude returns a ``{subject, body}`` draft, optionally grounded in the named
+    documents (owner-scoped). The draft is a **suggestion only** — nothing is
+    saved to the vault and nothing is sent.
+
+    Gated like the other AI features: the ``ai_features`` master gate AND
+    ``ai_document_drafting`` flags (503 when off), plus platform configuration —
+    if no key is set the call returns ``200`` with ``{"available": false,
+    "reason": "not_configured"}``. Per-user rate limited to bound cost.
+    """
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "ai_draft"
+
+    def post(self, request):
+        require_feature_enabled("ai_features", request.user)
+        require_feature_enabled("ai_document_drafting", request.user)
+
+        instructions = (request.data.get("instructions") or "").strip()
+        if not instructions:
+            return Response(
+                {"detail": "Instructions are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        document_ids = request.data.get("document_ids") or []
+        if not isinstance(document_ids, list):
+            document_ids = []
+        clean_ids: list[int] = []
+        for raw in document_ids[:50]:
+            try:
+                clean_ids.append(int(raw))
+            except (TypeError, ValueError):
+                continue
+        tone = (request.data.get("tone") or "").strip().lower()
+
+        from .ai_draft import draft
+
+        result = draft(
+            request.user,
+            instructions=instructions,
+            document_ids=clean_ids,
+            tone=tone,
+        )
+        _track_product_event(
+            request,
+            "document_draft_created",
+            object_type="document_draft",
+            metadata={
+                "available": result.get("available"),
+                "reason": result.get("reason"),
+                "grounded_on": len(result.get("used_document_ids") or []),
+            },
+        )
+        return Response(result, status=status.HTTP_200_OK)
