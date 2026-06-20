@@ -7,6 +7,7 @@ import {
   Download,
   Eye,
   EyeOff,
+  ExternalLink,
   FileText,
   Loader2,
   LockKeyhole,
@@ -448,6 +449,18 @@ function PackView({
             {pack.location.label || "Shared by the owner"}
             {pack.location.precision === "approximate" && " (approximate)"}
           </p>
+          {typeof pack.location.lat === "number" &&
+            typeof pack.location.lng === "number" && (
+              <a
+                href={`https://www.openstreetmap.org/?mlat=${pack.location.lat}&mlon=${pack.location.lng}#map=16/${pack.location.lat}/${pack.location.lng}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1 inline-flex items-center gap-1 text-sm text-primary hover:underline"
+              >
+                <ExternalLink className="size-3.5" />
+                View on map
+              </a>
+            )}
           {pack.location.updated_at && (
             <p className="text-xs text-muted-foreground">
               Updated {formatDate(pack.location.updated_at)}

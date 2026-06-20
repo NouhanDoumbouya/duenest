@@ -369,3 +369,35 @@ class EmergencyOwnerEndpointsTests(APITestCase):
             EmergencyActivityEvent.EventType.LOCATION_TOGGLED,
             set(self.pack.activity_events.values_list("event_type", flat=True)),
         )
+
+    def test_manual_location_update_is_logged(self):
+        self.client.force_authenticate(self.owner)
+        self.client.post(
+            f"/api/v1/emergency-packs/{self.pack.id}/location/",
+            {"location_enabled": True, "lat": 1.0, "lng": 2.0},
+            format="json",
+        )
+        self.assertEqual(
+            self.pack.activity_events.filter(
+                event_type=EmergencyActivityEvent.EventType.LOCATION_UPDATED
+            ).count(),
+            1,
+        )
+
+    def test_auto_location_refresh_is_not_logged(self):
+        """Background (auto) refreshes update coordinates without spamming the
+        activity log; only deliberate manual updates are recorded."""
+        self.client.force_authenticate(self.owner)
+        resp = self.client.post(
+            f"/api/v1/emergency-packs/{self.pack.id}/location/",
+            {"lat": 9.0, "lng": 8.0, "auto": True},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.pack.refresh_from_db()
+        self.assertEqual(self.pack.last_known_location["lat"], 9.0)
+        self.assertFalse(
+            self.pack.activity_events.filter(
+                event_type=EmergencyActivityEvent.EventType.LOCATION_UPDATED
+            ).exists()
+        )

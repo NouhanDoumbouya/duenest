@@ -161,6 +161,8 @@ export function updateEmergencyLocation(
     label?: string;
     lat?: number | null;
     lng?: number | null;
+    /** True for background auto-refreshes — suppresses the activity-log entry. */
+    auto?: boolean;
   },
 ): Promise<EmergencyPack> {
   return apiFetch<EmergencyPack>(`/emergency-packs/${packId}/location/`, {

@@ -1677,7 +1677,18 @@ X-Access-Code: 246810
 
 The emergency **location** is off by default and is only included in public
 responses after access is unlocked AND the owner enabled it; `approximate`
-precision withholds exact coordinates. Scans, requests, wrong-code attempts,
+precision withholds exact coordinates. The owner can set the location either by
+typing a place name (`label`) or by capturing GPS coordinates from their device
+(the dashboard's "Use my current location" calls the browser geolocation API and
+posts `lat`/`lng` to the `/location/` endpoint — a one-off snapshot, not live
+tracking). An optional **foreground auto-refresh** ("Keep updating while this
+page is open") uses `watchPosition` to re-post coordinates with `auto: true`
+while the owner's page stays open (throttled ~5 min / 50 m); the `auto` flag
+suppresses the `LOCATION_UPDATED` activity entry so background ticks don't spam
+the log. There is **no true background tracking** — it stops when the tab closes
+(real background updates would require a native mobile app). When precise
+coordinates are shared, the recipient viewer shows a "View on map" link. Scans,
+requests, wrong-code attempts,
 approvals/denials, views, downloads, and location reveals are written to the
 pack's activity log (never storing codes or tokens), and the owner receives
 in-app notifications for requests, unlocks, downloads, and wrong-code attempts.

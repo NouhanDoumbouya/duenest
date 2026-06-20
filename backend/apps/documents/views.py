@@ -3968,7 +3968,11 @@ class EmergencyPackViewSet(viewsets.ModelViewSet):
                     else "Emergency location turned off."
                 ),
             )
-        if location_changed:
+        # Background ("auto") refreshes from the owner's open page would otherwise
+        # write a LOCATION_UPDATED row on every tick; the `auto` flag suppresses
+        # the activity entry so only deliberate, manual updates are logged.
+        is_auto = bool(data.get("auto"))
+        if location_changed and not is_auto:
             log_emergency_event(
                 pack=pack,
                 event_type=EmergencyActivityEvent.EventType.LOCATION_UPDATED,

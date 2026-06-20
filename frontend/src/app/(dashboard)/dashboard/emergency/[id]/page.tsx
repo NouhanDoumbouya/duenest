@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
@@ -13,6 +13,7 @@ import {
   Copy,
   ExternalLink,
   Loader2,
+  LocateFixed,
   Lock,
   MapPin,
   Plus,
@@ -1112,6 +1113,29 @@ function TrustedContactsSection({
 
 // ---- Emergency location ----------------------------------------------------
 
+/** Great-circle distance between two lat/lng points, in metres. */
+function metersBetween(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
+): number {
+  const R = 6371000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+
+// Foreground auto-refresh cadence: persist at most this often, or sooner if the
+// device has moved more than this distance. Keeps the stored last-known
+// location fresh without spamming the API while the page sits open.
+const AUTO_MIN_INTERVAL_MS = 5 * 60 * 1000;
+const AUTO_MIN_MOVE_M = 50;
+
 function EmergencyLocationSection({
   pack,
   onSaved,
@@ -1123,6 +1147,28 @@ function EmergencyLocationSection({
 }) {
   const [label, setLabel] = useState(pack.last_known_location?.label ?? "");
   const [saving, setSaving] = useState(false);
+  const [locating, setLocating] = useState(false);
+  // Foreground auto-refresh: session-only (NOT persisted to the pack). While on,
+  // the page watches GPS and refreshes the stored location periodically; it
+  // stops on toggle-off, when location sharing is disabled, or on unmount/close.
+  const [autoUpdate, setAutoUpdate] = useState(false);
+  const [autoStatus, setAutoStatus] = useState<string | null>(null);
+  const watchIdRef = useRef<number | null>(null);
+  const lastSentRef = useRef<{ at: number; lat: number; lng: number } | null>(
+    null,
+  );
+  const labelRef = useRef(label);
+  useEffect(() => {
+    labelRef.current = label;
+  }, [label]);
+
+  // Coordinates already stored on the pack (set via GPS capture). Kept so a
+  // label-only "Update" doesn't silently wipe a captured pin — both are sent
+  // together. lat/lng are only shared on the recipient's map when precision is
+  // "precise" (the public serializer drops them for "approximate").
+  const lat = pack.last_known_location?.lat ?? null;
+  const lng = pack.last_known_location?.lng ?? null;
+  const hasCoords = typeof lat === "number" && typeof lng === "number";
 
   async function save(payload: Parameters<typeof updateEmergencyLocation>[1]) {
     setSaving(true);
@@ -1137,6 +1183,119 @@ function EmergencyLocationSection({
       setSaving(false);
     }
   }
+
+  // Capture the device's current GPS position (with permission) and store it
+  // alongside the typed label. Browser-only; nothing is tracked continuously —
+  // this is a one-off "last known location" snapshot the owner chooses to set.
+  function useMyLocation() {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setActionError("This device or browser can't share a GPS location.");
+      return;
+    }
+    setLocating(true);
+    setActionError(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLocating(false);
+        void save({
+          label,
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+        });
+      },
+      (err) => {
+        setLocating(false);
+        setActionError(
+          err.code === err.PERMISSION_DENIED
+            ? "Location permission was denied. You can still type a place name."
+            : "Couldn't get your current location. Please try again.",
+        );
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 },
+    );
+  }
+
+  // Turn the foreground auto-refresh on/off. Availability + the initial status
+  // are handled here (in the event handler) so the effect body never calls
+  // setState synchronously — it only subscribes to watchPosition.
+  function toggleAutoUpdate(next: boolean) {
+    if (!next) {
+      setAutoUpdate(false);
+      return;
+    }
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setActionError("This device or browser can't share a GPS location.");
+      return;
+    }
+    setActionError(null);
+    lastSentRef.current = null;
+    setAutoStatus("Waiting for a location fix…");
+    setAutoUpdate(true);
+  }
+
+  // Keep `onSaved` reachable from the watch callback without making it a
+  // dependency (it changes identity each render and would restart the watch).
+  const onSavedRef = useRef(onSaved);
+  useEffect(() => {
+    onSavedRef.current = onSaved;
+  }, [onSaved]);
+
+  // Foreground auto-refresh loop. Runs only while the toggle is on AND location
+  // sharing is enabled; watchPosition delivers fixes while the page is open and
+  // we throttle persistence by time + distance. Cleanup (toggle-off, disabling
+  // location, unmount, tab close) clears the watch — there is no background work.
+  useEffect(() => {
+    if (!autoUpdate || !pack.location_enabled) return;
+    if (typeof navigator === "undefined" || !navigator.geolocation) return;
+    const id = navigator.geolocation.watchPosition(
+      (pos) => {
+        const plat = pos.coords.latitude;
+        const plng = pos.coords.longitude;
+        const now = Date.now();
+        const last = lastSentRef.current;
+        const moved = last
+          ? metersBetween(last.lat, last.lng, plat, plng)
+          : Infinity;
+        if (
+          last &&
+          now - last.at < AUTO_MIN_INTERVAL_MS &&
+          moved < AUTO_MIN_MOVE_M
+        ) {
+          return; // too soon and barely moved — skip this fix
+        }
+        lastSentRef.current = { at: now, lat: plat, lng: plng };
+        updateEmergencyLocation(pack.id, {
+          label: labelRef.current,
+          lat: plat,
+          lng: plng,
+          auto: true,
+        })
+          .then((updated) => {
+            onSavedRef.current(updated);
+            setAutoStatus(`Updated ${new Date().toLocaleTimeString()}`);
+          })
+          .catch(() => {
+            /* transient network error — keep watching, try next fix */
+          });
+      },
+      (err) => {
+        setAutoStatus(null);
+        setActionError(
+          err.code === err.PERMISSION_DENIED
+            ? "Location permission was denied. Auto-update turned off."
+            : "Couldn't keep your location updated. Auto-update turned off.",
+        );
+        setAutoUpdate(false);
+      },
+      { enableHighAccuracy: true, maximumAge: 60000, timeout: 20000 },
+    );
+    watchIdRef.current = id;
+    return () => {
+      navigator.geolocation.clearWatch(id);
+      watchIdRef.current = null;
+      setAutoStatus(null);
+    };
+  }, [autoUpdate, pack.location_enabled, pack.id, setActionError]);
 
   return (
     <Card>
@@ -1157,7 +1316,10 @@ function EmergencyLocationSection({
           <input
             type="checkbox"
             checked={pack.location_enabled}
-            onChange={(e) => save({ location_enabled: e.target.checked })}
+            onChange={(e) => {
+              if (!e.target.checked) setAutoUpdate(false);
+              void save({ location_enabled: e.target.checked });
+            }}
             disabled={saving}
             className="size-4 rounded border-input"
           />
@@ -1177,13 +1339,85 @@ function EmergencyLocationSection({
                 />
                 <Button
                   variant="outline"
-                  onClick={() => save({ label })}
-                  disabled={saving}
+                  onClick={() => save({ label, lat, lng })}
+                  disabled={saving || locating}
                 >
                   {saving ? <Loader2 className="size-4 animate-spin" /> : "Update"}
                 </Button>
               </div>
+              {/* GPS capture — fills in precise coordinates without typing. */}
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={useMyLocation}
+                  disabled={saving || locating}
+                >
+                  {locating ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <LocateFixed className="size-4" />
+                  )}
+                  {locating ? "Getting location…" : "Use my current location"}
+                </Button>
+                {hasCoords && (
+                  <a
+                    href={`https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=16/${lat}/${lng}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                  >
+                    <ExternalLink className="size-3" />
+                    {lat!.toFixed(5)}, {lng!.toFixed(5)}
+                  </a>
+                )}
+                {hasCoords && (
+                  <button
+                    type="button"
+                    onClick={() => save({ label, lat: null, lng: null })}
+                    disabled={saving || locating}
+                    className="text-xs text-muted-foreground hover:text-foreground hover:underline disabled:opacity-50"
+                  >
+                    Clear pin
+                  </button>
+                )}
+              </div>
+              {hasCoords && pack.location_precision === "approximate" && (
+                <p className="text-xs text-muted-foreground">
+                  A GPS pin is saved, but it is only shared on the recipient&apos;s
+                  map when precision is set to <strong>Precise</strong> below.
+                </p>
+              )}
             </div>
+            <div className="flex flex-col gap-2 border-t border-border pt-3">
+              <label className="flex items-start justify-between gap-3 text-sm">
+                <span>
+                  Keep updating while this page is open
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    Refreshes about every 5 minutes while this tab stays open. It
+                    stops the moment you close it — this is not background
+                    tracking.
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={autoUpdate}
+                  onChange={(e) => toggleAutoUpdate(e.target.checked)}
+                  disabled={saving || locating}
+                  className="mt-0.5 size-4 rounded border-input"
+                />
+              </label>
+              {autoUpdate && (
+                <p className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span
+                    className="size-2 animate-pulse rounded-full bg-emerald-500"
+                    aria-hidden
+                  />
+                  {autoStatus ?? "Auto-updating while open…"}
+                </p>
+              )}
+            </div>
+
             <div className="flex flex-col gap-2">
               <Label htmlFor="loc-precision">Precision</Label>
               <select
