@@ -1366,8 +1366,18 @@ preselected (`src/components/documents/file-tools-dialog.tsx` `onShare` →
 `quick-share-prefill`). The original is never shared. Purely client-side
 composition of the existing redaction pipeline + share engine — no new backend.
 The same result-step action also enables compress→share / export-pages→share.
-Founder-flagged (`private_share`); v1 is manual redaction (auto purpose-preset /
-field-aware redaction is later, needing OCR).
+Founder-flagged (`private_share`); v1 is manual redaction.
+
+**Smart redaction (assistive).** Extends the redaction editor: an **Auto-find**
+control OCRs the current page on-device (`tesseract.js` via `recognizeWords` in
+`src/lib/scanner/ocr.ts`) and pre-draws redaction boxes over sensitive data —
+bank/card numbers, sort codes, IBANs, emails, phones, or a custom term — using pure
+pattern matchers (`src/lib/scanner/smart-redaction.ts`, unit-tested). Word boxes map
+straight onto the normalized `RedactionRect` space, and the boxes are ordinary
+editable rects, so the user reviews/adjusts before creating the copy. It is
+**assistive only** — patterns miss and over-match; the UI says "review before
+sharing" and never auto-applies. Client-side, no backend; founder-flagged
+(`smart_redaction`). True document-layout understanding remains future work.
 
 **Deliberately NOT unified — `OrganizationSecureRoom` and `EmergencyAccessPack`.**
 These look superficially similar (token-gated, access codes, expiry) but are

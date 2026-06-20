@@ -83,3 +83,38 @@ export async function recognizeText(
     await worker.terminate();
   }
 }
+
+/** One recognised word with its pixel box in the input canvas's coordinate space. */
+export interface OcrWord {
+  text: string;
+  bbox: { x0: number; y0: number; x1: number; y1: number };
+}
+
+/**
+ * Recognise individual words with their bounding boxes (in the canvas's pixel
+ * space). Used by smart redaction to locate sensitive text. Requests block output
+ * so per-word boxes are populated; the worker is always terminated.
+ */
+export async function recognizeWords(
+  canvas: HTMLCanvasElement,
+  onProgress?: (p: OcrProgress) => void,
+): Promise<OcrWord[]> {
+  const worker = await createWorker("eng", 1, {
+    logger: onProgress
+      ? (m: { status: string; progress: number }) => {
+          onProgress({ status: m.status, progress: m.progress });
+        }
+      : undefined,
+  });
+  try {
+    const { data } = await worker.recognize(canvas, {}, { blocks: true });
+    return (data.words ?? [])
+      .filter((w) => (w.text ?? "").trim().length > 0)
+      .map((w) => ({
+        text: w.text,
+        bbox: { x0: w.bbox.x0, y0: w.bbox.y0, x1: w.bbox.x1, y1: w.bbox.y1 },
+      }));
+  } finally {
+    await worker.terminate();
+  }
+}
