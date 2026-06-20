@@ -45,6 +45,21 @@ export default function DraftPage() {
   const [error, setError] = useState<string | null>(null);
   const [notEnabled, setNotEnabled] = useState(false);
 
+  // Seed from a `?goal=` handoff (e.g. from the Pack Copilot). Read from the
+  // URL directly to avoid needing a useSearchParams Suspense boundary.
+  useEffect(() => {
+    const goal = new URLSearchParams(window.location.search)
+      .get("goal")
+      ?.trim();
+    if (goal) {
+      // Intentional one-time seed from a browser-only source after mount; a
+      // useState initializer would run during SSR (no window) and cause a
+      // hydration mismatch, so the effect is the correct place for it.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setInstructions(`Write a cover letter for my ${goal} application.`);
+    }
+  }, []);
+
   useEffect(() => {
     let active = true;
     getDocuments()
