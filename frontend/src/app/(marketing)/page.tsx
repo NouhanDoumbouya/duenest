@@ -96,6 +96,16 @@ const FAQ_ITEMS: { q: string; a: string }[] = [
     q: "What happens after the beta?",
     a: "We'll email you before anything changes. Organizing and tracking your documents is built to stay useful, and we'll be clear about any plan limits ahead of time.",
   },
+  // AI FAQ appears only at public launch (flag off), since the AI features are
+  // gated until then. Reconciles with the rule-based "no AI guesswork" stance.
+  ...(PRIVATE_BETA
+    ? []
+    : [
+        {
+          q: "Does DueNest use AI?",
+          a: "Optionally, and only to assist you. AI can read your own documents to extract details and answer questions you ask — always as suggestions you confirm, never auto-saved. Your reminders and deadline checks stay rule-based, so nothing important is left to a guess. AI only ever sees your own documents; it is never used to train models or sold.",
+        },
+      ]),
 ];
 
 const STRUCTURED_DATA = {
@@ -147,6 +157,7 @@ export default function LandingPage() {
         <Emergency />
         <MoneyRadar />
         <Capabilities />
+        {!PRIVATE_BETA && <AiAssist />}
         <Security />
         <Principles />
         <UseCases />
@@ -765,6 +776,66 @@ function Capabilities() {
         </div>
       </div>
     </section>
+  );
+}
+
+// ---- AI assist (launch-gated) ----------------------------------------------
+
+function AiAssist() {
+  return (
+    <ProductSection
+      id="ai"
+      tone="muted"
+      reverse
+      eyebrow="AI assist"
+      title="AI that assists — never decides."
+      description="Optional AI reads your own documents to save you typing and answer the questions you ask. It only ever suggests — you confirm before anything is saved, and your reminders stay rule-based, not guessed."
+      bullets={[
+        "Extract key fields and dates from a scan or upload — you review before saving",
+        "Ask your documents: “When does my visa expire?” — answers cite the source file",
+        "Owner-scoped and private: AI only sees your own documents, never sold or used to train",
+        "Nothing auto-fills or auto-sends — AI proposes, you decide",
+      ]}
+      visual={<AiAssistVisual />}
+    />
+  );
+}
+
+function AiAssistVisual() {
+  const rows = [
+    { label: "Document", value: "Passport" },
+    { label: "Expiry date", value: "14 Mar 2027" },
+    { label: "Number", value: "A1234567" },
+  ];
+  return (
+    <div className="mx-auto max-w-md rounded-2xl border border-border bg-card p-5 shadow-card">
+      <div className="flex items-center gap-2 text-sm font-medium">
+        <Sparkles className="size-4 text-primary" />
+        AI suggestion · you confirm
+      </div>
+      <div className="mt-4 space-y-2">
+        {rows.map((row) => (
+          <div
+            key={row.label}
+            className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2 text-sm"
+          >
+            <span className="text-muted-foreground">{row.label}</span>
+            <span className="font-medium">{row.value}</span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <span className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground">
+          <Check className="size-4" /> Confirm &amp; save
+        </span>
+        <span className="inline-flex items-center rounded-lg border border-border px-3 py-1.5 text-sm">
+          Edit
+        </span>
+      </div>
+      <p className="mt-3 text-xs text-muted-foreground">
+        Suggestions only — nothing is saved until you confirm.
+      </p>
+    </div>
   );
 }
 
