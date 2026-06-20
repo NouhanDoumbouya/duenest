@@ -17,12 +17,20 @@
  *     threshold to black & white, so faces, stamps and signatures survive.
  */
 
+import {
+  adaptiveMeanBinarizeInPlace,
+  flattenIlluminationInPlace,
+  grayWorldWhiteBalanceInPlace,
+  unsharpMaskInPlace,
+} from "./enhance";
+
 export type FilterId =
   | "original"
   | "auto"
   | "light"
   | "grayscale"
   | "bw"
+  | "scan-hd"
   | "id-passport"
   | "receipt"
   | "low-light"
@@ -61,6 +69,15 @@ interface FilterParams {
   gamma?: number;
   /** Saturation multiplier, 1 = unchanged (ignored when grayscale). */
   saturation?: number;
+  // ---- Adaptive enhancement (see ./enhance) -------------------------------
+  /** Gray-world white balance (remove a warm/cool colour cast). */
+  whiteBalance?: boolean;
+  /** Divide out the background light field (shadow gradient / vignette). */
+  flattenIllumination?: boolean;
+  /** Mild unsharp mask to crisp text after enhancement. */
+  autoSharpen?: boolean;
+  /** Local adaptive-mean binarization (replaces the global B&W threshold). */
+  adaptiveBinarize?: boolean;
 }
 
 const PARAMS: Record<FilterId, FilterParams> = {
@@ -71,8 +88,18 @@ const PARAMS: Record<FilterId, FilterParams> = {
   // Brightens dark/low-contrast captures without washing out text.
   light: { brightness: 26, gamma: 0.9, contrast: 1.04 },
   grayscale: { grayscale: true, contrast: 1.05 },
-  // Strong contrast for printed text. Destroys color — not a default.
-  bw: { grayscale: true, adaptiveWhiten: true, threshold: true },
+  // Strong contrast for printed text. Destroys color — not a default. Uses local
+  // adaptive-mean binarization so uneven lighting / shadows don't smear or drop
+  // text the way a single global threshold does.
+  bw: { adaptiveBinarize: true },
+  // Flagship "looks professionally scanned" colour mode: neutralize colour cast,
+  // divide out the background light field (shadows/vignette), then crisp text.
+  "scan-hd": {
+    whiteBalance: true,
+    flattenIllumination: true,
+    autoSharpen: true,
+    contrast: 1.05,
+  },
   // Color-preserving modes never threshold, so faces/stamps/signatures survive.
   "id-passport": { brightness: 8, contrast: 1.05, saturation: 1.08 },
   receipt: { grayscale: true, brightness: 18, contrast: 1.28, gamma: 0.95 },
@@ -132,6 +159,20 @@ export const FILTERS: FilterMeta[] = [
     destructiveRisk: "high",
     supportsBatchApply: true,
     primary: true,
+  },
+  {
+    id: "scan-hd",
+    label: "Scan HD",
+    description:
+      "Professional scan look: evens out shadows and lighting, fixes color cast, and sharpens text. Keeps color.",
+    recommendedFor: "Any document photographed in uneven or warm lighting",
+    planTier: "pro",
+    isDefault: false,
+    isExperimental: true,
+    preservesColor: true,
+    destructiveRisk: "low",
+    supportsBatchApply: true,
+    primary: false,
   },
   {
     id: "grayscale",
@@ -228,6 +269,13 @@ export function applyFilterToImageData(
   const p = PARAMS[id];
   if (!p || id === "original") return data;
 
+  // ---- Adaptive enhancement passes (see ./enhance) ------------------------
+  // White balance and illumination flattening run first (they normalize the
+  // input the tone curve then polishes). Adaptive binarization is terminal.
+  if (p.whiteBalance) grayWorldWhiteBalanceInPlace(data);
+  if (p.flattenIllumination) flattenIlluminationInPlace(data, width, height);
+  if (p.adaptiveBinarize) return adaptiveMeanBinarizeInPlace(data, width, height);
+
   // Adaptive white point: find the brightest histogram peak so whitening adapts
   // to the lighting instead of a fixed threshold.
   let whitePoint = 245;
@@ -298,6 +346,7 @@ export function applyFilterToImageData(
     data[i + 2] = b;
   }
 
+  if (p.autoSharpen) unsharpMaskInPlace(data, width, height);
   return data;
 }
 
