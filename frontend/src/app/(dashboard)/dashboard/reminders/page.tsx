@@ -61,7 +61,7 @@ export default function RemindersPage() {
     <PageContainer width="narrow">
       <PageHeader
         eyebrow="Workspace"
-        title="Reminders"
+        title="Deadlines & Renewals"
         description="Upcoming reminders calculated from your documents' expiry and renewal dates. Add or change reminder rules from each document."
       />
 

@@ -129,7 +129,7 @@ export const NAV_SECTIONS: NavSection[] = [
         description: "Urgent items and gaps that may already be blocking you.",
       },
       {
-        label: "Reminders",
+        label: "Deadlines & Renewals",
         href: "/dashboard/reminders",
         description: "Renewal and deadline reminders you've scheduled.",
       },
@@ -264,7 +264,7 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
         sectionKey: "planning",
         children: [
           { label: "Attention", href: "/dashboard/attention", icon: ShieldAlert },
-          { label: "Reminders", href: "/dashboard/reminders", icon: BellRing },
+          { label: "Deadlines & Renewals", href: "/dashboard/reminders", icon: BellRing },
           { label: "Calendar", href: "/dashboard/calendar", icon: CalendarDays },
           { label: "Timeline", href: "/dashboard/timeline", icon: Clock },
         ],
