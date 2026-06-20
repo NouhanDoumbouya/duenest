@@ -53,25 +53,6 @@ export interface DocumentFileShareLink {
   last_accessed_at: string | null;
 }
 
-export interface CreatedDocumentFileShareLink extends DocumentFileShareLink {
-  access_code?: string;
-}
-
-export interface CreateShareLinkPayload {
-  permission: ShareLinkPermission;
-  expires_at: string;
-  access_code_required: boolean;
-  access_code?: string;
-  access_limit_type?: ShareAccessLimitType;
-  max_views?: number | null;
-  max_downloads?: number | null;
-  watermark_enabled?: boolean;
-  privacy_screen_enabled?: boolean;
-  label?: string;
-  recipient_email?: string;
-  purpose?: string;
-}
-
 export type DocumentFileActivityAction =
   | "file_uploaded"
   | "file_previewed"
