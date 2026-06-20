@@ -172,6 +172,46 @@ export function updateEmergencyLocation(
   });
 }
 
+// ---- Safety check-in ("dead man's switch") ---------------------------------
+
+/** Arm the check-in: must check in within `interval_minutes` or trusted
+ * contacts are alerted with `message` (+ last-known location if `reveal_location`). */
+export function armEmergencyCheckin(
+  packId: number,
+  payload: {
+    interval_minutes: number;
+    message?: string;
+    reveal_location?: boolean;
+  },
+): Promise<EmergencyPack> {
+  return apiFetch<EmergencyPack>(`/emergency-packs/${packId}/checkin/arm/`, {
+    method: "POST",
+    body: payload,
+    auth: true,
+  });
+}
+
+/** Push the deadline out (owner is "still going"). */
+export function extendEmergencyCheckin(
+  packId: number,
+  payload: { interval_minutes?: number } = {},
+): Promise<EmergencyPack> {
+  return apiFetch<EmergencyPack>(`/emergency-packs/${packId}/checkin/extend/`, {
+    method: "POST",
+    body: payload,
+    auth: true,
+  });
+}
+
+/** Disarm the check-in ("I'm safe") — nothing is sent. */
+export function cancelEmergencyCheckin(packId: number): Promise<EmergencyPack> {
+  return apiFetch<EmergencyPack>(`/emergency-packs/${packId}/checkin/cancel/`, {
+    method: "POST",
+    body: {},
+    auth: true,
+  });
+}
+
 // ---- Activity + unlock requests (owner) ------------------------------------
 
 export function getEmergencyActivity(

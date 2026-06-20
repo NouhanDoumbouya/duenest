@@ -47,7 +47,9 @@ import {
   addEmergencyPackItem,
   addTrustedContact,
   approveUnlockRequest,
+  armEmergencyCheckin,
   buildPublicViewerUrl,
+  cancelEmergencyCheckin,
   deleteEmergencyPack,
   denyUnlockRequest,
   disableEmergencyPack,
@@ -55,6 +57,7 @@ import {
   getEmergencyActivity,
   getEmergencyPack,
   getTrustedContacts,
+  extendEmergencyCheckin,
   getUnlockRequests,
   regenerateEmergencyPackLink,
   removeEmergencyPackItem,
@@ -64,6 +67,7 @@ import {
   updateEmergencyLocation,
   updateEmergencyPack,
 } from "@/lib/emergency";
+import { getFeatureMap } from "@/lib/features";
 import {
   READINESS_LABELS,
   UNLOCK_DELAY_OPTIONS,
@@ -117,6 +121,9 @@ export default function EmergencyProtocolPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmRegen, setConfirmRegen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  // Whether the safety check-in tool is launched for this viewer (founder-gated
+  // until released). Hidden entirely when off — the backend 503s regardless.
+  const [checkinEnabled, setCheckinEnabled] = useState(false);
 
   const refreshPack = useCallback(async () => {
     const refreshed = await getEmergencyPack(id);
@@ -157,6 +164,22 @@ export default function EmergencyProtocolPage() {
       active = false;
     };
   }, [id, validId]);
+
+  // Resolve whether the founder-gated safety check-in tool is available. Failure
+  // leaves it hidden, which is the safe default.
+  useEffect(() => {
+    let active = true;
+    getFeatureMap()
+      .then((map) => {
+        if (active) setCheckinEnabled(map.features.emergency_checkin?.enabled ?? false);
+      })
+      .catch(() => {
+        /* keep the tool hidden if availability can't be resolved */
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const shareUrl = pack ? buildPublicViewerUrl(pack.public_url_path) : null;
   const readiness = pack
@@ -606,6 +629,19 @@ export default function EmergencyProtocolPage() {
         onSaved={setPack}
         setActionError={setActionError}
       />
+
+      {/* Safety check-in (founder-gated) */}
+      {checkinEnabled && (
+        <EmergencyCheckinSection
+          pack={pack}
+          contacts={contacts}
+          onSaved={(p) => {
+            setPack(p);
+            getEmergencyActivity(id).then(setActivity).catch(() => {});
+          }}
+          setActionError={setActionError}
+        />
+      )}
 
       {/* Activity log */}
       <Card>
@@ -1443,6 +1479,215 @@ function EmergencyLocationSection({
                 Updated {formatDate(pack.last_known_location_at)}
               </p>
             )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---- Safety check-in ("dead man's switch") ---------------------------------
+
+const CHECKIN_INTERVALS: { value: number; label: string }[] = [
+  { value: 30, label: "30 minutes" },
+  { value: 60, label: "1 hour" },
+  { value: 120, label: "2 hours" },
+  { value: 240, label: "4 hours" },
+  { value: 480, label: "8 hours" },
+  { value: 1440, label: "24 hours" },
+];
+
+/** "2h 5m left" / "Overdue" from a future deadline relative to now. */
+function formatCheckinRemaining(dueAt: Date, now: number): string {
+  const ms = dueAt.getTime() - now;
+  if (ms <= 0) return "Overdue";
+  const totalMin = Math.floor(ms / 60000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h > 0) return `${h}h ${m}m left`;
+  if (m > 0) return `${m}m left`;
+  return "under a minute left";
+}
+
+function EmergencyCheckinSection({
+  pack,
+  contacts,
+  onSaved,
+  setActionError,
+}: {
+  pack: EmergencyPack;
+  contacts: EmergencyTrustedContact[];
+  onSaved: (pack: EmergencyPack) => void;
+  setActionError: (msg: string | null) => void;
+}) {
+  const [interval, setInterval] = useState<number>(
+    pack.checkin_interval_minutes ?? 60,
+  );
+  const [message, setMessage] = useState(pack.checkin_message ?? "");
+  const [revealLocation, setRevealLocation] = useState(
+    pack.checkin_reveal_location,
+  );
+  const [saving, setSaving] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+
+  const emailContacts = contacts.filter((c) => c.email);
+  const armed = pack.checkin_armed;
+  const dueAt = pack.checkin_due_at ? new Date(pack.checkin_due_at) : null;
+
+  // Tick the countdown every second while armed so the time-left stays live.
+  useEffect(() => {
+    if (!armed) return;
+    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, [armed]);
+
+  async function run(action: () => Promise<EmergencyPack>) {
+    setSaving(true);
+    setActionError(null);
+    try {
+      onSaved(await action());
+    } catch (err) {
+      setActionError(
+        err instanceof ApiError ? err.message : "Could not update the check-in.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const overdue = dueAt ? dueAt.getTime() - now <= 0 : false;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg">Safety check-in</CardTitle>
+        <CardDescription>
+          Set a timer before you head somewhere. If you don&apos;t check in by the
+          deadline, your trusted contacts are emailed automatically — this runs on
+          our servers, so it still works even if your phone dies. It&apos;s a
+          one-time alert you can extend or cancel anytime, not live tracking.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {emailContacts.length === 0 && (
+          <p className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+            Add at least one trusted contact with an email address so the alert can
+            reach someone.
+          </p>
+        )}
+
+        {armed && dueAt ? (
+          <div className="space-y-3 rounded-xl border border-border bg-muted/25 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <span className="inline-flex items-center gap-2 text-sm font-medium">
+                <span
+                  className={cn(
+                    "size-2 rounded-full",
+                    overdue ? "bg-red-500" : "animate-pulse bg-emerald-500",
+                  )}
+                  aria-hidden
+                />
+                {overdue ? "Check-in overdue" : "Check-in armed"}
+              </span>
+              <span
+                className={cn(
+                  "text-sm font-semibold tabular-nums",
+                  overdue ? "text-red-600" : "text-foreground",
+                )}
+              >
+                {formatCheckinRemaining(dueAt, now)}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Checking in by {formatDate(pack.checkin_due_at!)}. If you don&apos;t,
+              we&apos;ll alert {emailContacts.length} trusted contact
+              {emailContacts.length === 1 ? "" : "s"}
+              {pack.checkin_reveal_location && pack.location_enabled
+                ? " and share your last known location"
+                : ""}
+              .
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                onClick={() => run(() => cancelEmergencyCheckin(pack.id))}
+                disabled={saving}
+              >
+                {saving ? <Loader2 className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />}
+                I&apos;m safe
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() =>
+                  run(() => extendEmergencyCheckin(pack.id, { interval_minutes: interval }))
+                }
+                disabled={saving}
+              >
+                <Clock className="size-4" />
+                Extend
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3 rounded-xl border border-border bg-muted/25 p-4">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="ci-interval">Check in within</Label>
+              <select
+                id="ci-interval"
+                value={interval}
+                onChange={(e) => setInterval(Number(e.target.value))}
+                disabled={saving}
+                className="h-10 w-full max-w-xs rounded-lg border border-input bg-card px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                {CHECKIN_INTERVALS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="ci-message">Message to your contacts</Label>
+              <textarea
+                id="ci-message"
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                rows={3}
+                maxLength={2000}
+                placeholder="e.g. If you get this, I haven't checked in. Please call me and check on me."
+                className="w-full rounded-lg border border-input bg-card px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              />
+            </div>
+            {pack.location_enabled && (
+              <label className="flex items-center justify-between gap-3 text-sm">
+                <span className="inline-flex items-center gap-2">
+                  <MapPin className="size-4 text-muted-foreground" />
+                  Include my last known location in the alert
+                </span>
+                <input
+                  type="checkbox"
+                  checked={revealLocation}
+                  onChange={(e) => setRevealLocation(e.target.checked)}
+                  disabled={saving}
+                  className="size-4 rounded border-input"
+                />
+              </label>
+            )}
+            <Button
+              onClick={() =>
+                run(() =>
+                  armEmergencyCheckin(pack.id, {
+                    interval_minutes: interval,
+                    message,
+                    reveal_location: revealLocation,
+                  }),
+                )
+              }
+              disabled={saving || emailContacts.length === 0}
+            >
+              {saving ? <Loader2 className="size-4 animate-spin" /> : <Clock className="size-4" />}
+              Arm check-in
+            </Button>
           </div>
         )}
       </CardContent>

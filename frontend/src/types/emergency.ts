@@ -52,6 +52,13 @@ export interface EmergencyPack {
   location_precision: EmergencyLocationPrecision;
   last_known_location: EmergencyLocation | null;
   last_known_location_at: string | null;
+  // Safety check-in ("dead man's switch"). Off unless armed.
+  checkin_armed: boolean;
+  checkin_interval_minutes: number | null;
+  checkin_due_at: string | null;
+  checkin_message: string;
+  checkin_reveal_location: boolean;
+  checkin_triggered_at: string | null;
   last_reviewed_at: string | null;
   /** Relative public API path, only present while the pack is shareable now. */
   share_url_path: string | null;

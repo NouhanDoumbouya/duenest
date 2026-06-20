@@ -135,6 +135,14 @@ trash/archive/move), `vault_smart_views` (Smart Views panel on the Vault
 overview), and `vault_table_view` (compact table view mode). All are UI-only over
 existing owner-scoped data; the Vault behaves exactly as today when they are off.
 
+The **Emergency safety check-in** key `emergency_checkin` (`founder_only`) gates
+the "dead man's switch": the owner arms a deadline and, if they don't check in,
+the `process_emergency_checkins` cron emails the pack's trusted contacts
+(server-side, so it fires even with the phone off). The arm/extend/cancel
+endpoints enforce the flag (`503` when off) and the cron honors it as a kill
+switch (no-send when disabled). See `DOCUMENT_SCANNER.md`-style docs in
+`api-spec.md` §Emergency.
+
 The **Customizable QR** key `qr_customization` (`founder_only`) gates the custom
 foreground/background color pickers, live scan-reliability warnings, named style
 presets, quiet-zone control, saved default style, client-side logo upload, and

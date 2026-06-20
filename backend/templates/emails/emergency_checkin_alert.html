@@ -1,0 +1,14 @@
+{% extends "emails/base.html" %}
+{% block preheader %}{{ owner_name }} did not check in — safety alert{% endblock %}
+{% block content %}
+<h1 style="margin:0 0 12px;font-size:22px;line-height:1.3;color:#0B1220;">Safety check-in alert</h1>
+<p style="margin:0 0 18px;font-size:15px;line-height:1.6;color:#475569;">Hello {{ contact_name }}, {{ owner_name }} set up a safety check-in with DueNest and listed you as a trusted contact. They did not check in by their deadline, so this alert was sent automatically.</p>
+<p style="margin:0 0 6px;font-size:13px;font-weight:700;color:#0B1220;">Message from {{ owner_name }}:</p>
+<p style="margin:0 0 18px;font-size:15px;line-height:1.6;color:#0B1220;background:#F1F5F9;border:1px solid #E2E8F0;border-radius:8px;padding:12px 14px;">{{ message|linebreaksbr }}</p>
+{% if location_text %}
+<p style="margin:0 0 6px;font-size:13px;font-weight:700;color:#0B1220;">Last known location:</p>
+<p style="margin:0 0 18px;font-size:14px;line-height:1.6;color:#475569;">{{ location_text|urlize|linebreaksbr }}</p>
+{% endif %}
+<p style="margin:0;font-size:14px;line-height:1.6;color:#64748B;">If you think something may be wrong, please try to reach {{ owner_name }} directly.</p>
+{% endblock %}
+{% block footer %}You received this because {{ owner_name }} listed you as an emergency trusted contact in DueNest. DueNest never includes document contents, files, or access codes in email.{% endblock %}

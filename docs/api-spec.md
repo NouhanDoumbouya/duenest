@@ -1640,6 +1640,9 @@ off-by-default location (`location_enabled`, `location_precision`,
 | `GET`/`POST` | `/api/v1/emergency-packs/:pack_id/contacts/` | List / add trusted contacts |
 | `PATCH`/`DELETE` | `/api/v1/emergency-packs/:pack_id/contacts/:contact_id/` | Edit / remove a trusted contact |
 | `POST` | `/api/v1/emergency-packs/:pack_id/location/` | Toggle / update the optional last-known location |
+| `POST` | `/api/v1/emergency-packs/:pack_id/checkin/arm/` | Arm the safety check-in (`interval_minutes`, `message`, `reveal_location`) — gated `emergency_checkin` |
+| `POST` | `/api/v1/emergency-packs/:pack_id/checkin/extend/` | Push the check-in deadline out (optional `interval_minutes`) |
+| `POST` | `/api/v1/emergency-packs/:pack_id/checkin/cancel/` | Disarm the check-in ("I'm safe") — nothing is sent |
 | `GET` | `/api/v1/emergency-packs/:pack_id/activity/` | Emergency activity log (latest 100) |
 | `GET` | `/api/v1/emergency-packs/:pack_id/unlock-requests/` | List unlock requests (settles due countdowns) |
 | `POST` | `/api/v1/emergency-packs/:pack_id/unlock-requests/:req_id/approve/` | Approve a request |
@@ -1687,8 +1690,17 @@ while the owner's page stays open (throttled ~5 min / 50 m); the `auto` flag
 suppresses the `LOCATION_UPDATED` activity entry so background ticks don't spam
 the log. There is **no true background tracking** — it stops when the tab closes
 (real background updates would require a native mobile app). When precise
-coordinates are shared, the recipient viewer shows a "View on map" link. Scans,
-requests, wrong-code attempts,
+coordinates are shared, the recipient viewer shows a "View on map" link.
+
+The optional **safety check-in** ("dead man's switch", gated `emergency_checkin`)
+lets the owner arm a deadline: if they don't `checkin/cancel` ("I'm safe") or
+`checkin/extend` before it, a scheduled job (`process_emergency_checkins`) emails
+the pack's trusted contacts the owner's `message` (and, if `reveal_location` is
+on, the last-known location). It runs server-side, so it fires even with the
+owner's phone off — and it is a one-shot escalation, not live tracking. Arming
+requires at least one trusted contact with an email; the owner is nudged in-app
+~15 min before the deadline. Arm/extend/cancel/trigger are written to the
+activity log. Scans, requests, wrong-code attempts,
 approvals/denials, views, downloads, and location reveals are written to the
 pack's activity log (never storing codes or tokens), and the owner receives
 in-app notifications for requests, unlocks, downloads, and wrong-code attempts.

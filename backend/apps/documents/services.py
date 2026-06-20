@@ -22,6 +22,7 @@ from .models import (
     DocumentFile,
     DocumentFileActivity,
     DocumentVersion,
+    EmergencyAccessPack,
     EmergencyActivityEvent,
 )
 
@@ -2324,6 +2325,184 @@ def notify_pack_owner(
         create_notification(candidate)
     except Exception:  # noqa: BLE001 — notifications must never break the flow
         logger.warning("Failed to create emergency owner notification", exc_info=True)
+
+
+# ---- Safety check-in ("dead man's switch") escalation ----------------------
+
+
+def _checkin_location_text(pack) -> str:
+    """Human-readable last-known location for an escalation email, or "" when
+    sharing is off / nothing is set. Coordinates are only included at PRECISE
+    precision (mirrors the public viewer's privacy rule)."""
+    if not (pack.checkin_reveal_location and pack.location_enabled):
+        return ""
+    loc = pack.last_known_location or {}
+    label = (loc.get("label") or "").strip()
+    parts = []
+    if label:
+        parts.append(label)
+    if pack.location_precision == EmergencyAccessPack.LocationPrecision.PRECISE:
+        lat, lng = loc.get("lat"), loc.get("lng")
+        if isinstance(lat, (int, float)) and isinstance(lng, (int, float)):
+            parts.append(f"https://www.openstreetmap.org/?mlat={lat}&mlon={lng}#map=16/{lat}/{lng}")
+    return "\n".join(parts)
+
+
+def send_checkin_alert_email(*, pack, contact, location_text: str) -> bool:
+    """Email one trusted contact the owner's check-in escalation message. Returns
+    True if a message was sent. Never raises — a failed email must not stop the
+    escalation for the other contacts."""
+    if not contact.email:
+        return False
+    try:
+        from django.conf import settings
+        from django.core.mail import EmailMultiAlternatives
+        from django.template.loader import render_to_string
+
+        owner_name = (
+            pack.owner.get_full_name() or pack.owner.get_username() or "Someone"
+        ).strip()
+        subject = f"Safety check-in alert from {owner_name}"
+        context = {
+            "subject": subject,
+            "owner_name": owner_name,
+            "contact_name": contact.name,
+            "message": pack.checkin_message,
+            "location_text": location_text,
+        }
+        text_body = render_to_string("emails/emergency_checkin_alert.txt", context)
+        html_body = render_to_string("emails/emergency_checkin_alert.html", context)
+        email = EmailMultiAlternatives(
+            subject=subject,
+            body=text_body,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[contact.email],
+        )
+        email.attach_alternative(html_body, "text/html")
+        email.send(fail_silently=False)
+        return True
+    except Exception:  # noqa: BLE001 — one bad email must not break escalation
+        logger.warning(
+            "Failed to send check-in alert to contact %s", contact.id, exc_info=True
+        )
+        return False
+
+
+def fire_checkin_escalation(pack, *, now=None, dry_run: bool = False) -> dict:
+    """
+    Fire a pack's overdue check-in escalation: email every trusted contact that
+    has an email, notify the owner, log the trail, and disarm (one-shot). Safe to
+    call only when ``checkin_is_overdue``. Returns a small summary.
+    """
+    now = now or timezone.now()
+    contacts = [c for c in pack.trusted_contacts.all() if c.email]
+    location_text = _checkin_location_text(pack)
+
+    if dry_run:
+        return {"pack_id": pack.id, "notified": len(contacts), "dry_run": True}
+
+    notified = 0
+    for contact in contacts:
+        if send_checkin_alert_email(
+            pack=pack, contact=contact, location_text=location_text
+        ):
+            notified += 1
+            contact.last_notified_at = now
+            try:
+                contact.save(update_fields=["last_notified_at", "updated_at"])
+            except Exception:  # noqa: BLE001
+                pass
+            log_emergency_event(
+                pack=pack,
+                event_type=EmergencyActivityEvent.EventType.CONTACT_NOTIFIED,
+                actor_label="System",
+                description=f"Check-in alert sent to {contact.name}.",
+            )
+
+    # Disarm (one-shot) and record when it fired.
+    pack.checkin_armed = False
+    pack.checkin_triggered_at = now
+    pack.checkin_nudge_sent = False
+    pack.save(
+        update_fields=[
+            "checkin_armed",
+            "checkin_triggered_at",
+            "checkin_nudge_sent",
+            "updated_at",
+        ]
+    )
+    log_emergency_event(
+        pack=pack,
+        event_type=EmergencyActivityEvent.EventType.CHECKIN_TRIGGERED,
+        actor_label="System",
+        description=(
+            f"Check-in escalation fired — {notified} contact(s) alerted."
+            if notified
+            else "Check-in escalation fired — no contact had an email."
+        ),
+    )
+    notify_pack_owner(
+        pack=pack,
+        notification_type="emergency_checkin_triggered",
+        title="Your safety check-in escalation fired",
+        message=(
+            f"You didn't check in by the deadline, so {notified} trusted "
+            "contact(s) were alerted for this emergency pack."
+        ),
+        severity="warning",
+        dedupe_suffix=str(int(now.timestamp())),
+    )
+    return {"pack_id": pack.id, "notified": notified, "dry_run": False}
+
+
+def process_emergency_checkins(*, now=None, dry_run: bool = False) -> dict:
+    """
+    One scheduler pass over armed safety check-ins:
+
+    * overdue  -> fire the escalation (email trusted contacts, notify owner).
+    * almost due (within ``CHECKIN_NUDGE_LEAD_MINUTES``) -> nudge the owner once
+      in-app so they can tap "I'm safe" / extend before it fires.
+
+    Returns counts for logging. Never lets one pack's failure abort the rest.
+    """
+    from datetime import timedelta
+
+    now = now or timezone.now()
+    summary = {"evaluated": 0, "fired": 0, "nudged": 0, "errors": 0, "dry_run": dry_run}
+    armed = EmergencyAccessPack.objects.filter(
+        checkin_armed=True, checkin_due_at__isnull=False
+    ).prefetch_related("trusted_contacts")
+    for pack in armed:
+        summary["evaluated"] += 1
+        try:
+            if now >= pack.checkin_due_at:
+                fire_checkin_escalation(pack, now=now, dry_run=dry_run)
+                summary["fired"] += 1
+                continue
+            lead = timedelta(minutes=EmergencyAccessPack.CHECKIN_NUDGE_LEAD_MINUTES)
+            if not pack.checkin_nudge_sent and now >= pack.checkin_due_at - lead:
+                if not dry_run:
+                    notify_pack_owner(
+                        pack=pack,
+                        notification_type="emergency_checkin_due",
+                        title="Safety check-in due soon",
+                        message=(
+                            "Your emergency check-in is almost due. Open the pack "
+                            "to tap “I’m safe” or extend it before it "
+                            "alerts your trusted contacts."
+                        ),
+                        severity="warning",
+                        dedupe_suffix=str(int(pack.checkin_due_at.timestamp())),
+                    )
+                    pack.checkin_nudge_sent = True
+                    pack.save(update_fields=["checkin_nudge_sent", "updated_at"])
+                summary["nudged"] += 1
+        except Exception:  # noqa: BLE001 — keep processing the other packs
+            summary["errors"] += 1
+            logger.warning(
+                "Check-in processing failed for pack %s", pack.id, exc_info=True
+            )
+    return summary
 
 
 # ---- Structured export builder ---------------------------------------------

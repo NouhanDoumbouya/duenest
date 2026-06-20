@@ -1259,6 +1259,12 @@ class EmergencyAccessPack(models.Model):
         APPROXIMATE = "approximate", "Approximate"
         PRECISE = "precise", "Precise"
 
+    # Safety check-in bounds (minutes): no shorter than 5 min, no longer than a
+    # week. The pre-deadline nudge is sent this long before the deadline.
+    CHECKIN_MIN_MINUTES = 5
+    CHECKIN_MAX_MINUTES = 7 * 24 * 60
+    CHECKIN_NUDGE_LEAD_MINUTES = 15
+
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -1305,6 +1311,20 @@ class EmergencyAccessPack(models.Model):
     # Stored shape: {"label": str, "lat": float|None, "lng": float|None}.
     last_known_location = models.JSONField(null=True, blank=True)
     last_known_location_at = models.DateTimeField(null=True, blank=True)
+    # --- Safety check-in ("dead man's switch"). Off unless the owner arms it.
+    # When armed, the owner must check in by ``checkin_due_at``; if that passes,
+    # the escalation fires server-side (so it works even with the phone off):
+    # the pack's trusted contacts are emailed ``checkin_message`` and, when
+    # ``checkin_reveal_location`` is on, the last-known location. Not tracking —
+    # a one-shot escalation the owner can extend or cancel at any time. ---
+    checkin_armed = models.BooleanField(default=False)
+    checkin_interval_minutes = models.PositiveIntegerField(null=True, blank=True)
+    checkin_due_at = models.DateTimeField(null=True, blank=True)
+    # Whether the pre-deadline "almost due" nudge has been sent for this window.
+    checkin_nudge_sent = models.BooleanField(default=False)
+    checkin_message = models.TextField(blank=True)
+    checkin_reveal_location = models.BooleanField(default=True)
+    checkin_triggered_at = models.DateTimeField(null=True, blank=True)
     last_reviewed_at = models.DateTimeField(null=True, blank=True)
     last_accessed_at = models.DateTimeField(null=True, blank=True)
     disabled_at = models.DateTimeField(null=True, blank=True)
@@ -1324,6 +1344,15 @@ class EmergencyAccessPack(models.Model):
     @property
     def is_expired(self) -> bool:
         return self.expires_at is not None and timezone.now() >= self.expires_at
+
+    @property
+    def checkin_is_overdue(self) -> bool:
+        """Armed and the deadline has passed — the escalation is due to fire."""
+        return (
+            self.checkin_armed
+            and self.checkin_due_at is not None
+            and timezone.now() >= self.checkin_due_at
+        )
 
     @property
     def is_shareable_now(self) -> bool:
@@ -1563,6 +1592,10 @@ class EmergencyActivityEvent(models.Model):
         UNLOCK_MODE_CHANGED = "unlock_mode_changed", "Unlock mode changed"
         SETUP_DISABLED = "setup_disabled", "Setup disabled"
         SETUP_ENABLED = "setup_enabled", "Setup enabled"
+        CHECKIN_ARMED = "checkin_armed", "Safety check-in armed"
+        CHECKIN_EXTENDED = "checkin_extended", "Safety check-in extended"
+        CHECKIN_CANCELED = "checkin_canceled", "Safety check-in canceled"
+        CHECKIN_TRIGGERED = "checkin_triggered", "Safety check-in escalation fired"
 
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,

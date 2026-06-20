@@ -1592,8 +1592,12 @@ branch. Every user-owned model is scoped to its owner and follows the existing
   `unlock_delay_hours`, `expires_at`, `access_code_required`, `access_code_hash`,
   `access_duration_minutes`, `allow_downloads`, optional off-by-default location
   (`location_enabled`, `location_precision`, `last_known_location`,
-  `last_known_location_at`), `last_reviewed_at`, public `token`, access
-  timestamps, `metadata`, timestamps.
+  `last_known_location_at`), optional safety check-in / "dead man's switch"
+  (`checkin_armed`, `checkin_interval_minutes`, `checkin_due_at`,
+  `checkin_nudge_sent`, `checkin_message`, `checkin_reveal_location`,
+  `checkin_triggered_at` — when armed and the deadline passes, the
+  `process_emergency_checkins` cron emails the trusted contacts), `last_reviewed_at`,
+  public `token`, access timestamps, `metadata`, timestamps.
 - **Relationships:** `owner → User`; has many `EmergencyAccessPackItem`,
   `EmergencyTrustedContact`, `EmergencyUnlockRequest`, `EmergencyActivityEvent`.
 - **Security:** a pack grants access only to explicitly added items, never the

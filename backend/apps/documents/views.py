@@ -3981,6 +3981,143 @@ class EmergencyPackViewSet(viewsets.ModelViewSet):
             )
         return Response(self.get_serializer(pack).data)
 
+    # ---- Safety check-in ("dead man's switch") -----------------------------
+
+    @action(detail=True, methods=["post"], url_path="checkin/arm")
+    def checkin_arm(self, request, pack_id=None):
+        """
+        Arm the safety check-in. The owner must then check in by the deadline or
+        the escalation fires (trusted contacts are alerted server-side, so it
+        works even if their phone is off). Requires at least one trusted contact
+        with an email so the alert can reach someone.
+        """
+        require_feature_enabled("emergency_checkin", request.user)
+        pack = self.get_object()
+        data = request.data or {}
+
+        try:
+            interval = int(data.get("interval_minutes"))
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "interval_minutes is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        lo = EmergencyAccessPack.CHECKIN_MIN_MINUTES
+        hi = EmergencyAccessPack.CHECKIN_MAX_MINUTES
+        if interval < lo or interval > hi:
+            return Response(
+                {"detail": f"Choose a check-in time between {lo} and {hi} minutes."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not pack.trusted_contacts.exclude(email="").exists():
+            return Response(
+                {"detail": "Add at least one trusted contact with an email first."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        message = str(data.get("message", "")).strip()[:2000]
+        reveal_location = bool(data.get("reveal_location", True))
+        pack.checkin_armed = True
+        pack.checkin_interval_minutes = interval
+        pack.checkin_due_at = timezone.now() + timedelta(minutes=interval)
+        pack.checkin_nudge_sent = False
+        pack.checkin_message = message
+        pack.checkin_reveal_location = reveal_location
+        pack.checkin_triggered_at = None
+        pack.save(
+            update_fields=[
+                "checkin_armed",
+                "checkin_interval_minutes",
+                "checkin_due_at",
+                "checkin_nudge_sent",
+                "checkin_message",
+                "checkin_reveal_location",
+                "checkin_triggered_at",
+                "updated_at",
+            ]
+        )
+        log_emergency_event(
+            pack=pack,
+            event_type=EmergencyActivityEvent.EventType.CHECKIN_ARMED,
+            actor_label="Owner",
+            description=f"Safety check-in armed for {interval} minutes.",
+        )
+        return Response(self.get_serializer(pack).data)
+
+    @action(detail=True, methods=["post"], url_path="checkin/extend")
+    def checkin_extend(self, request, pack_id=None):
+        """Push the deadline out by the original interval (or a provided one).
+        Only valid while armed — this is the owner saying "still going"."""
+        require_feature_enabled("emergency_checkin", request.user)
+        pack = self.get_object()
+        if not pack.checkin_armed:
+            return Response(
+                {"detail": "No check-in is currently armed."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        data = request.data or {}
+        interval = pack.checkin_interval_minutes or EmergencyAccessPack.CHECKIN_MIN_MINUTES
+        raw = data.get("interval_minutes")
+        if raw is not None:
+            try:
+                interval = int(raw)
+            except (TypeError, ValueError):
+                return Response(
+                    {"detail": "interval_minutes must be a number."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            lo = EmergencyAccessPack.CHECKIN_MIN_MINUTES
+            hi = EmergencyAccessPack.CHECKIN_MAX_MINUTES
+            if interval < lo or interval > hi:
+                return Response(
+                    {"detail": f"Choose a check-in time between {lo} and {hi} minutes."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        pack.checkin_interval_minutes = interval
+        pack.checkin_due_at = timezone.now() + timedelta(minutes=interval)
+        pack.checkin_nudge_sent = False
+        pack.save(
+            update_fields=[
+                "checkin_interval_minutes",
+                "checkin_due_at",
+                "checkin_nudge_sent",
+                "updated_at",
+            ]
+        )
+        log_emergency_event(
+            pack=pack,
+            event_type=EmergencyActivityEvent.EventType.CHECKIN_EXTENDED,
+            actor_label="Owner",
+            description=f"Safety check-in extended by {interval} minutes.",
+        )
+        return Response(self.get_serializer(pack).data)
+
+    @action(detail=True, methods=["post"], url_path="checkin/cancel")
+    def checkin_cancel(self, request, pack_id=None):
+        """Disarm the check-in ("I'm safe") without firing anything."""
+        require_feature_enabled("emergency_checkin", request.user)
+        pack = self.get_object()
+        was_armed = pack.checkin_armed
+        pack.checkin_armed = False
+        pack.checkin_due_at = None
+        pack.checkin_nudge_sent = False
+        pack.save(
+            update_fields=[
+                "checkin_armed",
+                "checkin_due_at",
+                "checkin_nudge_sent",
+                "updated_at",
+            ]
+        )
+        if was_armed:
+            log_emergency_event(
+                pack=pack,
+                event_type=EmergencyActivityEvent.EventType.CHECKIN_CANCELED,
+                actor_label="Owner",
+                description="Safety check-in canceled — owner is safe.",
+            )
+        return Response(self.get_serializer(pack).data)
+
     # ---- Activity + unlock requests (owner side) ---------------------------
 
     @action(detail=True, methods=["get"], url_path="activity")
