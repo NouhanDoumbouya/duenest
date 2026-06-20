@@ -817,6 +817,25 @@ sequenceDiagram
 - AI failures should not block core document upload.
 - AI tasks should run asynchronously.
 
+### AI surface (all via `apps.ai.generate`, all assistive + flag-gated)
+
+Every Claude feature goes through the single `apps.ai.client.generate` wrapper
+(model `claude-opus-4-8`, structured JSON, never raises — degrades to
+`not_configured` with no key) and is gated by the `ai_features` master flag plus a
+per-feature flag:
+
+- **Document extraction** (`ai_document_extraction`) — suggest fields from a
+  document's text for review.
+- **Ask your documents** (`ai_document_qa`) — grounded Q&A over the owner's docs.
+- **Share readiness** (`ai_share_readiness`) — `apps/documents/ai_readiness.py`
+  reviews an application pack against its purpose before sharing and flags
+  likely-rejection issues. **Deterministic facts** (missing required items, expired
+  docs from `bundle_readiness`) are returned regardless; the AI layer adds
+  purpose-aware findings, falls back on any failure, and never claims "ready" while
+  a required item is missing. Endpoint `POST /document-bundles/:id/share-readiness/`.
+
+All AI surfaces are **assistive** — the UI labels AI output and the user confirms.
+
 ---
 
 ## 20. Security Architecture

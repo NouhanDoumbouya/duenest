@@ -1855,6 +1855,44 @@ Response shape:
 
 ---
 
+## 13B.8 AI: Share readiness (is this pack ready to send?)
+
+```txt
+POST /api/v1/document-bundles/:id/share-readiness/   # owner-only
+```
+
+Reviews an application pack (bundle) before sharing and returns a readiness report.
+**Deterministic facts are always included** — unmet required items (blockers) and
+expired attached documents (warnings) — computed from `bundle_readiness`. When AI is
+configured **and** the `ai_features` + `ai_share_readiness` flags are on, Claude adds
+a purpose-aware review grounded in the pack's requirements and attached documents
+(types, expiry). The endpoint **never 500s on an AI failure** — it falls back to the
+deterministic report, and never reports `ready` while a required item is missing.
+
+Response shape:
+
+```json
+{
+  "ai": true,
+  "overall": "issues",
+  "summary": "Almost there — one item is missing.",
+  "findings": [
+    {
+      "severity": "blocker",
+      "title": "Missing proof of address",
+      "detail": "Most landlords require one dated within 3 months.",
+      "fix": "Attach a recent utility bill or bank statement."
+    }
+  ]
+}
+```
+
+`ai` is false when only the deterministic facts ran (no key / flag off). `overall` is
+`ready` / `issues` / `blocked`; `severity` is `blocker` / `warning` / `suggestion`.
+Assistive — the UI labels AI findings and asks the user to review before submitting.
+
+---
+
 ## 13C.7 Document intelligence polish
 
 Intelligence fields are computed read-only on every document (`GET/LIST
