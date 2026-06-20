@@ -23,7 +23,6 @@ type ToggleKey =
   | "in_app_enabled"
   | "email_enabled"
   | "document_reminders_enabled"
-  | "subscription_reminders_enabled"
   | "checklist_bundle_reminders_enabled"
   | "organization_reminders_enabled"
   | "emergency_reminders_enabled"
@@ -46,11 +45,6 @@ const TOGGLES: Array<{ key: ToggleKey; label: string; helper: string }> = [
     key: "document_reminders_enabled",
     label: "Document reminders",
     helper: "Expiry, renewal, missing-file, and review reminders.",
-  },
-  {
-    key: "subscription_reminders_enabled",
-    label: "Subscription reminders",
-    helper: "Renewal, trial, and cancellation deadline reminders.",
   },
   {
     key: "checklist_bundle_reminders_enabled",

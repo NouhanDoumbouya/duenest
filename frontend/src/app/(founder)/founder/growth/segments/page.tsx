@@ -138,7 +138,7 @@ function SegmentForm({ onCreated, onCancel }: { onCreated: (s: AudienceSegment) 
         <div className="grid gap-3 sm:grid-cols-2">
           <Select id="s-plan" label="Plan" value={plan} onChange={setPlan} options={[["", "Any"], ["free", "Free"], ["pro_placeholder", "Pro"]]} />
           <Select id="s-act" label="Activation" value={activation} onChange={setActivation} options={[["", "Any"], ["activated", "Activated"], ["not_activated", "Not activated"]]} />
-          <Select id="s-goal" label="Onboarding goal" value={goal} onChange={setGoal} options={[["", "Any"], ["international_student", "International student"], ["applications", "Applications"], ["travel", "Travel"], ["family", "Family"], ["subscriptions", "Subscriptions"], ["emergency", "Emergency"], ["vault", "Vault"]]} />
+          <Select id="s-goal" label="Onboarding goal" value={goal} onChange={setGoal} options={[["", "Any"], ["international_student", "International student"], ["applications", "Applications"], ["travel", "Travel"], ["family", "Family"], ["subscriptions", "Renewals & deadlines"], ["emergency", "Emergency"], ["vault", "Vault"]]} />
           <div className="space-y-1.5">
             <Label htmlFor="s-mindocs">Min documents</Label>
             <Input id="s-mindocs" type="number" min={0} value={minDocs} onChange={(e) => setMinDocs(e.target.value)} placeholder="0" />
