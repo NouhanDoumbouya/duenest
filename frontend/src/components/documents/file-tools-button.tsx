@@ -20,6 +20,7 @@ export function FileToolsButton({
   onSave,
   saveLabel,
   onNotify,
+  onShare,
   variant = "outline",
   size = "sm",
   className,
@@ -29,6 +30,7 @@ export function FileToolsButton({
   onSave: (blob: Blob, name: string) => Promise<void>;
   saveLabel: string;
   onNotify?: (message: string, kind: "success" | "error") => void;
+  onShare?: (blob: Blob, name: string) => Promise<void>;
   variant?: React.ComponentProps<typeof Button>["variant"];
   size?: React.ComponentProps<typeof Button>["size"];
   className?: string;
@@ -66,6 +68,7 @@ export function FileToolsButton({
           onSave={onSave}
           saveLabel={saveLabel}
           onNotify={onNotify}
+          onShare={onShare}
           onClose={() => setOpen(false)}
         />
       )}

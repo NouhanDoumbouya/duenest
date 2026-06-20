@@ -577,6 +577,18 @@ export default function FileInboxPage() {
     setFiles((current) => [result, ...(current ?? [])]);
   }
 
+  // Minimal-disclosure share: save the produced (e.g. redacted) copy to the Inbox,
+  // then open the share wizard with that copy preselected. The original is never
+  // shared.
+  async function shareToolResult(blob: Blob, name: string) {
+    const file = new File([blob], name, {
+      type: blob.type || "application/octet-stream",
+    });
+    const saved = await uploadInboxFile(file);
+    setSharePrefill({ files: [fileToSelected(saved)] });
+    router.push("/dashboard/quick-share/new");
+  }
+
   async function handleMoveToVault(categoryId: number | null) {
     const targets = (files ?? []).filter((f) => selected.has(f.id));
     if (targets.length === 0) return;
@@ -997,6 +1009,7 @@ export default function FileInboxPage() {
                       file={file}
                       loadBlob={() => getInboxFileDownloadBlob(file.id)}
                       onSave={saveToolResult}
+                      onShare={shareToolResult}
                       saveLabel="Save to Inbox"
                       onNotify={(message, kind) => setToast({ message, kind })}
                     />

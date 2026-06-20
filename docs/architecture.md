@@ -1359,6 +1359,16 @@ the requester's existing "Shared with me" with a notification. Founder-flagged
 use it. v1 is DueNest-user-to-DueNest-user; anonymous responders / non-account
 requesters layer on later because the delivery path is already the engine.
 
+**Minimal-disclosure shares (differentiator).** Share only what's needed: from a
+file's **Tools**, redact a copy and — on the result step — **Share this copy**,
+which saves the prepared copy to the Inbox and opens the Quick Share wizard with it
+preselected (`src/components/documents/file-tools-dialog.tsx` `onShare` →
+`quick-share-prefill`). The original is never shared. Purely client-side
+composition of the existing redaction pipeline + share engine — no new backend.
+The same result-step action also enables compress→share / export-pages→share.
+Founder-flagged (`private_share`); v1 is manual redaction (auto purpose-preset /
+field-aware redaction is later, needing OCR).
+
 **Deliberately NOT unified — `OrganizationSecureRoom` and `EmergencyAccessPack`.**
 These look superficially similar (token-gated, access codes, expiry) but are
 different paradigms, so folding them into the personal share engine would damage

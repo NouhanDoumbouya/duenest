@@ -22,6 +22,7 @@ import {
   downloadDocumentFile,
   getDocumentFileDownloadBlob,
   getDocumentFiles,
+  uploadInboxFile,
 } from "@/lib/document-files";
 import type { DocumentFile } from "@/types/document-files";
 
@@ -105,6 +106,18 @@ export function FilesTab({
     const created = await createDocumentFileVersion(documentId, source.id, file);
     setFiles((prev) => [created, ...(prev ?? [])]);
     onChanged?.();
+  }
+
+  // Minimal-disclosure share: save the prepared (e.g. redacted) copy to the Inbox
+  // as a separate shareable file — never a new version of the original — then open
+  // the share wizard with it preselected.
+  async function shareToolResult(blob: Blob, name: string) {
+    const file = new File([blob], name, {
+      type: blob.type || "application/octet-stream",
+    });
+    const saved = await uploadInboxFile(file);
+    setSharePrefill({ files: [fileToSelected(saved)] });
+    router.push("/dashboard/quick-share/new");
   }
 
   useEffect(() => {
@@ -206,6 +219,7 @@ export function FilesTab({
                 onSave={(blob, name) =>
                   saveToolResultAsVersion(file, blob, name)
                 }
+                onShare={shareToolResult}
                 saveLabel="Save as new version"
                 onNotify={(message, kind) => setToast({ message, kind })}
               />
