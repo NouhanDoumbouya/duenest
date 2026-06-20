@@ -2044,6 +2044,37 @@ Action types: `draft` / `pack` (carry `goal`), `open_document` (carries
 
 ---
 
+## 13B.12 AI: Smart Intake (understand a file + next actions)
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/api/v1/files/<id>/intake/` | Understand an owned file and propose confirm-gated next actions |
+
+Opt-in, **key-gated**. For an owner's inbox/document file, returns a one-line
+`summary`, the `suggested_fields` (reused from extraction — never re-extracted),
+and **confirm-gated** `suggestions` (`create_document` / `set_reminder` /
+`add_to_pack` / `draft`, the last two carrying `goal`). The endpoint performs no
+writes; the user confirms any action in its flow. Owner-scoped; gated by
+`ai_features` + `ai_intake` (503 when off) / no key → `200 {available:false}`;
+rate limited (`ai_intake`).
+
+```json
+{
+  "available": true,
+  "reason": "ok",
+  "summary": "This looks like a passport.",
+  "suggested_fields": { "title": "UK Passport", "document_type": "passport", "expiry_date": "2030-01-01" },
+  "suggestions": [
+    { "type": "create_document", "label": "Save as a tracked document" },
+    { "type": "set_reminder", "label": "Set a renewal reminder" }
+  ]
+}
+```
+
+`reason` is `ok` / `not_configured` / `error`.
+
+---
+
 ## 13C.7 Document intelligence polish
 
 Intelligence fields are computed read-only on every document (`GET/LIST

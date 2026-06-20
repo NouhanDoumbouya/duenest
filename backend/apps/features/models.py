@@ -123,6 +123,7 @@ FEATURE_DEFINITIONS: list[dict] = [
     {"key": "ai_pack_copilot", "name": "AI — application pack copilot", "default": Visibility.FOUNDER_ONLY, "description": "For a goal (visa/scholarship/job/mortgage), build the requirement checklist, match it against the user's vault (have/missing), and flag documents expiring before the deadline. Suggestions only; never presented as official — requirements always vary and must be verified."},
     {"key": "ai_briefing", "name": "AI — proactive briefing", "default": Visibility.FOUNDER_ONLY, "description": "A prioritized 'what to do now' briefing across the vault. Statuses/dates are the real computed health; Claude prioritizes and phrases the suggested actions. Read-only suggestions; nothing is changed automatically."},
     {"key": "ai_chat", "name": "AI — conversational assistant", "default": Visibility.FOUNDER_ONLY, "description": "A chat assistant grounded in the user's documents that proposes confirm-gated actions (draft / pack / open document / briefing). The chat performs no writes or shares itself."},
+    {"key": "ai_intake", "name": "AI — smart intake", "default": Visibility.FOUNDER_ONLY, "description": "Understand a newly-added file (summary + suggested fields) and propose confirm-gated next actions (create document / set reminder / add to pack / draft). Reuses extraction; performs no writes itself."},
 ]
 
 FEATURE_KEYS = [d["key"] for d in FEATURE_DEFINITIONS]
