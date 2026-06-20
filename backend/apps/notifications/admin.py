@@ -1,6 +1,27 @@
 from django.contrib import admin
 
-from .models import Notification, NotificationPreference, PushWebSubscription
+from .models import (
+    EmailLog,
+    Notification,
+    NotificationPreference,
+    PushWebSubscription,
+    SuppressedEmail,
+)
+
+
+@admin.register(SuppressedEmail)
+class SuppressedEmailAdmin(admin.ModelAdmin):
+    list_display = ("email", "scope", "reason", "created_at")
+    list_filter = ("scope", "reason")
+    search_fields = ("email",)
+
+
+@admin.register(EmailLog)
+class EmailLogAdmin(admin.ModelAdmin):
+    list_display = ("email_type", "category", "recipient", "status", "created_at")
+    list_filter = ("status", "category", "email_type")
+    search_fields = ("recipient", "email_type", "provider_message_id")
+    readonly_fields = ("created_at",)
 
 
 @admin.register(Notification)

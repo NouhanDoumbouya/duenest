@@ -11,14 +11,18 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Toast, type ToastState } from "@/components/ui/toast";
 import { ApiError } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import {
+  getEmailAnalytics,
   getEmailSettings,
   updateEmailSetting,
+  type EmailAnalytics,
   type TransactionalEmailSetting,
 } from "@/lib/founder";
 
 export default function FounderEmailsPage() {
   const [items, setItems] = useState<TransactionalEmailSetting[] | null>(null);
+  const [analytics, setAnalytics] = useState<EmailAnalytics | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [savingKey, setSavingKey] = useState<string | null>(null);
@@ -45,6 +49,18 @@ export default function FounderEmailsPage() {
         setError(
           err instanceof ApiError ? err.message : "Unable to load email settings.",
         );
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    getEmailAnalytics()
+      .then((result) => active && setAnalytics(result))
+      .catch(() => {
+        /* analytics are non-critical — the editor still works without them */
       });
     return () => {
       active = false;
@@ -108,6 +124,99 @@ export default function FounderEmailsPage() {
         <p className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {error}
         </p>
+      )}
+
+      {analytics && (
+        <Card>
+          <CardContent className="space-y-4 p-5">
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 className="font-heading text-base font-semibold">
+                Delivery health
+              </h2>
+              <span className="text-xs text-muted-foreground">
+                Last {analytics.window_days} days
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs">
+              <span className="rounded-full bg-muted px-2.5 py-1 font-medium">
+                {analytics.total} sent attempts
+              </span>
+              {Object.entries(analytics.by_status).map(([status, count]) => (
+                <span
+                  key={status}
+                  className={cn(
+                    "rounded-full px-2.5 py-1 font-medium",
+                    status === "failed" || status === "bounced" || status === "complained"
+                      ? "bg-destructive/10 text-destructive"
+                      : status === "suppressed"
+                        ? "bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                        : "bg-teal-500/10 text-teal-700 dark:text-teal-300",
+                  )}
+                >
+                  {count} {status}
+                </span>
+              ))}
+              <span className="rounded-full bg-muted px-2.5 py-1 font-medium">
+                {analytics.suppressed_total} on suppression list
+              </span>
+            </div>
+
+            {analytics.by_type.length > 0 && (
+              <div className="grid gap-1.5 text-xs sm:grid-cols-2">
+                {analytics.by_type.map((t) => (
+                  <div
+                    key={t.email_type}
+                    className="flex items-center justify-between rounded-lg border border-border px-3 py-2"
+                  >
+                    <span className="font-medium">{t.email_type}</span>
+                    <span className="text-muted-foreground">
+                      {t.sent} sent
+                      {t.failed > 0 && ` · ${t.failed} failed`}
+                      {t.suppressed > 0 && ` · ${t.suppressed} suppressed`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {analytics.recent.length > 0 && (
+              <details className="text-xs">
+                <summary className="cursor-pointer font-medium text-muted-foreground hover:text-foreground">
+                  Recent sends ({analytics.recent.length})
+                </summary>
+                <ul className="mt-2 space-y-1">
+                  {analytics.recent.map((r, i) => (
+                    <li
+                      key={i}
+                      className="flex items-center justify-between gap-3 rounded border border-border/60 px-2.5 py-1.5"
+                    >
+                      <span className="min-w-0 flex-1 truncate">
+                        <span className="font-medium">{r.email_type}</span>{" "}
+                        <span className="text-muted-foreground">{r.recipient}</span>
+                      </span>
+                      <span
+                        className={cn(
+                          "shrink-0 rounded px-1.5 py-0.5 font-medium",
+                          r.status === "failed" || r.status === "bounced"
+                            ? "bg-destructive/10 text-destructive"
+                            : r.status === "suppressed"
+                              ? "bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                              : "bg-muted text-muted-foreground",
+                        )}
+                      >
+                        {r.status}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+            <p className="text-[0.7rem] text-muted-foreground">
+              Delivered / bounced / opened populate once an email provider posts
+              delivery webhooks. Recipients are masked.
+            </p>
+          </CardContent>
+        </Card>
       )}
 
       {items === null ? (

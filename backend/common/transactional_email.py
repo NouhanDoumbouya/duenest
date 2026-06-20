@@ -118,4 +118,6 @@ def send_transactional_email(key: str, *, context: dict, to) -> bool:
         template=definition.template,
         context={"email_body": body, **context},
         to=to,
+        email_type=key,
+        category="transactional",
     )

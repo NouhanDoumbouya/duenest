@@ -95,6 +95,28 @@ Reminder emails must never include:
 Emails should link users back to authenticated DueNest pages through
 `DUENEST_APP_BASE_URL`.
 
+## Email log & suppression
+
+All **branded** emails (transactional registry, receipts, and future lifecycle
+mail) flow through `common.email.send_branded_email`, which in one place:
+
+- **Checks suppression** against `notifications.SuppressedEmail` before sending.
+  `scope=all` (hard bounce / spam complaint) blocks every category; `scope=marketing`
+  (unsubscribe) blocks only non-essential mail (`lifecycle` / `marketing`), so
+  essential transactional mail (password reset, email verification, receipts)
+  still sends. Lookups fail open so a hiccup never drops essential mail.
+- **Logs each attempt** to `notifications.EmailLog` (`email_type`, `category`,
+  recipient, subject, status: `sent` / `failed` / `suppressed`, plus
+  `provider_message_id` and delivered/opened/bounced timestamps reserved for ESP
+  webhooks). Routing metadata only — never contents.
+
+Callers pass `email_type` (a stable analytics key, e.g. `payment_receipt`) and a
+`category`. Founders see aggregate health (totals by status, per-type breakdown,
+masked recent sends, suppression-list size) at `GET /api/v1/founder/email-analytics/`,
+surfaced on the founder **Emails** page. Addresses can be suppressed manually via
+Django admin; automated population from provider bounce/complaint webhooks is
+Phase 2.
+
 ## Failure Handling
 
 Failed sends:
@@ -188,9 +210,11 @@ the 7-day email failure rate.
   exists but per-user digest grouping is not implemented yet. Future: a daily
   digest that groups expiring documents, renewing subscriptions, trial/cancellation
   deadlines, and important unread notifications into one email; skip empty digests.
-- **Provider bounce/complaint webhooks.** No webhook endpoint yet. Future:
-  a provider-event endpoint (signature-verified) that marks bounced/complained
-  recipients and suppresses further sends. Until then, monitor via the provider
-  dashboard.
+- **Provider bounce/complaint webhooks.** The suppression + logging foundation
+  now exists (see "Email log & suppression" above): a `SuppressedEmail` list the
+  send path honours, and an `EmailLog`. Still pending is the signature-verified
+  provider-event endpoint that *populates* them from bounce / complaint events
+  (Phase 2). Until then, suppress addresses manually (admin) and monitor via the
+  provider dashboard.
 - **Background worker (Celery/Redis).** Not needed for beta; the cron-driven
   command is sufficient. Revisit if volume grows or near-real-time sends are required.

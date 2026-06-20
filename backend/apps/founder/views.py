@@ -865,3 +865,65 @@ class FounderEmailSettingDetailView(generics.RetrieveUpdateAPIView):
             object_id=item.id,
             metadata={"key": item.key, "enabled": item.enabled},
         )
+
+
+def _mask_email(email: str) -> str:
+    """Privacy-safe masking for the founder console: ``j***@example.com``."""
+    if not email or "@" not in email:
+        return "—"
+    local, _, domain = email.partition("@")
+    head = local[0] if local else ""
+    return f"{head}***@{domain}"
+
+
+class FounderEmailAnalyticsView(APIView):
+    """Aggregate email-send health for the founder console (last 30 days).
+
+    Reads the cross-cutting EmailLog: totals by status, a per-type breakdown,
+    masked recent sends, and the suppression-list size. Routing metadata only —
+    no document contents. Delivered/bounced/opened populate once an ESP posts
+    delivery webhooks.
+    """
+
+    permission_classes = [IsFounderUser]
+
+    def get(self, request):
+        from apps.notifications.models import EmailLog, SuppressedEmail
+
+        since = timezone.now() - timezone.timedelta(days=30)
+        logs = EmailLog.objects.filter(created_at__gte=since)
+        by_status = {
+            row["status"]: row["n"]
+            for row in logs.values("status").annotate(n=Count("id"))
+        }
+        by_type = list(
+            logs.values("email_type")
+            .annotate(
+                total=Count("id"),
+                sent=Count("id", filter=Q(status="sent")),
+                failed=Count("id", filter=Q(status="failed")),
+                suppressed=Count("id", filter=Q(status="suppressed")),
+            )
+            .order_by("-total")[:25]
+        )
+        recent = [
+            {
+                "email_type": item.email_type,
+                "category": item.category,
+                "recipient": _mask_email(item.recipient),
+                "status": item.status,
+                "subject": item.subject,
+                "created_at": item.created_at,
+            }
+            for item in logs.order_by("-created_at")[:25]
+        ]
+        return Response(
+            {
+                "window_days": 30,
+                "total": logs.count(),
+                "by_status": by_status,
+                "by_type": by_type,
+                "recent": recent,
+                "suppressed_total": SuppressedEmail.objects.count(),
+            }
+        )

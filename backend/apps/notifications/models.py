@@ -237,3 +237,87 @@ class PushWebSubscription(models.Model):
 
     def __str__(self):
         return f"PushSubscription for user {self.user_id}"
+
+
+class SuppressedEmail(models.Model):
+    """An email address we must not (or should not) send to.
+
+    ``scope=all`` (hard bounce / spam complaint) suppresses *every* category —
+    the address is dead or hostile. ``scope=marketing`` (unsubscribe) suppresses
+    only non-essential mail; essential transactional mail (password reset, email
+    verification, receipts) still sends. The send path checks this before every
+    branded email.
+    """
+
+    class Scope(models.TextChoices):
+        ALL = "all", "All mail"
+        MARKETING = "marketing", "Marketing / lifecycle only"
+
+    class Reason(models.TextChoices):
+        BOUNCE = "bounce", "Hard bounce"
+        COMPLAINT = "complaint", "Spam complaint"
+        UNSUBSCRIBE = "unsubscribe", "Unsubscribed"
+        MANUAL = "manual", "Manually suppressed"
+
+    email = models.EmailField(unique=True)
+    scope = models.CharField(max_length=12, choices=Scope.choices, default=Scope.ALL)
+    reason = models.CharField(
+        max_length=16, choices=Reason.choices, default=Reason.BOUNCE
+    )
+    detail = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["email"])]
+
+    def __str__(self):
+        return f"Suppressed<{self.email}:{self.scope}>"
+
+
+class EmailLog(models.Model):
+    """A record of one branded email send attempt (for support + analytics).
+
+    Stores only routing metadata — email type, recipient, subject, outcome —
+    never document contents or secrets. ``provider_message_id`` and the
+    delivered/opened/bounced timestamps are filled in later from ESP webhooks.
+    """
+
+    class Status(models.TextChoices):
+        SENT = "sent", "Sent to provider"
+        FAILED = "failed", "Failed"
+        SUPPRESSED = "suppressed", "Suppressed"
+        DELIVERED = "delivered", "Delivered"
+        BOUNCED = "bounced", "Bounced"
+        COMPLAINED = "complained", "Spam complaint"
+
+    class Category(models.TextChoices):
+        TRANSACTIONAL = "transactional", "Transactional"
+        LIFECYCLE = "lifecycle", "Lifecycle"
+        MARKETING = "marketing", "Marketing"
+
+    email_type = models.CharField(max_length=64, db_index=True)
+    category = models.CharField(
+        max_length=16, choices=Category.choices, default=Category.TRANSACTIONAL
+    )
+    recipient = models.EmailField()
+    subject = models.CharField(max_length=255, blank=True)
+    status = models.CharField(
+        max_length=12, choices=Status.choices, default=Status.SENT
+    )
+    error = models.CharField(max_length=255, blank=True)
+    provider_message_id = models.CharField(max_length=255, blank=True, db_index=True)
+    delivered_at = models.DateTimeField(null=True, blank=True)
+    opened_at = models.DateTimeField(null=True, blank=True)
+    bounced_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["email_type", "-created_at"]),
+            models.Index(fields=["status", "-created_at"]),
+        ]
+
+    def __str__(self):
+        return f"EmailLog<{self.email_type}:{self.status}>"

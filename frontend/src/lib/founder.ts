@@ -482,3 +482,35 @@ export function updateEmailSetting(
     { method: "PATCH", body: payload, auth: true },
   );
 }
+
+// ---- Email send analytics (founder) ----------------------------------------
+
+export interface EmailTypeStat {
+  email_type: string;
+  total: number;
+  sent: number;
+  failed: number;
+  suppressed: number;
+}
+
+export interface EmailLogEntry {
+  email_type: string;
+  category: string;
+  recipient: string;
+  status: string;
+  subject: string;
+  created_at: string;
+}
+
+export interface EmailAnalytics {
+  window_days: number;
+  total: number;
+  by_status: Record<string, number>;
+  by_type: EmailTypeStat[];
+  recent: EmailLogEntry[];
+  suppressed_total: number;
+}
+
+export function getEmailAnalytics(): Promise<EmailAnalytics> {
+  return apiFetch<EmailAnalytics>("/founder/email-analytics/", { auth: true });
+}

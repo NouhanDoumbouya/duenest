@@ -19,9 +19,9 @@ from __future__ import annotations
 import logging
 
 from django.conf import settings
-from django.core.mail import EmailMultiAlternatives
-from django.template.loader import render_to_string
 from django.utils import timezone
+
+from common.email import send_branded_email
 
 from .models import InvoiceRecord, ReceiptSettings
 
@@ -158,25 +158,26 @@ def build_receipt_pdf(context: dict) -> bytes:
 
 
 def _send(to_email: str, context: dict, *, attach_pdf: bool) -> None:
-    text_body = render_to_string("emails/payment_receipt.txt", context)
-    html_body = render_to_string("emails/payment_receipt.html", context)
-    message = EmailMultiAlternatives(
-        subject=context["subject"],
-        body=text_body,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        to=[to_email],
-    )
-    message.attach_alternative(html_body, "text/html")
+    attachments = None
     if attach_pdf:
         try:
             pdf_bytes = build_receipt_pdf(context)
-            message.attach(
-                "DueNest-receipt.pdf", pdf_bytes, "application/pdf"
-            )
+            attachments = [("DueNest-receipt.pdf", pdf_bytes, "application/pdf")]
         except Exception:  # noqa: BLE001 — fall back to a link/email if PDF fails
             logger.exception("receipt PDF generation failed; sending without it")
             context["has_pdf"] = False
-    message.send(fail_silently=False)
+    # Receipts are essential transactional mail and flow through the shared
+    # sender so they are suppression-checked and logged like every other email.
+    send_branded_email(
+        subject=context["subject"],
+        template="payment_receipt",
+        context=context,
+        to=to_email,
+        email_type="payment_receipt",
+        category="transactional",
+        attachments=attachments,
+        fail_silently=False,
+    )
 
 
 def send_receipt_for_invoice(invoice: InvoiceRecord) -> bool:
