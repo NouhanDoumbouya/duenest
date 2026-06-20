@@ -93,6 +93,8 @@ class QuickShareCreateSerializer(serializers.Serializer):
     require_sender_approval = serializers.BooleanField(default=False)
     watermark_enabled = serializers.BooleanField(default=True)
     privacy_screen_enabled = serializers.BooleanField(default=False)
+    # Tamper-evident, DueNest-signed share (feature-flagged; enforced in the view).
+    verified = serializers.BooleanField(default=False)
     # File ids to attach on creation (owner-owned; validated in the view).
     file_ids = serializers.ListField(
         child=serializers.IntegerField(), required=False, default=list
@@ -220,6 +222,8 @@ class QuickShareSessionSerializer(serializers.ModelSerializer):
             "require_sender_approval",
             "watermark_enabled",
             "privacy_screen_enabled",
+            "verified",
+            "verified_at",
             "short_id",
             "file_count",
             "files",
@@ -321,6 +325,7 @@ class QuickSharePublicSerializer(serializers.Serializer):
     save_copy_allowed = serializers.BooleanField()
     watermark_enabled = serializers.BooleanField()
     privacy_screen_enabled = serializers.BooleanField()
+    verified = serializers.BooleanField()
     watermark_text = serializers.CharField()
     require_sender_approval = serializers.BooleanField()
     access_code_required = serializers.BooleanField()
@@ -349,6 +354,7 @@ def build_public_payload(session, *, claim=None, viewer=None) -> dict:
         "save_copy_allowed": session.save_copy_allowed,
         "watermark_enabled": session.watermark_enabled,
         "privacy_screen_enabled": session.privacy_screen_enabled,
+        "verified": session.verified,
         "watermark_text": session.watermark_text,
         "require_sender_approval": session.require_sender_approval,
         "access_code_required": session.access_code_required,

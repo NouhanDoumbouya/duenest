@@ -13,6 +13,7 @@ import type {
   QuickShareListItem,
   QuickSharePublic,
   QuickShareSession,
+  ShareVerification,
   SharedWithMeItem,
 } from "@/types/quick-share";
 
@@ -127,6 +128,14 @@ export function getQuickShareClaim(
   return apiFetch<QuickSharePublic>(
     `/quick-share/claim/${encodeURIComponent(token)}/`,
     { auth: true, headers: codeHeaders(accessCode) },
+  );
+}
+
+/** Public tamper-evidence check for a verified share (no auth, metadata only). */
+export function getShareVerification(token: string): Promise<ShareVerification> {
+  return apiFetch<ShareVerification>(
+    `/verify/${encodeURIComponent(token)}/`,
+    { auth: false },
   );
 }
 

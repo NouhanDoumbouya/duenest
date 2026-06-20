@@ -1910,6 +1910,13 @@ preview/download) — plus claim/QR/DN-code/mode features the others lack.
 the unification; a proof item serves the proof's linked file. A single-file share
 is simply a session with one `file` item; a room is a multi-item session.
 
+**Verifiable Shares.** When the owner opts in (feature-flagged), the session also
+carries `verified`, `verification_manifest` (JSON: the signed list of
+`{name, sha256, size}` plus `share`/`sender`/`issued_at`), `verification_signature`
+(base64 Ed25519 over the canonical manifest), and `verified_at`. Hashes reuse
+`DocumentFile.checksum` (plaintext SHA-256). The signing key is server-only; the
+public verify endpoints expose metadata + per-file match booleans, never bytes.
+
 ### Calendar
 
 DueNest Calendar V1 adds **no new table** — events are aggregated on demand from

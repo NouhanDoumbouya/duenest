@@ -1325,6 +1325,17 @@ approval), so the other two fold into it rather than the reverse:
   their public endpoints (`/share/files/:token`, `/rooms/:token`) are kept so
   links already in the wild keep resolving. No data migration.
 
+**Verifiable Shares (differentiator).** An opt-in, feature-flagged
+(`verified_shares`) layer on the engine: a verified share carries an
+Ed25519-signed manifest of its files' SHA-256 hashes (`apps/quick_share/verification.py`),
+and a public **`/verify/<token>`** page recomputes the served files' hashes,
+compares them to the manifest, and checks the signature. It proves **provenance +
+integrity** ("these exact files are an unaltered copy shared from a DueNest
+account"), not the document's real-world authenticity — UI copy says so
+explicitly. The private signing key is server-only (`SHARE_SIGNING_PRIVATE_KEY`);
+only the public key is published (`/api/v1/verify/key/`), so independent/offline
+verification can follow later without rework.
+
 **Deliberately NOT unified — `OrganizationSecureRoom` and `EmergencyAccessPack`.**
 These look superficially similar (token-gated, access codes, expiry) but are
 different paradigms, so folding them into the personal share engine would damage

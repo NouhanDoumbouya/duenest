@@ -17,12 +17,22 @@ from .views import (
     QuickShareSessionListCreateView,
     QuickShareSessionRevokeView,
     QuickShareVerifyCodeView,
+    PublicShareVerifyView,
+    ShareVerifyKeyView,
     SharedWithMeDetailView,
     SharedWithMeListView,
     SharedWithMeRemoveView,
 )
 
 urlpatterns = [
+    # Verifiable Shares (public). 'key' is listed before the token route so it is
+    # never captured as a token.
+    path("verify/key/", ShareVerifyKeyView.as_view(), name="share-verify-key"),
+    path(
+        "verify/<str:token>/",
+        PublicShareVerifyView.as_view(),
+        name="share-verify",
+    ),
     # Owner sender endpoints
     path(
         "quick-share/sessions/",

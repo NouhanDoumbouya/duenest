@@ -147,6 +147,8 @@ export interface CreateQuickSharePayload {
   watermark_enabled: boolean;
   // Screenshot deterrence on the public viewer (blurs when the tab loses focus).
   privacy_screen_enabled?: boolean;
+  // Tamper-evident, DueNest-signed share (feature-flagged server-side).
+  verified?: boolean;
   file_ids: number[];
   // Whole documents to share; each exposes its current active files.
   document_ids?: number[];
@@ -166,6 +168,7 @@ export interface QuickSharePublic {
   save_copy_allowed: boolean;
   watermark_enabled: boolean;
   privacy_screen_enabled: boolean;
+  verified: boolean;
   watermark_text: string;
   require_sender_approval: boolean;
   access_code_required: boolean;
@@ -207,4 +210,21 @@ export interface SharedWithMeItem {
   accepted_at: string | null;
   last_accessed_at: string | null;
   files?: QuickShareFile[];
+}
+
+export interface ShareVerificationFile {
+  name: string;
+  sha256: string;
+  matches: boolean;
+}
+
+export interface ShareVerification {
+  verified: boolean;
+  status: "verified" | "altered" | "not_verified" | "not_found";
+  signature_valid?: boolean;
+  content_intact?: boolean;
+  share?: string;
+  sender?: string;
+  issued_at?: string;
+  files: ShareVerificationFile[];
 }

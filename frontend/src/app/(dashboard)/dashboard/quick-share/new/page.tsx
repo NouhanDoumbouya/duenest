@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
+  BadgeCheck,
   Check,
   ChevronDown,
   Download,
@@ -32,6 +33,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageContainer } from "@/components/ui/page-container";
 import { InlineAlert } from "@/components/ui/product-ui";
+import { useFeature } from "@/components/features/feature-flags-provider";
 import { ApiError } from "@/lib/api";
 import {
   formatFileSize,
@@ -109,6 +111,8 @@ export default function NewQuickSharePage() {
   const [requireApproval, setRequireApproval] = useState(false);
   const [watermark, setWatermark] = useState(true);
   const [privacyScreen, setPrivacyScreen] = useState(false);
+  const [verified, setVerified] = useState(false);
+  const verifiedSharesEnabled = useFeature("verified_shares");
   // Per-access caps (blank = unlimited). Kept as strings for the inputs.
   const [maxViews, setMaxViews] = useState("");
   const [maxDownloads, setMaxDownloads] = useState("");
@@ -363,6 +367,7 @@ export default function NewQuickSharePage() {
         mode === "account_to_account" ? requireApproval : false,
       watermark_enabled: watermark,
       privacy_screen_enabled: privacyScreen,
+      verified: verifiedSharesEnabled ? verified : undefined,
       max_views: maxViews.trim() ? Number(maxViews) : undefined,
       max_downloads: maxDownloads.trim() ? Number(maxDownloads) : undefined,
       file_ids: selectedList.map((f) => f.id),
@@ -774,6 +779,18 @@ export default function NewQuickSharePage() {
                       markCustom();
                     }}
                   />
+                  {verifiedSharesEnabled && (
+                    <ToggleRow
+                      icon={<BadgeCheck className="size-4" />}
+                      title="Verified share"
+                      description="Add a DueNest signature so the recipient can confirm these exact files are authentic and unaltered — on a public verify page."
+                      checked={verified}
+                      onChange={(v) => {
+                        setVerified(v);
+                        markCustom();
+                      }}
+                    />
+                  )}
                   <div className="rounded-lg border border-border p-3">
                     <p className="text-sm font-medium">Access limits</p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
