@@ -170,6 +170,74 @@ def analyze(user, *, goal: str, deadline=None) -> dict:
     }
 
 
+_MAX_BUNDLE_REQUIREMENTS = 40
+
+
+def create_bundle_from_copilot(user, *, goal: str, deadline=None, requirements) -> "object":
+    """
+    Turn a copilot analysis into a real DueNest bundle (insight -> action).
+
+    Creates a draft application bundle titled after the goal, one requirement per
+    item, with matched OWNED documents linked (status ATTACHED) and the rest left
+    MISSING. Document links are re-validated against the user's vault — the
+    caller's ``document_ids`` are never trusted blindly. Pure CRUD (no model
+    call). Returns the created ``DocumentBundle``.
+    """
+    from django.db import transaction
+
+    from .models import Document, DocumentBundle, DocumentBundleRequirement
+
+    title = (goal or "").strip()[:255] or "Application pack"
+    deadline_date = _parse_deadline(deadline)
+    owned_ids = set(
+        Document.objects.filter(owner=user, is_trashed=False).values_list(
+            "id", flat=True
+        )
+    )
+
+    with transaction.atomic():
+        bundle = DocumentBundle.objects.create(
+            owner=user,
+            title=title,
+            bundle_type=DocumentBundle.BundleType.APPLICATION,
+            target_date=deadline_date,
+            status=DocumentBundle.Status.DRAFT,
+            description=(
+                "Created with the Application Pack Copilot. Requirements are "
+                "AI-suggested guidance — verify against the official source."
+            ),
+        )
+        for i, req in enumerate((requirements or [])[:_MAX_BUNDLE_REQUIREMENTS]):
+            if not isinstance(req, dict):
+                continue
+            name = (req.get("name") or "").strip()[:255]
+            if not name:
+                continue
+            matched = [
+                int(d)
+                for d in (req.get("document_ids") or [])
+                if isinstance(d, (int, str)) and str(d).isdigit() and int(d) in owned_ids
+            ]
+            linked = matched[0] if matched else None
+            DocumentBundleRequirement.objects.create(
+                owner=user,
+                bundle=bundle,
+                title=name,
+                description=(req.get("description") or "").strip()[:2000],
+                requirement_type=DocumentBundleRequirement.RequirementType.DOCUMENT,
+                is_required=True,
+                linked_document_id=linked,
+                status=(
+                    DocumentBundleRequirement.Status.ATTACHED
+                    if linked
+                    else DocumentBundleRequirement.Status.MISSING
+                ),
+                sort_order=i,
+            )
+        bundle.recalculate_readiness()
+    return bundle
+
+
 def _gather_documents(user) -> list[tuple]:
     """Owner-scoped (index, snippet, (doc, title)) tuples for grounding."""
     from .ai_qa import _document_snippet

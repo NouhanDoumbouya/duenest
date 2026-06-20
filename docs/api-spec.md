@@ -1919,6 +1919,20 @@ Response shape:
 `reason` is one of `ok` / `not_configured` / `empty_goal` / `error`; `status` per
 requirement is `have` / `missing` / `unclear`.
 
+### Create a bundle from the analysis
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/api/v1/documents/pack-copilot/create-bundle/` | Turn a copilot analysis into a real draft bundle |
+
+Body: `{ "goal", "deadline"?, "requirements": [{ "name", "description", "document_ids": [..] }] }`.
+Creates a draft **application** bundle titled after the goal, one requirement per
+item — matched **owned** documents are linked (status `attached`), the rest are
+`missing`. Pure CRUD (no model call); `document_ids` are re-validated server-side
+against the owner's vault, so a foreign id is silently dropped. Gated by
+`ai_features` + `ai_pack_copilot`. Returns `201` with
+`{ "bundle_id", "title", "readiness_score" }`.
+
 ---
 
 ## 13C.7 Document intelligence polish

@@ -75,6 +75,7 @@ from .views import (
     DocumentProofRecordListView,
     DocumentQAView,
     PackCopilotView,
+    PackCopilotCreateBundleView,
     FileInboxAttachDocumentView,
     DocumentCategoryDetailView,
     DocumentCategoryListView,
@@ -335,6 +336,11 @@ urlpatterns = [
         "documents/pack-copilot/",
         PackCopilotView.as_view(),
         name="document-pack-copilot",
+    ),
+    path(
+        "documents/pack-copilot/create-bundle/",
+        PackCopilotCreateBundleView.as_view(),
+        name="document-pack-copilot-create-bundle",
     ),
     # ---- Intelligence polish: renewal history (nested under a document) ----
     path(
