@@ -1892,10 +1892,17 @@ def extract_file_details(file: DocumentFile) -> ExtractionResult:
       2. Local OCR (Tesseract) for images, and for scanned PDFs with no text
          layer — only when the engine is installed.
 
-    Files are never sent to a third-party service. When nothing reliable can be
-    read (no text, no OCR engine, encrypted PDF) the result is a graceful
-    ``needs_review`` with no fields. Extracted fields are always *suggestions*:
-    applying them to a document still requires explicit owner review.
+    By default files are never sent to a third-party service. When nothing
+    reliable can be read (no text, no OCR engine, encrypted PDF) the result is a
+    graceful ``needs_review`` with no fields. Extracted fields are always
+    *suggestions*: applying them to a document still requires explicit owner
+    review.
+
+    AI assist (opt-in): when ``settings.AI_CONFIGURED`` and the per-user AI
+    extraction flags are on, the extracted *text* (not the file) is sent to
+    Claude to produce more accurate field suggestions (``provider="ai"``). This
+    is the only path that sends content off-box, and it degrades to the local
+    regex fields on any failure. See ``apps.documents.ai_extract``.
     """
     raw_text: str | None = None
     provider = "local_text"
@@ -1924,6 +1931,23 @@ def extract_file_details(file: DocumentFile) -> ExtractionResult:
         )
 
     fields = _guess_fields_from_text(raw_text)
+
+    # AI assist (opt-in, key-gated): if configured + flagged, prefer Claude's
+    # field suggestions over the regex guesses. Suggestions only — still review
+    # gated. Any failure leaves the regex fields untouched.
+    ai_fields = _ai_field_suggestions(raw_text, getattr(file, "uploaded_by", None))
+    if ai_fields:
+        merged = dict(fields)
+        merged.update(ai_fields)  # AI values win where present
+        return ExtractionResult(
+            status="needs_review",
+            provider="ai",
+            raw_text=raw_text[:EXTRACTION_MAX_RAW_CHARS],
+            extracted_fields=merged,
+            confidence_score=0.85,
+            error_message="",
+        )
+
     # Text layers are more trustworthy than OCR; more fields → more confidence.
     base = 0.5 if provider == "local_text" else 0.35
     confidence = min(0.9, base + 0.08 * len(fields)) if fields else 0.1
@@ -1935,6 +1959,17 @@ def extract_file_details(file: DocumentFile) -> ExtractionResult:
         confidence_score=round(confidence, 2),
         error_message="",
     )
+
+
+def _ai_field_suggestions(raw_text: str, user) -> dict | None:
+    """Best-effort Claude field suggestions; ``None`` unless AI is on and works."""
+    try:
+        from .ai_extract import suggest_fields
+
+        return suggest_fields(raw_text, user=user)
+    except Exception:  # noqa: BLE001 — AI assist must never break extraction
+        logger.warning("ai_field_extraction_failed", exc_info=True)
+        return None
 
 
 # Month names → number, for parsing "12 Jan 2026" style dates.
