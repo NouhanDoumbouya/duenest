@@ -1336,6 +1336,17 @@ explicitly. The private signing key is server-only (`SHARE_SIGNING_PRIVATE_KEY`)
 only the public key is published (`/api/v1/verify/key/`), so independent/offline
 verification can follow later without rework.
 
+**Share Requests (inbound fulfilment, differentiator).** Sharing inverted: a
+requester lists the documents they need (`apps/share_requests` — `ShareRequest` +
+`ShareRequestItem`, modelled on `DocumentBundleRequirement`) and sends a link; a
+logged-in responder fulfils the checklist from their own vault. Crucially there is
+**no new delivery machinery** — the response is a `QuickShareSession` owned by the
+responder with a pre-accepted `QuickShareClaim` for the requester, so it lands in
+the requester's existing "Shared with me" with a notification. Founder-flagged
+(`share_requests`); the public respond page is open so non-founder responders can
+use it. v1 is DueNest-user-to-DueNest-user; anonymous responders / non-account
+requesters layer on later because the delivery path is already the engine.
+
 **Deliberately NOT unified — `OrganizationSecureRoom` and `EmergencyAccessPack`.**
 These look superficially similar (token-gated, access codes, expiry) but are
 different paradigms, so folding them into the personal share engine would damage
