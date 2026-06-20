@@ -141,3 +141,16 @@ export interface PromoCodeAdmin {
   is_active: boolean;
   created_at: string;
 }
+
+export type ReceiptMode = "email_link" | "email_pdf" | "email_only";
+
+export interface ReceiptSettings {
+  enabled: boolean;
+  mode: ReceiptMode;
+  send_for_manual: boolean;
+  business_legal_name: string;
+  business_address: string;
+  tax_id: string;
+  support_email: string;
+  updated_at: string;
+}

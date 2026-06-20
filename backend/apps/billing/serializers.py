@@ -7,6 +7,7 @@ from .models import (
     Plan,
     PlanEntitlement,
     PromoCode,
+    ReceiptSettings,
     UserSubscription,
 )
 
@@ -180,3 +181,19 @@ class BillingEventSerializer(serializers.ModelSerializer):
             "processed_at",
         ]
         read_only_fields = fields
+
+
+class ReceiptSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ReceiptSettings
+        fields = [
+            "enabled",
+            "mode",
+            "send_for_manual",
+            "business_legal_name",
+            "business_address",
+            "tax_id",
+            "support_email",
+            "updated_at",
+        ]
+        read_only_fields = ["updated_at"]

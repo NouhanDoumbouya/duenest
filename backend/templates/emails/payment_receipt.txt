@@ -1,0 +1,23 @@
+{{ heading }}
+
+{{ intro }}
+
+Plan:          {{ plan_name }}{% if interval_label %} ({{ interval_label }}){% endif %}
+{% if period_display %}Billing period: {{ period_display }}
+{% endif %}Date paid:     {{ paid_date_display }}
+{% if invoice_number %}Receipt no.:   {{ invoice_number }}
+{% endif %}Amount paid:   {{ amount_display }}
+{% if show_invoice_link and invoice_url %}
+View / download invoice:
+{{ invoice_url }}
+{% elif has_pdf %}
+Your receipt is attached to this email as a PDF.
+{% endif %}
+Manage your subscription:
+{{ manage_billing_url }}
+
+{% if business_legal_name %}{{ business_legal_name }}
+{% endif %}{% if business_address %}{{ business_address }}
+{% endif %}{% if tax_id %}Tax ID: {{ tax_id }}
+{% endif %}{% if support_email %}Questions? {{ support_email }}
+{% endif %}This is a receipt for your DueNest subscription. Keep it for your records.

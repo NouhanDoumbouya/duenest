@@ -9,8 +9,14 @@ from .models import (
     PlanEntitlement,
     PromoCode,
     PromoRedemption,
+    ReceiptSettings,
     UserSubscription,
 )
+
+
+@admin.register(ReceiptSettings)
+class ReceiptSettingsAdmin(admin.ModelAdmin):
+    list_display = ("enabled", "mode", "send_for_manual", "updated_at")
 
 
 class PlanEntitlementInline(admin.TabularInline):

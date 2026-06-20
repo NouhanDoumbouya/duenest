@@ -145,7 +145,42 @@ def _activate_manual_subscription(user, plan, interval, promo_code) -> UserSubsc
             promo_code, user, subscription=sub, currency=plan.currency
         )
     entitlements.sync_user_plan(user)
+    # A real (non-trial) manual activation is a "payment" in dev/demo: mirror an
+    # invoice and send a branded receipt if receipts are on for the manual
+    # provider. Trials don't charge, so they get no receipt.
+    if sub.status == UserSubscription.Status.ACTIVE and (amount or 0) > 0:
+        _record_manual_payment(sub)
     return sub
+
+
+def _record_manual_payment(sub) -> None:
+    """Mirror a manual (no real charge) payment as an InvoiceRecord and send a
+    branded receipt. Gated on receipts being enabled for the manual provider;
+    never raises into the checkout flow."""
+    try:
+        from . import receipts
+
+        cfg = receipts.ReceiptSettings.load()
+        if not (cfg.enabled and cfg.send_for_manual):
+            return
+        now = timezone.now()
+        invoice, _ = InvoiceRecord.objects.update_or_create(
+            provider_invoice_id=f"manual-{sub.id}-{int(now.timestamp())}",
+            defaults=dict(
+                user=sub.user,
+                subscription=sub,
+                amount_due=sub.amount,
+                amount_paid=sub.amount,
+                currency=sub.currency,
+                status="paid",
+                period_start=sub.current_period_start,
+                period_end=sub.current_period_end,
+                paid_at=now,
+            ),
+        )
+        receipts.send_receipt_for_invoice(invoice)
+    except Exception:  # noqa: BLE001 — receipts must never break billing
+        pass
 
 
 def open_billing_portal(user) -> dict:
@@ -433,6 +468,16 @@ def _handle_payment_failed(obj, record):
         )
 
 
+def _maybe_send_receipt(invoice) -> None:
+    """Send a branded receipt if enabled; receipt failures never break billing."""
+    try:
+        from . import receipts
+
+        receipts.send_receipt_for_invoice(invoice)
+    except Exception:  # noqa: BLE001 — receipts must never break billing
+        pass
+
+
 def _record_invoice(obj, record, paid: bool):
     user, sub, _ = _user_subscription_for(obj, record)
     invoice_id = obj.get("id")
@@ -440,7 +485,7 @@ def _record_invoice(obj, record, paid: bool):
         record.status = BillingEvent.Status.IGNORED
         record.save(update_fields=["status"])
         return
-    InvoiceRecord.objects.update_or_create(
+    invoice, _ = InvoiceRecord.objects.update_or_create(
         provider_invoice_id=invoice_id,
         defaults=dict(
             user=user,
@@ -463,3 +508,6 @@ def _record_invoice(obj, record, paid: bool):
         sub.grace_period_until = None
         sub.save(update_fields=["status", "grace_period_until", "updated_at"])
         entitlements.sync_user_plan(user)
+    # Branded receipt (founder-gated, idempotent). Never break webhook handling.
+    if paid:
+        _maybe_send_receipt(invoice)

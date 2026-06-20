@@ -378,6 +378,9 @@ class InvoiceRecord(models.Model):
     period_start = models.DateTimeField(null=True, blank=True)
     period_end = models.DateTimeField(null=True, blank=True)
     paid_at = models.DateTimeField(null=True, blank=True)
+    # When a branded receipt email was sent for this invoice. Guards against
+    # duplicate sends, since payment webhooks can be retried by the provider.
+    receipt_sent_at = models.DateTimeField(null=True, blank=True)
     metadata = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -462,3 +465,58 @@ class FeatureUsageCounter(models.Model):
 
     def __str__(self):
         return f"Usage<{self.user_id}:{self.feature_key}:{self.period_key}={self.count}>"
+
+
+class ReceiptSettings(models.Model):
+    """Founder-configurable branded receipt emails for DueNest subscriptions.
+
+    A single row (pk=1) holds the active configuration; ``load()`` returns it,
+    creating defaults on first use, so callers never deal with absence. Disabled
+    by default — receipts only go out once a founder turns them on.
+    """
+
+    class Mode(models.TextChoices):
+        EMAIL_LINK = "email_link", "Branded email + provider invoice link"
+        EMAIL_PDF = "email_pdf", "Branded email + DueNest PDF attachment"
+        EMAIL_ONLY = "email_only", "Branded email only"
+
+    enabled = models.BooleanField(default=False)
+    mode = models.CharField(
+        max_length=20, choices=Mode.choices, default=Mode.EMAIL_LINK
+    )
+    # Stripe payments always send a receipt when enabled. This also covers the
+    # manual/dev provider so receipts can be exercised offline; turn it off to
+    # avoid emailing on every local checkout.
+    send_for_manual = models.BooleanField(default=True)
+    # Merchant / legal details printed on the receipt. Blank for now; the
+    # template and PDF render them only when present, so they can be filled in
+    # later without code changes.
+    business_legal_name = models.CharField(max_length=200, blank=True)
+    business_address = models.TextField(blank=True)
+    tax_id = models.CharField(max_length=80, blank=True)
+    support_email = models.EmailField(blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+
+    class Meta:
+        verbose_name = "Receipt settings"
+        verbose_name_plural = "Receipt settings"
+
+    def __str__(self):
+        return f"ReceiptSettings(enabled={self.enabled}, mode={self.mode})"
+
+    def save(self, *args, **kwargs):
+        # Enforce the singleton: there is only ever one configuration row.
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def load(cls) -> "ReceiptSettings":
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj

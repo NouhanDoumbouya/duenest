@@ -11,6 +11,8 @@ from .views import (
     FounderManualAccessView,
     FounderPromoCodeDetailView,
     FounderPromoCodeListCreateView,
+    FounderReceiptSettingsView,
+    FounderReceiptTestSendView,
     FounderSubscribersView,
     InvoicesView,
     PlansView,
@@ -67,5 +69,15 @@ urlpatterns = [
         "founder/billing/events/",
         FounderBillingEventsView.as_view(),
         name="founder-billing-events",
+    ),
+    path(
+        "founder/billing/receipts/settings/",
+        FounderReceiptSettingsView.as_view(),
+        name="founder-billing-receipt-settings",
+    ),
+    path(
+        "founder/billing/receipts/test-send/",
+        FounderReceiptTestSendView.as_view(),
+        name="founder-billing-receipt-test-send",
     ),
 ]

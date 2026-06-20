@@ -1857,6 +1857,8 @@ Founder/admin (staff/superuser only):
 | `GET`/`POST` | `/api/v1/founder/billing/manual-access/` | List / grant manual access |
 | `DELETE` | `/api/v1/founder/billing/manual-access/:id/` | Revoke a manual grant |
 | `GET` | `/api/v1/founder/billing/events/` | Recent webhook/billing events |
+| `GET`/`PATCH` | `/api/v1/founder/billing/receipts/settings/` | Read / update branded-receipt config (`enabled`, `mode`, `send_for_manual`, merchant fields) |
+| `POST` | `/api/v1/founder/billing/receipts/test-send/` | Email a sample receipt to the founder to preview the format |
 
 `checkout` validates `plan_key` + `interval` server-side and never trusts a
 client-supplied price. Webhook processing is idempotent on the provider event

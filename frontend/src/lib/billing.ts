@@ -10,6 +10,7 @@ import type {
   InvoiceRecord,
   PromoCodeAdmin,
   PromoValidation,
+  ReceiptSettings,
   Subscriber,
 } from "@/types/billing";
 
@@ -149,6 +150,29 @@ export function revokeManualAccess(id: number): Promise<void> {
     method: "DELETE",
     auth: true,
   });
+}
+
+export function getReceiptSettings(): Promise<ReceiptSettings> {
+  return apiFetch<ReceiptSettings>("/founder/billing/receipts/settings/", {
+    auth: true,
+  });
+}
+
+export function updateReceiptSettings(
+  payload: Partial<ReceiptSettings>,
+): Promise<ReceiptSettings> {
+  return apiFetch<ReceiptSettings>("/founder/billing/receipts/settings/", {
+    method: "PATCH",
+    auth: true,
+    body: payload,
+  });
+}
+
+export function sendTestReceipt(): Promise<{ detail: string }> {
+  return apiFetch<{ detail: string }>(
+    "/founder/billing/receipts/test-send/",
+    { method: "POST", auth: true },
+  );
 }
 
 /** Coerce a paginated-or-plain list response into an array. */

@@ -10,13 +10,14 @@ from rest_framework.views import APIView
 from apps.documents.plan_usage import compute_plan_usage
 from apps.founder.permissions import IsFounderUser
 
-from . import entitlements, promo as promo_service, services
+from . import entitlements, promo as promo_service, receipts, services
 from .models import (
     BillingEvent,
     InvoiceRecord,
     ManualAccessGrant,
     Plan,
     PromoCode,
+    ReceiptSettings,
     UserSubscription,
 )
 from .providers import BillingError, get_provider_name
@@ -28,6 +29,7 @@ from .serializers import (
     PlanSerializer,
     PromoCodeSerializer,
     PromoValidateSerializer,
+    ReceiptSettingsSerializer,
     SubscriberSerializer,
 )
 
@@ -334,3 +336,49 @@ class FounderBillingEventsView(generics.ListAPIView):
     permission_classes = [IsFounderUser]
     serializer_class = BillingEventSerializer
     queryset = BillingEvent.objects.all().order_by("-processed_at")[:200]
+
+
+class FounderReceiptSettingsView(APIView):
+    """Read / update the branded-receipt configuration (founder console)."""
+
+    permission_classes = [IsFounderUser]
+
+    def get(self, request):
+        cfg = ReceiptSettings.load()
+        return Response(ReceiptSettingsSerializer(cfg).data)
+
+    def patch(self, request):
+        from apps.founder.audit import log_founder_action
+
+        cfg = ReceiptSettings.load()
+        serializer = ReceiptSettingsSerializer(cfg, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(updated_by=request.user)
+        log_founder_action(request, "receipt_settings_update")
+        return Response(serializer.data)
+
+
+class FounderReceiptTestSendView(APIView):
+    """Send a sample receipt to the founder's own email to preview the format."""
+
+    permission_classes = [IsFounderUser]
+
+    def post(self, request):
+        if not request.user.email:
+            return Response(
+                {"detail": "Your account has no email address."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not receipts._is_email_configured():
+            return Response(
+                {"detail": "Email is not configured in this environment."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            receipts.send_test_receipt(request.user)
+        except Exception:  # noqa: BLE001
+            return Response(
+                {"detail": "Could not send the test receipt."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        return Response({"detail": f"Test receipt sent to {request.user.email}."})

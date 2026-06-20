@@ -108,9 +108,38 @@ or via `POST /api/v1/founder/billing/promo-codes/`.
 ## Founder / admin
 
 `/api/v1/founder/billing/{overview,subscribers,promo-codes,manual-access,events}`
-(staff/superuser only). The console shows MRR/ARR **estimates derived from app
-data** (not provider financial reports), subscribers, promo management, and
-manual Pro/beta/founder grants (logged + revocable).
+plus `receipts/{settings,test-send}` (staff/superuser only). The console shows
+MRR/ARR **estimates derived from app data** (not provider financial reports),
+subscribers, promo management, manual Pro/beta/founder grants (logged +
+revocable), and the branded-receipt configuration (below).
+
+## Branded receipts
+
+DueNest can email a **branded receipt** when a subscription payment succeeds
+(Stripe `invoice.paid` / `invoice.payment_succeeded`, and the manual/dev provider
+on a non-trial activation). Receipts are **off by default** and founder-configured
+from the founder console (Billing tab) via `ReceiptSettings` (singleton):
+
+- `enabled` — master switch.
+- `mode` — `email_link` (branded email + provider's hosted invoice/PDF),
+  `email_pdf` (branded email + a DueNest-generated `fpdf2` PDF attachment), or
+  `email_only`.
+- `send_for_manual` — also send for the offline manual provider (dev/demo).
+- `business_legal_name` / `business_address` / `tax_id` / `support_email` —
+  optional merchant details printed on the receipt (blank shows DueNest branding
+  only; the template/PDF render them only when present).
+
+Sending lives in `apps/billing/receipts.py`, reuses the branded email shell
+(`templates/emails/payment_receipt.{html,txt}`), and is:
+
+- **Idempotent** — guarded by `InvoiceRecord.receipt_sent_at` (atomic claim), so
+  retried webhooks send exactly one receipt per invoice.
+- **Non-fatal** — receipt failures never break webhook/checkout handling, and a
+  failed send releases the claim so a later retry can resend.
+- **Skipped when email isn't configured** (`EMAIL_CONFIGURED`) — logged, not sent.
+
+`POST /founder/billing/receipts/test-send/` emails a sample receipt (in the
+configured format) to the founder to preview it; it touches no `InvoiceRecord`.
 
 ## Security
 
