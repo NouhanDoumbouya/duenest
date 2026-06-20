@@ -3089,9 +3089,12 @@ class DocumentExtractionListCreateView(
     """
     GET lists a file's extractions; POST runs a new extraction attempt.
 
-    The foundation never sends files to a third-party service. When no reliable
-    text can be obtained, the record is still created with a graceful
-    ``needs_review`` status so the UI always has something to show.
+    The local foundation never sends files to a third-party service. (When the
+    opt-in, key-gated AI assist is enabled, the extracted *text* — not the file —
+    may be sent to Claude for better field suggestions; see
+    ``apps.documents.ai_extract``.) When no reliable text can be obtained, the
+    record is still created with a graceful ``needs_review`` status so the UI
+    always has something to show.
     """
 
     def create(self, request, *args, **kwargs):

@@ -17,7 +17,8 @@ DueNest does not claim perfect extraction accuracy.
   - Owner-scoped (`owner` FK); tied to a `Document` + `DocumentFile`.
   - `extraction_status`: `pending` / `processing` / `completed` / `failed` /
     `needs_review`.
-  - `provider`: `manual` / `local_text` / `local_ocr` (Tesseract) / `future_ocr`.
+  - `provider`: `manual` / `local_text` / `local_ocr` (Tesseract) / `ai` (Claude,
+    opt-in — see below) / `future_ocr`.
   - `raw_text` (owner-only), `extracted_fields` (JSON), `confidence_score`,
     `error_message`, `reviewed_at`, `applied_at`.
 - **Service:** `extract_file_details(file)` in `apps/documents/services.py`:
@@ -31,8 +32,21 @@ DueNest does not claim perfect extraction accuracy.
   - `GET /documents/:id/files/:fid/extractions/:eid/`
   - `POST /documents/:id/files/:fid/extractions/:eid/apply/`
 
-No file is sent to any third-party service. Extraction is local-only today; the
-`provider` field leaves room for a future, clearly-disclosed provider.
+No file is sent to any third-party service. The local path (`local_text` /
+`local_ocr`) is the default and stays fully on-box.
+
+### Optional AI assist (`provider: ai`)
+
+When `settings.AI_CONFIGURED` is true (an `ANTHROPIC_API_KEY` is set) **and** the
+per-user `ai_features` + `ai_document_extraction` flags are on, `extract_file_details`
+sends the already-extracted **text** (not the file) to Claude
+(`apps/documents/ai_extract.py`) for more accurate field suggestions —
+especially `expiry_date` and `document_type`. This is the only path that sends
+content off-box; it is off by default, opt-in per user, and degrades silently to
+the local regex fields on any failure (no key, flag off, refusal, bad output).
+Suggestions remain review-gated: applying them to a document still requires
+explicit owner review. See `docs/architecture.md` (AI foundation) and
+`docs/FEATURE_FLAGS.md` (the `ai_*` keys).
 
 ## Category system
 
