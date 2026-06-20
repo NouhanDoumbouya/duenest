@@ -47,7 +47,7 @@ FEATURE_DEFINITIONS: list[dict] = [
     {"key": "emergency_access", "name": "Emergency Access", "default": Visibility.ENABLED, "description": "Emergency packs."},
     {"key": "emergency_public_viewer", "name": "Emergency public viewer", "default": Visibility.ENABLED, "description": "Token-gated emergency viewer."},
     {"key": "emergency_checkin", "name": "Emergency — safety check-in", "default": Visibility.FOUNDER_ONLY, "description": "Dead-man's-switch check-in: if the owner doesn't check in by the deadline, trusted contacts are emailed (server-side, works with phone off). Owner can extend/cancel. Founder-only until launched."},
-    {"key": "subscriptions", "name": "Subscriptions", "default": Visibility.ENABLED, "description": "Subscription Radar."},
+    {"key": "subscriptions", "name": "Subscriptions (deprecated)", "default": Visibility.DISABLED, "description": "DEPRECATED — legacy Subscription Radar (finance/recurring-payment tracking). DueNest is a life-document readiness platform, not a subscription/finance tracker. Disabled by default; data tables are retained but no longer exposed. Recurring renewals now live in Deadlines & Renewals."},
     {"key": "organizations", "name": "Organizations", "default": Visibility.ENABLED, "description": "Workspaces."},
     {"key": "email_reminders", "name": "Email reminders", "default": Visibility.ENABLED, "description": "Reminder email delivery."},
     {"key": "notification_center", "name": "Notification center", "default": Visibility.ENABLED, "description": "In-app notifications."},

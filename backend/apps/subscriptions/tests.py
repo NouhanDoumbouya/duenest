@@ -15,6 +15,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from apps.features.models import FeatureFlag, Visibility
 from apps.subscriptions.models import (
     Subscription,
     SubscriptionCategory,
@@ -46,6 +47,13 @@ def detail(pk):
 
 class SubscriptionBaseTest(APITestCase):
     def setUp(self):
+        # Subscription Radar is deprecated and disabled by default (DueNest is a
+        # life-document readiness platform, not a finance tracker). The engine is
+        # retained so a founder can re-enable it to inspect legacy data — these
+        # tests prove it still works when the flag is turned back on.
+        FeatureFlag.objects.update_or_create(
+            key="subscriptions", defaults={"visibility": Visibility.ENABLED}
+        )
         self.alice = User.objects.create_user(
             username="alice", email="a@x.com", password="StrongPassword123!DN"
         )
@@ -680,3 +688,40 @@ class ProviderKeyTest(SubscriptionBaseTest):
         )
         self.assertEqual(resp2.status_code, 201, resp2.data)
         self.assertEqual(resp2.data["provider_key"], "")
+
+
+class DeprecationGateTest(APITestCase):
+    """
+    Subscription Radar is deprecated. With the default flag state (no DB row,
+    no env override → ``disabled``), every subscriptions endpoint must refuse
+    with a controlled 503. UI hiding is not enough — the API must enforce it.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="carol", email="c@x.com", password="StrongPassword123!DN"
+        )
+        self.client.force_authenticate(self.user)
+
+    def test_list_is_gated_off_by_default(self):
+        res = self.client.get(LIST)
+        self.assertEqual(res.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(res.data.get("feature"), "subscriptions")
+
+    def test_categories_is_gated_off_by_default(self):
+        res = self.client.get(CATEGORIES)
+        self.assertEqual(res.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+
+    def test_create_is_gated_off_by_default(self):
+        res = self.client.post(
+            LIST,
+            {
+                "name": "Netflix",
+                "amount": "15.99",
+                "currency": "USD",
+                "billing_cycle": "monthly",
+                "next_billing_date": (timezone.localdate() + timedelta(days=10)).isoformat(),
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)

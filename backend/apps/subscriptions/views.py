@@ -14,6 +14,8 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.features.flags import require_feature_enabled
+
 from .models import Subscription, SubscriptionCategory, SubscriptionPaymentRecord
 from .plan_usage import enforce_subscription_limit
 from .serializers import (
@@ -38,7 +40,25 @@ _ALLOWED_ORDERING = {
 _TRUE = {"1", "true", "yes", "on"}
 
 
-class SubscriptionCategoryViewSet(viewsets.ReadOnlyModelViewSet):
+class _SubscriptionsDeprecatedMixin:
+    """
+    Server-side deprecation gate for the legacy Subscription Radar.
+
+    DueNest is a life-document readiness platform, not a subscription/finance
+    tracker. The ``subscriptions`` feature flag defaults to ``disabled``, so this
+    raises a controlled 503 for every action (list/detail/create/lifecycle).
+    UI hiding alone is not enough — the API must refuse too. A founder can still
+    re-enable the flag to inspect legacy data; tables are retained, never dropped.
+    """
+
+    def initial(self, request, *args, **kwargs):
+        require_feature_enabled("subscriptions", request.user)
+        super().initial(request, *args, **kwargs)
+
+
+class SubscriptionCategoryViewSet(
+    _SubscriptionsDeprecatedMixin, viewsets.ReadOnlyModelViewSet
+):
     """
     Read-only list of categories available to the user: the system categories
     plus any the user owns (none in V1, but the query is owner-aware already).
@@ -56,7 +76,7 @@ class SubscriptionCategoryViewSet(viewsets.ReadOnlyModelViewSet):
         )
 
 
-class SubscriptionViewSet(viewsets.ModelViewSet):
+class SubscriptionViewSet(_SubscriptionsDeprecatedMixin, viewsets.ModelViewSet):
     """CRUD + lifecycle actions for the authenticated user's subscriptions."""
 
     serializer_class = SubscriptionSerializer
