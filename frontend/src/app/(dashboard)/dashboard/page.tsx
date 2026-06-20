@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   CalendarClock,
-  CreditCard,
   FileText,
   LifeBuoy,
   Package,
@@ -23,7 +22,6 @@ import {
 import { FixFirstSection } from "@/components/dashboard/life-radar/fix-first";
 import { QuickActionsPanel } from "@/components/dashboard/life-radar/quick-actions";
 import {
-  MoneyRadarPanel,
   RecentActivityPanel,
   SharingEmergencyPanel,
   ThisWeekPanel,
@@ -46,11 +44,6 @@ import {
 } from "@/lib/documents";
 import { getCalendarEvents, getCalendarSummary } from "@/lib/calendar";
 import { getEmergencyPacks } from "@/lib/emergency";
-import {
-  getSubscriptionAttention,
-  getSubscriptionSummary,
-  snoozeSubscription,
-} from "@/lib/subscriptions";
 import { listQuickShares, revokeQuickShare } from "@/lib/quick-share";
 import {
   getDocumentSetupChecklist,
@@ -65,11 +58,8 @@ import {
 import {
   buildLifeRadarSummary,
   computeDashboardReadinessScore,
-  formatMoneyRisk,
-  formatRelativeDeadline,
   getActiveShareRisk,
   getEmergencyReadiness,
-  getNextCharge,
   getNextDeadline,
   type EmergencyReadiness,
 } from "@/lib/life-radar";
@@ -79,10 +69,6 @@ import type { CalendarEvent, CalendarSummary } from "@/types/calendar";
 import type { DocumentRecord } from "@/types/documents";
 import type { EmergencyPack } from "@/types/emergency";
 import type { QuickShareListItem } from "@/types/quick-share";
-import type {
-  SubscriptionAttentionItem,
-  SubscriptionSummary,
-} from "@/types/subscriptions";
 import type {
   DocumentSetupChecklist,
   OnboardingState,
@@ -95,8 +81,6 @@ interface RadarState {
   missingFiles: number;
   recentDocs: DocumentRecord[];
   attentionDocs: DocumentRecord[];
-  subSummary: SubscriptionSummary | null;
-  subAttention: SubscriptionAttentionItem[];
   shares: QuickShareListItem[];
   packs: EmergencyPack[];
   calSummary: CalendarSummary | null;
@@ -105,7 +89,6 @@ interface RadarState {
   checklist: DocumentSetupChecklist | null;
   errors: {
     documents: boolean;
-    subscriptions: boolean;
     shares: boolean;
     emergency: boolean;
     calendar: boolean;
@@ -118,8 +101,6 @@ const EMPTY_STATE: RadarState = {
   missingFiles: 0,
   recentDocs: [],
   attentionDocs: [],
-  subSummary: null,
-  subAttention: [],
   shares: [],
   packs: [],
   calSummary: null,
@@ -128,7 +109,6 @@ const EMPTY_STATE: RadarState = {
   checklist: null,
   errors: {
     documents: false,
-    subscriptions: false,
     shares: false,
     emergency: false,
     calendar: false,
@@ -164,8 +144,6 @@ export default function DashboardPage() {
         getDocuments({ missing_file: true, page_size: 1 }),
         getDocuments({ ordering: "-updated_at", page_size: 5 }),
         getAttentionNeeded(),
-        getSubscriptionSummary(),
-        getSubscriptionAttention(),
         listQuickShares(),
         getEmergencyPacks(),
         getCalendarSummary(),
@@ -185,8 +163,6 @@ export default function DashboardPage() {
       missing,
       recent,
       attention,
-      subSummary,
-      subAttention,
       shares,
       packs,
       calSummary,
@@ -207,8 +183,6 @@ export default function DashboardPage() {
       missingFiles: val(missing)?.count ?? 0,
       recentDocs: (val(recent)?.results ?? []).slice(0, 5),
       attentionDocs: val(attention)?.items ?? [],
-      subSummary: val(subSummary),
-      subAttention: val(subAttention)?.items ?? [],
       shares: val(shares) ?? [],
       packs: val(packs)?.results ?? [],
       calSummary: val(calSummary),
@@ -217,8 +191,6 @@ export default function DashboardPage() {
       checklist: val(checklist),
       errors: {
         documents: documentsError,
-        subscriptions:
-          subSummary.status === "rejected" || subAttention.status === "rejected",
         shares: shares.status === "rejected",
         emergency: packs.status === "rejected",
         calendar:
@@ -266,35 +238,25 @@ export default function DashboardPage() {
 
   const handleSnooze = useCallback(
     async (snooze: { kind: "document" | "subscription"; targetId: number }) => {
+      // Only documents are snoozable now that Subscription Radar is gone; the
+      // Fix First list never produces subscription items, but the shared type
+      // still carries the union, so guard defensively.
+      if (snooze.kind !== "document") return;
       const itemId = `${snooze.kind}-${snooze.targetId}`;
       setSnoozingId(itemId);
       try {
-        if (snooze.kind === "document") {
-          await snoozeDocument(snooze.targetId);
-          // Optimistic: drop it locally so Fix First updates instantly.
-          setState((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  attentionDocs: prev.attentionDocs.filter(
-                    (d) => d.id !== snooze.targetId,
-                  ),
-                }
-              : prev,
-          );
-        } else {
-          await snoozeSubscription(snooze.targetId);
-          setState((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  subAttention: prev.subAttention.filter(
-                    (s) => s.id !== snooze.targetId,
-                  ),
-                }
-              : prev,
-          );
-        }
+        await snoozeDocument(snooze.targetId);
+        // Optimistic: drop it locally so Fix First updates instantly.
+        setState((prev) =>
+          prev
+            ? {
+                ...prev,
+                attentionDocs: prev.attentionDocs.filter(
+                  (d) => d.id !== snooze.targetId,
+                ),
+              }
+            : prev,
+        );
       } catch {
         // Soft-fail: leave it in place; the user can retry.
       } finally {
@@ -317,11 +279,11 @@ export default function DashboardPage() {
     () =>
       buildLifeRadarSummary({
         attentionDocuments: state?.attentionDocs ?? [],
-        subscriptionAttention: state?.subAttention ?? [],
+        subscriptionAttention: [],
         activeShares: state?.shares ?? [],
         emergency,
       }),
-    [state?.attentionDocs, state?.subAttention, state?.shares, emergency],
+    [state?.attentionDocs, state?.shares, emergency],
   );
 
   const shareRisk = useMemo(
@@ -342,7 +304,6 @@ export default function DashboardPage() {
   const metrics: LifeRadarMetric[] = useMemo(() => {
     if (!state) return [];
     const nextDeadline = getNextDeadline(state.attentionDocs, state.calSummary);
-    const nextCharge = getNextCharge(state.subSummary);
     const atRisk = state.expiringSoon + state.missingFiles;
     return [
       {
@@ -366,21 +327,6 @@ export default function DashboardPage() {
         icon: CalendarClock,
         href: nextDeadline?.href ?? "/dashboard/calendar",
         tone: "blue",
-      },
-      {
-        key: "charge",
-        label: "Next charge",
-        value: nextCharge
-          ? formatRelativeDeadline(nextCharge.days_until_renewal)
-          : "—",
-        subtitle: nextCharge
-          ? `${nextCharge.name} · ${formatMoneyRisk(nextCharge.amount, nextCharge.currency)}`
-          : "No upcoming charges",
-        icon: CreditCard,
-        href: "/dashboard/subscriptions",
-        severity:
-          nextCharge && nextCharge.days_until_renewal <= 3 ? "soon" : undefined,
-        tone: "teal",
       },
       {
         key: "at-risk",
@@ -423,7 +369,6 @@ export default function DashboardPage() {
   const isBrandNew =
     !loading &&
     state.totalDocs === 0 &&
-    (state.subSummary?.total_count ?? 0) === 0 &&
     state.shares.length === 0 &&
     state.packs.length === 0;
 
@@ -524,9 +469,6 @@ export default function DashboardPage() {
                   <SectionCard title="This week">
                     <PanelSkeleton />
                   </SectionCard>
-                  <SectionCard title="Money Radar">
-                    <PanelSkeleton />
-                  </SectionCard>
                   <SectionCard title="Sharing & emergency">
                     <PanelSkeleton rows={2} />
                   </SectionCard>
@@ -537,11 +479,6 @@ export default function DashboardPage() {
                     events={state.calEvents}
                     summary={state.calSummary}
                     error={state.errors.calendar}
-                    onRetry={load}
-                  />
-                  <MoneyRadarPanel
-                    summary={state.subSummary}
-                    error={state.errors.subscriptions}
                     onRetry={load}
                   />
                   <SharingEmergencyPanel
@@ -563,7 +500,6 @@ export default function DashboardPage() {
 const QUICK_START_ICONS: Record<QuickStartGoalKey, LucideIcon> = {
   document: FileText,
   scan: ScanLine,
-  subscription: CreditCard,
   bundle: Package,
   safesend: Share2,
   emergency: LifeBuoy,

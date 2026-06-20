@@ -46,7 +46,6 @@ export interface GoalOption {
 export type QuickStartGoalKey =
   | "document"
   | "scan"
-  | "subscription"
   | "bundle"
   | "safesend"
   | "emergency";
@@ -85,14 +84,6 @@ export function getQuickStartGoals(): QuickStartGoal[] {
       primary: true,
     },
     {
-      key: "subscription",
-      title: "Track a subscription",
-      body: "Catch silent renewals and trial endings before they charge you.",
-      href: "/dashboard/subscriptions/new",
-      cta: "Add subscription",
-      primary: true,
-    },
-    {
       key: "bundle",
       title: "Prepare an application pack",
       body: "Gather documents for a scholarship, visa, job, or university application.",
@@ -106,7 +97,7 @@ export function getQuickStartGoals(): QuickStartGoal[] {
       body: "Share a document without losing control of who can open it.",
       href: "/dashboard/quick-share",
       cta: "Set up sharing",
-      primary: false,
+      primary: true,
     },
     {
       key: "emergency",
