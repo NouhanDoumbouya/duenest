@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from .models import (
+    BillingEmailSettings,
     BillingEvent,
     InvoiceRecord,
     ManualAccessGrant,
@@ -199,3 +200,33 @@ class ReceiptSettingsSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["updated_at"]
+
+
+class BillingEmailSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BillingEmailSettings
+        fields = [
+            "trial_ending_days_before",
+            "renewal_upcoming_days_before",
+            "grace_period_days",
+            "dunning_followup_days",
+            "updated_at",
+        ]
+        read_only_fields = ["updated_at"]
+
+    def validate(self, attrs):
+        # A follow-up that lands at/after grace end would never send; keep it
+        # strictly inside the window.
+        grace = attrs.get(
+            "grace_period_days",
+            getattr(self.instance, "grace_period_days", 7),
+        )
+        followup = attrs.get(
+            "dunning_followup_days",
+            getattr(self.instance, "dunning_followup_days", 0),
+        )
+        if followup and followup >= grace:
+            raise serializers.ValidationError(
+                {"dunning_followup_days": "Must be less than the grace period."}
+            )
+        return attrs

@@ -175,6 +175,30 @@ export function sendTestReceipt(): Promise<{ detail: string }> {
   );
 }
 
+export interface BillingEmailSettings {
+  trial_ending_days_before: number;
+  renewal_upcoming_days_before: number;
+  grace_period_days: number;
+  dunning_followup_days: number;
+  updated_at: string;
+}
+
+export function getBillingEmailSettings(): Promise<BillingEmailSettings> {
+  return apiFetch<BillingEmailSettings>("/founder/billing/email-settings/", {
+    auth: true,
+  });
+}
+
+export function updateBillingEmailSettings(
+  payload: Partial<BillingEmailSettings>,
+): Promise<BillingEmailSettings> {
+  return apiFetch<BillingEmailSettings>("/founder/billing/email-settings/", {
+    method: "PATCH",
+    body: payload,
+    auth: true,
+  });
+}
+
 /** Coerce a paginated-or-plain list response into an array. */
 export function asArray<T>(data: T[] | { results: T[] }): T[] {
   return Array.isArray(data) ? data : data.results;

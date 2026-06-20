@@ -16,6 +16,7 @@ from django.utils import timezone
 
 from . import entitlements, promo as promo_service
 from .models import (
+    BillingEmailSettings,
     BillingEvent,
     CustomerBillingProfile,
     InvoiceRecord,
@@ -481,17 +482,14 @@ def _handle_checkout_completed(obj, record):
 
 
 def _handle_payment_failed(obj, record):
-    from django.conf import settings
-
     user, sub, _ = _user_subscription_for(obj, record)
     if sub is None:
         record.status = BillingEvent.Status.IGNORED
         record.save(update_fields=["status"])
         return
+    grace_days = BillingEmailSettings.load().grace_period_days
     sub.status = UserSubscription.Status.GRACE_PERIOD
-    sub.grace_period_until = timezone.now() + timezone.timedelta(
-        days=settings.BILLING_GRACE_PERIOD_DAYS
-    )
+    sub.grace_period_until = timezone.now() + timezone.timedelta(days=grace_days)
     sub.save(update_fields=["status", "grace_period_until", "updated_at"])
     if user:
         entitlements.sync_user_plan(user)

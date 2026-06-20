@@ -10,9 +10,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ApiError } from "@/lib/api";
 import {
+  getBillingEmailSettings,
   getReceiptSettings,
   sendTestReceipt,
+  updateBillingEmailSettings,
   updateReceiptSettings,
+  type BillingEmailSettings,
 } from "@/lib/billing";
 import type { ReceiptMode, ReceiptSettings } from "@/types/billing";
 import { cn } from "@/lib/utils";
@@ -37,8 +40,10 @@ const MODES: { id: ReceiptMode; label: string; hint: string }[] = [
 
 export default function FounderBillingPage() {
   const [settings, setSettings] = useState<ReceiptSettings | null>(null);
+  const [timing, setTiming] = useState<BillingEmailSettings | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [savingTiming, setSavingTiming] = useState(false);
   const [testing, setTesting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
@@ -53,10 +58,44 @@ export default function FounderBillingPage() {
           err instanceof ApiError ? err.message : "Unable to load receipt settings.",
         ),
       );
+    getBillingEmailSettings()
+      .then((data) => active && setTiming(data))
+      .catch(() => {
+        /* timing is non-critical to render the receipt settings */
+      });
     return () => {
       active = false;
     };
   }, []);
+
+  function patchTiming(partial: Partial<BillingEmailSettings>) {
+    setTiming((prev) => (prev ? { ...prev, ...partial } : prev));
+    setNotice(null);
+    setErrorNotice(null);
+  }
+
+  async function saveTiming() {
+    if (!timing) return;
+    setSavingTiming(true);
+    setNotice(null);
+    setErrorNotice(null);
+    try {
+      const saved = await updateBillingEmailSettings({
+        trial_ending_days_before: timing.trial_ending_days_before,
+        renewal_upcoming_days_before: timing.renewal_upcoming_days_before,
+        grace_period_days: timing.grace_period_days,
+        dunning_followup_days: timing.dunning_followup_days,
+      });
+      setTiming(saved);
+      setNotice("Billing email timing saved.");
+    } catch (err) {
+      setErrorNotice(
+        err instanceof ApiError ? err.message : "Could not save timing.",
+      );
+    } finally {
+      setSavingTiming(false);
+    }
+  }
 
   function patch(partial: Partial<ReceiptSettings>) {
     setSettings((prev) => (prev ? { ...prev, ...partial } : prev));
@@ -264,6 +303,55 @@ export default function FounderBillingPage() {
         </CardContent>
       </Card>
 
+      {timing && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Email timing &amp; triggers</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-xs text-muted-foreground">
+              When the scheduled billing emails fire, and the grace/dunning
+              window after a failed payment. (Content &amp; on/off for each email
+              live on the Emails tab.)
+            </p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <TimingField
+                label="Trial-ending — days before"
+                value={timing.trial_ending_days_before}
+                onChange={(v) => patchTiming({ trial_ending_days_before: v })}
+                hint="Send the trial-ending reminder this many days before the trial ends."
+              />
+              <TimingField
+                label="Renewal-upcoming — days before"
+                value={timing.renewal_upcoming_days_before}
+                onChange={(v) => patchTiming({ renewal_upcoming_days_before: v })}
+                hint="Heads-up before an active plan renews."
+              />
+              <TimingField
+                label="Grace period (days)"
+                value={timing.grace_period_days}
+                onChange={(v) => patchTiming({ grace_period_days: v })}
+                hint="How long Pro stays active after a failed payment."
+              />
+              <TimingField
+                label="Dunning follow-up (days, 0 = off)"
+                value={timing.dunning_followup_days}
+                onChange={(v) => patchTiming({ dunning_followup_days: v })}
+                hint="Send a 2nd 'update your card' email this many days after the failure. Must be less than the grace period."
+              />
+            </div>
+            <Button onClick={saveTiming} disabled={savingTiming}>
+              {savingTiming ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Check className="size-4" />
+              )}
+              Save timing
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="flex flex-wrap items-center gap-3">
         <Button onClick={save} disabled={saving}>
           {saving ? (
@@ -286,6 +374,32 @@ export default function FounderBillingPage() {
           Uses the current saved format
         </span>
       </div>
+    </div>
+  );
+}
+
+function TimingField({
+  label,
+  value,
+  onChange,
+  hint,
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+  hint: string;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      <Input
+        type="number"
+        min={0}
+        max={365}
+        value={value}
+        onChange={(e) => onChange(Math.max(0, Number(e.target.value) || 0))}
+      />
+      <p className="text-xs text-muted-foreground">{hint}</p>
     </div>
   );
 }

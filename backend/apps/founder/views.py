@@ -927,3 +927,95 @@ class FounderEmailAnalyticsView(APIView):
                 "suppressed_total": SuppressedEmail.objects.count(),
             }
         )
+
+
+# Sample context so previews/test-sends render with realistic dynamic bits
+# (links, codes, dates) across every branded template. Missing keys render empty.
+_EMAIL_PREVIEW_SAMPLE = {
+    "invite_url": "https://app.duenest.com/invite/SAMPLE-CODE",
+    "invite_code": "DN-SAMPLE",
+    "reset_url": "https://app.duenest.com/reset-password?token=sample",
+    "verify_url": "https://app.duenest.com/verify-email?token=sample",
+    "action_url": "https://app.duenest.com/dashboard/settings/billing",
+    "action_label": "Manage billing",
+    "detail_line": "Sample: your plan renews 30 Jun 2026.",
+    "preferences_url": "https://app.duenest.com/dashboard/notifications/settings",
+}
+
+
+def _resolved_email_draft(request, key):
+    """(definition, subject, body): the saved/default email, overlaid with any
+    draft subject/body the founder is editing (so the preview matches the form)."""
+    from common.transactional_email import resolve_transactional_email
+
+    _enabled, subject, body, definition = resolve_transactional_email(key)
+    draft_subject = (request.data.get("subject") or "").strip()
+    draft_body = (request.data.get("body") or "").strip()
+    return definition, (draft_subject or subject), (draft_body or body)
+
+
+class FounderEmailPreviewView(APIView):
+    """Render a branded email to HTML for in-console preview (no send)."""
+
+    permission_classes = [IsFounderUser]
+
+    def post(self, request):
+        from django.template.loader import render_to_string
+
+        from common.transactional_email import TRANSACTIONAL_EMAILS
+
+        key = request.data.get("key")
+        if key not in TRANSACTIONAL_EMAILS:
+            return Response(
+                {"detail": "Unknown email."}, status=status.HTTP_400_BAD_REQUEST
+            )
+        definition, subject, body = _resolved_email_draft(request, key)
+        ctx = {"subject": subject, "email_body": body, **_EMAIL_PREVIEW_SAMPLE}
+        try:
+            html = render_to_string(f"emails/{definition.template}.html", ctx)
+        except Exception:  # noqa: BLE001
+            return Response(
+                {"detail": "Could not render preview."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        return Response({"subject": subject, "html": html})
+
+
+class FounderEmailTestSendView(APIView):
+    """Send a branded email (current draft content) to the founder to preview
+    real email-client rendering. Sends even if the email is toggled off."""
+
+    permission_classes = [IsFounderUser]
+
+    def post(self, request, key):
+        from common.email import send_branded_email
+        from common.transactional_email import TRANSACTIONAL_EMAILS
+
+        if key not in TRANSACTIONAL_EMAILS:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        if not request.user.email:
+            return Response(
+                {"detail": "Your account has no email address."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not getattr(settings, "EMAIL_CONFIGURED", True):
+            return Response(
+                {"detail": "Email is not configured in this environment."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        definition, subject, body = _resolved_email_draft(request, key)
+        ok = send_branded_email(
+            subject=f"[Test] {subject}",
+            template=definition.template,
+            context={"email_body": body, **_EMAIL_PREVIEW_SAMPLE},
+            to=request.user.email,
+            email_type=f"test_{key}",
+            category="transactional",
+            fail_silently=False,
+        )
+        if not ok:
+            return Response(
+                {"detail": "Could not send the test email."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        return Response({"detail": f"Test email sent to {request.user.email}."})

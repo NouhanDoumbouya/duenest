@@ -95,6 +95,18 @@ TRANSACTIONAL_EMAILS: dict[str, TransactionalEmail] = {
         # Essential: the user must know their billing is failing.
         category="transactional",
     ),
+    "billing_payment_failed_followup": TransactionalEmail(
+        key="billing_payment_failed_followup",
+        name="Payment failed — follow-up reminder",
+        template="billing_lifecycle",
+        subject="Reminder: update your DueNest payment method",
+        body=(
+            "We still haven't been able to process your DueNest payment. Please "
+            "update your payment method soon to avoid losing Pro access when the "
+            "grace period ends."
+        ),
+        category="transactional",
+    ),
     "billing_trial_ending": TransactionalEmail(
         key="billing_trial_ending",
         name="Trial ending soon",

@@ -530,3 +530,45 @@ class ReceiptSettings(models.Model):
     def load(cls) -> "ReceiptSettings":
         obj, _ = cls.objects.get_or_create(pk=1)
         return obj
+
+
+class BillingEmailSettings(models.Model):
+    """Founder-configurable timing for billing lifecycle/dunning emails.
+
+    A single row (pk=1) holds the timing knobs the webhook + ``sync_billing_access``
+    cron read. Content/on-off for each email lives in the transactional registry
+    (founder Emails page); this only governs *when* the scheduled ones fire.
+    """
+
+    # Scheduled-email lead times: how many days before the event to send.
+    trial_ending_days_before = models.PositiveSmallIntegerField(default=3)
+    renewal_upcoming_days_before = models.PositiveSmallIntegerField(default=3)
+    # How long Pro features stay active after a failed payment.
+    grace_period_days = models.PositiveSmallIntegerField(default=7)
+    # 0 disables the second dunning email; >0 sends a follow-up this many days
+    # after the failed payment (clamped to land inside the grace window).
+    dunning_followup_days = models.PositiveSmallIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+
+    class Meta:
+        verbose_name = "Billing email settings"
+        verbose_name_plural = "Billing email settings"
+
+    def __str__(self):
+        return "BillingEmailSettings"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def load(cls) -> "BillingEmailSettings":
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj

@@ -5,6 +5,7 @@ from .views import (
     BillingUsageView,
     CancelSubscriptionView,
     CheckoutView,
+    FounderBillingEmailSettingsView,
     FounderBillingEventsView,
     FounderBillingOverviewView,
     FounderManualAccessDetailView,
@@ -79,5 +80,10 @@ urlpatterns = [
         "founder/billing/receipts/test-send/",
         FounderReceiptTestSendView.as_view(),
         name="founder-billing-receipt-test-send",
+    ),
+    path(
+        "founder/billing/email-settings/",
+        FounderBillingEmailSettingsView.as_view(),
+        name="founder-billing-email-settings",
     ),
 ]

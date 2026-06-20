@@ -42,8 +42,11 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        from apps.billing.models import BillingEmailSettings
+
         dry_run = options["dry_run"]
         now = timezone.now()
+        cfg = BillingEmailSettings.load()
         affected_users = set()
         expired_grants = 0
         expired_grace = 0
@@ -70,6 +73,28 @@ class Command(BaseCommand):
             if not dry_run:
                 sub.status = UserSubscription.Status.UNPAID
                 sub.save(update_fields=["status", "updated_at"])
+
+        # 2b) Optional second dunning reminder while still in grace, once the
+        # configured follow-up delay after the failed payment has elapsed.
+        # Off when dunning_followup_days == 0. Deduped per grace window.
+        dunning_followups = 0
+        if cfg.dunning_followup_days > 0:
+            remaining = max(cfg.grace_period_days - cfg.dunning_followup_days, 0)
+            for sub in UserSubscription.objects.filter(
+                status=UserSubscription.Status.GRACE_PERIOD,
+                grace_period_until__isnull=False,
+                grace_period_until__gt=now,
+                grace_period_until__lte=now + timezone.timedelta(days=remaining),
+            ).select_related("user"):
+                if not dry_run and _email_once(
+                    sub, "dunning_followup", sub.grace_period_until.strftime("%Y%m%d")
+                ):
+                    from apps.billing.lifecycle_email import (
+                        send_payment_failed_followup_email,
+                    )
+
+                    send_payment_failed_followup_email(sub.user, sub)
+                    dunning_followups += 1
 
         # 3) cancel-at-period-end subs whose period has ended -> canceled.
         for sub in UserSubscription.objects.filter(
@@ -107,14 +132,14 @@ class Command(BaseCommand):
 
                 send_trial_ended_email(sub.user, sub)
 
-        # 4) Trial-ending reminders (within 3 days). Deduped by trial date.
+        # 4) Trial-ending reminders (configurable lead time). Deduped by trial date.
         trial_notices = 0
-        soon = now + timezone.timedelta(days=3)
+        trial_soon = now + timezone.timedelta(days=cfg.trial_ending_days_before)
         for sub in UserSubscription.objects.filter(
             status=UserSubscription.Status.TRIALING,
             trial_end__isnull=False,
             trial_end__gt=now,
-            trial_end__lte=soon,
+            trial_end__lte=trial_soon,
         ).select_related("user"):
             trial_notices += 1
             if not dry_run:
@@ -133,16 +158,17 @@ class Command(BaseCommand):
                 if _email_once(sub, "trial_ending", sub.trial_end.strftime("%Y%m%d")):
                     send_trial_ending_email(sub.user, sub)
 
-        # 5) Renewal-upcoming heads-up (within 3 days), for active paid subs that
-        # are NOT canceling. Deduped by period-end so the daily cron emails once.
+        # 5) Renewal-upcoming heads-up (configurable lead time), for active paid
+        # subs that are NOT canceling. Deduped by period-end (emails once).
         renewal_notices = 0
+        renewal_soon = now + timezone.timedelta(days=cfg.renewal_upcoming_days_before)
         for sub in UserSubscription.objects.filter(
             status=UserSubscription.Status.ACTIVE,
             cancel_at_period_end=False,
             billing_interval__in=["month", "year"],
             current_period_end__isnull=False,
             current_period_end__gt=now,
-            current_period_end__lte=soon,
+            current_period_end__lte=renewal_soon,
         ).select_related("user"):
             renewal_notices += 1
             if not dry_run:
@@ -166,6 +192,7 @@ class Command(BaseCommand):
                 f"billing access sync{' (dry-run)' if dry_run else ''}: "
                 f"grants_expired={expired_grants} grace_expired={expired_grace} "
                 f"period_canceled={expired_canceled} trials_expired={trials_expired} "
+                f"dunning_followups={dunning_followups} "
                 f"trial_notices={trial_notices} renewal_notices={renewal_notices} "
                 f"users_resynced={synced}"
             )

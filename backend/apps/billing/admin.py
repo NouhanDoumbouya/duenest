@@ -1,6 +1,7 @@
 from django.contrib import admin
 
 from .models import (
+    BillingEmailSettings,
     BillingEvent,
     CustomerBillingProfile,
     InvoiceRecord,
@@ -17,6 +18,17 @@ from .models import (
 @admin.register(ReceiptSettings)
 class ReceiptSettingsAdmin(admin.ModelAdmin):
     list_display = ("enabled", "mode", "send_for_manual", "updated_at")
+
+
+@admin.register(BillingEmailSettings)
+class BillingEmailSettingsAdmin(admin.ModelAdmin):
+    list_display = (
+        "trial_ending_days_before",
+        "renewal_upcoming_days_before",
+        "grace_period_days",
+        "dunning_followup_days",
+        "updated_at",
+    )
 
 
 class PlanEntitlementInline(admin.TabularInline):

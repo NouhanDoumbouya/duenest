@@ -12,6 +12,7 @@ from apps.founder.permissions import IsFounderUser
 
 from . import entitlements, promo as promo_service, receipts, services
 from .models import (
+    BillingEmailSettings,
     BillingEvent,
     InvoiceRecord,
     ManualAccessGrant,
@@ -22,6 +23,7 @@ from .models import (
 )
 from .providers import BillingError, get_provider_name
 from .serializers import (
+    BillingEmailSettingsSerializer,
     BillingEventSerializer,
     CheckoutSerializer,
     InvoiceRecordSerializer,
@@ -355,6 +357,29 @@ class FounderReceiptSettingsView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save(updated_by=request.user)
         log_founder_action(request, "receipt_settings_update")
+        return Response(serializer.data)
+
+
+class FounderBillingEmailSettingsView(APIView):
+    """Read / update billing-email timing (lead times, grace, dunning follow-up)."""
+
+    permission_classes = [IsFounderUser]
+
+    def get(self, request):
+        return Response(
+            BillingEmailSettingsSerializer(BillingEmailSettings.load()).data
+        )
+
+    def patch(self, request):
+        from apps.founder.audit import log_founder_action
+
+        cfg = BillingEmailSettings.load()
+        serializer = BillingEmailSettingsSerializer(
+            cfg, data=request.data, partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save(updated_by=request.user)
+        log_founder_action(request, "billing_email_settings_update")
         return Response(serializer.data)
 
 

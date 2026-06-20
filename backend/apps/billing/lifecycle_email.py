@@ -61,6 +61,20 @@ def send_payment_failed_email(user, sub) -> bool:
     )
 
 
+def send_payment_failed_followup_email(user, sub) -> bool:
+    detail = (
+        f"Your Pro features stay active until {_fmt(sub.grace_period_until)}."
+        if sub and sub.grace_period_until
+        else ""
+    )
+    return _send(
+        "billing_payment_failed_followup",
+        user,
+        detail_line=detail,
+        action_label="Update payment method",
+    )
+
+
 def send_trial_ending_email(user, sub) -> bool:
     detail = f"Your trial ends {_fmt(sub.trial_end)}." if sub and sub.trial_end else ""
     return _send(

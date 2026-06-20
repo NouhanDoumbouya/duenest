@@ -46,8 +46,10 @@ from .views import (
     FounderInviteCodeDisableView,
     FounderInviteCodeListCreateView,
     FounderEmailAnalyticsView,
+    FounderEmailPreviewView,
     FounderEmailSettingDetailView,
     FounderEmailSettingListView,
+    FounderEmailTestSendView,
     FounderLaunchReadinessDetailView,
     FounderLaunchReadinessListView,
     FounderMeView,
@@ -306,5 +308,15 @@ urlpatterns = [
         "founder/email-analytics/",
         FounderEmailAnalyticsView.as_view(),
         name="founder-email-analytics",
+    ),
+    path(
+        "founder/email-preview/",
+        FounderEmailPreviewView.as_view(),
+        name="founder-email-preview",
+    ),
+    path(
+        "founder/email-settings/<slug:key>/test-send/",
+        FounderEmailTestSendView.as_view(),
+        name="founder-email-test-send",
     ),
 ]

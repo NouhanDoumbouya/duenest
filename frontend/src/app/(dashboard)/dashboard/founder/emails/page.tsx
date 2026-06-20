@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Eye, Loader2, Send } from "lucide-react";
 
 import { FounderPageHeader } from "@/components/founder/founder-ui";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,8 @@ import { cn } from "@/lib/utils";
 import {
   getEmailAnalytics,
   getEmailSettings,
+  previewEmail,
+  sendTestEmail,
   updateEmailSetting,
   type EmailAnalytics,
   type TransactionalEmailSetting,
@@ -26,6 +28,11 @@ export default function FounderEmailsPage() {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [savingKey, setSavingKey] = useState<string | null>(null);
+  const [testingKey, setTestingKey] = useState<string | null>(null);
+  // Which card's live preview is open, the rendered HTML, and its loading flag.
+  const [previewKey, setPreviewKey] = useState<string | null>(null);
+  const [previewHtml, setPreviewHtml] = useState<string>("");
+  const [previewBusy, setPreviewBusy] = useState(false);
   // Local edits per email key (so typing doesn't fight the saved state).
   const [drafts, setDrafts] = useState<
     Record<string, { subject: string; body: string }>
@@ -109,6 +116,50 @@ export default function FounderEmailsPage() {
       setError(err instanceof ApiError ? err.message : "Couldn't save that email.");
     } finally {
       setSavingKey(null);
+    }
+  }
+
+  async function togglePreview(item: TransactionalEmailSetting) {
+    if (previewKey === item.key) {
+      setPreviewKey(null);
+      setPreviewHtml("");
+      return;
+    }
+    const draft = drafts[item.key] ?? { subject: "", body: "" };
+    setPreviewBusy(true);
+    setPreviewKey(item.key);
+    setError(null);
+    try {
+      const result = await previewEmail({
+        key: item.key,
+        subject: draft.subject,
+        body: draft.body,
+      });
+      setPreviewHtml(result.html);
+    } catch (err) {
+      setPreviewKey(null);
+      setError(err instanceof ApiError ? err.message : "Couldn't render preview.");
+    } finally {
+      setPreviewBusy(false);
+    }
+  }
+
+  async function sendTest(item: TransactionalEmailSetting) {
+    const draft = drafts[item.key] ?? { subject: "", body: "" };
+    setTestingKey(item.key);
+    setError(null);
+    try {
+      const res = await sendTestEmail(item.key, {
+        subject: draft.subject,
+        body: draft.body,
+      });
+      setToast({ message: res.detail, kind: "success" });
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : "Couldn't send the test email.",
+      );
+    } finally {
+      setTestingKey(null);
     }
   }
 
@@ -292,7 +343,7 @@ export default function FounderEmailsPage() {
                     </p>
                   </div>
 
-                  <div className="flex items-center justify-end gap-2">
+                  <div className="flex flex-wrap items-center justify-end gap-2">
                     {dirty && (
                       <button
                         type="button"
@@ -305,11 +356,39 @@ export default function FounderEmailsPage() {
                             },
                           }))
                         }
-                        className="text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+                        className="mr-auto text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
                       >
                         Discard changes
                       </button>
                     )}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => togglePreview(item)}
+                      disabled={previewBusy && previewKey === item.key}
+                    >
+                      {previewBusy && previewKey === item.key ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Eye className="size-4" />
+                      )}
+                      {previewKey === item.key ? "Hide preview" : "Preview"}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => sendTest(item)}
+                      disabled={testingKey === item.key}
+                    >
+                      {testingKey === item.key ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Send className="size-4" />
+                      )}
+                      Send test to me
+                    </Button>
                     <Button
                       type="button"
                       size="sm"
@@ -319,6 +398,20 @@ export default function FounderEmailsPage() {
                       {busy ? <Loader2 className="size-4 animate-spin" /> : "Save"}
                     </Button>
                   </div>
+
+                  {previewKey === item.key && previewHtml && (
+                    <div className="overflow-hidden rounded-lg border border-border">
+                      <div className="border-b border-border bg-muted/50 px-3 py-1.5 text-xs text-muted-foreground">
+                        Live preview · sample data
+                      </div>
+                      <iframe
+                        title={`Preview of ${item.name}`}
+                        sandbox=""
+                        srcDoc={previewHtml}
+                        className="h-[420px] w-full bg-white"
+                      />
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             );

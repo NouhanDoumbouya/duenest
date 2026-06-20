@@ -172,8 +172,9 @@ founder **Emails** page) and flow through the shared suppression-aware sender:
 | Key | Trigger | Category |
 | --- | --- | --- |
 | `billing_payment_failed` | `invoice.payment_failed` webhook (`_handle_payment_failed`) | transactional (essential) |
-| `billing_trial_ending` | `sync_billing_access` cron, trial ends ≤3 days | lifecycle |
-| `billing_renewal_upcoming` | `sync_billing_access` cron, active sub renews ≤3 days | lifecycle |
+| `billing_payment_failed_followup` | `sync_billing_access` cron, N days after a failed payment (off unless configured) | transactional (essential) |
+| `billing_trial_ending` | `sync_billing_access` cron, trial ends within the lead time | lifecycle |
+| `billing_renewal_upcoming` | `sync_billing_access` cron, active sub renews within the lead time | lifecycle |
 | `billing_subscription_canceled` | `customer.subscription.deleted` webhook + cron cancel-at-period-end expiry | lifecycle |
 | `billing_refund` | `charge.refunded` webhook (`_handle_refund`) | transactional (essential) |
 | `billing_trial_ended` | `sync_billing_access` cron, manual trial expired → Free | lifecycle |
@@ -182,6 +183,18 @@ Cron emails are **deduped** per cycle via `sub.metadata['lifecycle_emails']`, so
 the daily run emails once per trial/renewal — not every run. Dunning is
 `transactional` (essential, never suppressed by a marketing unsubscribe);
 retention nudges are `lifecycle` (carry `List-Unsubscribe`, honour unsubscribe).
+
+### Founder configuration
+
+- **Content + on/off** for every email above is edited on the founder **Emails**
+  page (`/dashboard/founder/emails`), which also has a **live HTML preview** and
+  **"Send test to me"** per email (`/founder/email-preview/` + the per-key
+  `…/test-send/` endpoints; sends even when an email is toggled off).
+- **Timing & triggers** are founder-configurable on the **Billing** tab via the
+  `BillingEmailSettings` singleton (`/founder/billing/email-settings/`):
+  `trial_ending_days_before`, `renewal_upcoming_days_before`, `grace_period_days`,
+  and `dunning_followup_days` (0 = off; validated `< grace_period_days`). The
+  webhook reads the grace length; the cron reads the lead times + follow-up delay.
 
 ## Security
 

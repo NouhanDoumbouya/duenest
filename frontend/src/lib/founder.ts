@@ -483,6 +483,29 @@ export function updateEmailSetting(
   );
 }
 
+export function previewEmail(payload: {
+  key: string;
+  subject?: string;
+  body?: string;
+}): Promise<{ subject: string; html: string }> {
+  return apiFetch("/founder/email-preview/", {
+    method: "POST",
+    body: payload,
+    auth: true,
+  });
+}
+
+export function sendTestEmail(
+  key: string,
+  payload: { subject?: string; body?: string },
+): Promise<{ detail: string }> {
+  return apiFetch(`/founder/email-settings/${key}/test-send/`, {
+    method: "POST",
+    body: payload,
+    auth: true,
+  });
+}
+
 // ---- Email send analytics (founder) ----------------------------------------
 
 export interface EmailTypeStat {
