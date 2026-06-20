@@ -1776,6 +1776,47 @@ strictly owner-scoped; one user's usage never affects another's limits.
 
 ---
 
+## 13B.6 AI: Ask your documents (grounded Q&A)
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/api/v1/documents/ask/` | Answer a natural-language question grounded in the owner's own documents |
+
+Opt-in, **key-gated** Q&A. Request body: `{ "question": "when does my visa expire?" }`.
+
+- **Gated three ways.** The `ai_features` master gate AND `ai_document_qa` flags
+  must be on (else `503`), and an `ANTHROPIC_API_KEY` must be configured. If the
+  flags are on but no key is set, the endpoint returns `200` with
+  `{ "available": false, "reason": "not_configured" }` so the UI can explain it.
+- **Owner-scoped + grounded.** Only the asking user's non-trashed documents are
+  considered; Claude is instructed to answer **only** from them and to cite the
+  documents it used. Relevant document fields/notes are sent to Anthropic on this
+  path (off by default; see `docs/architecture.md` → AI foundation).
+- **Rate limited** per authenticated user (`ai_qa` throttle scope) to bound cost.
+- Always returns `200` with a structured body; failures are reported in-band
+  (`reason`), never as an exception.
+
+Response shape:
+
+```json
+{
+  "available": true,
+  "reason": "ok",
+  "answer": "Your UK Passport expires on 1 January 2030.",
+  "answered": true,
+  "citations": [{ "document_id": 12, "title": "UK Passport" }],
+  "document_count": 8
+}
+```
+
+`reason` is one of `ok` / `not_configured` / `no_documents` / `empty_question` /
+`error`. `answered` is `false` when the answer wasn't found in the user's
+documents. Retrieval today grounds on each document's structured fields + notes
+(ranked by keyword overlap); the retrieval seam (`ai_qa.gather_context`) can be
+swapped for an embeddings/vector retriever later without changing this contract.
+
+---
+
 ## 13C.7 Document intelligence polish
 
 Intelligence fields are computed read-only on every document (`GET/LIST

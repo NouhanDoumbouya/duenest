@@ -72,6 +72,7 @@ from .views import (
     DocumentFileTrashListView,
     DocumentFileTrashView,
     DocumentProofRecordListView,
+    DocumentQAView,
     FileInboxAttachDocumentView,
     DocumentCategoryDetailView,
     DocumentCategoryListView,
@@ -314,6 +315,12 @@ urlpatterns = [
         "documents/health-overview/",
         DocumentHealthOverviewView.as_view(),
         name="document-health-overview",
+    ),
+    # ---- AI: "ask your documents" (grounded Q&A; opt-in, key+flag gated) ----
+    path(
+        "documents/ask/",
+        DocumentQAView.as_view(),
+        name="document-ask",
     ),
     # ---- Intelligence polish: renewal history (nested under a document) ----
     path(
