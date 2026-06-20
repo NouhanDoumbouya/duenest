@@ -1,5 +1,6 @@
 from django.urls import path
 
+from .email_webhook_views import ResendWebhookView, UnsubscribeView
 from .views import (
     NotificationDismissView,
     NotificationListView,
@@ -54,4 +55,10 @@ urlpatterns = [
         PushUnsubscribeView.as_view(),
         name="notifications-push-unsubscribe",
     ),
+    path(
+        "email/webhook/resend/",
+        ResendWebhookView.as_view(),
+        name="email-webhook-resend",
+    ),
+    path("email/unsubscribe/", UnsubscribeView.as_view(), name="email-unsubscribe"),
 ]

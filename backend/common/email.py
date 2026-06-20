@@ -109,6 +109,21 @@ def send_branded_email(
     if not recipients:
         return False
 
+    # One-click unsubscribe for non-essential mail (Gmail/Yahoo bulk-sender
+    # rules). Per-recipient, so only when a single recipient is addressed.
+    final_headers = dict(headers or {})
+    if category in _NON_ESSENTIAL and len(recipients) == 1:
+        try:
+            from apps.notifications.unsubscribe import build_unsubscribe_url
+
+            url = build_unsubscribe_url(recipients[0])
+            final_headers.setdefault("List-Unsubscribe", f"<{url}>")
+            final_headers.setdefault(
+                "List-Unsubscribe-Post", "List-Unsubscribe=One-Click"
+            )
+        except Exception:  # noqa: BLE001 — never block a send on header building
+            logger.warning("Unsubscribe header build failed", exc_info=True)
+
     try:
         ctx = {"subject": subject, **context}
         text_body = render_to_string(f"emails/{template}.txt", ctx)
@@ -118,7 +133,7 @@ def send_branded_email(
             body=text_body,
             from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
             to=recipients,
-            headers=headers or None,
+            headers=final_headers or None,
         )
         message.attach_alternative(html_body, "text/html")
         for name, content, mime in attachments or []:

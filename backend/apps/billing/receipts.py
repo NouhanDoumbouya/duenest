@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 
 from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 
 from common.email import send_branded_email
@@ -49,6 +50,25 @@ def format_money(minor: int, currency: str) -> str:
 
 def _is_email_configured() -> bool:
     return bool(getattr(settings, "EMAIL_CONFIGURED", True))
+
+
+def assign_receipt_number(invoice: InvoiceRecord) -> str:
+    """Assign a sequential human receipt number (``DN-<year>-<seq>``) once.
+
+    Uses a row lock on the settings singleton so concurrent sends never collide.
+    Idempotent — returns the existing number if already assigned.
+    """
+    if invoice.receipt_number:
+        return invoice.receipt_number
+    with transaction.atomic():
+        cfg = ReceiptSettings.objects.select_for_update().get(pk=1)
+        cfg.last_receipt_number += 1
+        seq = cfg.last_receipt_number
+        cfg.save(update_fields=["last_receipt_number"])
+    number = f"DN-{timezone.now():%Y}-{seq:05d}"
+    invoice.receipt_number = number
+    invoice.save(update_fields=["receipt_number"])
+    return number
 
 
 def _app_base() -> str:
@@ -83,6 +103,7 @@ def build_receipt_context(invoice: InvoiceRecord, cfg: ReceiptSettings) -> dict:
     )
     amount = invoice.amount_paid or invoice.amount_due or (sub.amount if sub else 0)
     invoice_url = invoice.hosted_invoice_url or invoice.invoice_pdf_url or ""
+    tax = invoice.tax_amount or 0
     return {
         "subject": f"Your DueNest receipt — {plan_name}",
         "heading": "Thanks for your payment",
@@ -90,9 +111,12 @@ def build_receipt_context(invoice: InvoiceRecord, cfg: ReceiptSettings) -> dict:
         "plan_name": plan_name,
         "interval_label": interval_label,
         "amount_display": format_money(amount, invoice.currency),
+        # Subtotal + tax shown only when a tax portion is recorded.
+        "subtotal_display": format_money(max(amount - tax, 0), invoice.currency),
+        "tax_display": format_money(tax, invoice.currency) if tax else "",
         "period_display": period_display,
         "paid_date_display": _fmt_date(invoice.paid_at or timezone.now()),
-        "invoice_number": invoice.provider_invoice_id or "",
+        "invoice_number": invoice.receipt_number or invoice.provider_invoice_id or "",
         "invoice_url": invoice_url,
         "show_invoice_link": cfg.mode == ReceiptSettings.Mode.EMAIL_LINK,
         "has_pdf": cfg.mode == ReceiptSettings.Mode.EMAIL_PDF,
@@ -137,6 +161,9 @@ def build_receipt_pdf(context: dict) -> bytes:
     row("Billing period", context["period_display"])
     row("Date paid", context["paid_date_display"])
     row("Receipt no.", context["invoice_number"])
+    if context.get("tax_display"):
+        row("Subtotal", context["subtotal_display"])
+        row("Tax", context["tax_display"])
     pdf.ln(2)
     row("Amount paid", context["amount_display"], bold=True, accent=True)
 
@@ -203,6 +230,8 @@ def send_receipt_for_invoice(invoice: InvoiceRecord) -> bool:
     if not claimed:
         return False
     try:
+        assign_receipt_number(invoice)
+        invoice.refresh_from_db(fields=["receipt_number"])
         context = build_receipt_context(invoice, cfg)
         _send(
             user.email,

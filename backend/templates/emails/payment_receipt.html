@@ -42,6 +42,16 @@
                     <td style="padding:11px 16px;color:#102033;text-align:right;border-top:1px solid #e5edf3;">{{ invoice_number }}</td>
                   </tr>
                   {% endif %}
+                  {% if tax_display %}
+                  <tr>
+                    <td style="padding:11px 16px;color:#66788a;border-top:1px solid #e5edf3;">Subtotal</td>
+                    <td style="padding:11px 16px;color:#102033;text-align:right;border-top:1px solid #e5edf3;">{{ subtotal_display }}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:11px 16px;color:#66788a;border-top:1px solid #e5edf3;">Tax</td>
+                    <td style="padding:11px 16px;color:#102033;text-align:right;border-top:1px solid #e5edf3;">{{ tax_display }}</td>
+                  </tr>
+                  {% endif %}
                   <tr>
                     <td style="padding:13px 16px;color:#102033;border-top:2px solid #e5edf3;font-weight:700;">Amount paid</td>
                     <td style="padding:13px 16px;color:#0f766e;text-align:right;border-top:2px solid #e5edf3;font-weight:700;font-size:16px;">{{ amount_display }}</td>

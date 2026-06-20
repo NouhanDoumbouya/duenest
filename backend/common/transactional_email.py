@@ -28,6 +28,10 @@ class TransactionalEmail:
     template: str  # base name under templates/emails/ (no extension)
     subject: str  # default subject
     body: str  # default message body (plain text; rendered with line breaks)
+    # Suppression category. Essential account mail stays "transactional" (only
+    # hard bounce / complaint suppresses it); retention nudges are "lifecycle"
+    # (also honour marketing unsubscribe + carry List-Unsubscribe).
+    category: str = "transactional"
 
 
 # The founder-editable transactional emails. Reminders are intentionally not
@@ -77,6 +81,68 @@ TRANSACTIONAL_EMAILS: dict[str, TransactionalEmail] = {
             "secure."
         ),
     ),
+    # ---- Billing lifecycle (share one template; context supplies CTA + dates) --
+    "billing_payment_failed": TransactionalEmail(
+        key="billing_payment_failed",
+        name="Payment failed (dunning)",
+        template="billing_lifecycle",
+        subject="Action needed: your DueNest payment failed",
+        body=(
+            "We couldn't process your latest DueNest payment. Your Pro features "
+            "stay active during a short grace period — please update your payment "
+            "method to avoid losing access."
+        ),
+        # Essential: the user must know their billing is failing.
+        category="transactional",
+    ),
+    "billing_trial_ending": TransactionalEmail(
+        key="billing_trial_ending",
+        name="Trial ending soon",
+        template="billing_lifecycle",
+        subject="Your DueNest trial ends soon",
+        body=(
+            "Your DueNest free trial is ending soon. Keep your documents, "
+            "renewals, and deadlines watched without interruption by choosing a "
+            "plan before it ends."
+        ),
+        category="lifecycle",
+    ),
+    "billing_renewal_upcoming": TransactionalEmail(
+        key="billing_renewal_upcoming",
+        name="Renewal upcoming",
+        template="billing_lifecycle",
+        subject="Your DueNest plan renews soon",
+        body=(
+            "This is a friendly heads-up that your DueNest subscription will "
+            "renew soon. No action is needed to stay subscribed — manage or "
+            "cancel any time from your billing settings."
+        ),
+        category="lifecycle",
+    ),
+    "billing_subscription_canceled": TransactionalEmail(
+        key="billing_subscription_canceled",
+        name="Subscription canceled (win-back)",
+        template="billing_lifecycle",
+        subject="Your DueNest subscription was canceled",
+        body=(
+            "Your DueNest subscription has been canceled. We'd love to keep "
+            "watching your important documents and deadlines — you can resubscribe "
+            "any time and pick up right where you left off."
+        ),
+        category="lifecycle",
+    ),
+    "billing_refund": TransactionalEmail(
+        key="billing_refund",
+        name="Refund issued",
+        template="billing_lifecycle",
+        subject="Your DueNest refund has been issued",
+        body=(
+            "We've issued a refund to your original payment method. Depending on "
+            "your bank, it may take a few business days to appear on your statement."
+        ),
+        # Essential financial confirmation.
+        category="transactional",
+    ),
 }
 
 
@@ -119,5 +185,5 @@ def send_transactional_email(key: str, *, context: dict, to) -> bool:
         context={"email_body": body, **context},
         to=to,
         email_type=key,
-        category="transactional",
+        category=definition.category,
     )

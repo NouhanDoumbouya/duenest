@@ -1,0 +1,9 @@
+{% extends "emails/base.txt" %}
+{% block content %}{{ email_body }}
+{% if detail_line %}
+{{ detail_line }}
+{% endif %}{% if action_url %}
+{{ action_label|default:"Manage billing" }}:
+{{ action_url }}
+{% endif %}{% endblock %}
+{% block footer %}You're receiving this because you have a DueNest subscription.{% endblock %}

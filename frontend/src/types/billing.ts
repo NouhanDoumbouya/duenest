@@ -78,8 +78,10 @@ export interface CheckoutResponse {
 
 export interface InvoiceRecord {
   provider_invoice_id: string;
+  receipt_number: string;
   amount_due: number;
   amount_paid: number;
+  tax_amount: number;
   currency: string;
   status: string;
   hosted_invoice_url: string;

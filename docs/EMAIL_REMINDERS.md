@@ -113,9 +113,51 @@ mail) flow through `common.email.send_branded_email`, which in one place:
 Callers pass `email_type` (a stable analytics key, e.g. `payment_receipt`) and a
 `category`. Founders see aggregate health (totals by status, per-type breakdown,
 masked recent sends, suppression-list size) at `GET /api/v1/founder/email-analytics/`,
-surfaced on the founder **Emails** page. Addresses can be suppressed manually via
-Django admin; automated population from provider bounce/complaint webhooks is
-Phase 2.
+surfaced on the founder **Emails** page.
+
+## Sending via Resend (recommended provider)
+
+Resend is the recommended ESP. Sending already works over SMTP — no extra Python
+dependency — by setting:
+
+```env
+EMAIL_PROVIDER=resend
+RESEND_API_KEY=re_...            # used as the SMTP password
+DEFAULT_FROM_EMAIL=DueNest <noreply@yourdomain.com>
+```
+
+**Domain authentication is mandatory for inbox placement.** In the Resend
+dashboard, add your sending domain and create the DNS records it shows:
+
+- **SPF** (`TXT` `v=spf1 include:...`),
+- **DKIM** (the `CNAME`/`TXT` records Resend provides),
+- **DMARC** (`TXT _dmarc` — start `p=none` to monitor, then tighten).
+
+Without these, branded mail (receipts included) lands in spam.
+
+## Resend delivery webhook
+
+`POST /api/v1/email/webhook/resend/` ingests Resend events. It is **Svix-signed**;
+the signature is verified against `RESEND_WEBHOOK_SECRET` (`whsec_...`, from the
+Resend webhook settings) before any event is applied — empty secret returns 503.
+
+- `email.bounced` → `SuppressedEmail(scope=all, reason=bounce)` + the recent
+  `EmailLog` row marked `bounced`.
+- `email.complained` → `SuppressedEmail(scope=all, reason=complaint)`.
+- `email.delivered` / `email.opened` → enrich the recent `EmailLog` row.
+
+Point a Resend webhook at that URL and subscribe to the bounce/complaint/
+delivered/opened events.
+
+## One-click unsubscribe (List-Unsubscribe)
+
+Non-essential mail (`lifecycle` / `marketing`) automatically carries
+`List-Unsubscribe` + `List-Unsubscribe-Post: List-Unsubscribe=One-Click` headers
+(Gmail/Yahoo bulk-sender requirement) pointing at a signed, per-recipient link:
+`GET|POST /api/v1/email/unsubscribe/?token=...`. Following it adds a
+`marketing`-scope suppression — the recipient stops receiving non-essential mail
+but still gets essential transactional mail (password reset, verification,
+receipts). Tokens are signed (`django.core.signing`) and expire after a year.
 
 ## Failure Handling
 
@@ -210,11 +252,11 @@ the 7-day email failure rate.
   exists but per-user digest grouping is not implemented yet. Future: a daily
   digest that groups expiring documents, renewing subscriptions, trial/cancellation
   deadlines, and important unread notifications into one email; skip empty digests.
-- **Provider bounce/complaint webhooks.** The suppression + logging foundation
-  now exists (see "Email log & suppression" above): a `SuppressedEmail` list the
-  send path honours, and an `EmailLog`. Still pending is the signature-verified
-  provider-event endpoint that *populates* them from bounce / complaint events
-  (Phase 2). Until then, suppress addresses manually (admin) and monitor via the
-  provider dashboard.
+- **Per-message tracking correlation.** Bounce/complaint suppression and
+  delivered/opened enrichment work today via the Resend webhook (recipient-based
+  correlation — see "Resend delivery webhook" above). Precise per-message
+  correlation by provider message-id would need the Resend **API** backend
+  (e.g. django-anymail) instead of SMTP; deferred since recipient-based handling
+  already drives suppression + analytics.
 - **Background worker (Celery/Redis).** Not needed for beta; the cron-driven
   command is sufficient. Revisit if volume grows or near-real-time sends are required.

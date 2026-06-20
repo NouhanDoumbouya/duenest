@@ -369,8 +369,15 @@ class InvoiceRecord(models.Model):
         related_name="invoice_records",
     )
     provider_invoice_id = models.CharField(max_length=140, unique=True)
+    # Human, sequential receipt number (e.g. DN-2026-00042), assigned when the
+    # branded receipt is sent. Blank until then; unique when set.
+    receipt_number = models.CharField(
+        max_length=32, blank=True, default="", db_index=True
+    )
     amount_due = models.PositiveIntegerField(default=0)
     amount_paid = models.PositiveIntegerField(default=0)
+    # Tax portion of the amount (minor units), shown as a separate receipt line.
+    tax_amount = models.PositiveIntegerField(default=0)
     currency = models.CharField(max_length=3, default="usd")
     status = models.CharField(max_length=20, blank=True)
     hosted_invoice_url = models.URLField(blank=True)
@@ -484,6 +491,9 @@ class ReceiptSettings(models.Model):
     mode = models.CharField(
         max_length=20, choices=Mode.choices, default=Mode.EMAIL_LINK
     )
+    # Monotonic counter for human receipt numbers (DN-<year>-<seq>). Incremented
+    # under select_for_update when a receipt is sent, so numbers never collide.
+    last_receipt_number = models.PositiveIntegerField(default=0)
     # Stripe payments always send a receipt when enabled. This also covers the
     # manual/dev provider so receipts can be exercised offline; turn it off to
     # avoid emailing on every local checkout.

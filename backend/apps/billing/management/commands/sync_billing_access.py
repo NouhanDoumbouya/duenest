@@ -16,6 +16,21 @@ from apps.billing import entitlements
 from apps.billing.models import ManualAccessGrant, UserSubscription
 
 
+def _email_once(sub, key: str, stamp: str) -> bool:
+    """Record that a lifecycle email was sent for (sub, key, stamp); return True
+    only the first time. Lets the daily cron email once per trial/renewal cycle
+    instead of every run. Stored in ``sub.metadata['lifecycle_emails']``."""
+    meta = sub.metadata or {}
+    sent = meta.get("lifecycle_emails") or {}
+    if sent.get(key) == stamp:
+        return False
+    sent[key] = stamp
+    meta["lifecycle_emails"] = sent
+    sub.metadata = meta
+    sub.save(update_fields=["metadata", "updated_at"])
+    return True
+
+
 class Command(BaseCommand):
     help = "Expire ended manual grants / grace periods and re-sync User.plan."
 
@@ -61,12 +76,17 @@ class Command(BaseCommand):
             cancel_at_period_end=True,
             current_period_end__isnull=False,
             current_period_end__lte=now,
-        ).exclude(status=UserSubscription.Status.CANCELED):
+        ).exclude(status=UserSubscription.Status.CANCELED).select_related("user"):
             expired_canceled += 1
             affected_users.add(sub.user_id)
             if not dry_run:
                 sub.status = UserSubscription.Status.CANCELED
                 sub.save(update_fields=["status", "updated_at"])
+                from apps.billing.lifecycle_email import (
+                    send_subscription_canceled_email,
+                )
+
+                send_subscription_canceled_email(sub.user, sub)
 
         # 4) Trial-ending reminders (within 3 days). Deduped by trial date.
         trial_notices = 0
@@ -79,6 +99,7 @@ class Command(BaseCommand):
         ).select_related("user"):
             trial_notices += 1
             if not dry_run:
+                from apps.billing.lifecycle_email import send_trial_ending_email
                 from apps.billing.services import notify_billing
 
                 notify_billing(
@@ -90,6 +111,27 @@ class Command(BaseCommand):
                     severity="warning",
                     suffix=sub.trial_end.strftime("%Y%m%d"),
                 )
+                if _email_once(sub, "trial_ending", sub.trial_end.strftime("%Y%m%d")):
+                    send_trial_ending_email(sub.user, sub)
+
+        # 5) Renewal-upcoming heads-up (within 3 days), for active paid subs that
+        # are NOT canceling. Deduped by period-end so the daily cron emails once.
+        renewal_notices = 0
+        for sub in UserSubscription.objects.filter(
+            status=UserSubscription.Status.ACTIVE,
+            cancel_at_period_end=False,
+            billing_interval__in=["month", "year"],
+            current_period_end__isnull=False,
+            current_period_end__gt=now,
+            current_period_end__lte=soon,
+        ).select_related("user"):
+            renewal_notices += 1
+            if not dry_run:
+                from apps.billing.lifecycle_email import send_renewal_upcoming_email
+
+                stamp = sub.current_period_end.strftime("%Y%m%d")
+                if _email_once(sub, "renewal_upcoming", stamp):
+                    send_renewal_upcoming_email(sub.user, sub)
 
         # Re-sync the denormalized tier for everyone affected.
         synced = 0
@@ -105,6 +147,6 @@ class Command(BaseCommand):
                 f"billing access sync{' (dry-run)' if dry_run else ''}: "
                 f"grants_expired={expired_grants} grace_expired={expired_grace} "
                 f"period_canceled={expired_canceled} trial_notices={trial_notices} "
-                f"users_resynced={synced}"
+                f"renewal_notices={renewal_notices} users_resynced={synced}"
             )
         )

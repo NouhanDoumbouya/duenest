@@ -120,6 +120,31 @@ class ReceiptServiceTests(APITestCase):
         invoice.refresh_from_db()
         self.assertIsNone(invoice.receipt_sent_at)
 
+    def test_receipt_numbers_are_sequential(self):
+        self._enable()
+        inv1 = self._make_invoice(provider_invoice_id="in_a")
+        receipts.send_receipt_for_invoice(inv1)
+        inv1.refresh_from_db()
+        self.assertRegex(inv1.receipt_number, r"^DN-\d{4}-00001$")
+        inv2 = self._make_invoice(provider_invoice_id="in_b")
+        receipts.send_receipt_for_invoice(inv2)
+        inv2.refresh_from_db()
+        self.assertRegex(inv2.receipt_number, r"^DN-\d{4}-00002$")
+
+    def test_tax_line_split_in_context(self):
+        cfg = self._enable()
+        invoice = self._make_invoice()
+        invoice.tax_amount = 400  # $4.00 of the $49.00
+        invoice.save(update_fields=["tax_amount"])
+        ctx = receipts.build_receipt_context(invoice, cfg)
+        self.assertEqual(ctx["tax_display"], "$4.00 USD")
+        self.assertEqual(ctx["subtotal_display"], "$45.00 USD")
+
+    def test_no_tax_line_when_zero(self):
+        cfg = self._enable()
+        ctx = receipts.build_receipt_context(self._make_invoice(), cfg)
+        self.assertEqual(ctx["tax_display"], "")
+
 
 @override_settings(
     FOUNDER_ALLOW_ALL_STAFF=True,

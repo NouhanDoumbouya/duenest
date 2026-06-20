@@ -267,10 +267,15 @@ export default function BillingSettingsPage() {
                       key={inv.provider_invoice_id}
                       className="flex items-center justify-between gap-3 py-2"
                     >
-                      <span className="text-muted-foreground">
+                      <span className="min-w-0 flex-1 text-muted-foreground">
                         {inv.paid_at
                           ? formatDate(inv.paid_at)
                           : formatDate(inv.created_at)}
+                        {inv.receipt_number && (
+                          <span className="ml-2 text-xs text-muted-foreground/70">
+                            {inv.receipt_number}
+                          </span>
+                        )}
                       </span>
                       <span className="font-medium">
                         {formatMoney(inv.amount_paid || inv.amount_due, inv.currency)}

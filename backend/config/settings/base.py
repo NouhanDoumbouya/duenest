@@ -269,6 +269,11 @@ DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="DueNest <noreply@loca
 SERVER_EMAIL = config("SERVER_EMAIL", default=DEFAULT_FROM_EMAIL)
 SUPPORT_EMAIL = config("SUPPORT_EMAIL", default="support@duenest.com")
 
+# Resend delivery webhook (bounce/complaint/delivered/opened). Svix-signed; the
+# secret (``whsec_...``) is verified before any event is applied. Empty disables
+# the endpoint (503) so a misconfigured deploy can't accept unsigned events.
+RESEND_WEBHOOK_SECRET = config("RESEND_WEBHOOK_SECRET", default="")
+
 # Public URLs. FRONTEND_APP_URL is the canonical name; DUENEST_APP_BASE_URL is
 # kept as a backward-compatible alias (used in existing email link building).
 DUENEST_APP_BASE_URL = config(

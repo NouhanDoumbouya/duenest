@@ -6,6 +6,8 @@ Plan:          {{ plan_name }}{% if interval_label %} ({{ interval_label }}){% e
 {% if period_display %}Billing period: {{ period_display }}
 {% endif %}Date paid:     {{ paid_date_display }}
 {% if invoice_number %}Receipt no.:   {{ invoice_number }}
+{% endif %}{% if tax_display %}Subtotal:      {{ subtotal_display }}
+Tax:           {{ tax_display }}
 {% endif %}Amount paid:   {{ amount_display }}
 {% if show_invoice_link and invoice_url %}
 View / download invoice:

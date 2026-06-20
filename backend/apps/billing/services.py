@@ -318,9 +318,44 @@ def _apply_event(event_type: str, obj: dict, record: BillingEvent) -> None:
         _record_invoice(obj, record, paid=True)
     elif event_type in ("invoice.payment_failed", "invoice.payment_action_required"):
         _handle_payment_failed(obj, record)
+    elif event_type == "charge.refunded":
+        _handle_refund(obj, record)
     else:
         record.status = BillingEvent.Status.IGNORED
         record.save(update_fields=["status"])
+
+
+def _handle_refund(obj, record):
+    """Email a refund confirmation. Resolves the user via the charge's customer."""
+    customer = obj.get("customer", "")
+    user = None
+    if customer:
+        sub = (
+            UserSubscription.objects.filter(provider_customer_id=customer)
+            .select_related("user")
+            .first()
+        )
+        if sub:
+            user = sub.user
+        if user is None:
+            prof = (
+                CustomerBillingProfile.objects.filter(provider_customer_id=customer)
+                .select_related("user")
+                .first()
+            )
+            if prof:
+                user = prof.user
+    if user is None:
+        record.status = BillingEvent.Status.IGNORED
+        record.save(update_fields=["status"])
+        return
+    from .lifecycle_email import send_refund_email
+
+    send_refund_email(
+        user,
+        amount_minor=obj.get("amount_refunded", 0) or 0,
+        currency=obj.get("currency", "usd") or "usd",
+    )
 
 
 def _user_subscription_for(obj, record):
@@ -421,6 +456,9 @@ def _mark_subscription_canceled(obj, record):
             severity="warning",
             suffix=str(sub.id),
         )
+        from .lifecycle_email import send_subscription_canceled_email
+
+        send_subscription_canceled_email(sub.user, sub)
 
 
 def _handle_checkout_completed(obj, record):
@@ -466,6 +504,9 @@ def _handle_payment_failed(obj, record):
             severity="urgent",
             suffix=sub.grace_period_until.strftime("%Y%m%d") if sub.grace_period_until else "",
         )
+        from .lifecycle_email import send_payment_failed_email
+
+        send_payment_failed_email(user, sub)
 
 
 def _maybe_send_receipt(invoice) -> None:
@@ -492,6 +533,7 @@ def _record_invoice(obj, record, paid: bool):
             subscription=sub,
             amount_due=obj.get("amount_due", 0) or 0,
             amount_paid=obj.get("amount_paid", 0) or 0,
+            tax_amount=obj.get("tax", 0) or 0,
             currency=obj.get("currency", "usd") or "usd",
             status=obj.get("status", ""),
             hosted_invoice_url=obj.get("hosted_invoice_url", "") or "",

@@ -141,6 +141,32 @@ Sending lives in `apps/billing/receipts.py`, reuses the branded email shell
 `POST /founder/billing/receipts/test-send/` emails a sample receipt (in the
 configured format) to the founder to preview it; it touches no `InvoiceRecord`.
 
+Receipts carry a **sequential human number** (`DN-<year>-<seq>`, assigned under a
+row lock on the settings singleton so concurrent sends never collide) and split
+out a **tax line** when the provider invoice reports `tax`. Both surface in the
+email, the generated PDF, and the user's Billing-history list
+(`receipt_number` / `tax_amount` on `InvoiceRecord`).
+
+## Lifecycle & dunning emails
+
+Branded billing emails fire at existing trigger points (`apps/billing/
+lifecycle_email.py`, sharing the `billing_lifecycle` template). They are
+founder-editable transactional-registry entries (subject/body + on/off via the
+founder **Emails** page) and flow through the shared suppression-aware sender:
+
+| Key | Trigger | Category |
+| --- | --- | --- |
+| `billing_payment_failed` | `invoice.payment_failed` webhook (`_handle_payment_failed`) | transactional (essential) |
+| `billing_trial_ending` | `sync_billing_access` cron, trial ends ≤3 days | lifecycle |
+| `billing_renewal_upcoming` | `sync_billing_access` cron, active sub renews ≤3 days | lifecycle |
+| `billing_subscription_canceled` | `customer.subscription.deleted` webhook + cron cancel-at-period-end expiry | lifecycle |
+| `billing_refund` | `charge.refunded` webhook (`_handle_refund`) | transactional (essential) |
+
+Cron emails are **deduped** per cycle via `sub.metadata['lifecycle_emails']`, so
+the daily run emails once per trial/renewal — not every run. Dunning is
+`transactional` (essential, never suppressed by a marketing unsubscribe);
+retention nudges are `lifecycle` (carry `List-Unsubscribe`, honour unsubscribe).
+
 ## Security
 
 - Secret keys live only in backend env; only `STRIPE_PUBLISHABLE_KEY` is client-safe.

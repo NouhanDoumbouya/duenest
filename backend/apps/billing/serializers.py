@@ -63,8 +63,10 @@ class InvoiceRecordSerializer(serializers.ModelSerializer):
         model = InvoiceRecord
         fields = [
             "provider_invoice_id",
+            "receipt_number",
             "amount_due",
             "amount_paid",
+            "tax_amount",
             "currency",
             "status",
             "hosted_invoice_url",
