@@ -18,6 +18,7 @@ import {
   Building2,
   CalendarClock,
   CalendarDays,
+  ClipboardList,
   Clock,
   CreditCard,
   DoorClosed,
@@ -289,6 +290,12 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
         href: "/dashboard/shared-with-me",
         icon: Inbox,
         featureKey: "shared_with_me",
+      },
+      {
+        label: "Document requests",
+        href: "/dashboard/requests",
+        icon: ClipboardList,
+        featureKey: "share_requests",
       },
       {
         label: "Secure rooms",
