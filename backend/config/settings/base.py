@@ -112,6 +112,7 @@ LOCAL_APPS = [
     "apps.organizations.apps.OrganizationsConfig",
     "apps.founder.apps.FounderConfig",
     "apps.quick_share.apps.QuickShareConfig",
+    "apps.share_requests.apps.ShareRequestsConfig",
     "apps.notifications.apps.NotificationsConfig",
     "apps.features.apps.FeaturesConfig",
     "apps.billing.apps.BillingConfig",
