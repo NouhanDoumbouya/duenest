@@ -40,6 +40,7 @@ FEATURE_DEFINITIONS: list[dict] = [
     {"key": "verified_shares", "name": "Verified shares", "default": Visibility.FOUNDER_ONLY, "description": "Tamper-evident, DueNest-signed shares with a public /verify page. Provenance + integrity only."},
     {"key": "share_requests", "name": "Share Requests", "default": Visibility.FOUNDER_ONLY, "description": "Request documents from someone; they fulfil the checklist from their vault. Delivered via the Quick Share engine."},
     {"key": "private_share", "name": "Minimal-disclosure share", "default": Visibility.FOUNDER_ONLY, "description": "Share a prepared/redacted copy directly via Quick Share; the original is never shared."},
+    {"key": "smart_redaction", "name": "Smart redaction", "default": Visibility.FOUNDER_ONLY, "description": "Assistive auto-redaction — OCR finds sensitive data (bank/card numbers, emails, a custom term) and pre-draws redaction boxes for review."},
     {"key": "bundle_sharing", "name": "Bundle sharing", "default": Visibility.ENABLED, "description": "Share a whole bundle."},
     {"key": "shared_with_me", "name": "Shared with me", "default": Visibility.ENABLED, "description": "Recipient inbox."},
     {"key": "secure_rooms", "name": "Secure Rooms", "default": Visibility.ENABLED, "description": "Controlled collection sharing."},

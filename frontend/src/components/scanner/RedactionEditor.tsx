@@ -1,15 +1,28 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Loader2, Undo2, X } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  Undo2,
+  Wand2,
+  X,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { useFeature } from "@/components/features/feature-flags-provider";
 import { cn } from "@/lib/utils";
+import { recognizeWords } from "@/lib/scanner/ocr";
 import {
   isMeaningfulRect,
   normalizeRect,
   type RedactionRect,
 } from "@/lib/scanner/redaction";
+import {
+  findRedactions,
+  type RedactionPreset,
+} from "@/lib/scanner/smart-redaction";
 
 /**
  * Visual tone. `dark` matches the force-dark scanner; `surface` uses semantic
@@ -86,8 +99,45 @@ export function RedactionEditor({
   const surfaceRef = useRef<HTMLDivElement>(null);
   const startRef = useRef<{ x: number; y: number } | null>(null);
 
+  const smartOn = useFeature("smart_redaction");
+  const [autoBusy, setAutoBusy] = useState(false);
+  const [autoStatus, setAutoStatus] = useState<string | null>(null);
+  const [customTerm, setCustomTerm] = useState("");
+
   const totalAreas = rects.reduce((n, p) => n + p.length, 0);
   const pageAreas = rects[page]?.length ?? 0;
+
+  // Assistive: OCR the current page and pre-draw boxes over sensitive data. The
+  // boxes are normal editable rects — the user reviews/adjusts before creating.
+  async function runAuto(preset: RedactionPreset) {
+    const canvas = pages[page];
+    if (!canvas || autoBusy) return;
+    setAutoBusy(true);
+    setAutoStatus("Scanning this page…");
+    try {
+      const words = await recognizeWords(canvas);
+      const found = findRedactions(
+        words,
+        { preset, term: customTerm },
+        canvas.width,
+        canvas.height,
+      );
+      if (found.length === 0) {
+        setAutoStatus("Nothing matched — draw boxes by hand instead.");
+        return;
+      }
+      setRects((prev) =>
+        prev.map((arr, i) => (i === page ? [...arr, ...found] : arr)),
+      );
+      setAutoStatus(
+        `Added ${found.length} area${found.length === 1 ? "" : "s"} — review them, then create.`,
+      );
+    } catch {
+      setAutoStatus("Couldn't scan this page. Draw boxes by hand instead.");
+    } finally {
+      setAutoBusy(false);
+    }
+  }
 
   function fractionFromEvent(
     e: React.PointerEvent,
@@ -249,9 +299,70 @@ export function RedactionEditor({
           </div>
         )}
 
+        {smartOn && (
+          <div className={cn("mb-3 rounded-lg border p-2.5", t.border)}>
+            <div className="mb-2 flex items-center gap-1.5">
+              <Wand2 className="size-3.5" aria-hidden="true" />
+              <span className="text-xs font-medium">Auto-find &amp; hide</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {(
+                [
+                  { id: "bank", label: "Bank details" },
+                  { id: "contact", label: "Email & phone" },
+                  { id: "all", label: "All sensitive" },
+                ] as const
+              ).map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => runAuto(p.id)}
+                  disabled={autoBusy}
+                  className={cn(
+                    "rounded-full border px-2.5 py-1 text-xs disabled:opacity-50",
+                    t.border,
+                    t.iconBtn,
+                  )}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            <div className="mt-2 flex items-center gap-2">
+              <input
+                value={customTerm}
+                onChange={(e) => setCustomTerm(e.target.value)}
+                placeholder="or type a word to hide (name, amount)…"
+                disabled={autoBusy}
+                className={cn(
+                  "min-w-0 flex-1 rounded-md border bg-transparent px-2 py-1 text-xs outline-none placeholder:opacity-60 focus-visible:ring-2 focus-visible:ring-ring",
+                  t.border,
+                )}
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => runAuto("custom")}
+                disabled={autoBusy || !customTerm.trim()}
+                className={t.cancelClass || undefined}
+              >
+                Find
+              </Button>
+            </div>
+            {(autoBusy || autoStatus) && (
+              <p className={cn("mt-2 flex items-center gap-1.5 text-xs", t.meta)}>
+                {autoBusy && (
+                  <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                )}
+                {autoBusy ? "Scanning this page…" : autoStatus}
+              </p>
+            )}
+          </div>
+        )}
+
         <p className={cn("mb-3 text-center text-xs", t.warn)}>
-          Review carefully before sharing. This creates a new copy; your original
-          is unchanged.
+          Auto-find is a helper — it can miss things. Review carefully before
+          sharing. This creates a new copy; your original is unchanged.
         </p>
 
         <div className="flex items-center justify-end gap-2">
