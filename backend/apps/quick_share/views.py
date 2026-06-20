@@ -25,7 +25,7 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from apps.core.security import public_access
-from apps.features.flags import require_feature_enabled
+from apps.features.flags import is_feature_enabled, require_feature_enabled
 from apps.documents.models import (
     Document,
     DocumentActivity,
@@ -110,6 +110,8 @@ class QuickShareSessionListCreateView(APIView):
         document_ids = data.pop("document_ids", []) or []
         bundle_ids = data.pop("bundle_ids", []) or []
         proof_ids = data.pop("proof_ids", []) or []
+        # Verified shares are gated by the feature flag; sign after items attach.
+        want_verified = data.pop("verified", False)
         plain_code = data.pop("access_code", "") or ""
         access_code_required = data.get("access_code_required", False)
 
@@ -236,6 +238,12 @@ class QuickShareSessionListCreateView(APIView):
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        # Verified share: sign a manifest of the now-attached files (flag-gated).
+        if want_verified and is_feature_enabled("verified_shares", request.user):
+            from .verification import sign_session
+
+            sign_session(session)
 
         # Record a privacy-safe timeline event on each shared document.
         for document in shared_documents.values():
@@ -866,3 +874,45 @@ class SharedWithMeRemoveView(APIView):
         claim.removed_by_receiver = True
         claim.save(update_fields=["removed_by_receiver", "updated_at"])
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# ---- Verifiable Shares (public) --------------------------------------------
+
+
+class ShareVerifyKeyView(APIView):
+    """Publish the Ed25519 public key so verification can become offline later."""
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        from .verification import public_key_b64
+
+        return Response({"algorithm": "ed25519", "public_key": public_key_b64()})
+
+
+class PublicShareVerifyView(APIView):
+    """
+    Verify a share by token: recompute the served files' hashes, compare to the
+    DueNest-signed manifest, and check the signature. Returns metadata + per-file
+    match booleans only — never document bytes, and no access code required (the
+    token already grants the recipient the share).
+    """
+
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "public_access_code"
+
+    def get(self, request, token):
+        from .verification import verify_session
+
+        session = QuickShareSession.objects.filter(token=token).first()
+        if session is None:
+            return Response(
+                {
+                    "detail": "No share found for this link.",
+                    "verified": False,
+                    "status": "not_found",
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(verify_session(session))

@@ -13,6 +13,7 @@ Quick Share QR tests — focused on the security-critical access rules:
 * public payload never leaks internal paths / tokens / codes
 """
 
+import base64
 import shutil
 import tempfile
 from datetime import timedelta
@@ -32,6 +33,7 @@ from apps.documents.models import (
     DocumentFile,
     ProofRecord,
 )
+from apps.features.models import FeatureFlag, Visibility
 
 from .models import (
     QuickShareActivity,
@@ -1051,3 +1053,90 @@ class AccessLimitTests(QuickShareBaseTest):
         session.refresh_from_db()
         self.assertEqual(session.view_count, 0)
         self.assertIsNone(session.limit_reached_at)
+
+
+class VerifiedSharesTests(QuickShareBaseTest):
+    """
+    Tamper-evident, DueNest-signed shares. The public /verify endpoint proves
+    provenance + integrity (signature valid + current files match the signed
+    hashes) — never document bytes.
+    """
+
+    def _enable_flag(self):
+        FeatureFlag.objects.update_or_create(
+            key="verified_shares", defaults={"visibility": Visibility.ENABLED}
+        )
+
+    def _create(self, *, verified):
+        self.client.force_authenticate(self.alice)
+        resp = self.client.post(
+            "/api/v1/quick-share/sessions/",
+            {
+                "permission": "view_only",
+                "expires_at": (timezone.now() + timedelta(minutes=10)).isoformat(),
+                "file_ids": [self.alice_file.id],
+                "verified": verified,
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.data)
+        return resp
+
+    def test_create_signs_manifest_and_verifies(self):
+        self._enable_flag()
+        resp = self._create(verified=True)
+        self.assertTrue(resp.data["verified"])
+        session = QuickShareSession.objects.get(id=resp.data["id"])
+        self.assertTrue(session.verified)
+        self.assertTrue(session.verification_signature)
+        self.assertEqual(len(session.verification_manifest["files"]), 1)
+
+        v = self.client.get(f"/api/v1/verify/{session.token}/")
+        self.assertEqual(v.status_code, status.HTTP_200_OK)
+        self.assertTrue(v.data["verified"])
+        self.assertTrue(v.data["signature_valid"])
+        self.assertTrue(v.data["content_intact"])
+        self.assertTrue(all(f["matches"] for f in v.data["files"]))
+        self.assertEqual(v.data["sender"], "alice")
+
+    def test_verify_detects_alteration(self):
+        self._enable_flag()
+        resp = self._create(verified=True)
+        session = QuickShareSession.objects.get(id=resp.data["id"])
+        # The served file no longer matches the signed hash (content changed).
+        self.alice_file.checksum = "0" * 64
+        self.alice_file.save(update_fields=["checksum"])
+
+        v = self.client.get(f"/api/v1/verify/{session.token}/")
+        self.assertFalse(v.data["verified"])
+        self.assertTrue(v.data["signature_valid"])  # signature itself still valid
+        self.assertFalse(v.data["content_intact"])
+        self.assertFalse(v.data["files"][0]["matches"])
+
+    def test_unverified_share_reports_not_verified(self):
+        self._enable_flag()
+        resp = self._create(verified=False)
+        session = QuickShareSession.objects.get(id=resp.data["id"])
+        self.assertFalse(session.verified)
+        v = self.client.get(f"/api/v1/verify/{session.token}/")
+        self.assertFalse(v.data["verified"])
+        self.assertEqual(v.data["status"], "not_verified")
+
+    def test_flag_off_ignores_verified_request(self):
+        # Founder-only default; alice is not a founder and no FeatureFlag row exists,
+        # so the verified request is silently ignored.
+        resp = self._create(verified=True)
+        session = QuickShareSession.objects.get(id=resp.data["id"])
+        self.assertFalse(session.verified)
+        self.assertIsNone(session.verification_manifest)
+
+    def test_unknown_token_is_404(self):
+        v = self.client.get("/api/v1/verify/not-a-real-token/")
+        self.assertEqual(v.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertFalse(v.data["verified"])
+
+    def test_public_key_endpoint(self):
+        v = self.client.get("/api/v1/verify/key/")
+        self.assertEqual(v.status_code, status.HTTP_200_OK)
+        self.assertEqual(v.data["algorithm"], "ed25519")
+        self.assertEqual(len(base64.b64decode(v.data["public_key"])), 32)

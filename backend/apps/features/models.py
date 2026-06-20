@@ -37,6 +37,7 @@ FEATURE_DEFINITIONS: list[dict] = [
     {"key": "quick_share_code", "name": "Quick Share — DueNest code", "default": Visibility.ENABLED, "description": "Receive-by-code claiming."},
     {"key": "quick_share_qr", "name": "Quick Share — QR", "default": Visibility.ENABLED, "description": "QR delivery."},
     {"key": "quick_share_public_viewer", "name": "Quick Share — public viewer", "default": Visibility.ENABLED, "description": "Recipient/public claim viewer."},
+    {"key": "verified_shares", "name": "Verified shares", "default": Visibility.FOUNDER_ONLY, "description": "Tamper-evident, DueNest-signed shares with a public /verify page. Provenance + integrity only."},
     {"key": "bundle_sharing", "name": "Bundle sharing", "default": Visibility.ENABLED, "description": "Share a whole bundle."},
     {"key": "shared_with_me", "name": "Shared with me", "default": Visibility.ENABLED, "description": "Recipient inbox."},
     {"key": "secure_rooms", "name": "Secure Rooms", "default": Visibility.ENABLED, "description": "Controlled collection sharing."},

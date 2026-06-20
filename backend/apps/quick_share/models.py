@@ -165,6 +165,14 @@ class QuickShareSession(models.Model):
     # this capability when they run through the Quick Share engine.
     privacy_screen_enabled = models.BooleanField(default=False)
 
+    # Verifiable Shares: when the owner opts in, the session carries an Ed25519-
+    # signed manifest of the shared files' SHA-256 hashes. The public /verify page
+    # proves provenance + integrity (not real-world document authenticity).
+    verified = models.BooleanField(default=False)
+    verification_manifest = models.JSONField(null=True, blank=True)
+    verification_signature = models.TextField(blank=True)
+    verified_at = models.DateTimeField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     last_accessed_at = models.DateTimeField(null=True, blank=True)

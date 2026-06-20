@@ -25,6 +25,15 @@ GOOGLE_OAUTH_CLIENT_ID = config("GOOGLE_OAUTH_CLIENT_ID", default="")
 # Existing users can still log in when private beta mode is enabled.
 PRIVATE_BETA_ENABLED = config("PRIVATE_BETA_ENABLED", default=False, cast=bool)
 
+# ---- Verifiable Shares signing key -----------------------------------------
+# Ed25519 private key (PEM) used to sign tamper-evident share manifests. Only the
+# PUBLIC key is ever exposed (at /api/v1/verify/key/). Keep the private key out of
+# source control; set SHARE_SIGNING_PRIVATE_KEY in the environment for any shared
+# or production deployment. When unset, the app generates an ephemeral dev key on
+# first use and logs a warning — verification works locally but signatures will not
+# persist across restarts, which is fine for development only.
+SHARE_SIGNING_PRIVATE_KEY = config("SHARE_SIGNING_PRIVATE_KEY", default="")
+
 # ---- Founder/admin console access (SEC-009) --------------------------------
 # Founder tools (CRM, analytics, bulk export, manual billing grants) are NOT
 # granted to every staff account. Superusers always qualify; other staff must be
