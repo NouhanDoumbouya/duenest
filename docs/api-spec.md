@@ -2012,6 +2012,38 @@ per-user rate limited (`ai_briefing` scope).
 
 ---
 
+## 13B.11 AI: Conversational assistant (chat)
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/api/v1/documents/ai-chat/` | Chat grounded in the user's documents, with confirm-gated action suggestions |
+
+Opt-in, **key-gated**. Body: `{ "message": "...", "history": [{role, content}] }`.
+Returns a `reply` grounded in the user's own documents plus typed,
+**confirm-gated** `actions` the UI renders as buttons into existing flows. The
+endpoint performs **no writes or shares** — the user completes any action in its
+destination flow. Owner-scoped; gated by `ai_features` + `ai_chat` (503 when
+off) / no key → `200 {available:false}`; rate limited (`ai_chat`).
+
+Action types: `draft` / `pack` (carry `goal`), `open_document` (carries
+`document_id` + `document_title`, mapped to a real owned document), `briefing`.
+
+```json
+{
+  "available": true,
+  "reason": "ok",
+  "reply": "Your passport is in your vault. Want to start a renewal?",
+  "actions": [
+    { "type": "draft", "label": "Draft a renewal letter", "goal": "passport renewal" },
+    { "type": "open_document", "label": "Open passport", "document_id": 12, "document_title": "UK Passport" }
+  ]
+}
+```
+
+`reason` is `ok` / `not_configured` / `empty_message` / `error`.
+
+---
+
 ## 13C.7 Document intelligence polish
 
 Intelligence fields are computed read-only on every document (`GET/LIST
