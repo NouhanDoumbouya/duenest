@@ -92,6 +92,17 @@ framing-time tools so tool choice and framing happen together:
   preview cheap; the selected mode + hint are shown so the choice is honest.
 - **Rule-of-thirds grid**, torch, and auto-capture toggles round out the
   framing controls.
+- **Hands-free batch** (gated by `scan_hands_free`, opt-in toggle, default
+  off): once a page is framed + aligned + held steady for the same dwell the
+  normal auto-capture uses, it is captured **and committed straight into the
+  page list without leaving the camera** (`handsFreeCapture`), so pages can be
+  laid down one after another with no taps. A ~1.5 s cooldown (reusing the
+  `focusingUntilRef` suppression window) stops one page being shot twice. An
+  on-screen banner shows the running page count and a **Finish** button, which
+  loads the last committed page into the standard review/save screen (the rest
+  stay in the page strip). Manual and single-shot auto-capture are unchanged;
+  warp/crop uses the live-detected quad (full-frame fallback) and the page limit
+  (`MAX_PAGES`) is enforced.
 
 All of these are progressive enhancements: each degrades to a no-op where the
 capability is missing, and manual capture always works.
@@ -131,6 +142,18 @@ a long scrolling stack of control rows. **Name & quality** is a single quiet
 trigger below the dock. Every dock edit stays non-destructive (re-derived from
 the base canvas). The multi-page strip shows each committed page's current
 filter as a small badge on its thumbnail.
+
+**Extract text / client-side OCR** (gated by `scan_ocr`): a **Text** dock button
+runs `recognizeText` (`src/lib/scanner/ocr.ts`, Tesseract.js) over the page in
+review **entirely in the browser** — the image never leaves the device, so it is
+distinct from the server-side OCR below (which indexes uploaded files for
+search). The result panel shows the extracted text with its mean confidence,
+**Copy**, **Use as name** (first non-empty line → document name), and **Redo**;
+a low-confidence (<60%) hint warns before the text is trusted. The OCR worker +
+language data load from a CDN on first use and the worker is torn down after
+each run. Nothing is auto-filled. `cleanOcrText`/`hasUsableText` are pure and
+unit-tested (`ocr.test.ts`); only whitespace is normalised — content is never
+reordered or invented.
 
 ### Capability detection & graceful degradation
 
@@ -381,6 +404,12 @@ extra timeline events (reminder / added-to-bundle / shared-via-SafeSend), and
 **lossless per-page replace/add** in a saved PDF (`lib/pdf/pages.ts` via pdf-lib —
 existing pages keep their text layer; only the new page is an image; saved as a
 new version; gated `document_page_edit`).
+
+**Shipped since (capture & on-device intelligence):** **hands-free batch**
+(continuous auto-capture + auto-commit between pages; gated `scan_hands_free`)
+and **client-side OCR** (in-browser text extraction with copy / use-as-name;
+Tesseract.js; gated `scan_ocr`; image stays on the device). Both are additive
+and opt-in/gated; manual capture and the existing save flow are unchanged.
 
 Still deferred — separate, scoped branches; **not** faked in the UI:
 

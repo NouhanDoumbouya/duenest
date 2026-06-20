@@ -104,8 +104,13 @@ endpoints are enforced server-side, not just hidden), `filename_templates`
 filter+quality presets; user-chosen, not auto-recognition), and
 `advanced_document_preview` (image zoom controls in the file viewer; UI-only),
 `batch_scan_actions` (move multiple selected inbox files to the Vault at once,
-optionally under a category), and `document_page_edit` (replace a bad page / add
-a page in a PDF, lossless via pdf-lib, saved as a new version; experimental).
+optionally under a category), `document_page_edit` (replace a bad page / add
+a page in a PDF, lossless via pdf-lib, saved as a new version; experimental),
+`scan_ocr` (on-device text extraction from a scanned page via Tesseract.js — the
+image never leaves the browser; user-triggered, nothing auto-filled), and
+`scan_hands_free` (continuous auto-capture batch mode: once a page is framed and
+steady it is captured and committed, then the camera keeps going for the next
+page; opt-in toggle, manual capture unchanged).
 These stay invisible to normal users until a founder launches each one
 (`beta_only` / `enabled`). They mostly gate UI
 affordances on the scanner success screen; the underlying risky actions reuse
