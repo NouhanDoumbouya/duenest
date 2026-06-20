@@ -245,8 +245,14 @@ public key is published so independent/offline verification can follow.
 fulfilment — a requester lists the documents they need; a logged-in recipient fills
 the checklist from their vault in a few taps, delivered through the Quick Share
 engine into the requester's "Shared with me". v1 is DueNest-user-to-DueNest-user; a
-growth loop and a showcase for application packs. Next in the same vein:
-**minimal-disclosure** (purpose-redacted) shares, then anonymous responders.
+growth loop and a showcase for application packs.
+
+**Minimal-disclosure shares (differentiator, behind `private_share`):** redact a
+copy of a document and share *that* in one flow — original never exposed —
+reusing the redaction tool + the share engine (client-side; no new backend). v1 is
+manual redaction one tap from sharing; auto purpose-presets (field-aware redaction)
+need OCR and come later. Remaining sharing-vision items: anonymous responders for
+Share Requests, then verifiable-credential / offline verification.
 
 ### v0.4 — Integrations
 

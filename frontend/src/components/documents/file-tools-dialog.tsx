@@ -10,6 +10,7 @@ import {
   Minimize2,
   Plus,
   Scissors,
+  Share2,
   X,
 } from "lucide-react";
 
@@ -71,6 +72,7 @@ export function FileToolsDialog({
   saveLabel,
   onClose,
   onNotify,
+  onShare,
 }: {
   file: DocumentFile;
   /** Fetch the original file's bytes (owner-scoped). */
@@ -82,6 +84,12 @@ export function FileToolsDialog({
   onClose: () => void;
   /** Surface a success/error message (toast or banner). */
   onNotify?: (message: string, kind: "success" | "error") => void;
+  /**
+   * Minimal-disclosure share: save the produced (e.g. redacted) copy and open the
+   * share wizard with it. When provided and the flag is on, the result step
+   * offers "Share this copy". The original is never shared.
+   */
+  onShare?: (blob: Blob, name: string) => Promise<void>;
 }) {
   const [step, setStep] = useState<Step>("pick");
   const [tier, setTier] = useState<TierId>("smaller");
@@ -102,6 +110,7 @@ export function FileToolsDialog({
   const compressOn = useFeature("document_compress");
   const extractOn = useFeature("document_page_extract");
   const redactOn = useFeature("document_redaction");
+  const privateShareOn = useFeature("private_share");
   const flagEnabled: Record<string, boolean> = {
     document_compress: compressOn,
     document_page_extract: extractOn,
@@ -244,6 +253,20 @@ export function FileToolsDialog({
     } catch (err) {
       fail(err, "Couldn't save that copy. Your original is unchanged.");
     } finally {
+      setBusy(false);
+    }
+  }
+
+  async function shareResult() {
+    if (!working || !onShare) return;
+    setBusy(true);
+    setError(null);
+    try {
+      // The caller saves the copy and opens the share wizard with it. We do not
+      // close here on success — navigation unmounts the dialog.
+      await onShare(working.blob, working.name);
+    } catch (err) {
+      fail(err, "Couldn't start sharing that copy. Your original is unchanged.");
       setBusy(false);
     }
   }
@@ -452,6 +475,11 @@ export function FileToolsDialog({
                 )}
                 {saveLabel}
               </Button>
+              {onShare && privateShareOn && (
+                <Button variant="outline" onClick={shareResult} disabled={busy}>
+                  <Share2 className="size-4" /> Share this copy
+                </Button>
+              )}
               <div className="grid grid-cols-2 gap-2">
                 <Button variant="outline" onClick={downloadResult} disabled={busy}>
                   <Download className="size-4" /> Download
