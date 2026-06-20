@@ -1855,6 +1855,60 @@ Response shape:
 
 ---
 
+## 13B.8 AI: Application Pack Copilot (goal → gap analysis)
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/api/v1/documents/pack-copilot/` | For a goal, build the requirement checklist, match it against the user's vault, and flag documents expiring before the deadline |
+
+Opt-in, **key-gated** flagship feature. Request body:
+`{ "goal": "UK Skilled Worker visa", "deadline": "2026-09-01" }` (deadline optional, ISO date).
+
+- For the goal, Claude lists the typically-required documents and, for each,
+  decides **have / missing / unclear** against the user's own vault — citing the
+  documents that satisfy it.
+- **Expiry-vs-deadline is computed in Python** from the stored
+  `Document.expiry_date` (never the model): each matched document carries
+  `expires_before_deadline`.
+- A requirement the model marks `have` but cites no owned document for is
+  **downgraded to `unclear`** — DueNest never claims a match it can't point to.
+- **Never official.** Requirements vary by country/institution/case; the model
+  is instructed to say so and to prefer `unclear` over guessing. Owner-scoped;
+  gated by `ai_features` + `ai_pack_copilot` (503 when off) and platform config
+  (no key → `200 {available:false, reason:"not_configured"}`); per-user rate
+  limited (`ai_pack_copilot` scope).
+
+Response shape:
+
+```json
+{
+  "available": true,
+  "reason": "ok",
+  "goal": "UK Skilled Worker visa",
+  "deadline": "2026-09-01",
+  "summary": "You already have 3 of 6 documents...",
+  "requirements": [
+    {
+      "name": "Valid passport",
+      "description": "A current passport valid for the duration of the visa.",
+      "status": "have",
+      "documents": [
+        { "document_id": 12, "title": "UK Passport", "expiry_date": "2026-03-01", "expires_before_deadline": true }
+      ]
+    },
+    { "name": "Bank statements", "description": "Recent statements.", "status": "missing", "documents": [] }
+  ],
+  "document_count": 9,
+  "have_count": 3,
+  "missing_count": 3
+}
+```
+
+`reason` is one of `ok` / `not_configured` / `empty_goal` / `error`; `status` per
+requirement is `have` / `missing` / `unclear`.
+
+---
+
 ## 13C.7 Document intelligence polish
 
 Intelligence fields are computed read-only on every document (`GET/LIST

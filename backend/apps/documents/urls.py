@@ -74,6 +74,7 @@ from .views import (
     DocumentDraftView,
     DocumentProofRecordListView,
     DocumentQAView,
+    PackCopilotView,
     FileInboxAttachDocumentView,
     DocumentCategoryDetailView,
     DocumentCategoryListView,
@@ -328,6 +329,12 @@ urlpatterns = [
         "documents/draft/",
         DocumentDraftView.as_view(),
         name="document-draft",
+    ),
+    # ---- AI: application pack copilot (goal -> gap analysis; opt-in) --------
+    path(
+        "documents/pack-copilot/",
+        PackCopilotView.as_view(),
+        name="document-pack-copilot",
     ),
     # ---- Intelligence polish: renewal history (nested under a document) ----
     path(

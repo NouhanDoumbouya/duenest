@@ -408,6 +408,8 @@ REST_FRAMEWORK = {
         "ai_qa": _throttle_rate("20/min"),
         # AI drafting assistant (per authenticated user) — bounds model cost.
         "ai_draft": _throttle_rate("20/min"),
+        # AI application pack copilot (per authenticated user) — bounds model cost.
+        "ai_pack_copilot": _throttle_rate("15/min"),
     },
 }
 

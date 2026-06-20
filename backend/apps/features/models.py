@@ -118,6 +118,7 @@ FEATURE_DEFINITIONS: list[dict] = [
     {"key": "ai_document_extraction", "name": "AI — document extraction", "default": Visibility.FOUNDER_ONLY, "description": "Use Claude to read a scanned/uploaded document and suggest structured fields (e.g. expiry date) for review. Suggestions only — never auto-saved without the user confirming."},
     {"key": "ai_document_qa", "name": "AI — ask your documents", "default": Visibility.FOUNDER_ONLY, "description": "Ask natural-language questions grounded in the user's own documents (e.g. 'when does my visa expire?'). Owner-scoped; answers cite the source document."},
     {"key": "ai_document_drafting", "name": "AI — drafting assistant", "default": Visibility.FOUNDER_ONLY, "description": "Draft letters/forms from the user's records. Drafts are editable suggestions; nothing is sent or saved automatically."},
+    {"key": "ai_pack_copilot", "name": "AI — application pack copilot", "default": Visibility.FOUNDER_ONLY, "description": "For a goal (visa/scholarship/job/mortgage), build the requirement checklist, match it against the user's vault (have/missing), and flag documents expiring before the deadline. Suggestions only; never presented as official — requirements always vary and must be verified."},
 ]
 
 FEATURE_KEYS = [d["key"] for d in FEATURE_DEFINITIONS]

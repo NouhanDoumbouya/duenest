@@ -5497,3 +5497,54 @@ class DocumentDraftView(APIView):
             },
         )
         return Response(result, status=status.HTTP_200_OK)
+
+
+class PackCopilotView(APIView):
+    """
+    Application Pack Copilot — goal → personalized document gap analysis.
+
+    POST ``{"goal": "UK Skilled Worker visa", "deadline": "2026-09-01"}`` → for
+    the goal, Claude returns the typical requirements, matches each against the
+    owner's vault (have/missing/unclear, citing documents), and flags matched
+    documents that expire on/before the deadline (computed from real stored
+    dates, not the model). **Suggestions only and never official** — requirements
+    vary and must be verified with the official source.
+
+    Gated by ``ai_features`` + ``ai_pack_copilot`` (503 when off) and platform
+    configuration (no key → ``200 {available:false, reason:"not_configured"}``).
+    Owner-scoped; per-user rate limited.
+    """
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "ai_pack_copilot"
+
+    def post(self, request):
+        require_feature_enabled("ai_features", request.user)
+        require_feature_enabled("ai_pack_copilot", request.user)
+
+        goal = (request.data.get("goal") or "").strip()
+        if not goal:
+            return Response(
+                {"detail": "A goal is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from .ai_pack_copilot import analyze
+
+        result = analyze(
+            request.user, goal=goal, deadline=request.data.get("deadline")
+        )
+        _track_product_event(
+            request,
+            "pack_copilot_analyzed",
+            object_type="pack_copilot",
+            metadata={
+                "available": result.get("available"),
+                "reason": result.get("reason"),
+                "requirements": len(result.get("requirements") or []),
+                "have_count": result.get("have_count"),
+                "missing_count": result.get("missing_count"),
+            },
+        )
+        return Response(result, status=status.HTTP_200_OK)
