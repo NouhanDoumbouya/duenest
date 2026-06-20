@@ -7,6 +7,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.documents.models import Document
+from apps.features.models import FeatureFlag, Visibility
 from apps.organizations.models import Organization, OrganizationMembership
 from apps.subscriptions.models import Subscription
 
@@ -42,6 +43,11 @@ class WorkspaceSearchTests(APITestCase):
         self.assertEqual(response.data["results"], [])
 
     def test_finds_documents_subscriptions_and_organizations(self):
+        # Subscription Radar is deprecated; search only includes legacy
+        # subscription rows when a founder re-enables the feature.
+        FeatureFlag.objects.update_or_create(
+            key="subscriptions", defaults={"visibility": Visibility.ENABLED}
+        )
         Document.objects.create(owner=self.alice, title="UK Passport")
         sub = Subscription.objects.create(
             owner=self.alice,
@@ -101,6 +107,22 @@ class WorkspaceSearchTests(APITestCase):
         self.client.force_authenticate(self.alice)
         response = self.client.get(SEARCH_URL, {"q": "passport"})
         self.assertEqual(response.data["results"], [])
+
+    def test_deprecated_subscriptions_excluded_by_default(self):
+        # With the default (disabled) flag, legacy subscription rows must not
+        # appear in search even though documents/orgs still do.
+        Document.objects.create(owner=self.alice, title="UK Passport")
+        Subscription.objects.create(
+            owner=self.alice,
+            name="Passport renewal service",
+            amount=Decimal("9.99"),
+            currency="GBP",
+        )
+        self.client.force_authenticate(self.alice)
+        response = self.client.get(SEARCH_URL, {"q": "passport"})
+        types = {item["type"] for item in response.data["results"]}
+        self.assertIn("document", types)
+        self.assertNotIn("subscription", types)
 
     def test_matches_secondary_document_fields(self):
         Document.objects.create(

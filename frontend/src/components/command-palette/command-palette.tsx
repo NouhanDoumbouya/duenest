@@ -1,7 +1,7 @@
 "use client";
 
 // Global command palette (Cmd/Ctrl+K): jump to any area, run a quick action, or
-// search your documents, subscriptions, and organizations — without leaving the
+// search your documents and organizations — without leaving the
 // keyboard. Navigation/action commands are derived from the canonical sidebar
 // model so they never drift from the real routes; search results come from the
 // owner-scoped /search/ endpoint.
@@ -19,7 +19,6 @@ import {
   FilePlus2,
   FileText,
   Loader2,
-  Plus,
   RefreshCw,
   ScanLine,
   Search,
@@ -54,13 +53,6 @@ const QUICK_ACTIONS: {
   featureKey?: string;
 }[] = [
   { id: "action-add-document", label: "Add document", href: "/dashboard/documents/new", icon: FilePlus2 },
-  {
-    id: "action-add-subscription",
-    label: "Add subscription",
-    href: "/dashboard/subscriptions/new",
-    icon: Plus,
-    featureKey: "subscriptions",
-  },
   {
     id: "action-new-share",
     label: "New quick share",
@@ -296,7 +288,7 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Search documents, subscriptions, organizations, or jump to…"
+              placeholder="Search documents, organizations, or jump to…"
               aria-label="Search and commands"
               className="h-12 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
             />

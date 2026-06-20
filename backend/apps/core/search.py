@@ -14,6 +14,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.documents.models import Document
+from apps.features.flags import is_feature_enabled
 from apps.organizations.models import Organization, OrganizationMembership
 from apps.subscriptions.models import Subscription
 
@@ -112,7 +113,10 @@ def workspace_search(request):
 
     results = [
         *_document_results(request.user, query),
-        *_subscription_results(request.user, query),
         *_organization_results(request.user, query),
     ]
+    # Subscription Radar is deprecated; only surface legacy rows in search when a
+    # founder has deliberately re-enabled the feature to inspect old data.
+    if is_feature_enabled("subscriptions", request.user):
+        results[1:1] = _subscription_results(request.user, query)
     return Response({"query": query, "results": results})
