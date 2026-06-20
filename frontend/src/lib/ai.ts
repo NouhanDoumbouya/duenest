@@ -17,6 +17,7 @@ export type AiReason =
   | "empty_question"
   | "empty_instructions"
   | "empty_goal"
+  | "empty_message"
   | "error";
 
 export interface DocumentCitation {
@@ -162,4 +163,37 @@ export interface BriefingResult {
 /** A prioritized "what to do now" briefing across the user's vault. */
 export function getBriefing(): Promise<BriefingResult> {
   return apiFetch<BriefingResult>("/documents/ai-briefing/", { method: "POST" });
+}
+
+export type ChatActionType = "draft" | "pack" | "open_document" | "briefing";
+
+export interface ChatAction {
+  type: ChatActionType;
+  label: string;
+  goal?: string;
+  document_id?: number;
+  document_title?: string;
+}
+
+export interface ChatResult {
+  available: boolean;
+  reason: AiReason;
+  reply: string;
+  actions: ChatAction[];
+}
+
+export interface ChatTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
+/** Chat grounded in the user's documents; returns a reply + confirm-gated actions. */
+export function chatWithAssistant(
+  message: string,
+  history: ChatTurn[],
+): Promise<ChatResult> {
+  return apiFetch<ChatResult>("/documents/ai-chat/", {
+    method: "POST",
+    body: { message, history },
+  });
 }
