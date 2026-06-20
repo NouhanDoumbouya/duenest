@@ -40,6 +40,7 @@ import {
   Trash2,
   Vault,
   Wrench,
+  Zap,
 } from "lucide-react";
 
 /** A single tab inside a grouped section's sub-nav. */
@@ -281,6 +282,12 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
   {
     heading: "Assistant",
     items: [
+      {
+        label: "Briefing",
+        href: "/dashboard/briefing",
+        icon: Zap,
+        featureKey: "ai_briefing",
+      },
       {
         label: "Ask documents",
         href: "/dashboard/ask",

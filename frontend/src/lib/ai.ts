@@ -139,3 +139,27 @@ export function createPackBundle(input: {
     },
   });
 }
+
+export type BriefingUrgency = "high" | "medium" | "low";
+
+export interface BriefingItem {
+  title: string;
+  detail: string;
+  urgency: BriefingUrgency;
+  action_label: string;
+  document_id: number | null;
+  document_title: string | null;
+}
+
+export interface BriefingResult {
+  available: boolean;
+  reason: AiReason;
+  summary: string;
+  items: BriefingItem[];
+  attention_count: number;
+}
+
+/** A prioritized "what to do now" briefing across the user's vault. */
+export function getBriefing(): Promise<BriefingResult> {
+  return apiFetch<BriefingResult>("/documents/ai-briefing/", { method: "POST" });
+}
