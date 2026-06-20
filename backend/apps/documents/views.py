@@ -5756,3 +5756,42 @@ class PackCopilotCreateBundleView(APIView):
             },
             status=status.HTTP_201_CREATED,
         )
+
+
+class AiBriefingView(APIView):
+    """
+    Proactive Autopilot — an AI "what to do now" briefing across the vault.
+
+    POST → returns a prioritized briefing built from the user's real document
+    health (Python computes the statuses/dates; Claude prioritizes and phrases
+    the suggested actions). Read-only: nothing is changed. When nothing needs
+    attention it returns a positive, empty briefing without calling the model.
+
+    Gated by ``ai_features`` + ``ai_briefing`` (503 when off) and platform config
+    (no key → ``200 {available:false, reason:"not_configured"}``). Owner-scoped;
+    per-user rate limited.
+    """
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "ai_briefing"
+
+    def post(self, request):
+        require_feature_enabled("ai_features", request.user)
+        require_feature_enabled("ai_briefing", request.user)
+
+        from .ai_briefing import build_briefing
+
+        result = build_briefing(request.user)
+        _track_product_event(
+            request,
+            "ai_briefing_generated",
+            object_type="ai_briefing",
+            metadata={
+                "available": result.get("available"),
+                "reason": result.get("reason"),
+                "items": len(result.get("items") or []),
+                "attention_count": result.get("attention_count"),
+            },
+        )
+        return Response(result, status=status.HTTP_200_OK)

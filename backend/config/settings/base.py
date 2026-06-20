@@ -410,6 +410,8 @@ REST_FRAMEWORK = {
         "ai_draft": _throttle_rate("20/min"),
         # AI application pack copilot (per authenticated user) — bounds model cost.
         "ai_pack_copilot": _throttle_rate("15/min"),
+        # AI proactive briefing (per authenticated user) — bounds model cost.
+        "ai_briefing": _throttle_rate("10/min"),
     },
 }
 
