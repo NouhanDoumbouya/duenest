@@ -95,3 +95,94 @@ jobs:
       - name: Build
         # Next's production build doubles as the TypeScript type-check.
         run: npm run build
+
+  e2e:
+    name: E2E (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: System packages (OCR / PDF tooling)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends tesseract-ocr poppler-utils
+
+      - name: Install backend deps
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Migrate + seed the E2E test user
+        working-directory: backend
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.development
+        run: |
+          python manage.py migrate --noinput
+          python manage.py shell -c "
+          from django.contrib.auth import get_user_model
+          U = get_user_model()
+          u, _ = U.objects.get_or_create(email='verify@example.com', defaults={'username':'verify','is_staff':True,'is_superuser':True})
+          u.username='verify'; u.is_staff=True; u.is_superuser=True; u.is_active=True
+          [setattr(u, f, True) for f in ['email_verified'] if hasattr(u, f)]
+          u.set_password('VerifyPass123!'); u.save()
+          print('seeded', u.email)"
+
+      - name: Start backend
+        working-directory: backend
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.development
+        run: |
+          nohup python manage.py runserver 127.0.0.1:8010 --noreload > /tmp/backend.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8010/api/v1/features/ >/dev/null && break || sleep 1
+          done
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Playwright browser
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Build + start frontend (same-origin proxy)
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_API_BASE_URL: /api/v1
+          BACKEND_ORIGIN: http://127.0.0.1:8010
+        run: |
+          npm run build
+          nohup npm run start -- -p 3010 > /tmp/frontend.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:3010/login >/dev/null && break || sleep 1
+          done
+
+      - name: Run E2E tests
+        working-directory: frontend
+        env:
+          CI: "true"
+          E2E_BASE_URL: http://localhost:3010
+        run: npm run test:e2e
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 7
