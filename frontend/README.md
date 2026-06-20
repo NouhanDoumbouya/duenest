@@ -139,14 +139,18 @@ src/
   `GET /api/v1/documents/:id/files/:file_id/download/`.
 - The in-app viewer supports PDF, JPG, and PNG previews. DOC/DOCX files show a
   download fallback.
-- Share management lives in `DocumentFileShareDialog`: owners can create
-  time-limited file-level links, choose view-only or download-allowed access,
-  require an access code, copy the generated link/code, revoke active links, and
-  view owner-only activity.
-- Public shared links render at `/share/files/[token]` without the dashboard
-  shell. Access-code-protected files keep the code in component state only and
-  pass it to the backend via `X-Access-Code`; codes are not stored in
-  `localStorage`.
+- Sharing is unified on the **Quick Share** engine. A file's "Share" action
+  (document files, the File Inbox, the document Sharing tab) seeds the one share
+  wizard at `/dashboard/quick-share/new` via an in-memory prefill
+  (`@/lib/quick-share-prefill`) and opens it; the owner picks view-only /
+  download / save-copy, expiry, an optional access code, watermark / privacy
+  screen, and per-access view/download caps. New "rooms" are multi-item Quick
+  Share sessions created the same way. See `docs/architecture.md` §35.
+- Legacy single-file links (`DocumentFileShareDialog`, public
+  `/share/files/[token]`) and Share Rooms (`/rooms/[token]`) are retained so
+  links already shared keep resolving; new shares no longer go through them.
+  Access-code-protected files keep the code in component state only and pass it
+  to the backend via `X-Access-Code`; codes are not stored in `localStorage`.
 - One-time public file shares and Secure Rooms are consumed by the first
   successful preview or download. After that, metadata, preview, download, and
   room ZIP access return a limit-reached state from the backend.
