@@ -1817,6 +1817,44 @@ swapped for an embeddings/vector retriever later without changing this contract.
 
 ---
 
+## 13B.7 AI: Drafting assistant (letters / emails)
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/api/v1/documents/draft/` | Draft a letter/email from the owner's instructions, optionally grounded in their documents |
+
+Opt-in, **key-gated** drafting. Request body:
+`{ "instructions": "request a replacement for my expired passport", "document_ids": [12], "tone": "formal" }`.
+
+- `instructions` (required) — what to write. `document_ids` (optional) — owner's
+  documents to ground on so real dates/reference numbers can be referenced
+  (non-owned/invalid ids are silently dropped). `tone` (optional) — `formal`
+  (default) / `friendly` / `concise`.
+- **Suggestion only.** Returns a `{subject, body}` draft for the owner to review
+  and edit. **Nothing is saved to the vault and nothing is sent.**
+- **Grounded, never invented.** Claude is told to use only the instructions +
+  supplied documents and to insert clearly-marked placeholders (`[your address]`)
+  for missing details — never to fabricate names/dates/numbers.
+- **Gated** by `ai_features` + `ai_document_drafting` (503 when off) and platform
+  configuration (no key → `200 {available:false, reason:"not_configured"}`).
+  Owner-scoped; per-user rate limited (`ai_draft` scope).
+
+Response shape:
+
+```json
+{
+  "available": true,
+  "reason": "ok",
+  "subject": "Request for replacement passport",
+  "body": "Dear Sir or Madam, ...",
+  "used_document_ids": [12]
+}
+```
+
+`reason` is one of `ok` / `not_configured` / `empty_instructions` / `error`.
+
+---
+
 ## 13C.7 Document intelligence polish
 
 Intelligence fields are computed read-only on every document (`GET/LIST

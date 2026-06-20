@@ -406,6 +406,8 @@ REST_FRAMEWORK = {
         "public_document_upload": _throttle_rate("10/hour"),
         # AI "ask your documents" Q&A (per authenticated user) — bounds model cost.
         "ai_qa": _throttle_rate("20/min"),
+        # AI drafting assistant (per authenticated user) — bounds model cost.
+        "ai_draft": _throttle_rate("20/min"),
     },
 }
 

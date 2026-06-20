@@ -71,6 +71,7 @@ from .views import (
     DocumentFileShareLinkRevokeView,
     DocumentFileTrashListView,
     DocumentFileTrashView,
+    DocumentDraftView,
     DocumentProofRecordListView,
     DocumentQAView,
     FileInboxAttachDocumentView,
@@ -321,6 +322,12 @@ urlpatterns = [
         "documents/ask/",
         DocumentQAView.as_view(),
         name="document-ask",
+    ),
+    # ---- AI: drafting assistant (letters/emails; opt-in, key+flag gated) ----
+    path(
+        "documents/draft/",
+        DocumentDraftView.as_view(),
+        name="document-draft",
     ),
     # ---- Intelligence polish: renewal history (nested under a document) ----
     path(
