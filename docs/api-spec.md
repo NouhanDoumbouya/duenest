@@ -3744,6 +3744,34 @@ every file matches), `altered` (signature valid but a file changed),
 files are an unaltered copy shared from a DueNest account — not the document's
 real-world authenticity.
 
+### 31.1b Share Requests — inbound fulfilment
+
+```txt
+# Owner (founder-gated by the `share_requests` flag)
+GET    /api/v1/share-requests/                       # list own requests
+POST   /api/v1/share-requests/                       # { title, message?, expires_at?, items:[{label, is_required?, ...}] }
+GET    /api/v1/share-requests/:id/                   # detail (token + items)
+POST   /api/v1/share-requests/:id/                   # close (stop accepting responses)
+DELETE /api/v1/share-requests/:id/                   # delete
+
+# Public / responder (NOT flag-gated — the responder may not be a founder)
+GET    /api/v1/share-requests/respond/:token/        # checklist metadata only (no vault data)
+POST   /api/v1/share-requests/respond/:token/submit/ # auth; { items:[{ item_id, file_ids?, document_ids? }] }
+```
+
+A requester lists the documents they need; a **logged-in** responder fulfils the
+checklist from their own vault. `respond/:token/` returns
+`{ title, message, requester_name, status, is_open, expires_at, items:[{id, label,
+description, is_required, expected_document_type}] }` only. On submit, the server
+validates the responder owns the chosen files (whole `document_ids` are expanded to
+their current files), requires every required item, then **delivers via the Quick
+Share engine** — a session owned by the responder + a pre-accepted claim for the
+requester — so it appears in the requester's **Shared with me** with a
+notification. A request stays open (one link can collect responses from several
+people); each responder may submit once. Reject reasons: foreign file (400),
+missing required item (400), own request (400), already responded (409),
+closed/expired (410).
+
 ## 31.2b Receive by DueNest code — public
 
 ```txt
