@@ -255,9 +255,15 @@ manual redaction one tap from sharing.
 **Smart redaction (assistive, behind `smart_redaction`):** the redaction editor's
 **Auto-find** OCRs the page on-device and pre-draws boxes over bank/card numbers,
 emails, phones, or a custom term — the user reviews before applying. Pattern-based
-and assistive (not layout AI); client-side, no backend. Remaining sharing-vision
-items: layout-aware redaction, anonymous responders for Share Requests, then
-verifiable-credential / offline verification.
+and assistive (not layout AI); client-side, no backend.
+
+**AI share-readiness (assistive, behind `ai_share_readiness`):** before sharing an
+application pack, Claude reviews it against its purpose and flags likely-rejection
+issues (missing items, expiring/wrong documents). Built on the `apps.ai` wrapper;
+deterministic facts shown regardless, graceful with no API key. Remaining
+sharing/AI-vision items: layout-aware redaction, anonymous responders for Share
+Requests, raw-text-grounded readiness, then verifiable-credential / offline
+verification.
 
 ### v0.4 — Integrations
 

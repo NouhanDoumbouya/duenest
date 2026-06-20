@@ -20,6 +20,7 @@ import type {
   BundleExportType,
   BundleFilesResponse,
   BundleReadiness,
+  ShareReadinessReport,
   BundleRequirement,
   Checklist,
   ChecklistItem,
@@ -215,6 +216,16 @@ export function getBundleReadiness(
   return apiFetch<BundleReadiness>(
     `/document-bundles/${bundleId}/readiness/`,
     { auth: true },
+  );
+}
+
+/** AI-assisted "is this pack ready to send?" review (deterministic when AI is off). */
+export function getBundleShareReadiness(
+  bundleId: number,
+): Promise<ShareReadinessReport> {
+  return apiFetch<ShareReadinessReport>(
+    `/document-bundles/${bundleId}/share-readiness/`,
+    { method: "POST", auth: true },
   );
 }
 

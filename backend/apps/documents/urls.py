@@ -21,6 +21,7 @@ from .views import (
     DocumentBundleFilesView,
     DocumentBundleListCreateView,
     BundleActivityTimelineView,
+    BundleShareReadinessView,
     BundleAddDocumentsView,
     DocumentsBulkExportView,
     PackTemplatesView,
@@ -447,6 +448,11 @@ urlpatterns = [
         "document-bundles/<int:bundle_id>/readiness/",
         BundleReadinessView.as_view(),
         name="document-bundle-readiness",
+    ),
+    path(
+        "document-bundles/<int:bundle_id>/share-readiness/",
+        BundleShareReadinessView.as_view(),
+        name="document-bundle-share-readiness",
     ),
     path(
         "document-bundles/<int:bundle_id>/files/",

@@ -21,6 +21,7 @@ import { BundleActivityTab } from "@/components/bundles/bundle-activity-tab";
 import { BundleFilesSection } from "@/components/bundles/bundle-files-section";
 import { BundleReviewTab } from "@/components/bundles/bundle-review-tab";
 import { ReadinessRing } from "@/components/bundles/readiness-ring";
+import { BundleShareReadiness } from "@/components/bundles/bundle-share-readiness";
 import { useFeature } from "@/components/features/feature-flags-provider";
 import { DocumentAppointments } from "@/components/documents/document-appointments";
 import { DocumentPayments } from "@/components/documents/document-payments";
@@ -385,6 +386,7 @@ export default function BundleDetailPage() {
   const scanToBundleEnabled = useFeature("scan_to_bundle");
   const safeSendEnabled = useFeature("application_pack_safesend");
   const packPrepEnabled = useFeature("application_pack_preparation");
+  const shareReadinessEnabled = useFeature("ai_share_readiness");
   const visibleTabs = [
     ...(packPrepEnabled ? [REVIEW_TAB] : []),
     ...BUNDLE_TABS,
@@ -942,6 +944,10 @@ export default function BundleDetailPage() {
                 </div>
                 <ReadinessRing score={bundle.readiness_score} size={76} />
               </div>
+
+              {shareReadinessEnabled && (
+                <BundleShareReadiness bundleId={bundle.id} />
+              )}
 
               <div className="space-y-2">
                 <label
