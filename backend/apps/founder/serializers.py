@@ -794,6 +794,7 @@ class TransactionalEmailSettingSerializer(serializers.ModelSerializer):
 
     default_subject = serializers.SerializerMethodField()
     default_body = serializers.SerializerMethodField()
+    trigger = serializers.SerializerMethodField()
 
     class Meta:
         model = TransactionalEmailSetting
@@ -806,6 +807,7 @@ class TransactionalEmailSettingSerializer(serializers.ModelSerializer):
             "body",
             "default_subject",
             "default_body",
+            "trigger",
             "updated_at",
         ]
         read_only_fields = [
@@ -814,6 +816,7 @@ class TransactionalEmailSettingSerializer(serializers.ModelSerializer):
             "name",
             "default_subject",
             "default_body",
+            "trigger",
             "updated_at",
         ]
 
@@ -829,3 +832,7 @@ class TransactionalEmailSettingSerializer(serializers.ModelSerializer):
     def get_default_body(self, obj) -> str:
         definition = self._definition(obj)
         return definition.body if definition else ""
+
+    def get_trigger(self, obj) -> str:
+        definition = self._definition(obj)
+        return definition.trigger if definition else ""

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Eye, Loader2, Send } from "lucide-react";
+import { Eye, Loader2, Send, Zap } from "lucide-react";
 
 import { FounderPageHeader } from "@/components/founder/founder-ui";
 import { Button } from "@/components/ui/button";
@@ -168,7 +168,7 @@ export default function FounderEmailsPage() {
       <FounderPageHeader
         eyebrow="Emails"
         title="Transactional emails"
-        description="Edit the subject and message of each email, or turn one off. Buttons, links, codes, and DueNest branding stay intact — leave a field blank to use the default."
+        description="Edit the subject and message of each email, preview it, send yourself a test, or turn one off. Each card shows what triggers the email. Buttons, links, codes, and DueNest branding stay intact — leave a field blank to use the default."
       />
 
       {error && (
@@ -290,6 +290,17 @@ export default function FounderEmailsPage() {
                       <p className="mt-0.5 text-xs text-muted-foreground">
                         {item.enabled ? "Sending" : "Disabled — not sent"}
                       </p>
+                      {item.trigger && (
+                        <p className="mt-2 inline-flex items-start gap-1.5 rounded-md bg-muted px-2 py-1 text-[0.7rem] leading-snug text-muted-foreground">
+                          <Zap className="mt-px size-3 shrink-0 text-brand-amber" />
+                          <span>
+                            <span className="font-medium text-foreground">
+                              Trigger:
+                            </span>{" "}
+                            {item.trigger}
+                          </span>
+                        </p>
+                      )}
                     </div>
                     <Button
                       type="button"

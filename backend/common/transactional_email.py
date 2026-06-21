@@ -32,6 +32,10 @@ class TransactionalEmail:
     # hard bounce / complaint suppresses it); retention nudges are "lifecycle"
     # (also honour marketing unsubscribe + carry List-Unsubscribe).
     category: str = "transactional"
+    # Human-readable description of what fires this email, shown read-only in the
+    # founder console so triggers are documented rather than guessed. These are
+    # code-driven events, so the trigger is informational (not configurable here).
+    trigger: str = ""
 
 
 # The founder-editable transactional emails. Reminders are intentionally not
@@ -41,6 +45,7 @@ TRANSACTIONAL_EMAILS: dict[str, TransactionalEmail] = {
     "invite": TransactionalEmail(
         key="invite",
         name="Private-beta invite",
+        trigger="Sent when you send a private-beta invite to someone on the waitlist.",
         template="invite",
         subject="Your DueNest invite is ready",
         body=(
@@ -52,6 +57,7 @@ TRANSACTIONAL_EMAILS: dict[str, TransactionalEmail] = {
     "waitlist_confirmation": TransactionalEmail(
         key="waitlist_confirmation",
         name="Waitlist confirmation",
+        trigger="Sent automatically the moment someone joins the waitlist.",
         template="waitlist_confirmation",
         subject="You're on the DueNest waitlist",
         body=(
@@ -64,6 +70,7 @@ TRANSACTIONAL_EMAILS: dict[str, TransactionalEmail] = {
     "password_reset": TransactionalEmail(
         key="password_reset",
         name="Password reset",
+        trigger="Sent when a user requests a password reset.",
         template="password_reset",
         subject="Reset your DueNest password",
         body=(
@@ -74,6 +81,7 @@ TRANSACTIONAL_EMAILS: dict[str, TransactionalEmail] = {
     "email_verification": TransactionalEmail(
         key="email_verification",
         name="Email verification",
+        trigger="Sent when a user registers or changes their email address.",
         template="email_verification",
         subject="Verify your DueNest email",
         body=(
@@ -85,6 +93,7 @@ TRANSACTIONAL_EMAILS: dict[str, TransactionalEmail] = {
     "billing_payment_failed": TransactionalEmail(
         key="billing_payment_failed",
         name="Payment failed (dunning)",
+        trigger="Sent when a subscription payment fails (first dunning notice).",
         template="billing_lifecycle",
         subject="Action needed: your DueNest payment failed",
         body=(
@@ -98,6 +107,7 @@ TRANSACTIONAL_EMAILS: dict[str, TransactionalEmail] = {
     "billing_payment_failed_followup": TransactionalEmail(
         key="billing_payment_failed_followup",
         name="Payment failed — follow-up reminder",
+        trigger="Sent a few days later if a failed payment is still unresolved.",
         template="billing_lifecycle",
         subject="Reminder: update your DueNest payment method",
         body=(
@@ -110,6 +120,7 @@ TRANSACTIONAL_EMAILS: dict[str, TransactionalEmail] = {
     "billing_trial_ending": TransactionalEmail(
         key="billing_trial_ending",
         name="Trial ending soon",
+        trigger="Sent a few days before a free trial ends.",
         template="billing_lifecycle",
         subject="Your DueNest trial ends soon",
         body=(
@@ -122,6 +133,7 @@ TRANSACTIONAL_EMAILS: dict[str, TransactionalEmail] = {
     "billing_renewal_upcoming": TransactionalEmail(
         key="billing_renewal_upcoming",
         name="Renewal upcoming",
+        trigger="Sent shortly before a paid plan renews.",
         template="billing_lifecycle",
         subject="Your DueNest plan renews soon",
         body=(
@@ -134,6 +146,7 @@ TRANSACTIONAL_EMAILS: dict[str, TransactionalEmail] = {
     "billing_subscription_canceled": TransactionalEmail(
         key="billing_subscription_canceled",
         name="Subscription canceled (win-back)",
+        trigger="Sent when a subscription is canceled.",
         template="billing_lifecycle",
         subject="Your DueNest subscription was canceled",
         body=(
@@ -146,6 +159,7 @@ TRANSACTIONAL_EMAILS: dict[str, TransactionalEmail] = {
     "billing_refund": TransactionalEmail(
         key="billing_refund",
         name="Refund issued",
+        trigger="Sent when a refund is issued.",
         template="billing_lifecycle",
         subject="Your DueNest refund has been issued",
         body=(
@@ -158,6 +172,7 @@ TRANSACTIONAL_EMAILS: dict[str, TransactionalEmail] = {
     "billing_trial_ended": TransactionalEmail(
         key="billing_trial_ended",
         name="Trial ended",
+        trigger="Sent when a free trial ends without upgrading.",
         template="billing_lifecycle",
         subject="Your DueNest trial has ended",
         body=(

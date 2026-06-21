@@ -464,6 +464,8 @@ export interface TransactionalEmailSetting {
   body: string;
   default_subject: string;
   default_body: string;
+  /** Human description of what fires this email (read-only, code-driven). */
+  trigger: string;
   updated_at: string;
 }
 
