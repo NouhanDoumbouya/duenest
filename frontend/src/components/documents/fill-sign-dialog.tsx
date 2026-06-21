@@ -22,6 +22,11 @@ import {
 import { prepareSignedCopy } from "@/lib/fill-sign";
 import { rasterizePdf } from "@/lib/pdf/rasterize";
 import { useFocusTrap } from "@/lib/use-focus-trap";
+import {
+  clearSavedSignature,
+  loadSavedSignature,
+  saveSignature,
+} from "@/lib/signature-store";
 import { cn } from "@/lib/utils";
 import type {
   FillSignAnnotation,
@@ -150,6 +155,11 @@ export function FillSignDialog({
   const [marks, setMarks] = useState<Mark[]>([]);
   const [tool, setTool] = useState<Tool>(null);
   const [signature, setSignature] = useState<string | null>(null);
+  // Reusable signature persisted on this device (lazy init reads localStorage).
+  const [savedSignature, setSavedSignature] = useState<string | null>(() =>
+    loadSavedSignature(),
+  );
+  const [drawingNew, setDrawingNew] = useState(false);
   const [signerName, setSignerName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -328,12 +338,65 @@ export function FillSignDialog({
               )}
             </div>
 
-            {tool === "signature" && !signature && (
-              <SignaturePad
-                onCommit={(data) => setSignature(data)}
-                onCancel={() => setTool(null)}
-              />
-            )}
+            {tool === "signature" &&
+              !signature &&
+              (savedSignature && !drawingNew ? (
+                <div className="rounded-xl border border-border bg-muted/30 p-3">
+                  <p className="mb-2 text-xs font-medium text-muted-foreground">
+                    Use your saved signature, or draw a new one.
+                  </p>
+                  <div className="flex flex-wrap items-center gap-3">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={savedSignature}
+                      alt="Your saved signature"
+                      className="h-12 rounded border border-border bg-card p-1"
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => setSignature(savedSignature)}
+                      >
+                        Use signature
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setDrawingNew(true)}
+                      >
+                        Draw new
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          clearSavedSignature();
+                          setSavedSignature(null);
+                          setDrawingNew(true);
+                        }}
+                      >
+                        Forget
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <SignaturePad
+                  onCommit={(data) => {
+                    setSignature(data);
+                    saveSignature(data);
+                    setSavedSignature(data);
+                    setDrawingNew(false);
+                  }}
+                  onCancel={() => {
+                    setTool(null);
+                    setDrawingNew(false);
+                  }}
+                />
+              ))}
 
             <div className="overflow-auto rounded-xl border border-border bg-muted/30 p-3">
               {/* The page is a click surface; marks are positioned over it. */}

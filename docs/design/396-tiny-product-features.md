@@ -386,7 +386,7 @@
 | TF-221 | Fill & Sign | Draw signature | Core | Signs docs | P1 | M | deferred | |
 | TF-222 | Fill & Sign | Type signature | Convenience | Speed | P2 | S | deferred | |
 | TF-223 | Fill & Sign | Upload signature image | Flexibility | Reuse | P2 | S | deferred | |
-| TF-224 | Fill & Sign | Saved signature (opt-in, secure) | Speed | Reuse | P3 | M | deferred | |
+| TF-224 | Fill & Sign | Saved signature (opt-in, secure) | Speed | Reuse | P3 | M | implemented | Local-first saved signature reused in the Fill & Sign dialog (use / draw new / forget) |
 | TF-225 | Fill & Sign | Save signed copy (original preserved) | Preserve originals | Trust | P0 | S | deferred | |
 | TF-226 | Fill & Sign | Honest note on legal acceptance | No overclaim | Trust | P0 | XS | deferred | |
 | TF-227 | Fill & Sign | Output → attach to pack / share | Cross-feature | Speed | P1 | S | deferred | |
@@ -590,7 +590,7 @@
 | TF-375 | Settings | AI preferences (on/off, scope) | Control | Trust | P1 | S | partially implemented | `settings/ai` |
 | TF-376 | Settings | SafeSend defaults (expiry, access) | Convenience | Safe defaults | P2 | S | deferred | |
 | TF-377 | Settings | QR defaults | Convenience | Speed | P3 | S | deferred | |
-| TF-378 | Settings | Signature settings | Reuse | Speed | P3 | S | deferred | |
+| TF-378 | Settings | Signature settings | Reuse | Speed | P3 | S | implemented | Saved signature stored on-device; managed inline in Fill & Sign (forget to clear) |
 | TF-379 | Settings | Reminder defaults (lead time) | Stays ready | Less setup | P2 | S | deferred | |
 | TF-380 | Settings | Plan & billing clear, honest (no dark patterns on cancel) | Trust | Control | P1 | M | partially implemented | `settings/billing`, `BILLING.md` |
 

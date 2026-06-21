@@ -237,7 +237,7 @@
 | DD-159 | Tools | Merge preview shows page order before commit | clarity | No mistakes | Confident | P2 | M | deferred | |
 | DD-160 | Tools | Tools grouped as "document readiness", not a junk drawer | visual | Coherence | Calm | P1 | S | deferred | |
 | DD-161 | Fill & Sign | Signature draws smoothly with a natural feel | motion | Tactile quality | Pleased | P2 | M | deferred | |
-| DD-162 | Fill & Sign | Saved signature reused with consent | speed | Less repetition | Efficient | P3 | M | deferred | |
+| DD-162 | Fill & Sign | Saved signature reused with consent | speed | Less repetition | Efficient | P3 | M | implemented | Drawing once saves it locally; reuse with one tap next time |
 | DD-163 | Fill & Sign | Honest note on legal acceptance, no overclaim | trust | Integrity | Reassured | P0 | XS | deferred | |
 | DD-164 | Fill & Sign | Fields snap to sensible positions | speed | Less fiddling | Efficient | P2 | M | deferred | |
 | DD-165 | Fill & Sign | "Signed copy saved, original preserved" confirmation | completion | Closure + trust | Reassured | P1 | XS | deferred | |
