@@ -134,11 +134,54 @@ def gather_context(user, question: str, *, limit: int = _MAX_DOCS) -> list[dict]
         ]
     )
     snippets = [(doc, _document_snippet(doc)) for doc in docs]
-    ranked = _rank(question, snippets)[:limit]
+    # Prefer semantic (embeddings) ranking when an embeddings key is configured
+    # and documents are indexed; otherwise fall back to lexical keyword ranking.
+    ranked = (_semantic_rank(question, snippets) or _rank(question, snippets))[:limit]
     return [
         {"index": i + 1, "document_id": doc.id, "title": doc.title, "text": text}
         for i, (doc, text) in enumerate(ranked)
     ]
+
+
+def _semantic_rank(question: str, snippets: list[tuple]) -> list[tuple] | None:
+    """Cosine-rank by stored document embeddings, or ``None`` to fall back.
+
+    Returns ``None`` (caller uses keyword ranking) when embeddings aren't
+    configured, the query can't be embedded, or no candidate document has a
+    stored embedding yet. Documents without an embedding sort last.
+    """
+    from apps.ai.embeddings import (
+        cosine_similarity,
+        embed_query,
+        embeddings_available,
+    )
+
+    if not embeddings_available() or not snippets:
+        return None
+    query_vector = embed_query(question)
+    if not query_vector:
+        return None
+
+    from .models import DocumentEmbedding
+
+    doc_ids = [doc.id for doc, _ in snippets]
+    vectors = {
+        e.document_id: e.vector
+        for e in DocumentEmbedding.objects.filter(document_id__in=doc_ids)
+    }
+    if not vectors:
+        return None  # nothing indexed yet — keyword ranking is the honest answer
+
+    scored = [
+        (
+            cosine_similarity(query_vector, vectors[doc.id]) if doc.id in vectors else -1.0,
+            doc,
+            text,
+        )
+        for doc, text in snippets
+    ]
+    scored.sort(key=lambda t: t[0], reverse=True)
+    return [(doc, text) for _score, doc, text in scored]
 
 
 def answer_question(user, question: str) -> dict:

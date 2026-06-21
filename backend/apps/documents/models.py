@@ -2269,3 +2269,34 @@ class RoomActivity(models.Model):
 
     def __str__(self):
         return f"{self.action} on room {self.room_id}"
+
+
+class DocumentEmbedding(models.Model):
+    """A stored semantic embedding for one document (content-level RAG).
+
+    Built from the document's searchable text and refreshed when ``text_hash``
+    changes. Stored as a JSON float list so it works on SQLite and Postgres with
+    no vector extension — cosine similarity is computed in Python at query time
+    (fine for per-owner vault sizes). Owner-scoped via the document; only
+    populated when an embeddings key is configured.
+    """
+
+    document = models.OneToOneField(
+        Document, on_delete=models.CASCADE, related_name="embedding"
+    )
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="document_embeddings",
+    )
+    vector = models.JSONField(default=list)
+    text_hash = models.CharField(max_length=64, blank=True)
+    model = models.CharField(max_length=64, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["owner"])]
+
+    def __str__(self):
+        return f"Embedding(doc={self.document_id})"

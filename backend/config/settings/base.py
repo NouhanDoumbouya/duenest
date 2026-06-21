@@ -8,6 +8,7 @@ import sys
 from decouple import Csv, config
 
 from apps.ai.config import resolve_ai_settings
+from apps.ai.embeddings import resolve_embeddings_settings
 from apps.notifications.email_config import resolve_email_settings
 from config.storage import build_storages
 
@@ -294,6 +295,15 @@ ANTHROPIC_API_KEY = _ai["ANTHROPIC_API_KEY"]
 AI_MODEL = _ai["AI_MODEL"]
 AI_MAX_TOKENS = _ai["AI_MAX_TOKENS"]
 AI_CONFIGURED = _ai["AI_CONFIGURED"]
+
+# Embeddings (content-level RAG retrieval) — separate optional key (Voyage AI).
+# With no VOYAGE_API_KEY, EMBEDDINGS_CONFIGURED is False and retrieval stays
+# lexical (keyword) — see apps/ai/embeddings.py and apps/documents/ai_qa.py.
+_embeddings = resolve_embeddings_settings(lambda key, default="": config(key, default=default))
+EMBEDDINGS_PROVIDER = _embeddings["EMBEDDINGS_PROVIDER"]
+VOYAGE_API_KEY = _embeddings["VOYAGE_API_KEY"]
+EMBEDDINGS_MODEL = _embeddings["EMBEDDINGS_MODEL"]
+EMBEDDINGS_CONFIGURED = _embeddings["EMBEDDINGS_CONFIGURED"]
 
 # Resend delivery webhook (bounce/complaint/delivered/opened). Svix-signed; the
 # secret (``whsec_...``) is verified before any event is applied. Empty disables
