@@ -207,19 +207,38 @@ function Hero() {
         <div className="content-fade-in flex flex-col items-start text-left">
           <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card/80 px-3 py-1 text-xs font-medium text-muted-foreground shadow-xs backdrop-blur">
             <span className="flex size-1.5 rounded-full bg-brand-teal" />
-            Private life-document readiness
+            A calmer home for important documents
           </span>
 
-          <h1 className="mt-7 font-heading text-[2.6rem] leading-[1.04] font-semibold tracking-tight text-balance sm:text-6xl">
+          <h1 className="mt-6 font-heading text-[2.6rem] leading-[1.04] font-semibold tracking-tight text-balance sm:text-6xl">
             Important documents, ready when life asks.
           </h1>
 
-          <p className="mt-6 max-w-md text-lg leading-relaxed text-pretty text-muted-foreground">
-            One private place to organize, prepare, and track your important
-            documents — and share them safely when life asks for proof.
+          <p className="mt-5 max-w-md text-lg leading-relaxed text-pretty text-muted-foreground">
+            Stop scrambling for a passport, visa, or signed form when a
+            deadline, application, or emergency arrives.
           </p>
 
-          <div className="mt-9 flex flex-col gap-3 sm:flex-row">
+          {/* The whole product in four verbs — so a first-time visitor
+              understands what DueNest does at a glance (the 10-second test). */}
+          <ul className="mt-6 flex flex-wrap gap-x-5 gap-y-2">
+            {[
+              { icon: ScanLine, label: "Scan" },
+              { icon: Folder, label: "Organize" },
+              { icon: BellRing, label: "Track" },
+              { icon: ShieldCheck, label: "Share" },
+            ].map(({ icon: Icon, label }) => (
+              <li
+                key={label}
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground/80"
+              >
+                <Icon className="size-4 text-brand-teal" aria-hidden />
+                {label}
+              </li>
+            ))}
+          </ul>
+
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Link
               href={PRIMARY_CTA.href}
               className={cn(
@@ -241,17 +260,11 @@ function Hero() {
             </Link>
           </div>
 
-          <p className="mt-7 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+          <p className="mt-6 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
             <ShieldCheck className="size-4 text-brand-success" />
             <span>Private until shared</span>
             <span className="text-border">·</span>
-            <span>Secure sharing</span>
-            <span className="text-border">·</span>
             <span>Revoke anytime</span>
-          </p>
-          <p className="mt-3 text-sm text-muted-foreground">
-            Made for anyone who can&apos;t afford to miss a passport, a visa, or
-            a deadline.
           </p>
         </div>
 
