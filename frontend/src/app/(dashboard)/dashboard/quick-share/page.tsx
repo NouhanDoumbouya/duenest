@@ -190,6 +190,20 @@ export default function QuickShareListPage() {
 
   const finishedCount = (sessions ?? []).filter((s) => !s.is_active).length;
 
+  // Per-filter counts so the segmented control shows how many shares each view
+  // holds before you click. Mirrors the predicates used by `filtered` below.
+  const filterCounts = useMemo<Record<Filter, number>>(() => {
+    const list = sessions ?? [];
+    return {
+      all: list.length,
+      active: list.filter((s) => s.is_active).length,
+      expiring: list.filter(isExpiringSoon).length,
+      sensitive: list.filter((s) => looksSensitive(s.title)).length,
+      expired: list.filter((s) => s.is_expired).length,
+      revoked: list.filter((s) => s.is_revoked).length,
+    };
+  }, [sessions]);
+
   const filtered = useMemo(() => {
     const list = sessions ?? [];
     switch (filter) {
@@ -306,22 +320,36 @@ export default function QuickShareListPage() {
             role="group"
             aria-label="Filter shares"
           >
-            {FILTERS.map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                aria-pressed={filter === f.id}
-                onClick={() => setFilter(f.id)}
-                className={cn(
-                  "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-                  filter === f.id
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-border bg-card text-muted-foreground hover:bg-muted",
-                )}
-              >
-                {f.label}
-              </button>
-            ))}
+            {FILTERS.map((f) => {
+              const isActive = filter === f.id;
+              const count = filterCounts[f.id];
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  aria-pressed={isActive}
+                  onClick={() => setFilter(f.id)}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                    isActive
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border bg-card text-muted-foreground hover:bg-muted",
+                  )}
+                >
+                  {f.label}
+                  <span
+                    className={cn(
+                      "inline-flex min-w-4 items-center justify-center rounded-full px-1 text-[0.7rem] leading-none tabular-nums",
+                      isActive
+                        ? "bg-primary/15 text-primary"
+                        : "bg-muted text-muted-foreground/80",
+                    )}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         )}
 
