@@ -44,9 +44,9 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
-  title: "DueNest — Stay ready before it's due",
+  title: { absolute: "DueNest — Important Documents, Ready When Life Asks" },
   description:
-    "DueNest is the calm place to scan and organize important documents, track renewals, prepare application bundles, share securely, and set up emergency access — before life asks for them. Private by default. Join the beta.",
+    "DueNest helps you scan, organize, prepare, track, generate, and safely share important documents before deadlines, applications, renewals, and emergencies. Private by default. Join the beta.",
   alternates: { canonical: "/" },
 };
 
@@ -230,7 +230,7 @@ function Hero() {
               )}
             >
               {PRIMARY_CTA.label}
-              <ArrowRight className="size-4" />
+              <ArrowRight className="size-4" aria-hidden />
             </Link>
             <Link
               href="/#how-it-works"
@@ -309,7 +309,7 @@ function TrustBar() {
           className="inline-flex shrink-0 items-center gap-1.5 text-sm font-medium text-primary hover:underline"
         >
           How we keep documents safe
-          <ArrowRight className="size-4" />
+          <ArrowRight className="size-4" aria-hidden />
         </Link>
       </div>
     </section>
@@ -923,7 +923,7 @@ function Security() {
             className="mt-7 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
           >
             Read the trust &amp; security page
-            <ArrowRight className="size-4" />
+            <ArrowRight className="size-4" aria-hidden />
           </Link>
         </ScrollReveal>
 
@@ -1151,7 +1151,7 @@ function UseCases() {
                 <Link href={c.href} className="group flex h-full flex-col gap-2">
                   <h3 className="flex items-center gap-1.5 font-heading text-base font-semibold">
                     {c.title}
-                    <ArrowRight className="size-3.5 opacity-0 transition-opacity group-hover:opacity-100" />
+                    <ArrowRight className="size-3.5 opacity-0 transition-opacity group-hover:opacity-100" aria-hidden />
                   </h3>
                   <p className="text-sm leading-relaxed text-muted-foreground">
                     {c.description}
@@ -1174,7 +1174,7 @@ function UseCases() {
             className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
           >
             See all use cases
-            <ArrowRight className="size-4" />
+            <ArrowRight className="size-4" aria-hidden />
           </Link>
         </ScrollReveal>
       </div>
@@ -1252,7 +1252,7 @@ function FinalCta() {
               )}
             >
               {PRIMARY_CTA.label}
-              <ArrowRight className="size-4" />
+              <ArrowRight className="size-4" aria-hidden />
             </Link>
             <Link
               href="/#how-it-works"

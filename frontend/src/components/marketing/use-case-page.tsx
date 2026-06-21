@@ -37,7 +37,7 @@ export function UseCasePage({ useCase }: { useCase: UseCase }) {
               className={cn(buttonVariants({ size: "lg" }), "h-12 px-7 text-base")}
             >
               {PRIMARY_CTA.label}
-              <ArrowRight className="size-4" />
+              <ArrowRight className="size-4" aria-hidden />
             </Link>
             <Link
               href="/#how-it-works"
@@ -101,7 +101,7 @@ export function UseCasePage({ useCase }: { useCase: UseCase }) {
         {/* Trust + final CTA */}
         <section className="mt-12 rounded-2xl border border-border bg-card p-6">
           <p className="flex items-start gap-2.5 text-sm text-muted-foreground">
-            <ShieldCheck className="mt-0.5 size-4 shrink-0 text-brand-success" />
+            <ShieldCheck className="mt-0.5 size-4 shrink-0 text-brand-success" aria-hidden />
             {useCase.trustNote}
           </p>
           <div className="mt-5 flex flex-wrap gap-2">

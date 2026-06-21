@@ -39,7 +39,7 @@ export default function UseCasesIndexPage() {
                   <p className="text-xs font-semibold text-primary">{u.eyebrow}</p>
                   <CardTitle className="flex items-center gap-1.5">
                     {u.title}
-                    <ArrowRight className="size-4 opacity-0 transition-opacity group-hover:opacity-100" />
+                    <ArrowRight className="size-4 opacity-0 transition-opacity group-hover:opacity-100" aria-hidden />
                   </CardTitle>
                   <CardDescription>{u.solution}</CardDescription>
                 </CardHeader>
