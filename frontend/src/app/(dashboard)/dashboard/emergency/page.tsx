@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { LifeBuoy, Loader2, Lock, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { ApiError } from "@/lib/api";
 import { formatDate } from "@/lib/documents";
@@ -47,23 +49,31 @@ export default function EmergencyPacksPage() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let active = true;
+  const load = useCallback(() => {
     getEmergencyPacks()
-      .then((page) => active && setPacks(page.results))
-      .catch((err) => {
-        if (!active) return;
-        setPacks([]);
+      .then((page) => {
+        setPacks(page.results);
+        setError(null);
+      })
+      .catch((err) =>
         setError(
           err instanceof ApiError
             ? err.message
             : "Unable to load emergency packs.",
-        );
-      });
-    return () => {
-      active = false;
-    };
+        ),
+      );
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // Reset to the loading state, then refetch (called from the error retry).
+  const retry = useCallback(() => {
+    setError(null);
+    setPacks(null);
+    load();
+  }, [load]);
 
   async function handleCreate(event: React.FormEvent) {
     event.preventDefault();
@@ -233,20 +243,27 @@ export default function EmergencyPacksPage() {
         </form>
       )}
 
-      {error && (
-        <p
-          className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
-          role="alert"
+      {error ? (
+        <ErrorState description={error} onRetry={retry} />
+      ) : packs === null ? (
+        <ul
+          className="space-y-3"
+          aria-busy="true"
+          aria-label="Loading emergency packs"
         >
-          {error}
-        </p>
-      )}
-
-      {packs === null ? (
-        <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">
-          <Loader2 className="size-5 animate-spin" />
-          <span>Loading emergency packs…</span>
-        </div>
+          {Array.from({ length: 3 }).map((_, i) => (
+            <li
+              key={i}
+              className="flex items-center gap-4 rounded-xl border border-border bg-card p-4"
+            >
+              <Skeleton className="size-10 shrink-0 rounded-lg" />
+              <div className="min-w-0 flex-1 space-y-2">
+                <Skeleton className="h-4 w-1/2" />
+                <Skeleton className="h-3 w-1/3" />
+              </div>
+            </li>
+          ))}
+        </ul>
       ) : packs.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border">
           <EmptyState
