@@ -7,6 +7,7 @@ import { Package, Plus } from "lucide-react";
 import { ReadinessRing } from "@/components/bundles/readiness-ring";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { ApiError } from "@/lib/api";
 import { formatDate } from "@/lib/documents";
 import {
@@ -128,13 +129,11 @@ export default function BundlesPage() {
                     </span>
                   )}
                   {bundle.missing_required_count > 0 ? (
-                    <span className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-700">
+                    <StatusBadge tone="warning">
                       {bundle.missing_required_count} missing
-                    </span>
+                    </StatusBadge>
                   ) : (
-                    <span className="rounded-full bg-brand-success/10 px-2 py-0.5 font-medium text-brand-success">
-                      Ready
-                    </span>
+                    <StatusBadge status="ready" />
                   )}
                 </div>
               </div>

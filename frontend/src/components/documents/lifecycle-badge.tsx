@@ -1,16 +1,20 @@
 import { LIFECYCLE_STATUS_LABELS } from "@/lib/documents";
 import { cn } from "@/lib/utils";
+import { TONE_CLASS, type StatusTone } from "@/lib/status-badge";
 import type { DocumentLifecycleStatus } from "@/types/documents";
 
-const STYLES: Record<DocumentLifecycleStatus, string> = {
-  draft: "bg-muted text-muted-foreground",
-  collected: "bg-slate-100 text-slate-700",
-  submitted: "bg-blue-100 text-blue-700",
-  under_review: "bg-amber-100 text-amber-700",
-  approved: "bg-brand-success/10 text-brand-success",
-  rejected: "bg-destructive/10 text-destructive",
-  renewed: "bg-teal-100 text-teal-700",
-  archived: "bg-muted text-muted-foreground",
+// Lifecycle stage -> canonical badge tone (see lib/status-badge). Replaces the
+// previous off-brand Tailwind palette (slate/blue/amber/teal) with brand tokens
+// while preserving each stage's intent.
+const TONE: Record<DocumentLifecycleStatus, StatusTone> = {
+  draft: "neutral",
+  collected: "neutral",
+  submitted: "info",
+  under_review: "warning",
+  approved: "success",
+  rejected: "danger",
+  renewed: "trust",
+  archived: "neutral",
 };
 
 /** Owner-set lifecycle status badge (distinct from computed expiry status). */
@@ -25,7 +29,7 @@ export function LifecycleBadge({
     <span
       className={cn(
         "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
-        STYLES[status],
+        TONE_CLASS[TONE[status]].badge,
         className,
       )}
     >

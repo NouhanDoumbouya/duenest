@@ -11,7 +11,9 @@ import { PageContainer } from "@/components/ui/page-container";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { InlineAlert } from "@/components/ui/product-ui";
+import type { StatusTone } from "@/lib/status-badge";
 import { ApiError } from "@/lib/api";
 import {
   closeShareRequest,
@@ -27,11 +29,13 @@ interface DraftItem {
   is_required: boolean;
 }
 
-const statusClass: Record<string, string> = {
-  open: "bg-brand-success/10 text-brand-success",
-  closed: "bg-muted text-muted-foreground",
-  expired: "bg-muted text-muted-foreground",
-  responded: "bg-primary/10 text-primary",
+// Request status -> canonical badge tone (see lib/status-badge). Open requests
+// read positive, responded reads informational, finished states stay quiet.
+const statusTone: Record<string, StatusTone> = {
+  open: "success",
+  closed: "neutral",
+  expired: "neutral",
+  responded: "info",
 };
 
 export default function ShareRequestsPage() {
@@ -157,14 +161,12 @@ export default function ShareRequestsPage() {
                       {req.response_count === 1 ? "" : "s"}
                     </p>
                   </div>
-                  <span
-                    className={cn(
-                      "shrink-0 rounded-full px-2 py-0.5 text-[0.68rem] font-medium capitalize",
-                      statusClass[req.status] ?? statusClass.closed,
-                    )}
+                  <StatusBadge
+                    tone={statusTone[req.status] ?? "neutral"}
+                    className="capitalize"
                   >
                     {req.status}
-                  </span>
+                  </StatusBadge>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button
