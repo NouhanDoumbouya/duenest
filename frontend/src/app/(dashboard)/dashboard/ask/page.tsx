@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, type FormEvent, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
 import Link from "next/link";
 import {
   FileText,
@@ -35,6 +41,19 @@ export default function AskDocumentsPage() {
   const [asked, setAsked] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notEnabled, setNotEnabled] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // A contextual "Ask AI about this" deep-link (e.g. from a document) can
+  // pre-seed the question via ?q=. We pre-fill and focus, but never auto-submit
+  // — the user stays in control of what they actually ask.
+  useEffect(() => {
+    const seeded = new URLSearchParams(window.location.search).get("q");
+    if (seeded) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setQuestion(seeded);
+      textareaRef.current?.focus();
+    }
+  }, []);
 
   async function ask(q: string) {
     const trimmed = q.trim();
@@ -109,6 +128,7 @@ export default function AskDocumentsPage() {
         <CardContent className="space-y-4">
           <form onSubmit={handleSubmit} className="space-y-3">
             <Textarea
+              ref={textareaRef}
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
               onKeyDown={handleKeyDown}

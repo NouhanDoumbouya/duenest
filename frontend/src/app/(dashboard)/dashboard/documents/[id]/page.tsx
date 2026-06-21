@@ -21,6 +21,7 @@ import {
   RefreshCw,
   Share2,
   ShieldCheck,
+  Sparkles,
   UploadCloud,
   X,
   type LucideIcon,
@@ -192,6 +193,7 @@ export default function DocumentWorkspacePage() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>(() => tabFromLocation());
   const versioningEnabled = useFeature("document_versioning");
+  const askEnabled = useFeature("ai_document_qa");
   const visibleTabs = versioningEnabled ? [...TABS, VERSIONS_TAB] : TABS;
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
@@ -470,6 +472,17 @@ export default function DocumentWorkspacePage() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
+                {askEnabled && (
+                  <Link
+                    href={`/dashboard/ask?q=${encodeURIComponent(
+                      `What should I know about my ${doc.title}?`,
+                    )}`}
+                    className={cn(buttonVariants({ variant: "outline" }))}
+                  >
+                    <Sparkles className="size-4" />
+                    Ask AI about this
+                  </Link>
+                )}
                 <Button
                   type="button"
                   variant="outline"
