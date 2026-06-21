@@ -186,7 +186,6 @@ const FILTERS: {
   { key: "appointments", label: "Appointments", categories: ["appointments"] },
   { key: "proofs", label: "Proofs", categories: ["proofs"] },
   { key: "shares", label: "Shares/Rooms", categories: ["shares", "rooms"] },
-  { key: "subscriptions", label: "Subscriptions", categories: ["subscriptions"] },
   { key: "overdue", label: "Overdue", urgency: "overdue" },
 ];
 
