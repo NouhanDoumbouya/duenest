@@ -103,10 +103,19 @@ function NavTab({ item, pathname }: { item: BottomNavItem; pathname: string }) {
         aria-current={active ? "page" : undefined}
         className={cn(
           "flex min-h-14 flex-col items-center justify-center gap-1 px-1 py-1.5 text-[0.68rem] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
-          active ? "text-primary" : "text-muted-foreground hover:text-foreground",
+          active
+            ? "font-semibold text-primary"
+            : "text-muted-foreground hover:text-foreground",
         )}
       >
-        <Icon className="size-5 shrink-0" aria-hidden />
+        <span
+          className={cn(
+            "flex items-center justify-center rounded-full px-4 py-0.5 transition-colors",
+            active && "bg-primary/10",
+          )}
+        >
+          <Icon className="size-5 shrink-0" aria-hidden />
+        </span>
         {item.label}
       </Link>
     </li>
@@ -171,7 +180,7 @@ export function BottomNav({ onOpenMore }: { onOpenMore: () => void }) {
             role="dialog"
             aria-modal="true"
             aria-label="Add to DueNest"
-            className="fixed inset-x-0 bottom-0 z-50 rounded-t-2xl border-t border-border bg-card p-4 shadow-xl"
+            className="fixed inset-x-0 bottom-0 z-50 rounded-t-2xl border-t border-border bg-card p-4 shadow-floating"
             style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 1rem)" }}
           >
             <div className="mx-auto max-w-lg">
@@ -277,7 +286,7 @@ export function BottomNav({ onOpenMore }: { onOpenMore: () => void }) {
             >
               <span
                 className={cn(
-                  "-mt-5 flex size-12 items-center justify-center rounded-full border-4 border-card bg-primary text-primary-foreground shadow-lg transition-transform hover:bg-primary/90 active:scale-95",
+                  "-mt-5 flex size-12 items-center justify-center rounded-full border-4 border-card bg-primary text-primary-foreground shadow-elevated transition-transform hover:bg-primary/90 active:scale-95",
                   addOpen && "rotate-45",
                 )}
               >
