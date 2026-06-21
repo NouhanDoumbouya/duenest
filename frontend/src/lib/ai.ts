@@ -229,3 +229,31 @@ export interface IntakeResult {
 export function getFileIntake(fileId: number): Promise<IntakeResult> {
   return apiFetch<IntakeResult>(`/files/${fileId}/intake/`, { method: "POST" });
 }
+
+export interface AiDisclosure {
+  provider: string;
+  used_for_training: boolean;
+  summary: string;
+}
+
+export interface AiPreferences {
+  ai_enabled: boolean;
+  redact_sensitive: boolean;
+  ai_available?: boolean;
+  disclosure?: AiDisclosure;
+}
+
+/** The current user's AI consent + privacy settings (with the data stance). */
+export function getAiPreferences(): Promise<AiPreferences> {
+  return apiFetch<AiPreferences>("/ai/preferences/");
+}
+
+/** Update AI consent / Privacy Mode. */
+export function updateAiPreferences(
+  patch: Partial<Pick<AiPreferences, "ai_enabled" | "redact_sensitive">>,
+): Promise<AiPreferences> {
+  return apiFetch<AiPreferences>("/ai/preferences/", {
+    method: "PUT",
+    body: patch,
+  });
+}
