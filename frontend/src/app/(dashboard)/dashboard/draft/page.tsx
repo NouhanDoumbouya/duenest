@@ -9,7 +9,9 @@ import {
   Info,
   Loader2,
   PenLine,
+  Save,
   Sparkles,
+  Trash2,
   TriangleAlert,
 } from "lucide-react";
 
@@ -23,9 +25,15 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Textarea } from "@/components/ui/textarea";
 import { ApiError } from "@/lib/api";
 import { draftDocument, type DraftResult, type DraftTone } from "@/lib/ai";
-import { getDocuments } from "@/lib/documents";
+import { getDocuments, formatDate } from "@/lib/documents";
+import {
+  deleteGeneratedDocument,
+  listGeneratedDocuments,
+  saveGeneratedDocument,
+} from "@/lib/generated-documents";
 import { cn } from "@/lib/utils";
 import type { DocumentRecord } from "@/types/documents";
+import type { GeneratedDocument } from "@/types/generated-documents";
 
 const TONES: { value: DraftTone; label: string }[] = [
   { value: "formal", label: "Formal" },
@@ -44,6 +52,49 @@ export default function DraftPage() {
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notEnabled, setNotEnabled] = useState(false);
+  const [savedDrafts, setSavedDrafts] = useState<GeneratedDocument[] | null>(null);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [draftSaved, setDraftSaved] = useState(false);
+
+  // Load the user's saved drafts (the drafts library) for this page.
+  useEffect(() => {
+    let active = true;
+    listGeneratedDocuments()
+      .then((data) => active && setSavedDrafts(data))
+      .catch(() => active && setSavedDrafts([]));
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function saveDraft() {
+    setSavingDraft(true);
+    try {
+      const saved = await saveGeneratedDocument({
+        title: subject.trim() || "Untitled draft",
+        document_type: "other",
+        output_text: subject ? `${subject}\n\n${body}` : body,
+        input_payload: { instructions, tone, document_ids: [...selected] },
+        status: "saved",
+      });
+      setSavedDrafts((prev) => [saved, ...(prev ?? [])]);
+      setDraftSaved(true);
+      setTimeout(() => setDraftSaved(false), 2000);
+    } catch {
+      /* the editor stays intact; the user can retry */
+    } finally {
+      setSavingDraft(false);
+    }
+  }
+
+  async function removeDraft(id: number) {
+    try {
+      await deleteGeneratedDocument(id);
+      setSavedDrafts((prev) => (prev ?? []).filter((d) => d.id !== id));
+    } catch {
+      /* keep it in the list on failure */
+    }
+  }
 
   // Seed from a `?goal=` handoff (e.g. from the Pack Copilot). Read from the
   // URL directly to avoid needing a useSearchParams Suspense boundary.
@@ -245,7 +296,44 @@ export default function DraftPage() {
           body={body}
           onSubjectChange={setSubject}
           onBodyChange={setBody}
+          onSaveDraft={saveDraft}
+          saving={savingDraft}
+          saved={draftSaved}
         />
+      )}
+
+      {savedDrafts && savedDrafts.length > 0 && (
+        <Card>
+          <CardContent className="space-y-3">
+            <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              Saved drafts
+            </p>
+            <ul className="divide-y divide-border">
+              {savedDrafts.map((d) => (
+                <li
+                  key={d.id}
+                  className="flex items-center justify-between gap-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{d.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatDate(d.updated_at)}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Delete ${d.title}`}
+                    onClick={() => removeDraft(d.id)}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
       )}
     </PageContainer>
   );
@@ -257,12 +345,18 @@ function DraftResultCard({
   body,
   onSubjectChange,
   onBodyChange,
+  onSaveDraft,
+  saving,
+  saved,
 }: {
   result: DraftResult;
   subject: string;
   body: string;
   onSubjectChange: (v: string) => void;
   onBodyChange: (v: string) => void;
+  onSaveDraft: () => void;
+  saving: boolean;
+  saved: boolean;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -310,17 +404,34 @@ function DraftResultCard({
           <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
             Your draft
           </p>
-          <Button type="button" variant="outline" size="sm" onClick={copyAll}>
-            {copied ? (
-              <>
-                <Check /> Copied
-              </>
-            ) : (
-              <>
-                <Copy /> Copy
-              </>
-            )}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={copyAll}>
+              {copied ? (
+                <>
+                  <Check /> Copied
+                </>
+              ) : (
+                <>
+                  <Copy /> Copy
+                </>
+              )}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={onSaveDraft}
+              disabled={saving || (!subject.trim() && !body.trim())}
+            >
+              {saving ? (
+                <Loader2 className="animate-spin" />
+              ) : saved ? (
+                <Check />
+              ) : (
+                <Save />
+              )}
+              {saved ? "Saved" : "Save draft"}
+            </Button>
+          </div>
         </div>
 
         <div className="space-y-2">
@@ -354,7 +465,8 @@ function DraftResultCard({
           <Info className="mt-0.5 size-3.5 shrink-0" />
           This is an editable draft — review it carefully and replace any{" "}
           <code className="rounded bg-muted px-1">[placeholders]</code> before
-          sending. Nothing here is saved or sent for you.
+          sending. Nothing is sent for you; saving keeps a private copy in your
+          drafts.
         </p>
 
         <div>
