@@ -35,6 +35,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { PageContainer } from "@/components/ui/page-container";
 import {
   DrawerBackdrop,
@@ -288,6 +289,7 @@ function recommendedAction(event: CalendarEvent): string {
 export default function CalendarPage() {
   const [events, setEvents] = useState<CalendarEvent[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [view, setView] = useState<ViewMode>("upcoming");
   const [filter, setFilter] = useState("all");
   const [monthCursor, setMonthCursor] = useState(() => startOfDay(new Date()));
@@ -307,7 +309,6 @@ export default function CalendarPage() {
       })
       .catch((err) => {
         if (!active) return;
-        setEvents([]);
         setError(
           err instanceof ApiError ? err.message : "Unable to load the calendar.",
         );
@@ -315,7 +316,15 @@ export default function CalendarPage() {
     return () => {
       active = false;
     };
-  }, [range]);
+  }, [range, reloadKey]);
+
+  // Retry re-runs the load effect (bumping the key) while keeping its
+  // range-change cancellation guard intact.
+  const retry = () => {
+    setError(null);
+    setEvents(null);
+    setReloadKey((k) => k + 1);
+  };
 
   const filtered = useMemo(() => {
     if (!events) return [];
@@ -395,7 +404,6 @@ export default function CalendarPage() {
         </div>
       </header>
 
-      {error && <InlineAlert>{error}</InlineAlert>}
       {exportMessage && <InlineAlert tone="good">{exportMessage}</InlineAlert>}
 
       {metrics ? (
@@ -450,7 +458,9 @@ export default function CalendarPage() {
         <main id="calendar-agenda" className="min-w-0 space-y-4">
           <CalendarToolbar view={view} onView={setView} filter={filter} onFilter={setFilter} />
 
-          {events === null ? (
+          {error ? (
+            <ErrorState description={error} onRetry={retry} />
+          ) : events === null ? (
             <CalendarSkeleton />
           ) : filtered.length === 0 ? (
             <CalendarEmptyState

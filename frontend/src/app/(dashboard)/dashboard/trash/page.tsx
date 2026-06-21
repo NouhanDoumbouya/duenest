@@ -6,6 +6,7 @@ import { RotateCcw, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/lib/api";
@@ -51,13 +52,11 @@ export default function TrashPage() {
         setDocs(documentPage.results);
         setFiles(filePage.results);
       })
-      .catch((err) => {
-        setDocs([]);
-        setFiles([]);
+      .catch((err) =>
         setError(
           err instanceof ApiError ? err.message : "Unable to load trash.",
-        );
-      });
+        ),
+      );
   }
 
   useEffect(() => {
@@ -70,8 +69,6 @@ export default function TrashPage() {
       })
       .catch((err) => {
         if (!active) return;
-        setDocs([]);
-        setFiles([]);
         setError(
           err instanceof ApiError ? err.message : "Unable to load trash.",
         );
@@ -183,22 +180,6 @@ export default function TrashPage() {
         </p>
       </div>
 
-      {error && (
-        <p
-          className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
-          role="alert"
-        >
-          {error}{" "}
-          <button
-            type="button"
-            onClick={load}
-            className="font-medium underline underline-offset-2"
-          >
-            Try again
-          </button>
-        </p>
-      )}
-
       {actionError && (
         <p
           className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
@@ -208,7 +189,9 @@ export default function TrashPage() {
         </p>
       )}
 
-      {docs === null ? (
+      {error ? (
+        <ErrorState description={error} onRetry={load} />
+      ) : docs === null ? (
         <ul className="space-y-3" aria-busy="true" aria-label="Loading trash">
           {Array.from({ length: 4 }).map((_, i) => (
             <li

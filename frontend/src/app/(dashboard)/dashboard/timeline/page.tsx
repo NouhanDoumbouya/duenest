@@ -36,9 +36,9 @@ import { PageContainer } from "@/components/ui/page-container";
 import {
   DrawerBackdrop,
   DrawerPanel,
-  InlineAlert,
   StatusDot,
 } from "@/components/ui/product-ui";
+import { ErrorState } from "@/components/ui/error-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/lib/api";
 import { formatDate, daysUntil } from "@/lib/documents";
@@ -73,6 +73,7 @@ const DAY_MS = 86_400_000;
 export default function TimelinePage() {
   const [events, setEvents] = useState<TimelineEvent[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [filter, setFilter] = useState<TimelineEventType | "all">("all");
   const [selected, setSelected] = useState<TimelineEvent | null>(null);
 
@@ -86,7 +87,6 @@ export default function TimelinePage() {
       })
       .catch((err) => {
         if (!active) return;
-        setEvents([]);
         setError(
           err instanceof ApiError ? err.message : "Unable to load the timeline.",
         );
@@ -94,7 +94,15 @@ export default function TimelinePage() {
     return () => {
       active = false;
     };
-  }, [filter]);
+  }, [filter, reloadKey]);
+
+  // Retry re-runs the load effect (bumping the key) while keeping its
+  // filter-change cancellation guard intact.
+  const retry = () => {
+    setError(null);
+    setEvents(null);
+    setReloadKey((k) => k + 1);
+  };
 
   const metrics = useMemo(() => {
     if (!events) return null;
@@ -172,8 +180,6 @@ export default function TimelinePage() {
         </div>
       </header>
 
-      {error && <InlineAlert>{error}</InlineAlert>}
-
       {metrics ? (
         <div className="grid gap-3 sm:grid-cols-3">
           <TimelineMetric
@@ -232,7 +238,9 @@ export default function TimelinePage() {
             ))}
           </div>
 
-          {events === null ? (
+          {error ? (
+            <ErrorState description={error} onRetry={retry} />
+          ) : events === null ? (
             <TimelineSkeleton />
           ) : (
             <TimelineRail events={events} onSelect={setSelected} />
