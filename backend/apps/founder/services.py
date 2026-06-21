@@ -1372,7 +1372,7 @@ def build_feature_adoption() -> dict:
         ),
         _feature_metric(
             feature_key="subscriptions",
-            label="Subscription tracker",
+            label="Subscription Radar (deprecated)",
             # Lazy import keeps the founder app independent of subscriptions at
             # load time. Aggregate only - no names/providers/emails/labels.
             queryset=_subscription_queryset(),
