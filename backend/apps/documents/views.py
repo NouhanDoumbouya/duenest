@@ -5583,9 +5583,21 @@ class DocumentQAView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Optional: scope the answer to a single owned document (the contextual
+        # "ask about this document" entry point). A non-integer, missing, foreign,
+        # or unknown id is ignored and falls through to the owner-scoped filter in
+        # gather_context, so it can never leak another user's data.
+        document_id = None
+        raw_document_id = request.data.get("document_id")
+        if raw_document_id not in (None, ""):
+            try:
+                document_id = int(raw_document_id)
+            except (TypeError, ValueError):
+                document_id = None
+
         from .ai_qa import answer_question
 
-        result = answer_question(request.user, question)
+        result = answer_question(request.user, question, document_id=document_id)
         _track_product_event(
             request,
             "document_qa_asked",
@@ -5595,6 +5607,7 @@ class DocumentQAView(APIView):
                 "reason": result.get("reason"),
                 "answered": result.get("answered"),
                 "document_count": result.get("document_count"),
+                "scoped": document_id is not None,
             },
         )
         return Response(result, status=status.HTTP_200_OK)

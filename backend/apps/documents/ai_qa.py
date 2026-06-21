@@ -120,20 +120,28 @@ def _rank(question: str, snippets: list[tuple]) -> list[tuple]:
     return sorted(snippets, key=score, reverse=True)
 
 
-def gather_context(user, question: str, *, limit: int = _MAX_DOCS) -> list[dict]:
+def gather_context(
+    user, question: str, *, limit: int = _MAX_DOCS, document_id: int | None = None
+) -> list[dict]:
     """
     Select the documents to ground the answer on (the retrieval seam).
 
     Returns a list of ``{"index", "document_id", "title", "text"}`` — owner-scoped,
     ranked by relevance to ``question``, capped at ``limit``.
+
+    When ``document_id`` is given, grounding is restricted to that single
+    document. It stays owner-scoped, so a foreign or unknown id simply yields no
+    context (and the caller reports ``no_documents``) — never another user's data.
+    This powers a contextual "ask about this document" entry point without the
+    model ever seeing the rest of the vault.
     """
     from .models import Document
 
-    docs = list(
-        Document.objects.filter(owner=user, is_trashed=False).order_by("-updated_at")[
-            : max(limit * 3, limit)
-        ]
-    )
+    owned = Document.objects.filter(owner=user, is_trashed=False)
+    if document_id is not None:
+        docs = list(owned.filter(id=document_id))
+    else:
+        docs = list(owned.order_by("-updated_at")[: max(limit * 3, limit)])
     snippets = [(doc, _document_snippet(doc)) for doc in docs]
     # Prefer semantic (embeddings) ranking when an embeddings key is configured
     # and documents are indexed; otherwise fall back to lexical keyword ranking.
@@ -185,7 +193,9 @@ def _semantic_rank(question: str, snippets: list[tuple]) -> list[tuple] | None:
     return [(doc, text) for _score, doc, text in scored]
 
 
-def answer_question(user, question: str) -> dict:
+def answer_question(
+    user, question: str, *, document_id: int | None = None
+) -> dict:
     """
     Answer ``question`` grounded in ``user``'s documents.
 
@@ -209,7 +219,7 @@ def answer_question(user, question: str) -> dict:
     if not ai_available():
         return {**base, "reason": "not_configured"}
 
-    context = gather_context(user, question)
+    context = gather_context(user, question, document_id=document_id)
     if not context:
         return {**base, "reason": "no_documents"}
 

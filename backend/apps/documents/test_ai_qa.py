@@ -113,6 +113,21 @@ class AnswerQuestionTests(TestCase):
         titles = {c["title"] for c in ctx}
         self.assertNotIn("Secret Other Doc", titles)
 
+    def test_document_scope_grounds_only_on_that_document(self):
+        passport = Document.objects.get(owner=self.user, title="UK Passport")
+        ctx = ai_qa.gather_context(self.user, "anything", document_id=passport.id)
+        self.assertEqual([c["title"] for c in ctx], ["UK Passport"])
+
+    def test_document_scope_with_foreign_id_yields_no_context(self):
+        other = User.objects.create_user(
+            username="intruder2", email="i2@x.com", password="StrongPassword123!DN"
+        )
+        foreign = Document.objects.create(owner=other, title="Not Yours")
+        # A document id the asking user does not own grounds on nothing — it is
+        # never substituted with the rest of their vault.
+        ctx = ai_qa.gather_context(self.user, "anything", document_id=foreign.id)
+        self.assertEqual(ctx, [])
+
     def test_failed_model_call_is_reported(self):
         gen = mock.Mock(return_value=AIResult(ok=False, reason="refusal"))
         with mock.patch.object(ai_qa, "generate", gen):

@@ -476,7 +476,7 @@ export default function DocumentWorkspacePage() {
                   <Link
                     href={`/dashboard/ask?q=${encodeURIComponent(
                       `What should I know about my ${doc.title}?`,
-                    )}`}
+                    )}&document=${doc.id}&scope=${encodeURIComponent(doc.title)}`}
                     className={cn(buttonVariants({ variant: "outline" }))}
                   >
                     <Sparkles className="size-4" />

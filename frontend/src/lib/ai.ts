@@ -34,11 +34,21 @@ export interface AskResult {
   document_count: number;
 }
 
-/** Ask a natural-language question grounded in the user's own documents. */
-export function askDocuments(question: string): Promise<AskResult> {
+/**
+ * Ask a natural-language question grounded in the user's own documents.
+ *
+ * Pass `documentId` to scope the answer to a single document (the contextual
+ * "ask about this document" entry point). Omit it for whole-vault Q&A. Scoping
+ * is enforced owner-side on the server, so an unknown id simply grounds on
+ * nothing rather than leaking other documents.
+ */
+export function askDocuments(
+  question: string,
+  documentId?: number,
+): Promise<AskResult> {
   return apiFetch<AskResult>("/documents/ask/", {
     method: "POST",
-    body: { question },
+    body: documentId ? { question, document_id: documentId } : { question },
   });
 }
 

@@ -1795,6 +1795,8 @@ strictly owner-scoped; one user's usage never affects another's limits.
 | `POST` | `/api/v1/documents/ask/` | Answer a natural-language question grounded in the owner's own documents |
 
 Opt-in, **key-gated** Q&A. Request body: `{ "question": "when does my visa expire?" }`.
+Optionally pass `"document_id": <id>` to scope the answer to a single owned
+document (the contextual "ask about this document" entry point).
 
 - **Gated three ways.** The `ai_features` master gate AND `ai_document_qa` flags
   must be on (else `503`), and an `ANTHROPIC_API_KEY` must be configured. If the
@@ -1804,6 +1806,9 @@ Opt-in, **key-gated** Q&A. Request body: `{ "question": "when does my visa expir
   considered; Claude is instructed to answer **only** from them and to cite the
   documents it used. Relevant document fields/notes are sent to Anthropic on this
   path (off by default; see `docs/architecture.md` → AI foundation).
+- **Optional single-document scope.** When `document_id` is supplied, grounding is
+  restricted to that one document. It stays owner-scoped, so a foreign or unknown
+  id grounds on nothing (`reason: no_documents`) rather than leaking other docs.
 - **Rate limited** per authenticated user (`ai_qa` throttle scope) to bound cost.
 - Always returns `200` with a structured body; failures are reported in-band
   (`reason`), never as an exception.

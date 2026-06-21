@@ -41,17 +41,25 @@ export default function AskDocumentsPage() {
   const [asked, setAsked] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notEnabled, setNotEnabled] = useState(false);
+  const [scope, setScope] = useState<{ id: number; title: string } | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // A contextual "Ask AI about this" deep-link (e.g. from a document) can
-  // pre-seed the question via ?q=. We pre-fill and focus, but never auto-submit
-  // — the user stays in control of what they actually ask.
+  // pre-seed the question via ?q= and scope the answer to a single document via
+  // ?document=<id>&scope=<title>. We pre-fill and focus, but never auto-submit —
+  // the user stays in control of what they actually ask.
   useEffect(() => {
-    const seeded = new URLSearchParams(window.location.search).get("q");
+    const params = new URLSearchParams(window.location.search);
+    const seeded = params.get("q");
     if (seeded) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setQuestion(seeded);
       textareaRef.current?.focus();
+    }
+    const docId = Number(params.get("document"));
+    const docTitle = params.get("scope");
+    if (Number.isFinite(docId) && docId > 0 && docTitle) {
+      setScope({ id: docId, title: docTitle });
     }
   }, []);
 
@@ -63,7 +71,7 @@ export default function AskDocumentsPage() {
     setResult(null);
     setAsked(trimmed);
     try {
-      const res = await askDocuments(trimmed);
+      const res = await askDocuments(trimmed, scope?.id);
       setResult(res);
     } catch (err) {
       if (err instanceof ApiError && err.status === 503) {
@@ -126,6 +134,26 @@ export default function AskDocumentsPage() {
 
       <Card>
         <CardContent className="space-y-4">
+          {scope && (
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-sm">
+              <span className="inline-flex min-w-0 items-center gap-2">
+                <FileText className="size-4 shrink-0 text-primary" aria-hidden />
+                <span className="truncate text-muted-foreground">
+                  Answering based on{" "}
+                  <span className="font-medium text-foreground">
+                    {scope.title}
+                  </span>
+                </span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setScope(null)}
+                className="shrink-0 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+              >
+                Ask all documents
+              </button>
+            </div>
+          )}
           <form onSubmit={handleSubmit} className="space-y-3">
             <Textarea
               ref={textareaRef}
@@ -163,7 +191,7 @@ export default function AskDocumentsPage() {
             </div>
           </form>
 
-          {!result && !loading && (
+          {!result && !loading && !scope && (
             <div className="space-y-2">
               <p className="text-xs font-medium text-muted-foreground">
                 Try asking
