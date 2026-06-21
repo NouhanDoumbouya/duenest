@@ -23,6 +23,7 @@ from __future__ import annotations
 import logging
 
 from apps.ai.client import ai_available, generate
+from apps.ai.privacy import maybe_redact
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +111,7 @@ def build_briefing(user) -> dict:
     blocks = "\n".join(
         f"[{i}] {line}" for i, line, _doc in candidates
     )
+    blocks = maybe_redact(user, blocks)
     prompt = (
         "These documents need attention (status and day counts are already "
         "computed and correct):\n\n" + blocks

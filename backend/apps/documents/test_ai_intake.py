@@ -12,6 +12,7 @@ from django.urls import reverse
 from rest_framework.test import APITestCase
 
 from apps.ai.client import AIResult
+from apps.ai.models import AiPreference
 from apps.documents import ai_intake
 from apps.documents.models import Document, DocumentFile
 
@@ -117,6 +118,7 @@ class FileIntakeEndpointTests(APITestCase):
             username="api", email="api@x.com", password="StrongPassword123!DN"
         )
         self.client.force_authenticate(self.user)
+        AiPreference.objects.create(user=self.user, ai_enabled=True)
 
     def _inbox_file(self, owner):
         return DocumentFile.objects.create(

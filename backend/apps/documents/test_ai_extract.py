@@ -30,6 +30,11 @@ def _flags(value: bool):
 
 @override_settings(**_CONFIGURED)
 class SuggestFieldsTests(SimpleTestCase):
+    def setUp(self):
+        p = mock.patch("apps.ai.privacy.ai_consented", return_value=True)
+        p.start()
+        self.addCleanup(p.stop)
+
     def test_returns_cleaned_fields_when_enabled(self):
         data = {
             "title": "  British Passport ",
@@ -88,6 +93,11 @@ class SuggestFieldsTests(SimpleTestCase):
 
 
 class GatingTests(SimpleTestCase):
+    def setUp(self):
+        p = mock.patch("apps.ai.privacy.ai_consented", return_value=True)
+        p.start()
+        self.addCleanup(p.stop)
+
     @override_settings(AI_CONFIGURED=False)
     def test_not_configured_disables_extraction(self):
         with _flags(True):

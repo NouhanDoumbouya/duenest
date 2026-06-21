@@ -15,6 +15,7 @@ from django.urls import reverse
 from rest_framework.test import APITestCase
 
 from apps.ai.client import AIResult
+from apps.ai.models import AiPreference
 from apps.documents import ai_pack_copilot as copilot
 from apps.documents.models import Document
 
@@ -160,6 +161,7 @@ class PackCopilotEndpointTests(APITestCase):
             username="api", email="api@x.com", password="StrongPassword123!DN"
         )
         self.client.force_authenticate(self.user)
+        AiPreference.objects.create(user=self.user, ai_enabled=True)
         self.url = reverse("document-pack-copilot")
 
     def test_flag_off_returns_503(self):

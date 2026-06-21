@@ -5569,6 +5569,13 @@ class DocumentQAView(APIView):
         require_feature_enabled("ai_features", request.user)
         require_feature_enabled("ai_document_qa", request.user)
 
+        from apps.ai.privacy import ai_consented
+        if not ai_consented(request.user):
+            return Response(
+                {"available": False, "reason": "consent_required"},
+                status=status.HTTP_200_OK,
+            )
+
         question = (request.data.get("question") or "").strip()
         if not question:
             return Response(
@@ -5615,6 +5622,13 @@ class DocumentDraftView(APIView):
     def post(self, request):
         require_feature_enabled("ai_features", request.user)
         require_feature_enabled("ai_document_drafting", request.user)
+
+        from apps.ai.privacy import ai_consented
+        if not ai_consented(request.user):
+            return Response(
+                {"available": False, "reason": "consent_required"},
+                status=status.HTTP_200_OK,
+            )
 
         instructions = (request.data.get("instructions") or "").strip()
         if not instructions:
@@ -5678,6 +5692,13 @@ class PackCopilotView(APIView):
     def post(self, request):
         require_feature_enabled("ai_features", request.user)
         require_feature_enabled("ai_pack_copilot", request.user)
+
+        from apps.ai.privacy import ai_consented
+        if not ai_consented(request.user):
+            return Response(
+                {"available": False, "reason": "consent_required"},
+                status=status.HTTP_200_OK,
+            )
 
         goal = (request.data.get("goal") or "").strip()
         if not goal:
@@ -5780,6 +5801,13 @@ class AiBriefingView(APIView):
         require_feature_enabled("ai_features", request.user)
         require_feature_enabled("ai_briefing", request.user)
 
+        from apps.ai.privacy import ai_consented
+        if not ai_consented(request.user):
+            return Response(
+                {"available": False, "reason": "consent_required"},
+                status=status.HTTP_200_OK,
+            )
+
         from .ai_briefing import build_briefing
 
         result = build_briefing(request.user)
@@ -5818,6 +5846,13 @@ class AiChatView(APIView):
     def post(self, request):
         require_feature_enabled("ai_features", request.user)
         require_feature_enabled("ai_chat", request.user)
+
+        from apps.ai.privacy import ai_consented
+        if not ai_consented(request.user):
+            return Response(
+                {"available": False, "reason": "consent_required"},
+                status=status.HTTP_200_OK,
+            )
 
         message = (request.data.get("message") or "").strip()
         if not message:
@@ -5865,6 +5900,13 @@ class FileIntakeView(APIView):
     def post(self, request, pk):
         require_feature_enabled("ai_features", request.user)
         require_feature_enabled("ai_intake", request.user)
+
+        from apps.ai.privacy import ai_consented
+        if not ai_consented(request.user):
+            return Response(
+                {"available": False, "reason": "consent_required"},
+                status=status.HTTP_200_OK,
+            )
 
         file = get_object_or_404(_owned_file_queryset(request.user), pk=pk)
 

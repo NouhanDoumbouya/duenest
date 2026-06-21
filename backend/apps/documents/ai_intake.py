@@ -123,8 +123,10 @@ def suggest_intake(user, file) -> dict:
         + _existing_documents(user)
     )
 
+    from apps.ai.privacy import maybe_redact
+
     result = generate(
-        prompt=prompt,
+        prompt=maybe_redact(user, prompt),
         system=_SYSTEM,
         output_schema=_SCHEMA,
         max_tokens=_MAX_TOKENS,
