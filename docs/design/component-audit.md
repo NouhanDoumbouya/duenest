@@ -26,7 +26,7 @@
 
 | Proposed primitive | Why | Priority |
 | --- | --- | --- |
-| `tabs` | Vault smart views, Bundles tabs, Document Tools tabs, Quick Share states all need consistent tabs. A `document-tabs.tsx` already exists in feature scope — promote/generalize. | P0 |
+| `tabs` | ✅ **Built.** `components/ui/tabs.tsx` — controlled underlined tabs with optional icon/count and full ARIA roving-tabindex keyboard nav (Arrow/Home/End). `document-tabs.tsx` now delegates to it. Ready to wire Vault smart-views, Bundles, Document Tools. | P0 |
 | `status-badge` | ✅ **Built.** `components/ui/status-badge.tsx` over pure vocabulary in `lib/status-badge.ts` (unit-tested). One mapping from lifecycle status → tone + label, built on the [status color map](./design-system.md#status-color-map-canonical--use-everywhere). First wired into Quick Share. Roll out to Vault/Bundles/Requests next. | P0 |
 | `drawer` / `bottom-sheet` | Mobile document actions, filters, share flows. Mobile-first. | P0 |
 | `dropdown` / `menu` | Row/card overflow actions ("⋯"). | P1 |
