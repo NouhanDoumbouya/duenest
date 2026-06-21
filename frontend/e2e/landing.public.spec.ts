@@ -4,9 +4,14 @@ import { expect, test } from "@playwright/test";
 test.describe("Landing page", () => {
   test("renders the hero and trust sections", async ({ page }) => {
     await page.goto("/");
+    // Hero headline (the product promise).
     await expect(
-      page.getByRole("heading", { name: /Stay ready before it's due/i }),
+      page.getByRole("heading", {
+        name: /Important documents, ready when life asks/i,
+      }),
     ).toBeVisible();
+    // The composed product-story visual carries the readiness narrative.
+    await expect(page.getByText(/Your readiness/i).first()).toBeVisible();
     // The trust/credibility additions from earlier work.
     await expect(
       page.getByRole("heading", { name: /The standards behind your documents/i }),
