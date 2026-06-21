@@ -2300,3 +2300,104 @@ class DocumentEmbedding(models.Model):
 
     def __str__(self):
         return f"Embedding(doc={self.document_id})"
+
+
+class PreparedDocument(models.Model):
+    """
+    A prepared (filled / signed) copy of a document file.
+
+    The original ``DocumentFile`` is always preserved; the prepared copy is a new
+    encrypted ``DocumentFile``. This is a *prepared copy*, not a legally binding
+    e-signature — see ``DocumentSignatureRecord`` for the audit trail.
+    """
+
+    class PreparationType(models.TextChoices):
+        FILL_SIGN = "fill_sign", "Fill & Sign"
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="prepared_documents",
+    )
+    # The source document (nullable: a File Inbox file may not be a Document yet).
+    document = models.ForeignKey(
+        "Document",
+        on_delete=models.CASCADE,
+        related_name="prepared_documents",
+        null=True,
+        blank=True,
+    )
+    original_file = models.ForeignKey(
+        "DocumentFile",
+        on_delete=models.CASCADE,
+        related_name="prepared_as_original",
+    )
+    prepared_file = models.ForeignKey(
+        "DocumentFile",
+        on_delete=models.CASCADE,
+        related_name="prepared_as_copy",
+    )
+    preparation_type = models.CharField(
+        max_length=32,
+        choices=PreparationType.choices,
+        default=PreparationType.FILL_SIGN,
+    )
+    # The overlay spec the prepared copy was built from (list of annotations).
+    annotations = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["owner", "-created_at"]),
+            models.Index(fields=["document"]),
+        ]
+
+    def __str__(self):
+        return f"PreparedDocument(owner={self.owner_id}, file={self.prepared_file_id})"
+
+
+class DocumentSignatureRecord(models.Model):
+    """
+    Audit record for a prepared signed copy: who prepared it, how, when, and the
+    SHA-256 hashes of the original and prepared files.
+
+    This is **not** a legal certification of signature validity. It is a
+    tamper-evidence/audit trail for a prepared copy.
+    """
+
+    class SignatureMethod(models.TextChoices):
+        DRAWN = "drawn", "Drawn"
+        TYPED = "typed", "Typed"
+        UPLOADED = "uploaded", "Uploaded"
+        NONE = "none", "Fill only (no signature)"
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="signature_records",
+    )
+    prepared = models.ForeignKey(
+        PreparedDocument,
+        on_delete=models.CASCADE,
+        related_name="signature_records",
+    )
+    signer_name = models.CharField(max_length=200, blank=True)
+    signer_email = models.EmailField(blank=True)
+    signature_method = models.CharField(
+        max_length=16,
+        choices=SignatureMethod.choices,
+        default=SignatureMethod.NONE,
+    )
+    signed_at = models.DateTimeField(default=timezone.now)
+    original_file_hash = models.CharField(max_length=64, blank=True)
+    prepared_file_hash = models.CharField(max_length=64, blank=True)
+    audit_payload = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["owner", "-created_at"])]
+
+    def __str__(self):
+        return f"SignatureRecord(prepared={self.prepared_id}, method={self.signature_method})"

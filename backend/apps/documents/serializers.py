@@ -26,6 +26,8 @@ def _validate_owner_access_code(value):
         raise serializers.ValidationError(message)
     return value
 from .models import (
+    DocumentSignatureRecord,
+    PreparedDocument,
     Document,
     DocumentActivity,
     DocumentAppointment,
@@ -2256,3 +2258,62 @@ class RoomActivitySerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = fields
+
+
+class DocumentSignatureRecordSerializer(serializers.ModelSerializer):
+    """Read-only audit record for a prepared signed copy (not legal certification)."""
+
+    class Meta:
+        model = DocumentSignatureRecord
+        fields = [
+            "id",
+            "signer_name",
+            "signer_email",
+            "signature_method",
+            "signed_at",
+            "original_file_hash",
+            "prepared_file_hash",
+            "audit_payload",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+
+class PreparedDocumentSerializer(serializers.ModelSerializer):
+    """A prepared (filled/signed) copy plus its audit record(s)."""
+
+    prepared_file = DocumentFileSerializer(read_only=True)
+    signature_records = DocumentSignatureRecordSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = PreparedDocument
+        fields = [
+            "id",
+            "document",
+            "original_file",
+            "prepared_file",
+            "preparation_type",
+            "annotations",
+            "signature_records",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+
+class FillSignRequestSerializer(serializers.Serializer):
+    """Input for preparing a signed copy. `annotations` is the overlay spec."""
+
+    annotations = serializers.ListField(
+        child=serializers.DictField(), allow_empty=False
+    )
+    signer_name = serializers.CharField(
+        required=False, allow_blank=True, default="", max_length=200
+    )
+    signer_email = serializers.EmailField(
+        required=False, allow_blank=True, default=""
+    )
+    signature_method = serializers.ChoiceField(
+        choices=[m.value for m in DocumentSignatureRecord.SignatureMethod],
+        required=False,
+        default=DocumentSignatureRecord.SignatureMethod.NONE,
+    )

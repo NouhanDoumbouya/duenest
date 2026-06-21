@@ -73,7 +73,9 @@ from .views import (
     DocumentFileTrashListView,
     DocumentFileTrashView,
     AiBriefingView,
+    DocumentFileFillSignView,
     FileIntakeView,
+    PreparedDocumentListView,
     AiChatView,
     DocumentDraftView,
     DocumentProofRecordListView,
@@ -175,6 +177,16 @@ urlpatterns = [
         "files/<int:pk>/intake/",
         FileIntakeView.as_view(),
         name="file-inbox-intake",
+    ),
+    path(
+        "files/<int:pk>/fill-sign/",
+        DocumentFileFillSignView.as_view(),
+        name="file-fill-sign",
+    ),
+    path(
+        "fill-sign/prepared/",
+        PreparedDocumentListView.as_view(),
+        name="fill-sign-prepared",
     ),
     path(
         "files/<int:pk>/attach-document/",

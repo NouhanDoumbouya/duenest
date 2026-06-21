@@ -5925,3 +5925,79 @@ class FileIntakeView(APIView):
             },
         )
         return Response(result, status=status.HTTP_200_OK)
+
+
+class DocumentFileFillSignView(APIView):
+    """
+    Fill & Sign — prepare a filled/signed **copy** of an owned PDF file.
+
+    POST ``/api/v1/files/<id>/fill-sign/`` with an ``annotations`` overlay spec.
+    The original is never modified; a new encrypted DocumentFile is produced and
+    a PreparedDocument + DocumentSignatureRecord audit row are created. PDF only.
+
+    Owner-scoped; gated by the ``fill_sign`` feature flag (premium-gateable; the
+    flag defaults to enabled). This prepares a signed copy — it is not a legal
+    certification of signature validity.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        require_feature_enabled("fill_sign", request.user)
+        source = get_object_or_404(_owned_file_queryset(request.user), pk=pk)
+
+        from .serializers import FillSignRequestSerializer, PreparedDocumentSerializer
+
+        ser = FillSignRequestSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+
+        from .fill_sign import FillSignError, prepare_signed_copy
+
+        try:
+            prepared, _record = prepare_signed_copy(
+                user=request.user,
+                source_file=source,
+                annotations=ser.validated_data["annotations"],
+                signer_name=ser.validated_data.get("signer_name", ""),
+                signer_email=ser.validated_data.get("signer_email", ""),
+                signature_method=ser.validated_data.get("signature_method", "none"),
+            )
+        except FillSignError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(
+            PreparedDocumentSerializer(prepared).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class PreparedDocumentListView(generics.ListAPIView):
+    """
+    List the current user's prepared (filled/signed) copies and their audit
+    records. Optional filters: ``?original_file=<id>`` or ``?document=<id>`` to
+    show signed copies for a specific file/document (e.g. on a document detail).
+    """
+
+    permission_classes = [IsAuthenticated]
+    pagination_class = None
+
+    def get_serializer_class(self):
+        from .serializers import PreparedDocumentSerializer
+
+        return PreparedDocumentSerializer
+
+    def get_queryset(self):
+        from .models import PreparedDocument
+
+        qs = (
+            PreparedDocument.objects.filter(owner=self.request.user)
+            .select_related("prepared_file", "original_file")
+            .prefetch_related("signature_records")
+        )
+        original_file = self.request.query_params.get("original_file")
+        if original_file:
+            qs = qs.filter(original_file_id=original_file)
+        document = self.request.query_params.get("document")
+        if document:
+            qs = qs.filter(document_id=document)
+        return qs
