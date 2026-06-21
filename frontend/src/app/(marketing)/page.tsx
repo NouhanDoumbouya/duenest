@@ -33,9 +33,6 @@ import { FeatureCard, type Feature } from "@/components/marketing/feature-card";
 import {
   EmergencyMockup,
   LifeRadarMockup,
-  DeadlinesRenewalsMockup,
-  SafeSendMockup,
-  VaultMockup,
 } from "@/components/marketing/mockups";
 import { HeroReadinessComposite } from "@/components/marketing/hero-composite";
 import { LiveCountdown } from "@/components/marketing/live-countdown";
@@ -173,11 +170,8 @@ export default function LandingPage() {
         <HowItWorks />
         <Connected />
         <LifeRadar />
-        <Vault />
-        <SafeSend />
+        <Toolkit />
         <Emergency />
-        <DeadlinesRenewals />
-        <Capabilities />
         {AI_ENABLED && <AiAssist />}
         <Security />
         <Principles />
@@ -625,52 +619,6 @@ function ProductSection({
   );
 }
 
-function Vault() {
-  return (
-    <ProductSection
-      id="vault"
-      tone="muted"
-      eyebrow="Vault"
-      title="A vault that does more than store files."
-      description="Every important document gets a status, a place, and a next action — not just a filename in a folder."
-      bullets={[
-        "Status at a glance: Safe, Expiring, Expired, Missing info, Shared",
-        "Drop a file in File Inbox now, organize it later",
-        "Expiry tracking, categories, and secure preview",
-        "Trash and recovery, so nothing is lost by accident",
-      ]}
-      visual={<VaultMockup />}
-    />
-  );
-}
-
-function SafeSend() {
-  return (
-    <ProductSection
-      id="safesend"
-      reverse
-      eyebrow="Sharing · SafeSend"
-      title="Share access, not raw files."
-      description="Send a QR, a secure link, or a DueNest code — through WhatsApp, Telegram, or email — without ever handing over the original file."
-      bullets={[
-        "View-only, access codes, expiry countdown, and watermarking",
-        "See a recipient preview before you send",
-        "Revoke access anytime — your vault is never exposed",
-        "One activity log shows every open and download",
-      ]}
-      visual={
-        <div className="relative">
-          <div
-            aria-hidden
-            className="pointer-events-none absolute -inset-6 -z-10 rounded-[2rem] bg-gradient-to-tr from-brand-teal/12 via-primary/10 to-transparent blur-2xl"
-          />
-          <SafeSendMockup />
-        </div>
-      }
-    />
-  );
-}
-
 // ---- Emergency (dark spotlight) --------------------------------------------
 
 function Emergency() {
@@ -721,29 +669,102 @@ function Emergency() {
   );
 }
 
-function DeadlinesRenewals() {
+// ---- Toolkit (consolidated product showcase) -------------------------------
+
+/** One pillar of the product, shown as a compact card with a few proof points.
+ *  Carries the section's former anchor id so existing deep-links still land. */
+function Pillar({
+  id,
+  icon: Icon,
+  title,
+  description,
+  bullets,
+}: {
+  id?: string;
+  icon: typeof Folder;
+  title: string;
+  description: string;
+  bullets: string[];
+}) {
   return (
-    <ProductSection
-      id="deadlines-renewals"
-      reverse
-      eyebrow="Deadlines & Renewals"
-      title="Never miss an expiry, renewal, or application deadline."
-      description="Track passport and visa expiries, ID and licence renewals, insurance, certificates, and application deadlines — with reminders before they pass."
-      bullets={[
-        "Expiry, renewal, and deadline reminders in one place",
-        "Choose when to be reminded — 7, 30, 60, or 90 days before",
-        "Recurring reminders for anything that comes back around",
-        "Linked to the document or application pack it belongs to",
-      ]}
-      visual={<DeadlinesRenewalsMockup />}
-    />
+    <div
+      id={id}
+      className="flex h-full flex-col gap-3 rounded-2xl border border-border bg-card p-6 shadow-card scroll-mt-20"
+    >
+      <div className="flex items-center gap-3">
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-brand-navy text-brand-teal">
+          <Icon className="size-5" />
+        </span>
+        <h3 className="font-heading text-lg font-semibold">{title}</h3>
+      </div>
+      <p className="text-sm leading-relaxed text-muted-foreground">
+        {description}
+      </p>
+      <ul className="mt-auto space-y-2 pt-1">
+        {bullets.map((b) => (
+          <li key={b} className="flex items-start gap-2.5 text-sm">
+            <ShieldCheck className="mt-0.5 size-4 shrink-0 text-brand-success" />
+            <span className="text-muted-foreground">{b}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
-// ---- Capabilities (breadth grid) -------------------------------------------
+function Toolkit() {
+  const pillars = [
+    {
+      id: "vault",
+      icon: Folder,
+      title: "Vault",
+      description:
+        "Every document gets a status, a place, and a next action — not just a filename in a folder.",
+      bullets: [
+        "Status at a glance: Safe, Expiring, Expired, Shared",
+        "Drop a file in File Inbox now, organize it later",
+        "Trash and recovery, so nothing is lost by accident",
+      ],
+    },
+    {
+      id: "safesend",
+      icon: ShieldCheck,
+      title: "SafeSend sharing",
+      description:
+        "Send a QR, a secure link, or a code — never the original file. Your vault is never exposed.",
+      bullets: [
+        "View-only, access codes, expiry, and watermarking",
+        "See a recipient preview before you send",
+        "Revoke access anytime, with a full activity log",
+      ],
+    },
+    {
+      id: "deadlines-renewals",
+      icon: BellRing,
+      title: "Deadlines & renewals",
+      description:
+        "Track passport and visa expiries, ID renewals, insurance, and application deadlines — before they pass.",
+      bullets: [
+        "Reminders 7, 30, 60, or 90 days before",
+        "Recurring reminders for anything that returns",
+        "Linked to the document or pack it belongs to",
+      ],
+    },
+    {
+      id: "packs",
+      icon: Package,
+      title: "Application packs",
+      description:
+        "Group the right documents into a pack with a readiness score — for visas, scholarships, jobs, and renewals.",
+      bullets: [
+        "Required vs optional checklist",
+        "A readiness score and what's still missing",
+        "Export or share safely when complete",
+      ],
+    },
+  ];
 
-function Capabilities() {
-  const features: Feature[] = [
+  const tools: Feature[] = [
     {
       icon: ScanLine,
       title: "Scan with your camera",
@@ -755,18 +776,6 @@ function Capabilities() {
       title: "Details filled in for you",
       description:
         "DueNest reads key fields and dates from a file, then asks you to confirm before saving — you stay in control.",
-    },
-    {
-      icon: Package,
-      title: "Application & renewal packs",
-      description:
-        "Group the right documents into a pack with a readiness score — ready for visas, scholarships, jobs, and renewals.",
-    },
-    {
-      icon: BellRing,
-      title: "Reminders & calendar",
-      description:
-        "Renewal and deadline reminders on a calendar and timeline, so the next step never sneaks up on you.",
     },
     {
       icon: DoorClosed,
@@ -783,19 +792,29 @@ function Capabilities() {
       badge: "Beta",
     },
   ];
+
   return (
     <section id="capabilities" className="scroll-mt-20">
       <div className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:py-24">
         <ScrollReveal>
           <SectionHeader
-            eyebrow="The full toolkit"
-            title="More ways to stay ready — one calm system."
-            description="Beyond documents and renewals, DueNest gives you the tools to capture, prepare, and share important paperwork without the last-minute scramble."
+            eyebrow="One connected system"
+            title="Everything your documents need, in one place."
+            description="Store, prepare, track, and share — each piece works with the others, so a document you add once stays ready for whatever life asks."
           />
         </ScrollReveal>
-        <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {features.map((feature, i) => (
-            <ScrollReveal key={feature.title} delay={(i % 3) * 80}>
+
+        <div className="mt-12 grid gap-5 lg:grid-cols-2">
+          {pillars.map((p, i) => (
+            <ScrollReveal key={p.title} delay={(i % 2) * 80}>
+              <Pillar {...p} />
+            </ScrollReveal>
+          ))}
+        </div>
+
+        <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          {tools.map((feature, i) => (
+            <ScrollReveal key={feature.title} delay={(i % 4) * 70}>
               <FeatureCard feature={feature} />
             </ScrollReveal>
           ))}
