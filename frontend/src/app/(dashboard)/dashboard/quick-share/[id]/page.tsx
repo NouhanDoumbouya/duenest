@@ -415,6 +415,12 @@ export default function QuickShareDetailPage() {
           </div>
 
           {!inactive && (
+            <p className="mt-3 text-center text-xs text-muted-foreground">
+              This QR follows your SafeSend access rules.
+            </p>
+          )}
+
+          {!inactive && (
             <div className="mt-4 flex flex-col items-center gap-2">
               <div className="flex items-center gap-2" role="group" aria-label="QR color">
                 {QR_COLOR_PRESETS.map((c) => (

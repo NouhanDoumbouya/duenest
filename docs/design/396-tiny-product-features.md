@@ -25,6 +25,13 @@
 > **build the genuine gaps, mark already-done rows truthfully, never fabricate.** Rows are
 > updated to `implemented` only as they are code-verified or built — this is in progress,
 > not complete.
+>
+> **Code-verified present (despite "deferred" rows below):** TF-196 (Trash Undo toast),
+> TF-251 (pack readiness ring), TF-260 (SafeSend a pack), TF-261 (pack export ZIP/merged
+> PDF), TF-262 (pack cover sheet), TF-138 (scans-stay-private copy), TF-243 (reminder
+> channels), TF-321 (request QR), TF-373/374 (export/delete account data), TF-039 (command
+> palette), TF-040 (quick "+ new"). **Built this pass:** TF-102 (signed-copy badge),
+> TF-309 (QR access-rules note).
 
 ## Index
 
@@ -455,7 +462,7 @@
 | TF-306 | QR | Logo in center (optional, safe) | Branding | Professional | P3 | M | deferred | |
 | TF-307 | QR | Download PNG/SVG/PDF | Flexibility | Usable | P2 | S | deferred | |
 | TF-308 | QR | Frame/card styles | Polish | Professional | P3 | M | deferred | |
-| TF-309 | QR | "This QR follows your SafeSend access rules" note | Trust | Clarity | P1 | XS | deferred | |
+| TF-309 | QR | "This QR follows your SafeSend access rules" note | Trust | Clarity | P1 | XS | implemented | Added under the QR on the SafeSend detail page |
 | TF-310 | QR | Expiry + revoke visible on QR | Safety | Control | P1 | S | deferred | |
 
 ## 22. Document Requests
