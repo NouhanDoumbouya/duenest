@@ -73,3 +73,11 @@ def purge_expired_trash() -> dict:
     call_command("purge_expired_trash")
     logger.info("purge_expired_trash_task complete")
     return {"ok": True}
+
+
+@shared_task(name="apps.documents.tasks.send_ai_digests", acks_late=True)
+def send_ai_digests() -> dict:
+    """Scheduled: send the opt-in weekly AI briefing digest to eligible users."""
+    call_command("send_ai_digests")
+    logger.info("send_ai_digests_task complete")
+    return {"ok": True}

@@ -49,6 +49,7 @@ class NotificationPreferenceSerializer(serializers.ModelSerializer):
             "security_alerts_enabled",
             "activity_notifications_enabled",
             "reminder_digest_enabled",
+            "ai_briefing_digest_enabled",
             "default_reminder_lead_days",
             "timezone",
             "created_at",
