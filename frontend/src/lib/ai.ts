@@ -17,6 +17,7 @@ export type AiReason =
   | "empty_question"
   | "empty_instructions"
   | "empty_goal"
+  | "empty_message"
   | "error";
 
 export interface DocumentCitation {
@@ -138,4 +139,93 @@ export function createPackBundle(input: {
       requirements: input.requirements,
     },
   });
+}
+
+export type BriefingUrgency = "high" | "medium" | "low";
+
+export interface BriefingItem {
+  title: string;
+  detail: string;
+  urgency: BriefingUrgency;
+  action_label: string;
+  document_id: number | null;
+  document_title: string | null;
+}
+
+export interface BriefingResult {
+  available: boolean;
+  reason: AiReason;
+  summary: string;
+  items: BriefingItem[];
+  attention_count: number;
+}
+
+/** A prioritized "what to do now" briefing across the user's vault. */
+export function getBriefing(): Promise<BriefingResult> {
+  return apiFetch<BriefingResult>("/documents/ai-briefing/", { method: "POST" });
+}
+
+export type ChatActionType = "draft" | "pack" | "open_document" | "briefing";
+
+export interface ChatAction {
+  type: ChatActionType;
+  label: string;
+  goal?: string;
+  document_id?: number;
+  document_title?: string;
+}
+
+export interface ChatResult {
+  available: boolean;
+  reason: AiReason;
+  reply: string;
+  actions: ChatAction[];
+}
+
+export interface ChatTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
+/** Chat grounded in the user's documents; returns a reply + confirm-gated actions. */
+export function chatWithAssistant(
+  message: string,
+  history: ChatTurn[],
+): Promise<ChatResult> {
+  return apiFetch<ChatResult>("/documents/ai-chat/", {
+    method: "POST",
+    body: { message, history },
+  });
+}
+
+export type IntakeSuggestionType =
+  | "create_document"
+  | "set_reminder"
+  | "add_to_pack"
+  | "draft";
+
+export interface IntakeSuggestion {
+  type: IntakeSuggestionType;
+  label: string;
+  goal?: string;
+}
+
+export interface IntakeSuggestedFields {
+  title?: string;
+  document_type?: string;
+  expiry_date?: string;
+  reference_number?: string;
+}
+
+export interface IntakeResult {
+  available: boolean;
+  reason: AiReason;
+  summary: string;
+  suggested_fields: IntakeSuggestedFields;
+  suggestions: IntakeSuggestion[];
+}
+
+/** Understand an uploaded file and get confirm-gated next-action suggestions. */
+export function getFileIntake(fileId: number): Promise<IntakeResult> {
+  return apiFetch<IntakeResult>(`/files/${fileId}/intake/`, { method: "POST" });
 }

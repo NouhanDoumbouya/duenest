@@ -1973,6 +1973,108 @@ Assistive — the UI labels AI findings and asks the user to review before submi
 
 ---
 
+## 13B.10 AI: Proactive briefing ("what to do now")
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/api/v1/documents/ai-briefing/` | A prioritized, plain-language action briefing across the user's vault |
+
+Opt-in, **key-gated**. Returns a short, prioritized briefing built from the
+user's **real** document health (Python computes statuses/day counts via
+`get_document_health`; Claude prioritizes and phrases the suggested actions —
+it never changes a date or status). Read-only — nothing is modified. When
+nothing needs attention, returns a positive, empty briefing **without** calling
+the model. Gated by `ai_features` + `ai_briefing` (503 when off) and platform
+config (no key → `200 {available:false, reason:"not_configured"}`); owner-scoped;
+per-user rate limited (`ai_briefing` scope).
+
+```json
+{
+  "available": true,
+  "reason": "ok",
+  "summary": "Two things worth handling this week.",
+  "items": [
+    {
+      "title": "Renew your passport",
+      "detail": "It expires in 20 days.",
+      "urgency": "high",
+      "action_label": "Renew now",
+      "document_id": 12,
+      "document_title": "UK Passport"
+    }
+  ],
+  "attention_count": 2
+}
+```
+
+`reason` is `ok` / `not_configured` / `error`; `urgency` is `high` / `medium` /
+`low`.
+
+---
+
+## 13B.11 AI: Conversational assistant (chat)
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/api/v1/documents/ai-chat/` | Chat grounded in the user's documents, with confirm-gated action suggestions |
+
+Opt-in, **key-gated**. Body: `{ "message": "...", "history": [{role, content}] }`.
+Returns a `reply` grounded in the user's own documents plus typed,
+**confirm-gated** `actions` the UI renders as buttons into existing flows. The
+endpoint performs **no writes or shares** — the user completes any action in its
+destination flow. Owner-scoped; gated by `ai_features` + `ai_chat` (503 when
+off) / no key → `200 {available:false}`; rate limited (`ai_chat`).
+
+Action types: `draft` / `pack` (carry `goal`), `open_document` (carries
+`document_id` + `document_title`, mapped to a real owned document), `briefing`.
+
+```json
+{
+  "available": true,
+  "reason": "ok",
+  "reply": "Your passport is in your vault. Want to start a renewal?",
+  "actions": [
+    { "type": "draft", "label": "Draft a renewal letter", "goal": "passport renewal" },
+    { "type": "open_document", "label": "Open passport", "document_id": 12, "document_title": "UK Passport" }
+  ]
+}
+```
+
+`reason` is `ok` / `not_configured` / `empty_message` / `error`.
+
+---
+
+## 13B.12 AI: Smart Intake (understand a file + next actions)
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/api/v1/files/<id>/intake/` | Understand an owned file and propose confirm-gated next actions |
+
+Opt-in, **key-gated**. For an owner's inbox/document file, returns a one-line
+`summary`, the `suggested_fields` (reused from extraction — never re-extracted),
+and **confirm-gated** `suggestions` (`create_document` / `set_reminder` /
+`add_to_pack` / `draft`, the last two carrying `goal`). The endpoint performs no
+writes; the user confirms any action in its flow. Owner-scoped; gated by
+`ai_features` + `ai_intake` (503 when off) / no key → `200 {available:false}`;
+rate limited (`ai_intake`).
+
+```json
+{
+  "available": true,
+  "reason": "ok",
+  "summary": "This looks like a passport.",
+  "suggested_fields": { "title": "UK Passport", "document_type": "passport", "expiry_date": "2030-01-01" },
+  "suggestions": [
+    { "type": "create_document", "label": "Save as a tracked document" },
+    { "type": "set_reminder", "label": "Set a renewal reminder" }
+  ]
+}
+```
+
+`reason` is `ok` / `not_configured` / `error`.
+
+---
+
 ## 13C.7 Document intelligence polish
 
 Intelligence fields are computed read-only on every document (`GET/LIST

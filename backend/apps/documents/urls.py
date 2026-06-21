@@ -72,6 +72,9 @@ from .views import (
     DocumentFileShareLinkRevokeView,
     DocumentFileTrashListView,
     DocumentFileTrashView,
+    AiBriefingView,
+    FileIntakeView,
+    AiChatView,
     DocumentDraftView,
     DocumentProofRecordListView,
     DocumentQAView,
@@ -167,6 +170,11 @@ urlpatterns = [
         "files/<int:pk>/permanent-delete/",
         FileInboxPermanentDeleteView.as_view(),
         name="file-inbox-permanent-delete",
+    ),
+    path(
+        "files/<int:pk>/intake/",
+        FileIntakeView.as_view(),
+        name="file-inbox-intake",
     ),
     path(
         "files/<int:pk>/attach-document/",
@@ -342,6 +350,17 @@ urlpatterns = [
         "documents/pack-copilot/create-bundle/",
         PackCopilotCreateBundleView.as_view(),
         name="document-pack-copilot-create-bundle",
+    ),
+    # ---- AI: proactive briefing (what to do now; opt-in, key+flag gated) ----
+    path(
+        "documents/ai-briefing/",
+        AiBriefingView.as_view(),
+        name="document-ai-briefing",
+    ),
+    path(
+        "documents/ai-chat/",
+        AiChatView.as_view(),
+        name="document-ai-chat",
     ),
     # ---- Intelligence polish: renewal history (nested under a document) ----
     path(

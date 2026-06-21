@@ -1,0 +1,16 @@
+{% extends "emails/base.txt" %}
+{% block content %}Your weekly briefing
+{% if summary %}
+{{ summary }}
+{% endif %}
+{% for item in items %}
+- {{ item.title }}{% if item.detail %}
+  {{ item.detail }}{% endif %}{% if item.action_label %}
+  → {{ item.action_label }}{% endif %}
+{% endfor %}
+Open your briefing: {{ action_url }}
+
+This summary is generated from your own documents' dates and statuses. DueNest
+emails never include document contents, access codes, share tokens, raw OCR
+text, private notes, or files.{% endblock %}
+{% block footer %}Manage notification preferences: {{ preferences_url }}{% endblock %}

@@ -33,6 +33,10 @@ class NotificationPreference(models.Model):
     security_alerts_enabled = models.BooleanField(default=True)
     activity_notifications_enabled = models.BooleanField(default=False)
     reminder_digest_enabled = models.BooleanField(default=False)
+    # Opt-in weekly AI briefing email ("what to do now"). Default off — strictly
+    # opt-in, and only delivered when AI + email are configured and the user can
+    # see the ai_briefing feature.
+    ai_briefing_digest_enabled = models.BooleanField(default=False)
     default_reminder_lead_days = models.JSONField(default=default_lead_days, blank=True)
     timezone = models.CharField(max_length=64, default="UTC")
     created_at = models.DateTimeField(auto_now_add=True)

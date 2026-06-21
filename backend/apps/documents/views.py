@@ -5756,3 +5756,130 @@ class PackCopilotCreateBundleView(APIView):
             },
             status=status.HTTP_201_CREATED,
         )
+
+
+class AiBriefingView(APIView):
+    """
+    Proactive Autopilot — an AI "what to do now" briefing across the vault.
+
+    POST → returns a prioritized briefing built from the user's real document
+    health (Python computes the statuses/dates; Claude prioritizes and phrases
+    the suggested actions). Read-only: nothing is changed. When nothing needs
+    attention it returns a positive, empty briefing without calling the model.
+
+    Gated by ``ai_features`` + ``ai_briefing`` (503 when off) and platform config
+    (no key → ``200 {available:false, reason:"not_configured"}``). Owner-scoped;
+    per-user rate limited.
+    """
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "ai_briefing"
+
+    def post(self, request):
+        require_feature_enabled("ai_features", request.user)
+        require_feature_enabled("ai_briefing", request.user)
+
+        from .ai_briefing import build_briefing
+
+        result = build_briefing(request.user)
+        _track_product_event(
+            request,
+            "ai_briefing_generated",
+            object_type="ai_briefing",
+            metadata={
+                "available": result.get("available"),
+                "reason": result.get("reason"),
+                "items": len(result.get("items") or []),
+                "attention_count": result.get("attention_count"),
+            },
+        )
+        return Response(result, status=status.HTTP_200_OK)
+
+
+class AiChatView(APIView):
+    """
+    Conversational assistant — chat grounded in the user's vault.
+
+    POST ``{"message": "...", "history": [{role, content}]}`` → a reply plus
+    **confirm-gated action suggestions** (draft / pack / open_document /
+    briefing) the UI renders as buttons into existing flows. The endpoint
+    performs no writes or shares itself.
+
+    Gated by ``ai_features`` + ``ai_chat`` (503 when off) and platform config
+    (no key → ``200 {available:false, reason:"not_configured"}``). Owner-scoped;
+    per-user rate limited.
+    """
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "ai_chat"
+
+    def post(self, request):
+        require_feature_enabled("ai_features", request.user)
+        require_feature_enabled("ai_chat", request.user)
+
+        message = (request.data.get("message") or "").strip()
+        if not message:
+            return Response(
+                {"detail": "A message is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        history = request.data.get("history")
+        if not isinstance(history, list):
+            history = []
+
+        from .ai_chat import chat
+
+        result = chat(request.user, message=message, history=history)
+        _track_product_event(
+            request,
+            "ai_chat_message",
+            object_type="ai_chat",
+            metadata={
+                "available": result.get("available"),
+                "reason": result.get("reason"),
+                "actions": len(result.get("actions") or []),
+            },
+        )
+        return Response(result, status=status.HTTP_200_OK)
+
+
+class FileIntakeView(APIView):
+    """
+    Smart Intake — understand an owned file and propose next actions.
+
+    POST ``/api/v1/files/<id>/intake/`` → a one-line summary, the suggested
+    fields (reused from extraction), and **confirm-gated** next-action
+    suggestions (create_document / set_reminder / add_to_pack / draft). The
+    endpoint performs no writes; the user confirms any action in its flow.
+
+    Owner-scoped; gated by ``ai_features`` + ``ai_intake`` (503 when off) and
+    platform config (no key → ``200 {available:false}``). Per-user rate limited.
+    """
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "ai_intake"
+
+    def post(self, request, pk):
+        require_feature_enabled("ai_features", request.user)
+        require_feature_enabled("ai_intake", request.user)
+
+        file = get_object_or_404(_owned_file_queryset(request.user), pk=pk)
+
+        from .ai_intake import suggest_intake
+
+        result = suggest_intake(request.user, file)
+        _track_product_event(
+            request,
+            "file_intake_suggested",
+            object_type="document_file",
+            object_id=file.id,
+            metadata={
+                "available": result.get("available"),
+                "reason": result.get("reason"),
+                "suggestions": len(result.get("suggestions") or []),
+            },
+        )
+        return Response(result, status=status.HTTP_200_OK)

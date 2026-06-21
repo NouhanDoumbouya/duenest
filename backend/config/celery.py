@@ -79,6 +79,13 @@ app.conf.beat_schedule = {
         "schedule": crontab(minute="*/10"),
         "options": {"queue": "analytics"},
     },
+    "send-ai-briefing-digests": {
+        "task": "apps.documents.tasks.send_ai_digests",
+        # Weekly — Monday 08:00 UTC. No-ops unless AI + email are configured and
+        # users have opted in (the command guards all of this).
+        "schedule": crontab(day_of_week=1, hour=8, minute=0),
+        "options": {"queue": "files"},
+    },
 }
 
 
