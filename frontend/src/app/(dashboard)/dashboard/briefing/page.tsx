@@ -14,6 +14,7 @@ import {
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { AiActivationCard } from "@/components/ai/ai-activation-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer } from "@/components/ui/page-container";
 import { PageHeader } from "@/components/ui/page-header";
@@ -151,6 +152,8 @@ export default function BriefingPage() {
         }
       />
 
+      <AiActivationCard onActivated={() => void load(true)} />
+
       {loading && (
         <Card>
           <CardContent className="flex items-center gap-3 text-sm text-muted-foreground">
@@ -169,7 +172,7 @@ export default function BriefingPage() {
         </Card>
       )}
 
-      {result && !loading && (
+      {result?.available && !loading && (
         <>
           {result.summary && (
             <Card>

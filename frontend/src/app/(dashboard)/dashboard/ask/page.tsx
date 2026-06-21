@@ -11,6 +11,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 
+import { AiActivationCard } from "@/components/ai/ai-activation-card";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -101,6 +102,8 @@ export default function AskDocumentsPage() {
         title="Ask your documents"
         description="Ask a question in plain language and get an answer drawn from your own documents — with links to the ones it used."
       />
+
+      <AiActivationCard />
 
       <Card>
         <CardContent className="space-y-4">
