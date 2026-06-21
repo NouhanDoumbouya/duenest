@@ -3,6 +3,10 @@ amqp==5.3.1
 # lazily and only used when ANTHROPIC_API_KEY is set, so lean installs that omit
 # it still run — AI just reports "not configured" (see apps/ai/client.py).
 anthropic==0.111.0
+# voyageai powers the optional content-level RAG retrieval (apps.ai.embeddings).
+# Lazy-imported and only used when VOYAGE_API_KEY is set; absent it, retrieval
+# stays lexical, so lean installs run fine.
+voyageai==0.4.1
 asgiref==3.11.1
 billiard==4.2.4
 boto3==1.35.99
