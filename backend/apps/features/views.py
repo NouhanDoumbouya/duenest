@@ -9,6 +9,8 @@ Feature flag API.
 
 from __future__ import annotations
 
+import logging
+
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.permissions import AllowAny
@@ -21,6 +23,8 @@ from apps.founder.services import log_founder_action
 from .flags import is_feature_enabled, resolve_flag
 from .models import FEATURE_DEFINITIONS, FeatureFlag, Visibility
 from .serializers import FeatureFlagSerializer, FeatureFlagUpdateSerializer
+
+logger = logging.getLogger(__name__)
 
 
 class FeatureMapView(APIView):
@@ -72,7 +76,14 @@ class FounderFeatureFlagListView(APIView):
     permission_classes = [IsFounderUser]
 
     def get(self, request):
-        _seed_missing_flags()
+        # Seeding is an opportunistic convenience (auto-create rows for new
+        # registry keys). It must never break the read: if it fails for any
+        # reason (a write race, a DB lock, a transient error), still return the
+        # flags that already exist instead of 500-ing the Feature Control Center.
+        try:
+            _seed_missing_flags()
+        except Exception:  # noqa: BLE001 — read must not depend on the seed write
+            logger.exception("feature-flag seeding failed; returning existing flags")
         flags = FeatureFlag.objects.all()
         return Response(FeatureFlagSerializer(flags, many=True).data)
 

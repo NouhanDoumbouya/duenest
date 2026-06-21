@@ -10,10 +10,15 @@ race-safe behaviour.
 
 from unittest import mock
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase
+from rest_framework import status
+from rest_framework.test import APITestCase
 
 from apps.features.models import FEATURE_DEFINITIONS, FeatureFlag
 from apps.features.views import _seed_missing_flags
+
+User = get_user_model()
 
 
 class SeedMissingFlagsRaceTests(TestCase):
@@ -39,3 +44,25 @@ class SeedMissingFlagsRaceTests(TestCase):
         self.assertEqual(
             FeatureFlag.objects.count(), len(FEATURE_DEFINITIONS)
         )
+
+
+class FeatureFlagsReadResilienceTests(APITestCase):
+    """The Feature Control Center read must not 500 when the opportunistic seed
+    fails — it should still return the flags that already exist."""
+
+    def test_get_returns_flags_even_when_seeding_raises(self):
+        admin = User.objects.create_superuser(
+            username="founder", email="f@x.com", password="StrongPassword123!DN"
+        )
+        FeatureFlag.objects.create(
+            key="x_existing", name="X Existing", visibility="enabled"
+        )
+        self.client.force_authenticate(admin)
+        with mock.patch(
+            "apps.features.views._seed_missing_flags",
+            side_effect=RuntimeError("seed boom"),
+        ):
+            res = self.client.get("/api/v1/founder/feature-flags/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIsInstance(res.data, list)
+        self.assertTrue(any(f["key"] == "x_existing" for f in res.data))
