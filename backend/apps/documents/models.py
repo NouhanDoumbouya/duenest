@@ -2401,3 +2401,69 @@ class DocumentSignatureRecord(models.Model):
 
     def __str__(self):
         return f"SignatureRecord(prepared={self.prepared_id}, method={self.signature_method})"
+
+
+class GeneratedDocument(models.Model):
+    """
+    A persisted AI-drafted document (CV, cover/motivation letter, request email,
+    etc.). Generation itself stays ephemeral and review-first in ``ai_draft``;
+    this model lets the user **save** a reviewed draft into a drafts library,
+    edit it, and attach it to an Application Pack.
+
+    The draft is a starting point the user reviews — not an authoritative document
+    and not a guarantee of any application outcome.
+    """
+
+    class DocumentType(models.TextChoices):
+        CV = "cv", "CV / résumé"
+        COVER_LETTER = "cover_letter", "Cover letter"
+        MOTIVATION_LETTER = "motivation_letter", "Motivation letter"
+        STATEMENT_OF_PURPOSE = "statement_of_purpose", "Statement of purpose"
+        RECOMMENDATION_EMAIL = "recommendation_email", "Recommendation request email"
+        FORMAL_LETTER = "formal_letter", "Formal request letter"
+        APPLICATION_EMAIL = "application_email", "Application email"
+        REQUEST_MESSAGE = "request_message", "Document request message"
+        PACK_COVER_SHEET = "pack_cover_sheet", "Pack cover sheet"
+        OTHER = "other", "Other"
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        SAVED = "saved", "Saved"
+        DISCARDED = "discarded", "Discarded"
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="generated_documents",
+    )
+    title = models.CharField(max_length=255)
+    document_type = models.CharField(
+        max_length=32, choices=DocumentType.choices, default=DocumentType.OTHER
+    )
+    # The inputs the draft was generated from (instructions, tone, doc ids, etc.).
+    input_payload = models.JSONField(default=dict, blank=True)
+    output_text = models.TextField(blank=True)
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.DRAFT
+    )
+    related_pack = models.ForeignKey(
+        "DocumentBundle",
+        on_delete=models.SET_NULL,
+        related_name="generated_documents",
+        null=True,
+        blank=True,
+    )
+    provider = models.CharField(max_length=32, blank=True)
+    model = models.CharField(max_length=64, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+        indexes = [
+            models.Index(fields=["owner", "-updated_at"]),
+            models.Index(fields=["related_pack"]),
+        ]
+
+    def __str__(self):
+        return f"GeneratedDocument(owner={self.owner_id}, type={self.document_type})"

@@ -75,6 +75,8 @@ from .views import (
     AiBriefingView,
     DocumentFileFillSignView,
     FileIntakeView,
+    GeneratedDocumentDetailView,
+    GeneratedDocumentListCreateView,
     PreparedDocumentListView,
     AiChatView,
     DocumentDraftView,
@@ -187,6 +189,16 @@ urlpatterns = [
         "fill-sign/prepared/",
         PreparedDocumentListView.as_view(),
         name="fill-sign-prepared",
+    ),
+    path(
+        "generated-documents/",
+        GeneratedDocumentListCreateView.as_view(),
+        name="generated-documents",
+    ),
+    path(
+        "generated-documents/<int:pk>/",
+        GeneratedDocumentDetailView.as_view(),
+        name="generated-document-detail",
     ),
     path(
         "files/<int:pk>/attach-document/",

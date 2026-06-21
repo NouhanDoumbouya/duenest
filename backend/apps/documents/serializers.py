@@ -27,6 +27,7 @@ def _validate_owner_access_code(value):
     return value
 from .models import (
     DocumentSignatureRecord,
+    GeneratedDocument,
     PreparedDocument,
     Document,
     DocumentActivity,
@@ -2317,3 +2318,31 @@ class FillSignRequestSerializer(serializers.Serializer):
         required=False,
         default=DocumentSignatureRecord.SignatureMethod.NONE,
     )
+
+
+class GeneratedDocumentSerializer(serializers.ModelSerializer):
+    """A saved AI-drafted document (drafts library). Owner-scoped."""
+
+    class Meta:
+        model = GeneratedDocument
+        fields = [
+            "id",
+            "title",
+            "document_type",
+            "input_payload",
+            "output_text",
+            "status",
+            "related_pack",
+            "provider",
+            "model",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "provider", "model", "created_at", "updated_at"]
+
+    def validate_related_pack(self, value):
+        # A draft may only be attached to one of the requesting user's own packs.
+        request = self.context.get("request")
+        if value is not None and request and value.owner_id != request.user.id:
+            raise serializers.ValidationError("Pack not found.")
+        return value

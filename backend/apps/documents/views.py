@@ -6001,3 +6001,52 @@ class PreparedDocumentListView(generics.ListAPIView):
         if document:
             qs = qs.filter(document_id=document)
         return qs
+
+
+class GeneratedDocumentListCreateView(generics.ListCreateAPIView):
+    """
+    The drafts library: list / save AI-drafted documents. Owner-scoped. Saving a
+    reviewed draft here is just persistence of the user's own text — it is not
+    gated on the AI flags (so saved drafts stay accessible even if AI is off).
+
+    Optional filters: ``?status=`` and ``?related_pack=<id>``.
+    """
+
+    permission_classes = [IsAuthenticated]
+    pagination_class = None
+
+    def get_serializer_class(self):
+        from .serializers import GeneratedDocumentSerializer
+
+        return GeneratedDocumentSerializer
+
+    def get_queryset(self):
+        from .models import GeneratedDocument
+
+        qs = GeneratedDocument.objects.filter(owner=self.request.user)
+        status_filter = self.request.query_params.get("status")
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+        pack = self.request.query_params.get("related_pack")
+        if pack:
+            qs = qs.filter(related_pack_id=pack)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
+
+
+class GeneratedDocumentDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """Retrieve / edit / delete one of the user's own saved drafts."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get_serializer_class(self):
+        from .serializers import GeneratedDocumentSerializer
+
+        return GeneratedDocumentSerializer
+
+    def get_queryset(self):
+        from .models import GeneratedDocument
+
+        return GeneratedDocument.objects.filter(owner=self.request.user)
