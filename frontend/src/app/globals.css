@@ -532,6 +532,14 @@
     animation: none;
   }
 
+  /* tailwindcss-animate enter animations (slide/zoom/fade-in). Components that
+     opt in with `motion-safe:` are already off under reduced motion; this also
+     neutralizes any bare `animate-in`, so elements appear in their final state
+     without movement. */
+  .animate-in {
+    animation: none;
+  }
+
   /* Motion add-ons: keep everything static and visible when motion is reduced. */
   .live-scan::before,
   .radar-sweep {
