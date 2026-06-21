@@ -8,6 +8,7 @@ import { useFeature } from "@/components/features/feature-flags-provider";
 import { DocumentFilesList } from "@/components/documents/document-files-list";
 import { FileToolsButton } from "@/components/documents/file-tools-button";
 import { PageEditorDialog } from "@/components/documents/page-editor-dialog";
+import { PreparedCopiesSection } from "@/components/documents/prepared-copies-section";
 import { DocumentFileUploader } from "@/components/documents/document-file-uploader";
 import { DocumentFileViewer } from "@/components/documents/document-file-viewer";
 import { DocumentTrashedFiles } from "@/components/documents/document-trashed-files";
@@ -171,10 +172,11 @@ export function FilesTab({
   }
 
   return (
-    <SectionCard
-      title="Files"
-      description="Scans and copies linked to this document."
-    >
+    <div className="space-y-6">
+      <SectionCard
+        title="Files"
+        description="Scans and copies linked to this document."
+      >
       <div className="space-y-4">
         <DocumentFileUploader documentId={documentId} onUploaded={handleUploaded} />
         {/* Hidden picker for "New version" — replaces a file by uploading a new
@@ -278,6 +280,8 @@ export function FilesTab({
       )}
 
       <Toast toast={toast} onDismiss={() => setToast(null)} />
-    </SectionCard>
+      </SectionCard>
+      <PreparedCopiesSection documentId={documentId} />
+    </div>
   );
 }
