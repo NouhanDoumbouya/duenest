@@ -19,10 +19,11 @@ const columns: { heading: string; links: FooterLink[] }[] = [
   {
     heading: "Use cases",
     links: [
-      { label: "Students & visas", href: "/#use-cases" },
-      { label: "Families", href: "/#use-cases" },
-      { label: "Freelancers", href: "/#use-cases" },
-      { label: "Organizations", href: "/#use-cases" },
+      { label: "Students", href: "/use-cases/students" },
+      { label: "Visa documents", href: "/use-cases/visa-documents" },
+      { label: "Job applications", href: "/use-cases/job-applications" },
+      { label: "Agencies & schools", href: "/use-cases/agencies-schools" },
+      { label: "All use cases", href: "/use-cases" },
     ],
   },
   {
