@@ -84,6 +84,27 @@ class GeneratedDocumentTests(APITestCase):
         self.assertEqual(draft.output_text, "Edited body")
         self.assertEqual(draft.status, "saved")
 
+    def test_patch_attach_to_pack_and_reject_other(self):
+        draft = GeneratedDocument.objects.create(owner=self.alice, title="Draft")
+        self.client.force_authenticate(self.alice)
+        # Attach to own pack via PATCH (the path the drafts-library UI uses).
+        res = self.client.patch(
+            f"{LIST}{draft.id}/", {"related_pack": self.alice_pack.id}, format="json"
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.json()["related_pack"], self.alice_pack.id)
+        # Reattaching to another user's pack is rejected.
+        res = self.client.patch(
+            f"{LIST}{draft.id}/", {"related_pack": self.bob_pack.id}, format="json"
+        )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        # Detaching (null) works.
+        res = self.client.patch(
+            f"{LIST}{draft.id}/", {"related_pack": None}, format="json"
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIsNone(res.json()["related_pack"])
+
     def test_delete(self):
         draft = GeneratedDocument.objects.create(owner=self.alice, title="Draft")
         self.client.force_authenticate(self.alice)

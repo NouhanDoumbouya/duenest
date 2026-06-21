@@ -30,10 +30,13 @@ import {
   deleteGeneratedDocument,
   listGeneratedDocuments,
   saveGeneratedDocument,
+  updateGeneratedDocument,
 } from "@/lib/generated-documents";
+import { getBundles } from "@/lib/renewal-workspace";
 import { cn } from "@/lib/utils";
 import type { DocumentRecord } from "@/types/documents";
 import type { GeneratedDocument } from "@/types/generated-documents";
+import type { Bundle } from "@/types/renewal-workspace";
 
 const TONES: { value: DraftTone; label: string }[] = [
   { value: "formal", label: "Formal" },
@@ -55,17 +58,34 @@ export default function DraftPage() {
   const [savedDrafts, setSavedDrafts] = useState<GeneratedDocument[] | null>(null);
   const [savingDraft, setSavingDraft] = useState(false);
   const [draftSaved, setDraftSaved] = useState(false);
+  const [packs, setPacks] = useState<Bundle[]>([]);
 
-  // Load the user's saved drafts (the drafts library) for this page.
+  // Load the user's saved drafts (the drafts library) and packs for this page.
   useEffect(() => {
     let active = true;
     listGeneratedDocuments()
       .then((data) => active && setSavedDrafts(data))
       .catch(() => active && setSavedDrafts([]));
+    getBundles()
+      .then((page) => active && setPacks(page.results))
+      .catch(() => {
+        /* the pack picker is optional */
+      });
     return () => {
       active = false;
     };
   }, []);
+
+  async function attachToPack(id: number, packId: number | null) {
+    try {
+      const updated = await updateGeneratedDocument(id, { related_pack: packId });
+      setSavedDrafts((prev) =>
+        (prev ?? []).map((d) => (d.id === id ? updated : d)),
+      );
+    } catch {
+      /* keep the prior value on failure */
+    }
+  }
 
   async function saveDraft() {
     setSavingDraft(true);
@@ -320,15 +340,37 @@ export default function DraftPage() {
                       {formatDate(d.updated_at)}
                     </p>
                   </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={`Delete ${d.title}`}
-                    onClick={() => removeDraft(d.id)}
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
+                  <div className="flex shrink-0 items-center gap-2">
+                    {packs.length > 0 && (
+                      <select
+                        value={d.related_pack ?? ""}
+                        onChange={(e) =>
+                          attachToPack(
+                            d.id,
+                            e.target.value ? Number(e.target.value) : null,
+                          )
+                        }
+                        aria-label={`Attach ${d.title} to a pack`}
+                        className="max-w-40 rounded-lg border border-border bg-card px-2 py-1 text-xs text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+                      >
+                        <option value="">Not in a pack</option>
+                        {packs.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.title}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={`Delete ${d.title}`}
+                      onClick={() => removeDraft(d.id)}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </div>
                 </li>
               ))}
             </ul>
