@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, BellRing, CalendarClock } from "lucide-react";
 
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { PageContainer } from "@/components/ui/page-container";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
@@ -41,21 +42,28 @@ export default function RemindersPage() {
   const [rules, setRules] = useState<DocumentReminderRule[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let active = true;
+  const load = useCallback(() => {
     getUpcomingDocumentReminders()
-      .then((res) => active && setRules(res.items))
-      .catch((err) => {
-        if (!active) return;
-        setRules([]);
+      .then((res) => {
+        setRules(res.items);
+        setError(null);
+      })
+      .catch((err) =>
         setError(
           err instanceof ApiError ? err.message : "Unable to load reminders.",
-        );
-      });
-    return () => {
-      active = false;
-    };
+        ),
+      );
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const retry = useCallback(() => {
+    setError(null);
+    setRules(null);
+    load();
+  }, [load]);
 
   return (
     <PageContainer width="narrow">
@@ -65,20 +73,13 @@ export default function RemindersPage() {
         description="Upcoming reminders calculated from your documents' expiry and renewal dates. Add or change reminder rules from each document."
       />
 
-      {error && (
-        <p
-          className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
-          role="alert"
-        >
-          {error}
-        </p>
-      )}
-
       <SectionCard
         title="Upcoming reminders"
         description="Sorted by the next date DueNest would remind you."
       >
-        {rules === null ? (
+        {error ? (
+          <ErrorState description={error} onRetry={retry} />
+        ) : rules === null ? (
           <div className="space-y-2">
             {Array.from({ length: 4 }).map((_, i) => (
               <Skeleton key={i} className="h-16 w-full" />

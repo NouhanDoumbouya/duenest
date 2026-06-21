@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, Bell, CheckCheck, Settings, X } from "lucide-react";
 
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { PageContainer } from "@/components/ui/page-container";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
@@ -77,7 +78,6 @@ export default function NotificationsPage() {
         setError(null);
       })
       .catch((err) => {
-        setNotifications([]);
         setCount(0);
         setError(
           err instanceof ApiError
@@ -88,6 +88,12 @@ export default function NotificationsPage() {
   }, [filter, severity, type]);
 
   useEffect(() => refresh(), [refresh]);
+
+  const retry = useCallback(() => {
+    setError(null);
+    setNotifications(null);
+    refresh();
+  }, [refresh]);
 
   async function handleOpen(notification: NotificationRecord) {
     setBusyId(notification.id);
@@ -161,15 +167,6 @@ export default function NotificationsPage() {
         }
       />
 
-      {error && (
-        <p
-          className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
-          role="alert"
-        >
-          {error}
-        </p>
-      )}
-
       <SectionCard
         title="Notification center"
         description={`${count} result${count === 1 ? "" : "s"}`}
@@ -231,7 +228,9 @@ export default function NotificationsPage() {
           </div>
         </div>
 
-        {isLoading ? (
+        {error ? (
+          <ErrorState description={error} onRetry={retry} />
+        ) : isLoading ? (
           <div className="space-y-3">
             {Array.from({ length: 5 }).map((_, index) => (
               <Skeleton key={index} className="h-28 w-full rounded-xl" />

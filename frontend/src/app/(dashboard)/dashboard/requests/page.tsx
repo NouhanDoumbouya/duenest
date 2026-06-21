@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Check, Copy, Inbox, Loader2, Plus, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageContainer } from "@/components/ui/page-container";
@@ -51,21 +52,28 @@ export default function ShareRequestsPage() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<number | null>(null);
 
-  useEffect(() => {
-    let active = true;
+  const load = useCallback(() => {
     listShareRequests()
-      .then((result) => active && setRequests(result))
-      .catch((err) => {
-        if (!active) return;
-        setRequests([]);
+      .then((result) => {
+        setRequests(result);
+        setError(null);
+      })
+      .catch((err) =>
         setError(
           err instanceof ApiError ? err.message : "Unable to load requests.",
-        );
-      });
-    return () => {
-      active = false;
-    };
+        ),
+      );
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const retry = useCallback(() => {
+    setError(null);
+    setRequests(null);
+    load();
+  }, [load]);
 
   const validItems = items.filter((item) => item.label.trim());
   const canSubmit = title.trim() && validItems.length > 0 && !submitting;
@@ -128,12 +136,12 @@ export default function ShareRequestsPage() {
         description="Ask someone for the exact documents you need. They fill your checklist from their DueNest vault in a few taps — no email back-and-forth."
       />
 
-      {error && <InlineAlert>{error}</InlineAlert>}
-
       <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
         {/* List */}
         <div className="space-y-3">
-          {requests === null ? (
+          {error ? (
+            <ErrorState description={error} onRetry={retry} />
+          ) : requests === null ? (
             <div className="space-y-3">
               {Array.from({ length: 3 }).map((_, i) => (
                 <Skeleton key={i} className="h-24 rounded-xl" />

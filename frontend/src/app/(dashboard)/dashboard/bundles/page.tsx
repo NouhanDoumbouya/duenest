@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Package, Plus } from "lucide-react";
 
 import { ReadinessRing } from "@/components/bundles/readiness-ring";
 import { buttonVariants } from "@/components/ui/button";
+import { ErrorState } from "@/components/ui/error-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ApiError } from "@/lib/api";
@@ -22,21 +23,28 @@ export default function BundlesPage() {
   const [bundles, setBundles] = useState<Bundle[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let active = true;
+  const load = useCallback(() => {
     getBundles()
-      .then((page) => active && setBundles(page.results))
-      .catch((err) => {
-        if (!active) return;
-        setBundles([]);
+      .then((page) => {
+        setBundles(page.results);
+        setError(null);
+      })
+      .catch((err) =>
         setError(
           err instanceof ApiError ? err.message : "Unable to load application packs.",
-        );
-      });
-    return () => {
-      active = false;
-    };
+        ),
+      );
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const retry = useCallback(() => {
+    setError(null);
+    setBundles(null);
+    load();
+  }, [load]);
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6">
@@ -62,16 +70,9 @@ export default function BundlesPage() {
         </Link>
       </div>
 
-      {error && (
-        <p
-          className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
-          role="alert"
-        >
-          {error}
-        </p>
-      )}
-
-      {bundles === null ? (
+      {error ? (
+        <ErrorState description={error} onRetry={retry} />
+      ) : bundles === null ? (
         <div
           className="grid gap-3 sm:grid-cols-2"
           aria-busy="true"

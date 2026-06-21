@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -18,6 +18,7 @@ import { DocumentStatusBadge } from "@/components/documents/status-badge";
 import { UrgencyBadge } from "@/components/documents/urgency-badge";
 import { buttonVariants } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { PageContainer } from "@/components/ui/page-container";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
@@ -206,25 +207,28 @@ export default function AttentionPage() {
     }
   };
 
-  useEffect(() => {
-    let active = true;
+  const load = useCallback(() => {
     getAttentionNeeded()
       .then((response) => {
-        if (!active) return;
         setItems(response.items);
         setError(null);
       })
-      .catch((err) => {
-        if (!active) return;
-        setItems([]);
+      .catch((err) =>
         setError(
           err instanceof ApiError ? err.message : "Unable to load this page.",
-        );
-      });
-    return () => {
-      active = false;
-    };
+        ),
+      );
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const retry = useCallback(() => {
+    setError(null);
+    setItems(null);
+    load();
+  }, [load]);
 
   const groups = useMemo(() => {
     const grouped: Record<Severity, DocumentRecord[]> = {
@@ -252,16 +256,9 @@ export default function AttentionPage() {
         description="Documents with expired dates, missing files, missing expiry dates, or reminder gaps. Work the highest-risk items first."
       />
 
-      {error && (
-        <p
-          className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
-          role="alert"
-        >
-          {error}
-        </p>
-      )}
-
-      {loading && !error ? (
+      {error ? (
+        <ErrorState description={error} onRetry={retry} />
+      ) : loading ? (
         <div className="space-y-4">
           <Skeleton className="h-36 w-full rounded-xl" />
           <Skeleton className="h-36 w-full rounded-xl" />
