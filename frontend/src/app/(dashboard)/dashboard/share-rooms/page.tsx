@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -16,11 +16,11 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import type { StatusTone } from "@/lib/status-badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { PageContainer } from "@/components/ui/page-container";
 import { PageHeader } from "@/components/ui/page-header";
 import {
   DataRow,
-  InlineAlert,
   ProductMetric,
   SectionToolbar,
   TrustNotice,
@@ -59,21 +59,29 @@ export default function ShareRoomsPage() {
     router.push("/dashboard/quick-share/new");
   }
 
-  useEffect(() => {
-    let active = true;
+  const load = useCallback(() => {
     listShareRooms()
-      .then((result) => active && setRooms(result))
-      .catch((err) => {
-        if (!active) return;
-        setRooms([]);
+      .then((result) => {
+        setRooms(result);
+        setError(null);
+      })
+      .catch((err) =>
         setError(
           err instanceof ApiError ? err.message : "Unable to load secure rooms.",
-        );
-      });
-    return () => {
-      active = false;
-    };
+        ),
+      );
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // Reset to the loading state, then refetch (called from the error retry).
+  const retry = useCallback(() => {
+    setError(null);
+    setRooms(null);
+    load();
+  }, [load]);
 
   const metrics = useMemo(() => {
     const list = rooms ?? [];
@@ -98,8 +106,6 @@ export default function ShareRoomsPage() {
           </Button>
         }
       />
-
-      {error && <InlineAlert>{error}</InlineAlert>}
 
       <div className="grid gap-6 lg:grid-cols-[1.45fr_0.9fr]">
         <div className="space-y-6">
@@ -144,7 +150,9 @@ export default function ShareRoomsPage() {
               )
             }
           >
-            {rooms === null ? (
+            {error ? (
+              <ErrorState description={error} onRetry={retry} />
+            ) : rooms === null ? (
               <div className="space-y-3">
                 {Array.from({ length: 4 }).map((_, index) => (
                   <Skeleton key={index} className="h-[74px] rounded-xl" />
