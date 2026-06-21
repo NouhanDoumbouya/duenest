@@ -58,7 +58,12 @@ def _seed_missing_flags():
         if d["key"] not in existing
     ]
     if to_create:
-        FeatureFlag.objects.bulk_create(to_create)
+        # `ignore_conflicts` makes seeding race-safe: this runs on every founder
+        # GET, and on a cold DB two near-simultaneous requests (e.g. React's dev
+        # double-render) both compute the same "missing" set and both insert —
+        # without this, the second raises a UNIQUE-constraint IntegrityError and
+        # 500s the Feature Control Center. Matches the other seeders in the app.
+        FeatureFlag.objects.bulk_create(to_create, ignore_conflicts=True)
 
 
 class FounderFeatureFlagListView(APIView):
