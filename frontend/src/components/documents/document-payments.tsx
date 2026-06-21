@@ -221,7 +221,7 @@ export function DocumentPayments({
           <Receipt className="mx-auto size-7 text-muted-foreground/60" />
           <p className="mt-3 text-sm font-medium">No costs tracked yet</p>
           <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-            Add a cost to budget for and track renewal or application fees.
+            Add a cost to track renewal or application fees for this document.
           </p>
         </div>
       ) : (
