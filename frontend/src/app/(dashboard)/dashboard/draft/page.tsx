@@ -4,8 +4,10 @@ import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import {
   Check,
+  ChevronRight,
   Copy,
   FileDown,
+  FilePen,
   FileText,
   Info,
   Loader2,
@@ -141,6 +143,34 @@ export default function DraftPage() {
     } catch {
       /* keep it in the list on failure */
     }
+  }
+
+  const [expandedDraft, setExpandedDraft] = useState<number | null>(null);
+  const [copiedDraft, setCopiedDraft] = useState<number | null>(null);
+
+  async function copyDraftText(draft: GeneratedDocument) {
+    try {
+      await navigator.clipboard.writeText(draft.output_text);
+      setCopiedDraft(draft.id);
+      setTimeout(() => setCopiedDraft(null), 1500);
+    } catch {
+      /* clipboard unavailable; the text is visible to copy manually */
+    }
+  }
+
+  // Re-open a saved draft in the editor (loads its content for edit / re-export).
+  function openDraftInEditor(draft: GeneratedDocument) {
+    setSubject(draft.title);
+    setBody(draft.output_text);
+    setResult({
+      available: true,
+      reason: "ok",
+      subject: draft.title,
+      body: draft.output_text,
+      used_document_ids: [],
+    });
+    setExpandedDraft(null);
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   // Seed from a `?goal=` handoff (e.g. from the Pack Copilot). Read from the
@@ -361,47 +391,90 @@ export default function DraftPage() {
             </p>
             <ul className="divide-y divide-border">
               {savedDrafts.map((d) => (
-                <li
-                  key={d.id}
-                  className="flex items-center justify-between gap-3 py-2"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{d.title}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatDate(d.updated_at)}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    {packs.length > 0 && (
-                      <select
-                        value={d.related_pack ?? ""}
-                        onChange={(e) =>
-                          attachToPack(
-                            d.id,
-                            e.target.value ? Number(e.target.value) : null,
-                          )
-                        }
-                        aria-label={`Attach ${d.title} to a pack`}
-                        className="max-w-40 rounded-lg border border-border bg-card px-2 py-1 text-xs text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
-                      >
-                        <option value="">Not in a pack</option>
-                        {packs.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.title}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                    <Button
+                <li key={d.id} className="py-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <button
                       type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={`Delete ${d.title}`}
-                      onClick={() => removeDraft(d.id)}
+                      onClick={() =>
+                        setExpandedDraft((id) => (id === d.id ? null : d.id))
+                      }
+                      aria-expanded={expandedDraft === d.id}
+                      className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
                     >
-                      <Trash2 className="size-4" />
-                    </Button>
+                      <ChevronRight
+                        className={cn(
+                          "size-4 shrink-0 text-muted-foreground transition-transform",
+                          expandedDraft === d.id && "rotate-90",
+                        )}
+                      />
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-medium">
+                          {d.title}
+                        </span>
+                        <span className="block text-xs text-muted-foreground">
+                          {formatDate(d.updated_at)}
+                        </span>
+                      </span>
+                    </button>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {packs.length > 0 && (
+                        <select
+                          value={d.related_pack ?? ""}
+                          onChange={(e) =>
+                            attachToPack(
+                              d.id,
+                              e.target.value ? Number(e.target.value) : null,
+                            )
+                          }
+                          aria-label={`Attach ${d.title} to a pack`}
+                          className="max-w-40 rounded-lg border border-border bg-card px-2 py-1 text-xs text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+                        >
+                          <option value="">Not in a pack</option>
+                          {packs.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.title}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`Delete ${d.title}`}
+                        onClick={() => removeDraft(d.id)}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
                   </div>
+
+                  {expandedDraft === d.id && (
+                    <div className="mt-2 space-y-2 pl-6">
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openDraftInEditor(d)}
+                        >
+                          <FilePen /> Open in editor
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => copyDraftText(d)}
+                        >
+                          {copiedDraft === d.id ? <Check /> : <Copy />}
+                          {copiedDraft === d.id ? "Copied" : "Copy"}
+                        </Button>
+                      </div>
+                      <pre className="max-h-64 overflow-auto rounded-lg border border-border bg-muted/30 p-3 font-sans text-xs whitespace-pre-wrap text-foreground">
+                        {d.output_text}
+                      </pre>
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
