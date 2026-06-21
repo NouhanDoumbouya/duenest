@@ -32,14 +32,13 @@ import { SystemFlow } from "@/components/marketing/system-flow";
 import { FeatureCard, type Feature } from "@/components/marketing/feature-card";
 import {
   EmergencyMockup,
-  FixFirstCard,
   LifeRadarMockup,
   DeadlinesRenewalsMockup,
   SafeSendMockup,
   VaultMockup,
 } from "@/components/marketing/mockups";
+import { HeroReadinessComposite } from "@/components/marketing/hero-composite";
 import { LiveCountdown } from "@/components/marketing/live-countdown";
-import { TiltCard } from "@/components/marketing/tilt-card";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -216,9 +215,8 @@ function Hero() {
           </h1>
 
           <p className="mt-6 max-w-md text-lg leading-relaxed text-pretty text-muted-foreground">
-            DueNest helps you scan, organize, prepare, track, generate, and
-            safely share important documents — before deadlines, applications,
-            renewals, and emergencies.
+            One private place to organize, prepare, and track your important
+            documents — and share them safely when life asks for proof.
           </p>
 
           <div className="mt-9 flex flex-col gap-3 sm:flex-row">
@@ -257,21 +255,14 @@ function Hero() {
           </p>
         </div>
 
-        {/* Product moment: a focused, living teaser with depth. */}
+        {/* Product story: scattered files → ready documents, in one composed
+            moment (readiness card + live SafeSend + AI-suggestion accents). */}
         <div className="content-fade-in relative lg:pl-2">
           <div
             aria-hidden
             className="pointer-events-none absolute -inset-8 -z-10 rounded-[2.5rem] bg-gradient-to-tr from-primary/12 via-brand-teal/10 to-transparent blur-3xl"
           />
-          <div className="relative mx-auto max-w-md">
-            <TiltCard>
-              <FixFirstCard />
-            </TiltCard>
-            <span className="absolute -top-3 -right-2 z-10 hidden items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground shadow-card sm:inline-flex">
-              <span className="pulse-soft flex size-1.5 rounded-full bg-brand-success" />
-              Updates as things change
-            </span>
-          </div>
+          <HeroReadinessComposite />
         </div>
       </div>
     </section>
