@@ -1,24 +1,19 @@
 import { cn } from "@/lib/utils";
+import { TONE_CLASS, type StatusTone } from "@/lib/status-badge";
 import type { DocumentUrgencyLevel } from "@/types/documents";
 
-const STYLES: Record<DocumentUrgencyLevel, { wrap: string; label: string } | null> = {
+// Urgency level -> canonical tone + label. Keeps the deliberately distinct
+// compact uppercase shape, but pulls colours from the shared tone map so it
+// stays on-brand and contrast-safe.
+const LEVELS: Record<
+  DocumentUrgencyLevel,
+  { tone: StatusTone; label: string } | null
+> = {
   none: null,
-  low: {
-    wrap: "bg-muted text-muted-foreground ring-1 ring-inset ring-border",
-    label: "Low",
-  },
-  medium: {
-    wrap: "bg-brand-amber/15 text-brand-amber ring-1 ring-inset ring-brand-amber/25",
-    label: "Soon",
-  },
-  high: {
-    wrap: "bg-brand-amber/15 text-brand-amber ring-1 ring-inset ring-brand-amber/25",
-    label: "Act now",
-  },
-  critical: {
-    wrap: "bg-destructive/10 text-destructive ring-1 ring-inset ring-destructive/20",
-    label: "Urgent",
-  },
+  low: { tone: "neutral", label: "Low" },
+  medium: { tone: "warning", label: "Soon" },
+  high: { tone: "warning", label: "Act now" },
+  critical: { tone: "danger", label: "Urgent" },
 };
 
 /** Compact urgency pill; renders nothing for the calm "none" level. */
@@ -29,17 +24,17 @@ export function UrgencyBadge({
   level: DocumentUrgencyLevel;
   className?: string;
 }) {
-  const style = STYLES[level];
-  if (!style) return null;
+  const config = LEVELS[level];
+  if (!config) return null;
   return (
     <span
       className={cn(
         "inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[0.7rem] font-semibold uppercase tracking-wide",
-        style.wrap,
+        TONE_CLASS[config.tone].badge,
         className,
       )}
     >
-      {style.label}
+      {config.label}
     </span>
   );
 }
