@@ -5,6 +5,7 @@ import { Inbox, Loader2, Mail, MessageSquare, Save, ShieldCheck } from "lucide-r
 
 import { FounderPageHeader } from "@/components/founder/founder-ui";
 import { Badge } from "@/components/ui/badge";
+import { ErrorState } from "@/components/ui/error-state";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -60,6 +61,7 @@ export default function FounderFeedbackPage() {
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -88,7 +90,6 @@ export default function FounderFeedbackPage() {
       })
       .catch((err) => {
         if (!active) return;
-        setItems([]);
         setError(
           err instanceof ApiError ? err.message : "Unable to load feedback.",
         );
@@ -96,7 +97,13 @@ export default function FounderFeedbackPage() {
     return () => {
       active = false;
     };
-  }, [categoryFilter, priorityFilter, search, selectedId, statusFilter]);
+  }, [categoryFilter, priorityFilter, search, selectedId, statusFilter, reloadKey]);
+
+  const retry = () => {
+    setError(null);
+    setItems(null);
+    setReloadKey((k) => k + 1);
+  };
 
   const selected = useMemo(
     () => (items ?? []).find((item) => item.id === selectedId) ?? null,
@@ -153,12 +160,6 @@ export default function FounderFeedbackPage() {
           Keep notes safe — never paste private document contents here.
         </span>
       </div>
-
-      {error && (
-        <p className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {error}
-        </p>
-      )}
 
       <Card>
         <CardContent className="grid gap-3 md:grid-cols-4">
@@ -221,7 +222,9 @@ export default function FounderFeedbackPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {items === null ? (
+            {error ? (
+              <ErrorState description={error} onRetry={retry} />
+            ) : items === null ? (
               <div className="h-[320px] animate-pulse rounded-lg bg-muted" />
             ) : items.length === 0 ? (
               <p className="text-sm text-muted-foreground">

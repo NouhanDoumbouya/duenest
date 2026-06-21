@@ -8,6 +8,7 @@ import {
   FounderStatCard,
 } from "@/components/founder/founder-ui";
 import { Badge } from "@/components/ui/badge";
+import { ErrorState } from "@/components/ui/error-state";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ApiError } from "@/lib/api";
@@ -26,6 +27,7 @@ export default function FounderErrorsPage() {
   const [resolvedFilter, setResolvedFilter] = useState<boolean | "">("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -38,13 +40,18 @@ export default function FounderErrorsPage() {
       })
       .catch((err) => {
         if (!active) return;
-        setItems([]);
         setError(err instanceof ApiError ? err.message : "Unable to load errors.");
       });
     return () => {
       active = false;
     };
-  }, [resolvedFilter]);
+  }, [resolvedFilter, reloadKey]);
+
+  const retry = () => {
+    setError(null);
+    setItems(null);
+    setReloadKey((k) => k + 1);
+  };
 
   const [resolvedFlash, setResolvedFlash] = useState(false);
 
@@ -112,12 +119,6 @@ export default function FounderErrorsPage() {
         />
       </div>
 
-      {error && (
-        <p className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {error}
-        </p>
-      )}
-
       {resolvedFlash && (
         <p className="rounded-lg bg-brand-success/10 px-4 py-3 text-sm font-medium text-brand-success">
           Marked resolved.
@@ -156,7 +157,9 @@ export default function FounderErrorsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {items === null ? (
+            {error ? (
+              <ErrorState description={error} onRetry={retry} />
+            ) : items === null ? (
               <div className="h-[320px] animate-pulse rounded-lg bg-muted" />
             ) : items.length === 0 ? (
               <div className="flex flex-col items-center gap-3 py-10 text-center">

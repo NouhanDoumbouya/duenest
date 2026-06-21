@@ -5,6 +5,7 @@ import { FileText, Loader2, Plus, Save, Trash2 } from "lucide-react";
 
 import { FounderPageHeader } from "@/components/founder/founder-ui";
 import { Badge } from "@/components/ui/badge";
+import { ErrorState } from "@/components/ui/error-state";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -81,7 +82,6 @@ export default function FounderTemplatesPage() {
         setError(null);
       })
       .catch((err) => {
-        setTemplates([]);
         setError(
           err instanceof ApiError ? err.message : "Unable to load templates.",
         );
@@ -91,6 +91,12 @@ export default function FounderTemplatesPage() {
   useEffect(() => {
     loadTemplates();
   }, [loadTemplates]);
+
+  const retry = () => {
+    setError(null);
+    setTemplates(null);
+    loadTemplates();
+  };
 
   function updateItem(index: number, patch: Partial<ChecklistTemplateItem>) {
     setDraft((current) => ({
@@ -145,11 +151,6 @@ export default function FounderTemplatesPage() {
         description="Reusable life-admin playbooks for renewals, applications, and travel. Editing a template changes future checklist creation only — existing user checklists are never rewritten."
       />
 
-      {error && (
-        <p className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {error}
-        </p>
-      )}
 
       <div className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
         <Card>
@@ -171,7 +172,9 @@ export default function FounderTemplatesPage() {
             </Button>
           </CardHeader>
           <CardContent>
-            {templates === null ? (
+            {error ? (
+              <ErrorState description={error} onRetry={retry} />
+            ) : templates === null ? (
               <div className="h-[360px] animate-pulse rounded-lg bg-muted" />
             ) : templates.length === 0 ? (
               <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center">

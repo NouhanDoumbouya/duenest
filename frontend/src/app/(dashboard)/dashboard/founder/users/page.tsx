@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Search, ShieldCheck, Users } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { ErrorState } from "@/components/ui/error-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ApiError } from "@/lib/api";
@@ -21,6 +22,7 @@ export default function FounderUsersPage() {
   const [summary, setSummary] = useState<FounderUserSummary | null>(null);
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -35,13 +37,18 @@ export default function FounderUsersPage() {
       })
       .catch((err) => {
         if (!active) return;
-        setUsers([]);
         setError(err instanceof ApiError ? err.message : "Unable to load users.");
       });
     return () => {
       active = false;
     };
-  }, [search, selectedId]);
+  }, [search, selectedId, reloadKey]);
+
+  const retry = () => {
+    setError(null);
+    setUsers(null);
+    setReloadKey((k) => k + 1);
+  };
 
   const selected = useMemo(
     () => (users ?? []).find((user) => user.id === selectedId) ?? null,
@@ -84,12 +91,6 @@ export default function FounderUsersPage() {
         </p>
       </div>
 
-      {error && (
-        <p className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {error}
-        </p>
-      )}
-
       <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
         <Card>
           <CardHeader>
@@ -110,7 +111,9 @@ export default function FounderUsersPage() {
               />
             </label>
 
-            {users === null ? (
+            {error ? (
+              <ErrorState description={error} onRetry={retry} />
+            ) : users === null ? (
               <div className="h-[320px] animate-pulse rounded-lg bg-muted" />
             ) : users.length === 0 ? (
               <p className="text-sm text-muted-foreground">No users found.</p>
