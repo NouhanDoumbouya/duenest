@@ -25,6 +25,7 @@ import { DocumentFileViewer } from "@/components/documents/document-file-viewer"
 import { DuplicateWarningDialog } from "@/components/documents/duplicate-warning-dialog";
 import { MoveToVaultDialog } from "@/components/documents/move-to-vault-dialog";
 import { FileToolsButton } from "@/components/documents/file-tools-button";
+import { SmartIntakePanel } from "@/components/documents/smart-intake-panel";
 import { FileThumbnail } from "@/components/documents/file-thumbnail";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -948,6 +949,8 @@ export default function FileInboxPage() {
                       </p>
                     </div>
                   </div>
+
+                  <SmartIntakePanel fileId={file.id} />
 
                   <div className="mt-4 flex flex-wrap gap-2">
                     <Button
