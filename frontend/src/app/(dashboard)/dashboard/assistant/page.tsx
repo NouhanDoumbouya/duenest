@@ -131,83 +131,111 @@ export default function AssistantPage() {
   }
 
   return (
-    <PageContainer width="narrow">
-      <PageHeader
-        eyebrow="Assistant"
-        title="Chat"
-        description="Ask about your documents and what to do next. The assistant answers from your own records and offers quick actions you confirm."
-      />
+    <div className="mx-auto flex h-[calc(100dvh-11rem)] min-h-[24rem] w-full max-w-3xl flex-col md:h-[calc(100dvh-7rem)] lg:h-[calc(100dvh-9rem)]">
+      {/* Slim chat header — a conversation, not a titled page. */}
+      <div className="flex shrink-0 items-center gap-3 border-b border-border pb-3">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand-navy text-brand-teal">
+          <Sparkles className="size-4" />
+        </span>
+        <div className="min-w-0">
+          <p className="font-heading text-sm font-semibold">DueNest Assistant</p>
+          <p className="truncate text-xs text-muted-foreground">
+            Answers from your own documents · you confirm every action
+          </p>
+        </div>
+      </div>
 
-      <AiActivationCard />
+      <div className="shrink-0 [&:empty]:hidden [&>*]:mt-3">
+        <AiActivationCard />
+      </div>
 
-      <div className="space-y-3">
-        {messages.length === 0 && !loading && (
-          <Card>
-            <CardContent className="space-y-3">
-              <p className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Sparkles className="size-4 text-primary" /> Try asking
+      {/* Scrolling message history */}
+      <div className="flex-1 space-y-4 overflow-y-auto py-4">
+        {messages.length === 0 && !loading ? (
+          <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
+            <span className="flex size-12 items-center justify-center rounded-2xl bg-accent text-accent-foreground">
+              <Sparkles className="size-6" />
+            </span>
+            <div>
+              <p className="font-heading text-base font-semibold">
+                Ask about your documents
               </p>
-              <div className="flex flex-wrap gap-2">
-                {SUGGESTIONS.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => void send(s)}
-                    className="rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {messages.map((m, i) =>
-          m.role === "user" ? (
-            <div key={i} className="flex justify-end">
-              <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-primary px-4 py-2.5 text-sm text-primary-foreground">
-                {m.content}
-              </div>
+              <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+                Get answers from your own records and quick actions you confirm.
+              </p>
             </div>
-          ) : (
-            <div key={i} className="flex justify-start">
-              <div className="w-full max-w-[90%] space-y-2">
-                <div className="rounded-2xl rounded-bl-sm border border-border bg-card px-4 py-2.5 text-sm whitespace-pre-wrap">
-                  {m.content}
-                </div>
-                {m.actions && m.actions.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {m.actions.map((a, j) => (
-                      <ActionButton key={j} action={a} />
-                    ))}
+            <div className="flex flex-wrap justify-center gap-2">
+              {SUGGESTIONS.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => void send(s)}
+                  className="rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <>
+            {messages.map((m, i) =>
+              m.role === "user" ? (
+                <div key={i} className="flex justify-end">
+                  <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-primary px-4 py-2.5 text-sm text-primary-foreground">
+                    {m.content}
                   </div>
-                )}
+                </div>
+              ) : (
+                <div key={i} className="flex items-start gap-2.5">
+                  <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-brand-navy text-brand-teal">
+                    <Sparkles className="size-3.5" />
+                  </span>
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div className="inline-block rounded-2xl rounded-tl-sm border border-border bg-card px-4 py-2.5 text-sm whitespace-pre-wrap">
+                      {m.content}
+                    </div>
+                    {m.actions && m.actions.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {m.actions.map((a, j) => (
+                          <ActionButton key={j} action={a} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ),
+            )}
+
+            {loading && (
+              <div className="flex items-start gap-2.5">
+                <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-brand-navy text-brand-teal">
+                  <Sparkles className="size-3.5" />
+                </span>
+                <div className="rounded-2xl rounded-tl-sm border border-border bg-card px-4 py-2.5 text-sm text-muted-foreground">
+                  <Loader2 className="inline size-4 animate-spin" /> Thinking…
+                </div>
               </div>
-            </div>
-          ),
-        )}
+            )}
 
-        {loading && (
-          <div className="flex justify-start">
-            <div className="rounded-2xl rounded-bl-sm border border-border bg-card px-4 py-2.5 text-sm text-muted-foreground">
-              <Loader2 className="inline size-4 animate-spin" /> Thinking…
-            </div>
-          </div>
-        )}
-
-        {error && (
-          <div className="flex items-start gap-2 px-1 text-sm text-destructive">
-            <TriangleAlert className="mt-0.5 size-4 shrink-0" />
-            <span>{error}</span>
-          </div>
+            {error && (
+              <div className="flex items-start gap-2 px-1 text-sm text-destructive">
+                <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+          </>
         )}
 
         <div ref={endRef} />
       </div>
 
-      <form onSubmit={handleSubmit} className="sticky bottom-4 space-y-2">
-        <div className="flex items-end gap-2 rounded-xl border border-border bg-card p-2 shadow-card">
+      {/* Docked composer */}
+      <form
+        onSubmit={handleSubmit}
+        className="shrink-0 space-y-2 border-t border-border pt-3"
+      >
+        <div className="flex items-end gap-2 rounded-2xl border border-border bg-card p-2 shadow-card">
           <Textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -227,12 +255,12 @@ export default function AssistantPage() {
             {loading ? <Loader2 className="animate-spin" /> : <Send />}
           </Button>
         </div>
-        <p className="px-1 text-xs text-muted-foreground">
+        <p className="px-1 text-[0.7rem] text-muted-foreground">
           Answers come from your own documents and may be imperfect — confirm
           anything important. The assistant never sends or shares on its own.
         </p>
       </form>
-    </PageContainer>
+    </div>
   );
 }
 
