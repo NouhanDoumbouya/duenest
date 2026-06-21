@@ -4,12 +4,23 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Bell, CheckCheck, LogOut, Search, X } from "lucide-react";
+import {
+  Bell,
+  CheckCheck,
+  ChevronsUpDown,
+  CreditCard,
+  Database,
+  LogOut,
+  Search,
+  ShieldCheck,
+  X,
+} from "lucide-react";
 
 import { BottomNav } from "@/components/layout/bottom-nav";
 import { CommandPalette } from "@/components/command-palette/command-palette";
@@ -39,6 +50,20 @@ function initials(name: string) {
   return letters.toUpperCase() || name.slice(0, 2).toUpperCase();
 }
 
+const ACCOUNT_LINKS = [
+  { label: "Plan & Billing", href: "/dashboard/settings/billing", icon: CreditCard },
+  { label: "Data & privacy", href: "/dashboard/settings/data", icon: Database },
+  { label: "Trust & security", href: "/dashboard/trust", icon: ShieldCheck },
+] as const;
+
+/**
+ * The sidebar's account control: the user chip is a trigger that opens an
+ * upward popover with account/settings links and Sign out, so the footer stays
+ * calm (one chip) instead of a permanent button. Hand-rolled popover with
+ * Escape + click-outside, mirroring the NotificationBell pattern; links and the
+ * sign-out button are natively focusable, so keyboard order works without faux
+ * menu semantics.
+ */
 function UserFooter({
   user,
   onLogout,
@@ -46,29 +71,96 @@ function UserFooter({
   user?: ShellUser;
   onLogout: () => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    function onPointer(event: MouseEvent) {
+      if (ref.current && !ref.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onPointer);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onPointer);
+    };
+  }, [open]);
+
+  if (!user) {
+    return (
+      <div className="border-t border-border p-3">
+        <Button
+          variant="ghost"
+          className="w-full justify-start text-muted-foreground hover:text-foreground"
+          onClick={onLogout}
+        >
+          <LogOut className="size-4" />
+          Sign out
+        </Button>
+      </div>
+    );
+  }
+
   return (
-    <div className="border-t border-border p-3">
-      {user && (
-        <div className="mb-2 flex items-center gap-3 rounded-lg px-2 py-2">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand-navy text-xs font-semibold text-white ring-2 ring-brand-teal/20">
-            {initials(user.name)}
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium">{user.name}</p>
-            <p className="truncate text-xs text-muted-foreground">
-              {user.email}
-            </p>
-          </div>
+    <div ref={ref} className="relative border-t border-border p-3">
+      {open && (
+        <div className="absolute inset-x-3 bottom-[calc(100%-0.25rem)] z-50 mb-2 overflow-hidden rounded-xl border border-border bg-card p-1.5 shadow-floating">
+          {ACCOUNT_LINKS.map((link) => {
+            const Icon = link.icon;
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <Icon className="size-4 shrink-0" />
+                {link.label}
+              </Link>
+            );
+          })}
+          <div className="my-1 h-px bg-border" />
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              onLogout();
+            }}
+            className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+          >
+            <LogOut className="size-4 shrink-0" />
+            Sign out
+          </button>
         </div>
       )}
-      <Button
-        variant="ghost"
-        className="w-full justify-start text-muted-foreground hover:text-foreground"
-        onClick={onLogout}
+
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-haspopup="true"
+        aria-expanded={open}
+        className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       >
-        <LogOut className="size-4" />
-        Sign out
-      </Button>
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand-navy text-xs font-semibold text-white ring-2 ring-brand-teal/20">
+          {initials(user.name)}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium">{user.name}</span>
+          <span className="block truncate text-xs text-muted-foreground">
+            {user.email}
+          </span>
+        </span>
+        <ChevronsUpDown
+          className="size-4 shrink-0 text-muted-foreground/70"
+          aria-hidden
+        />
+      </button>
     </div>
   );
 }
