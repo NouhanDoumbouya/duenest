@@ -95,6 +95,22 @@ const FAQ_ITEMS: { q: string; a: string }[] = [
     a: "You send access — a QR, a secure link, or a code — not the original file. Require an access code, set an expiry, watermark the preview, and revoke access whenever you want.",
   },
   {
+    q: "Why not just use Google Drive?",
+    a: "Drive stores files; DueNest makes them ready. It adds deadline and renewal tracking, application packs with checklists, secure shares that expire and can be revoked, and emergency access — built around documents, not just storage.",
+  },
+  {
+    q: "Why not Adobe Scan or a plain scanner app?",
+    a: "Scanning is one step. DueNest takes the scan into a Vault, organizes it, tracks its expiry, adds it to application packs, and lets you share it safely — the whole readiness workflow, not just a clean PDF.",
+  },
+  {
+    q: "Are the application pack templates official?",
+    a: "No. Templates are generic and fully editable starting points. Requirements vary, so always verify with the official institution or source.",
+  },
+  {
+    q: "Is signing in DueNest legally binding?",
+    a: "DueNest helps you prepare a signed copy with a signature image, date, and initials. It is not a legal e-signature service — legal acceptance depends on the recipient and jurisdiction.",
+  },
+  {
     q: "How do reminders work?",
     a: "DueNest tracks expiry dates and renewal rules, surfaces what needs attention first, and shows it on a calendar and timeline. Rule-based checks — no AI guesswork.",
   },
