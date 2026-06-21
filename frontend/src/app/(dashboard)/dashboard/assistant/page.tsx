@@ -19,6 +19,7 @@ import {
   Zap,
 } from "lucide-react";
 
+import { AiActivationCard } from "@/components/ai/ai-activation-card";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -136,6 +137,8 @@ export default function AssistantPage() {
         title="Chat"
         description="Ask about your documents and what to do next. The assistant answers from your own records and offers quick actions you confirm."
       />
+
+      <AiActivationCard />
 
       <div className="space-y-3">
         {messages.length === 0 && !loading && (
