@@ -30,6 +30,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { Input } from "@/components/ui/input";
 import { PageContainer } from "@/components/ui/page-container";
 import { PageHeader } from "@/components/ui/page-header";
@@ -388,7 +389,8 @@ function DocumentsPageInner() {
         setError(
           err instanceof ApiError ? err.message : "Unable to load documents.",
         );
-        setDocuments([]);
+        // Keep documents null on a failed initial load so the page shows a
+        // recoverable error — not a misleading "empty vault" state.
         setHasNext(false);
         setLoadedQueryKey(queryKey);
       });
@@ -1207,7 +1209,9 @@ function DocumentsPageInner() {
         </div>
       )}
 
-      {error && (
+      {/* Action errors (delete, load-more…) show as a banner; a failed initial
+          load is handled by the recoverable ErrorState in the body below. */}
+      {error && documents !== null && (
         <p
           className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive"
           role="alert"
@@ -1222,6 +1226,14 @@ function DocumentsPageInner() {
           onOpen={(selection) => {
             setCategory(selection);
             changeView("list");
+          }}
+        />
+      ) : error && documents === null ? (
+        <ErrorState
+          description={error}
+          onRetry={() => {
+            setError(null);
+            reload();
           }}
         />
       ) : initialLoading ? (
