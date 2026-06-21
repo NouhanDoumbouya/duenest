@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { Download, FileText, Loader2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { useFocusTrap } from "@/lib/use-focus-trap";
 
 export interface FilePreviewState {
   fileName: string;
@@ -36,6 +37,8 @@ export function FilePreviewDialog({
   preview: FilePreviewState | null;
   onClose: () => void;
 }) {
+  const panelRef = useFocusTrap<HTMLDivElement>(preview !== null);
+
   useEffect(() => {
     if (!preview) return;
     function onKey(event: KeyboardEvent) {
@@ -50,6 +53,7 @@ export function FilePreviewDialog({
 
   return (
     <div
+      ref={panelRef}
       className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/50 p-3 backdrop-blur-sm sm:p-6"
       role="dialog"
       aria-modal="true"

@@ -17,6 +17,7 @@ import {
 import { useFeature } from "@/components/features/feature-flags-provider";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ApiError } from "@/lib/api";
+import { useFocusTrap } from "@/lib/use-focus-trap";
 import {
   fileExtension,
   formatFileSize,
@@ -68,6 +69,7 @@ export function DocumentFileViewer({
   // friendly "open in a new tab" fallback instead. Default to embedding so SSR
   // and desktop keep the inline viewer.
   const [canEmbedPdf, setCanEmbedPdf] = useState(true);
+  const panelRef = useFocusTrap<HTMLDivElement>(file !== null);
 
   useEffect(() => {
     const mq = window.matchMedia("(pointer: coarse)");
@@ -135,6 +137,7 @@ export function DocumentFileViewer({
 
   return (
     <div
+      ref={panelRef}
       className="fixed inset-0 z-50 flex bg-background/95 p-3 backdrop-blur-sm sm:p-5"
       role="dialog"
       aria-modal="true"

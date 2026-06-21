@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 
 import { Button } from "@/components/ui/button";
+import { useFocusTrap } from "@/lib/use-focus-trap";
 import { formatFileSize } from "@/lib/document-files";
 import type { DuplicateCheckResult } from "@/lib/document-files";
 
@@ -34,6 +35,8 @@ export function DuplicateWarningDialog({
   onKeepBoth: () => void;
   onSkip: () => void;
 }) {
+  const panelRef = useFocusTrap<HTMLDivElement>(open && result !== null);
+
   useEffect(() => {
     if (!open) return;
     function onKey(event: KeyboardEvent) {
@@ -48,6 +51,7 @@ export function DuplicateWarningDialog({
 
   return (
     <div
+      ref={panelRef}
       className="fixed inset-0 z-50 flex justify-center overflow-y-auto p-4"
       role="dialog"
       aria-modal="true"

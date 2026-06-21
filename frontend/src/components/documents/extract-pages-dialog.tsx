@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useFocusTrap } from "@/lib/use-focus-trap";
 
 /**
  * Pick which pages of a PDF to extract into a new copy. Page selection is
@@ -29,6 +30,7 @@ export function ExtractPagesDialog({
   // Selection starts empty; the parent remounts this dialog per file (via key),
   // so state is naturally fresh each time it opens.
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const panelRef = useFocusTrap<HTMLDivElement>(open);
 
   useEffect(() => {
     if (!open) return;
@@ -52,6 +54,7 @@ export function ExtractPagesDialog({
 
   return (
     <div
+      ref={panelRef}
       className="fixed inset-0 z-50 flex justify-center overflow-y-auto p-4"
       role="dialog"
       aria-modal="true"

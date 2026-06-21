@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { ApiError } from "@/lib/api";
 import { startCheckout, validatePromoCode } from "@/lib/billing";
 import { cn } from "@/lib/utils";
+import { useFocusTrap } from "@/lib/use-focus-trap";
 import type { BillingInterval } from "@/types/billing";
 
 const PRO_UNLOCKS = [
@@ -36,6 +37,7 @@ export function UpgradeModal({
   const [checking, setChecking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const panelRef = useFocusTrap<HTMLDivElement>(open);
 
   useEffect(() => {
     if (!open) return;
@@ -86,6 +88,7 @@ export function UpgradeModal({
 
   return (
     <div
+      ref={panelRef}
       className="fixed inset-0 z-50 flex justify-center overflow-y-auto p-4"
       role="dialog"
       aria-modal="true"

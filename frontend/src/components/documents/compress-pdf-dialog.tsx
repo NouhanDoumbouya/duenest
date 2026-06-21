@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useFocusTrap } from "@/lib/use-focus-trap";
 import { formatFileSize } from "@/lib/document-files";
 
 const TIERS = [
@@ -35,6 +36,7 @@ export function CompressPdfDialog({
   onConfirm: (quality: number) => void;
 }) {
   const [tier, setTier] = useState<TierId>("smaller");
+  const panelRef = useFocusTrap<HTMLDivElement>(open);
 
   useEffect(() => {
     if (!open) return;
@@ -49,6 +51,7 @@ export function CompressPdfDialog({
 
   return (
     <div
+      ref={panelRef}
       className="fixed inset-0 z-50 flex justify-center overflow-y-auto p-4"
       role="dialog"
       aria-modal="true"

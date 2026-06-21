@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { useFocusTrap } from "@/lib/use-focus-trap";
 import type { DocumentCategory } from "@/types/documents";
 
 /**
@@ -28,6 +29,7 @@ export function MoveToVaultDialog({
 }) {
   // Parent remounts this dialog when it opens (via key), so state is fresh.
   const [categoryId, setCategoryId] = useState<string>("");
+  const panelRef = useFocusTrap<HTMLDivElement>(open);
 
   useEffect(() => {
     if (!open) return;
@@ -42,6 +44,7 @@ export function MoveToVaultDialog({
 
   return (
     <div
+      ref={panelRef}
       className="fixed inset-0 z-50 flex justify-center overflow-y-auto p-4"
       role="dialog"
       aria-modal="true"

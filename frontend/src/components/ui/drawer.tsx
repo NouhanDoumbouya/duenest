@@ -1,11 +1,9 @@
 "use client";
 
-import { useEffect, useRef, type MouseEventHandler, type ReactNode } from "react";
+import { useEffect, type MouseEventHandler, type ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
-
-const FOCUSABLE =
-  'button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+import { useFocusTrap } from "@/lib/use-focus-trap";
 
 /**
  * Full-height slide-over backdrop. Owns Escape-to-close. Pair with
@@ -51,43 +49,7 @@ export function DrawerPanel({
   label: string;
   onClick?: MouseEventHandler<HTMLElement>;
 }) {
-  const panelRef = useRef<HTMLElement>(null);
-
-  useEffect(() => {
-    const panel = panelRef.current;
-    if (!panel) return;
-    // Capture focus before moving it in, so we can restore it on close. This
-    // effect runs before the backdrop's, while the trigger is still focused.
-    const previouslyFocused = document.activeElement as HTMLElement | null;
-    const focusables = panel.querySelectorAll<HTMLElement>(FOCUSABLE);
-    (focusables[0] ?? panel).focus();
-
-    function onKey(event: KeyboardEvent) {
-      if (event.key !== "Tab" || !panel) return;
-      const items = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE));
-      if (items.length === 0) {
-        event.preventDefault();
-        panel.focus();
-        return;
-      }
-      const first = items[0];
-      const last = items[items.length - 1];
-      const active = document.activeElement;
-      if (event.shiftKey && active === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && active === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    }
-
-    panel.addEventListener("keydown", onKey);
-    return () => {
-      panel.removeEventListener("keydown", onKey);
-      previouslyFocused?.focus?.();
-    };
-  }, []);
+  const panelRef = useFocusTrap<HTMLElement>(true);
 
   return (
     <aside
