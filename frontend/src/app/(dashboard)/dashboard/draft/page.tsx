@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   Check,
   Copy,
+  FileDown,
   FileText,
   Info,
   Loader2,
@@ -26,6 +27,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { ApiError } from "@/lib/api";
 import { draftDocument, type DraftResult, type DraftTone } from "@/lib/ai";
 import { getDocuments, formatDate } from "@/lib/documents";
+import { uploadInboxFileWithProgress } from "@/lib/document-files";
+import { textToPdfBlob } from "@/lib/pdf/text-to-pdf";
 import {
   deleteGeneratedDocument,
   listGeneratedDocuments,
@@ -59,6 +62,30 @@ export default function DraftPage() {
   const [savingDraft, setSavingDraft] = useState(false);
   const [draftSaved, setDraftSaved] = useState(false);
   const [packs, setPacks] = useState<Bundle[]>([]);
+  const [exporting, setExporting] = useState(false);
+  const [exported, setExported] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  async function exportToVault() {
+    setExporting(true);
+    setExportError(null);
+    try {
+      const blob = await textToPdfBlob(subject, body);
+      const name = `${(subject.trim() || "Draft").slice(0, 80)}.pdf`;
+      const file = new File([blob], name, { type: "application/pdf" });
+      await uploadInboxFileWithProgress(file);
+      setExported(true);
+      setTimeout(() => setExported(false), 2500);
+    } catch (err) {
+      setExportError(
+        err instanceof ApiError
+          ? err.message
+          : "Could not save to your Vault. Try again.",
+      );
+    } finally {
+      setExporting(false);
+    }
+  }
 
   // Load the user's saved drafts (the drafts library) and packs for this page.
   useEffect(() => {
@@ -319,6 +346,10 @@ export default function DraftPage() {
           onSaveDraft={saveDraft}
           saving={savingDraft}
           saved={draftSaved}
+          onExportToVault={exportToVault}
+          exporting={exporting}
+          exported={exported}
+          exportError={exportError}
         />
       )}
 
@@ -390,6 +421,10 @@ function DraftResultCard({
   onSaveDraft,
   saving,
   saved,
+  onExportToVault,
+  exporting,
+  exported,
+  exportError,
 }: {
   result: DraftResult;
   subject: string;
@@ -399,6 +434,10 @@ function DraftResultCard({
   onSaveDraft: () => void;
   saving: boolean;
   saved: boolean;
+  onExportToVault: () => void;
+  exporting: boolean;
+  exported: boolean;
+  exportError: string | null;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -460,6 +499,22 @@ function DraftResultCard({
             </Button>
             <Button
               type="button"
+              variant="outline"
+              size="sm"
+              onClick={onExportToVault}
+              disabled={exporting || (!subject.trim() && !body.trim())}
+            >
+              {exporting ? (
+                <Loader2 className="animate-spin" />
+              ) : exported ? (
+                <Check />
+              ) : (
+                <FileDown />
+              )}
+              {exported ? "Saved" : "Save as document"}
+            </Button>
+            <Button
+              type="button"
               size="sm"
               onClick={onSaveDraft}
               disabled={saving || (!subject.trim() && !body.trim())}
@@ -475,6 +530,12 @@ function DraftResultCard({
             </Button>
           </div>
         </div>
+
+        {exportError && (
+          <p className="text-sm text-destructive" role="alert">
+            {exportError}
+          </p>
+        )}
 
         <div className="space-y-2">
           <Label htmlFor="draft-subject">Subject</Label>
