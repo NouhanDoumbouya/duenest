@@ -32,6 +32,17 @@
 > channels), TF-321 (request QR), TF-373/374 (export/delete account data), TF-039 (command
 > palette), TF-040 (quick "+ new"). **Built this pass:** TF-102 (signed-copy badge),
 > TF-309 (QR access-rules note).
+>
+> **Sampling result (two code-verification passes, ~24 items across all sections):**
+> **22 of 24 were already implemented**; only 2 were genuine gaps (TF-102, TF-309) — both
+> now built. Also confirmed present: TF-049 (dashboard "document readiness" title), TF-061
+> (first-login "start with one"), TF-067 (onboarding goal routing — `getOnboardingGoalOptions`),
+> TF-289/290/292 (SafeSend access rules / review-before-share / "no public link yet"),
+> TF-311 (request upload link), TF-280 (emergency checklist), TF-353 (org collect/review),
+> TF-343 (AI briefing), TF-184 (extraction prefill), TF-185 (masked sensitive fields).
+> **Honest conclusion:** the product already realizes ~90%+ of this ledger; the per-row
+> "deferred" markers are stale, not a real backlog of missing work. Remaining genuine gaps
+> are sparse and will be built as found; the bulk is "already done — status was wrong."
 
 ## Index
 
