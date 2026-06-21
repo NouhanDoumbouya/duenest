@@ -38,6 +38,8 @@ import { SectionCard } from "@/components/ui/section-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TimelineList } from "@/components/timeline/timeline-list";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { StatusBadge } from "@/components/ui/status-badge";
+import type { StatusTone } from "@/lib/status-badge";
 import {
   Card,
   CardContent,
@@ -138,11 +140,15 @@ function initialBundleTab(): BundleTab {
     : "requirements";
 }
 
-const STATUS_STYLES: Record<RequirementStatus, string> = {
-  missing: "bg-amber-100 text-amber-700",
-  attached: "bg-primary/10 text-primary",
-  completed: "bg-brand-success/10 text-brand-success",
-  skipped: "bg-muted text-muted-foreground",
+// Requirement lifecycle → canonical status tone (see `lib/status-badge` and the
+// status colour map in `docs/design/design-system.md`). Keeps pack checklist
+// pills consistent with Vault, SafeSend, and Requests instead of drifting into
+// one-off palette colours.
+const REQUIREMENT_TONES: Record<RequirementStatus, StatusTone> = {
+  missing: "warning",
+  attached: "info",
+  completed: "success",
+  skipped: "neutral",
 };
 
 function RequirementRow({
@@ -233,14 +239,9 @@ function RequirementRow({
                 Optional
               </span>
             )}
-            <span
-              className={cn(
-                "rounded-full px-2 py-0.5 text-[10px] font-medium",
-                STATUS_STYLES[requirement.status],
-              )}
-            >
+            <StatusBadge tone={REQUIREMENT_TONES[requirement.status]}>
               {REQUIREMENT_STATUS_LABELS[requirement.status]}
-            </span>
+            </StatusBadge>
           </div>
           {requirement.description && (
             <p className="mt-0.5 text-xs text-muted-foreground">
