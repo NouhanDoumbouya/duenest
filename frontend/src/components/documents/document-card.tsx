@@ -233,7 +233,7 @@ export function DocumentCard({
               {doc.in_bundle && (
                 <span
                   className="hidden items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[0.68rem] font-medium text-muted-foreground sm:inline-flex"
-                  title="This document is used in a bundle"
+                  title="This document is used in an application pack"
                 >
                   <Package className="size-3" aria-hidden />
                   In bundle

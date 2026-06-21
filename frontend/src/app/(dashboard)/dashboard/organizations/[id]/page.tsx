@@ -1180,7 +1180,7 @@ function PacksTab({
     try {
       await createOrganizationBundle(state.organization.id, { title: bundleTitle });
       setBundleTitle("");
-      await onRefresh("Bundle created.");
+      await onRefresh("Pack created.");
     } catch (err) {
       onError(err instanceof ApiError ? err.message : "Unable to create bundle.");
     } finally {

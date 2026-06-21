@@ -48,7 +48,7 @@ const TOGGLES: Array<{ key: ToggleKey; label: string; helper: string }> = [
   },
   {
     key: "checklist_bundle_reminders_enabled",
-    label: "Checklist and bundle reminders",
+    label: "Checklist and pack reminders",
     helper: "Checklist item due dates and application pack deadlines.",
   },
   {

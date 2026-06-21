@@ -44,7 +44,7 @@ const RISK_TYPE_META: Record<RiskType, { label: string; icon: LucideIcon }> = {
   document: { label: "Document", icon: FileText },
   share: { label: "Share", icon: Share2 },
   emergency: { label: "Emergency", icon: LifeBuoy },
-  bundle: { label: "Bundle", icon: Package },
+  bundle: { label: "Pack", icon: Package },
   organization: { label: "Organization", icon: Building2 },
   reminder: { label: "Reminder", icon: CalendarClock },
 };

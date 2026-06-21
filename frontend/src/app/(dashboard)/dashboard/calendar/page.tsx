@@ -94,7 +94,7 @@ const CATEGORY_META: Record<
     dot: "bg-brand-teal",
   },
   bundles: {
-    label: "Bundle",
+    label: "Pack",
     icon: Package,
     chip: "border-brand-amber/30 bg-brand-amber/10 text-brand-amber",
     dot: "bg-brand-amber",
@@ -1201,7 +1201,7 @@ function CalendarEmptyState({
         <EmptyState
           icon={CalendarDays}
           title="No calendar events yet"
-          description="Add expiry dates, reminders, bundle deadlines, appointments, or secure share expiries to make your calendar useful."
+          description="Add expiry dates, reminders, pack deadlines, appointments, or secure share expiries to make your calendar useful."
           action={
             <div className="flex flex-wrap justify-center gap-2">
               <Link href="/dashboard/documents/new" className={cn(buttonVariants())}>

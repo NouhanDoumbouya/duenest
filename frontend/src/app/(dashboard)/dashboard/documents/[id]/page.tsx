@@ -454,7 +454,7 @@ export default function DocumentWorkspacePage() {
                     <GlanceChip icon={Share2} label="Shared" tone="blue" />
                   )}
                   {doc.in_bundle && (
-                    <GlanceChip icon={Package} label="In bundle" tone="slate" />
+                    <GlanceChip icon={Package} label="In a pack" tone="slate" />
                   )}
                   {doc.in_emergency && (
                     <GlanceChip icon={LifeBuoy} label="Emergency access" tone="amber" />

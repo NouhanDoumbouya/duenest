@@ -462,7 +462,7 @@ function recommendedAction(event: TimelineEvent): string {
   if (days !== null && days < 0)
     return "Open the linked item and renew, update, or resolve it.";
   if (event.related_bundle)
-    return "Open the bundle and check any missing requirements.";
+    return "Open the pack and check any missing requirements.";
   if (event.related_document)
     return "Open the document to confirm the date and renewal status.";
   if (event.event_type === "reminder")

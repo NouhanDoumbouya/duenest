@@ -151,7 +151,7 @@ export function eventHref(event: TimelineEvent): string | null {
 }
 
 export function eventActionLabel(event: TimelineEvent): string {
-  if (event.related_bundle) return "Open bundle";
+  if (event.related_bundle) return "Open pack";
   if (event.related_document) return "Open document";
   if (event.related_subscription) return "Open subscription";
   if (event.event_type === "reminder") return "Edit reminder";
