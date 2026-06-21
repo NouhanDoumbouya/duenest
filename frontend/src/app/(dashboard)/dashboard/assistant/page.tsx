@@ -218,7 +218,12 @@ export default function AssistantPage() {
             disabled={loading}
             className="min-h-9 resize-none border-0 shadow-none focus-visible:ring-0"
           />
-          <Button type="submit" size="icon" disabled={!input.trim() || loading}>
+          <Button
+            type="submit"
+            size="icon"
+            aria-label="Send message"
+            disabled={!input.trim() || loading}
+          >
             {loading ? <Loader2 className="animate-spin" /> : <Send />}
           </Button>
         </div>

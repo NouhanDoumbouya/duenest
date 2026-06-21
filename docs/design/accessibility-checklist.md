@@ -32,7 +32,10 @@
 
 - [ ] One `<h1>` per page; logical heading order (h1→h2→h3, no skips).
 - [ ] Buttons vs links used semantically (action = button, navigation = link).
-- [ ] Icon-only buttons have `aria-label` (overflow ⋯, close, revoke).
+- [x] Icon-only buttons have `aria-label`. Audited all `size="icon"` Buttons (26)
+      and raw `<button>` icon candidates: only the AI assistant send button was
+      unlabeled (now `aria-label="Send message"`); the rest pair an icon with
+      visible text or already carry a label.
 - [ ] Images/thumbnails have meaningful `alt`; decorative icons `aria-hidden`.
 - [x] Toasts announced via `aria-live`: shared `Toast` primitive (errors now
       `role="alert"`/assertive, success polite); 4 ad-hoc confirmation toasts
