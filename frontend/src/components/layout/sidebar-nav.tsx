@@ -50,13 +50,10 @@ function LeafLink({
           ? "px-3 py-2 font-medium"
           : "px-3 py-2 text-[0.83rem]",
         active
-          ? "bg-accent text-accent-foreground"
+          ? "bg-accent font-semibold text-accent-foreground"
           : "text-muted-foreground hover:bg-muted hover:text-foreground",
       )}
     >
-      {active && (
-        <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-accent-foreground/70" />
-      )}
       {Icon && (
         <Icon
           className={cn(
@@ -107,13 +104,13 @@ function CollapsibleItem({
             : "text-muted-foreground hover:bg-muted hover:text-foreground",
         )}
       >
-        {parentActive && (
-          <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-accent-foreground/70" />
-        )}
         <Link
           href={parent.href}
           onClick={onNavigate}
-          className="flex flex-1 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          className={cn(
+            "flex flex-1 items-center gap-3 rounded-lg px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+            parentActive ? "font-semibold" : "font-medium",
+          )}
         >
           <Icon
             className={cn(
@@ -222,7 +219,7 @@ export function SidebarNav({
 
         return (
           <div key={group.heading} className="flex flex-col gap-0.5">
-            <p className="px-3 pb-1.5 text-[0.68rem] font-semibold tracking-wider text-muted-foreground/60 uppercase">
+            <p className="px-3 pb-1.5 text-[0.68rem] font-semibold tracking-wider text-muted-foreground/70 uppercase">
               {group.heading}
             </p>
             {items.map((item) => {
@@ -258,7 +255,7 @@ export function SidebarNav({
 
       {hasFounderAccess && (
         <div className="flex flex-col gap-0.5">
-          <p className="px-3 pb-1.5 text-[0.68rem] font-semibold tracking-wider text-muted-foreground/60 uppercase">
+          <p className="px-3 pb-1.5 text-[0.68rem] font-semibold tracking-wider text-muted-foreground/70 uppercase">
             Founder
           </p>
           <LeafLink
