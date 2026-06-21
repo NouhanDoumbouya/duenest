@@ -1106,6 +1106,7 @@ function UseCases() {
       title: "Families",
       description:
         "Keep important documents organized and prepare emergency access for the people you trust.",
+      href: "/use-cases/families",
     },
     {
       title: "Agencies & schools",

@@ -142,6 +142,26 @@ export const USE_CASES: UseCase[] = [
     features: ["DueNest Portals", "Document Requests", "Deadlines & Renewals", "SafeSend", "Organizations"],
     trustNote: "Upload links are scoped — recipients never see your workspace.",
   },
+  {
+    slug: "families",
+    eyebrow: "For families",
+    title: "Keep your family's documents ready",
+    metaTitle: "DueNest for Families — Documents Ready for Emergencies",
+    metaDescription:
+      "Keep your family's important documents organized in one private place, and prepare read-only emergency access for the people you trust.",
+    pain: "Everyone's important documents are spread out — and impossible to find in an emergency.",
+    solution:
+      "Keep the family's critical documents organized and prepare read-only emergency access for trusted people.",
+    workflow: [
+      "Scan or upload each person's key documents",
+      "Organize them in your Vault by person and category",
+      "Track expiry dates and renewals",
+      "Prepare an emergency pack of critical documents",
+      "Give trusted people read-only emergency access",
+    ],
+    features: ["Vault", "Scan", "Deadlines & Renewals", "Emergency Access", "SafeSend"],
+    trustNote: "Emergency access is read-only and revocable. Nothing is shared publicly.",
+  },
 ];
 
 export function getUseCase(slug: string): UseCase | undefined {
