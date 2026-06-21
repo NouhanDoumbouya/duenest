@@ -34,7 +34,10 @@
 - [ ] Buttons vs links used semantically (action = button, navigation = link).
 - [ ] Icon-only buttons have `aria-label` (overflow ⋯, close, revoke).
 - [ ] Images/thumbnails have meaningful `alt`; decorative icons `aria-hidden`.
-- [ ] Status changes announced via `aria-live` (toasts, upload progress, "pack ready").
+- [x] Toasts announced via `aria-live`: shared `Toast` primitive (errors now
+      `role="alert"`/assertive, success polite); 4 ad-hoc confirmation toasts
+      (SafeSend list/detail, claim, shared-with-me) given `role="status"`/polite;
+      scanner toasts already covered. (Upload progress / "pack ready" still TODO.)
 - [ ] Form fields have associated `<label>`; errors linked via `aria-describedby` and
       announced.
 

@@ -37,8 +37,9 @@ export function Toast({
   return (
     <div
       className="pointer-events-none fixed inset-x-0 bottom-4 z-[60] flex justify-center px-4"
-      role="status"
-      aria-live="polite"
+      // Errors interrupt (assertive/alert); success is announced politely.
+      role={toast.kind === "error" ? "alert" : "status"}
+      aria-live={toast.kind === "error" ? "assertive" : "polite"}
     >
       <div
         className={cn(
