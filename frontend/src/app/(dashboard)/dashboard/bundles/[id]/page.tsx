@@ -39,7 +39,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { TimelineList } from "@/components/timeline/timeline-list";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
-import type { StatusTone } from "@/lib/status-badge";
+import { TONE_CLASS, type StatusTone } from "@/lib/status-badge";
 import {
   Card,
   CardContent,
@@ -673,8 +673,13 @@ export default function BundleDetailPage() {
                     </p>
                   </div>
                 ) : (
-                  <ul className="space-y-2">
-                    {bundle.requirements.map((requirement) => (
+                  (() => {
+                    // Render the existing row unchanged, but group requirements
+                    // so what needs action surfaces first: Missing (required
+                    // before optional) → Needs review → Ready → Skipped. Empty
+                    // groups are omitted so the checklist never shows dead
+                    // headers.
+                    const renderRow = (requirement: BundleRequirement) => (
                       <RequirementRow
                         key={requirement.id}
                         bundleId={bundleId}
@@ -709,8 +714,52 @@ export default function BundleDetailPage() {
                           refreshReadiness();
                         }}
                       />
-                    ))}
-                  </ul>
+                    );
+
+                    const byStatus = (status: RequirementStatus) =>
+                      bundle.requirements.filter((r) => r.status === status);
+                    const missing = byStatus("missing").sort(
+                      (a, b) => Number(b.is_required) - Number(a.is_required),
+                    );
+                    const groups: {
+                      key: RequirementStatus;
+                      label: string;
+                      tone: StatusTone;
+                      items: BundleRequirement[];
+                    }[] = [
+                      { key: "missing", label: "Missing", tone: "warning", items: missing },
+                      { key: "attached", label: "Needs review", tone: "info", items: byStatus("attached") },
+                      { key: "completed", label: "Ready", tone: "success", items: byStatus("completed") },
+                      { key: "skipped", label: "Skipped", tone: "neutral", items: byStatus("skipped") },
+                    ];
+
+                    return (
+                      <div className="space-y-5">
+                        {groups
+                          .filter((g) => g.items.length > 0)
+                          .map((g) => (
+                            <div key={g.key} className="space-y-2">
+                              <div className="flex items-center gap-2 px-0.5">
+                                <span
+                                  aria-hidden
+                                  className={cn(
+                                    "size-1.5 rounded-full",
+                                    TONE_CLASS[g.tone].dot,
+                                  )}
+                                />
+                                <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                                  {g.label}
+                                </p>
+                                <span className="text-xs tabular-nums text-muted-foreground/60">
+                                  {g.items.length}
+                                </span>
+                              </div>
+                              <ul className="space-y-2">{g.items.map(renderRow)}</ul>
+                            </div>
+                          ))}
+                      </div>
+                    );
+                  })()
                 )}
 
                 <div className="flex flex-col gap-2 rounded-xl border border-border bg-muted/25 p-3 sm:flex-row sm:items-center">
