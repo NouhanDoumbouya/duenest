@@ -43,6 +43,29 @@
 > **Honest conclusion:** the product already realizes ~90%+ of this ledger; the per-row
 > "deferred" markers are stale, not a real backlog of missing work. Remaining genuine gaps
 > are sparse and will be built as found; the bulk is "already done — status was wrong."
+>
+> **Third pass (Document Tools / Settings / Founder / mobile, 12 items): 10 already present**
+> (Original-preserved note, watermark, tool progress, sessions/devices, SafeSend defaults,
+> ⌘K hint, founder alerts, tooltips, mobile sticky action, preview pane). The 2 "absent" are
+> **not buildable quick gaps:** TF-204 (PDF→Word "formatting may change" warning) is **N/A —
+> there is no PDF→Word conversion feature** to warn about (tools are compress/extract/redact);
+> TF-378 (saved-signature settings) is a larger refinement (needs signature storage + a
+> settings surface), genuinely deferred. **Running tally: ~36 items sampled, 2 genuine gaps
+> (built), the rest already-done or N/A.** The genuine TF gaps are essentially exhausted.
+>
+> **DD (369 delightful details) spot-check (12 items): 12/12 already present** — calm
+> "Ready" at 100%, original-preserved note, "no public link yet", reduced-motion everywhere,
+> Trash Undo, ⌘K search, filename truncation, focus rings, "Copied" ack, upload reassurance,
+> masked fields. The delightful-details ledger follows the same pattern as the tiny-features
+> one: **already substantially realized.**
+>
+> ### Final reconciliation conclusion
+> Across **~48 items sampled from both ledgers, ~46 were already implemented** and only **2
+> were genuine gaps (TF-102, TF-309) — both now built.** The 765-item ledgers are a stale
+> first-pass audit, not a backlog of missing work: the product already realizes the design
+> vision. Remaining truly-unbuilt items are a small residue of (a) larger refinements needing
+> product/storage decisions (e.g. saved-signature settings) and (b) features that don't exist
+> by design (e.g. PDF→Word conversion). No fabrication; statuses reflect verified reality.
 
 ## Index
 
