@@ -17,8 +17,10 @@ prepared it, how, when, and the SHA-256 hashes of the original and prepared file
 ## Status
 
 - **Backend: implemented and tested** (`apps/documents`).
-- **Frontend: API client + types implemented** (`lib/fill-sign.ts`, `types/fill-sign.ts`).
-  The annotation **canvas UI** is the next slice — primitives are ready (see below).
+- **Frontend: implemented** — API client + types (`lib/fill-sign.ts`, `types/fill-sign.ts`)
+  and the annotation UI (`components/documents/fill-sign-dialog.tsx`), launched from the
+  per-file `FileToolsButton` (PDF-gated on the `fill_sign` flag). Compiles + builds clean;
+  **still needs a browser smoke test** (interactive canvas can't be exercised headlessly here).
 
 ## Models (`apps/documents/models.py`, migration 0028)
 
@@ -57,13 +59,16 @@ resolution-independently.
 `{ page, x, y, type, value?, font_size?, image?, width?, height? }` where `type` ∈
 `text|date|initials|check|signature`; `image` is a base64/data-URL PNG for `signature`.
 
-## Frontend client
+## Frontend
 
 - `lib/fill-sign.ts`: `prepareSignedCopy(fileId, payload)`, `listPreparedDocuments(...)`.
-- Next slice — the annotation canvas — reuses existing primitives:
-  `getDocumentFileDownloadBlob` (bytes) → `rasterizePdf(bytes, {maxWidth})` (page canvases)
-  → click-to-place overlay (normalised coords) + a signature pad (canvas → PNG) →
-  `prepareSignedCopy`. Modal a11y via `useFocusTrap`.
+- `components/documents/fill-sign-dialog.tsx`: loads the PDF
+  (`getDocumentFileDownloadBlob` / `getInboxFileDownloadBlob`), rasterises pages
+  (`rasterizePdf`), renders a click-to-place overlay (normalised coords), a real
+  signature-pad canvas (pointer drawing → transparent PNG), multi-page navigation, a
+  signer-name field, honest trust copy, and submits via `prepareSignedCopy`. Modal a11y
+  via `useFocusTrap`; loading / PDF-only error / success states.
+- Launched from `FileToolsButton` for PDF files when the `fill_sign` flag is on.
 
 ## Security
 
