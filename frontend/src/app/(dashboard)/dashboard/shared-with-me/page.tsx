@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Clock,
@@ -16,6 +16,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import type { StatusTone } from "@/lib/status-badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { PageContainer } from "@/components/ui/page-container";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
@@ -48,21 +49,29 @@ export default function SharedWithMePage() {
   const [error, setError] = useState<string | null>(null);
   const [removing, setRemoving] = useState<number | null>(null);
 
-  useEffect(() => {
-    let active = true;
+  const load = useCallback(() => {
     listSharedWithMe()
-      .then((data) => active && setItems(data))
-      .catch(
-        (err) =>
-          active &&
-          setError(
-            err instanceof ApiError ? err.message : "Could not load shared files.",
-          ),
+      .then((data) => {
+        setItems(data);
+        setError(null);
+      })
+      .catch((err) =>
+        setError(
+          err instanceof ApiError ? err.message : "Could not load shared files.",
+        ),
       );
-    return () => {
-      active = false;
-    };
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // Reset to the loading state, then refetch (called from the error retry).
+  const retry = useCallback(() => {
+    setError(null);
+    setItems(null);
+    load();
+  }, [load]);
 
   async function handleRemove(id: number) {
     setRemoving(id);
@@ -86,7 +95,7 @@ export default function SharedWithMePage() {
 
       <SectionCard title="Recent shares">
         {error ? (
-          <p className="text-sm text-destructive">{error}</p>
+          <ErrorState description={error} onRetry={retry} />
         ) : items === null ? (
           <div className="space-y-2">
             {[0, 1].map((i) => (

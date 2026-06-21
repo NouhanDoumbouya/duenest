@@ -16,6 +16,7 @@
 | `skeleton` | ✅ Good | Ensure every list view actually uses it. |
 | `toast` | ✅ Good | Standardize Undo affordance for reversible actions. |
 | `empty-state` | ✅ Good | Ensure **every** module uses it with a teaching message + CTA. |
+| `error-state` | ✅ **New.** Recoverable error with built-in **retry** + `role="alert"`, mirrors `empty-state`. Replaces dead-end `text-destructive` messages. Wired into SafeSend + Shared-with-me; roll out to other list loads. |
 | `confirm-dialog` | ✅ Good | Use for all irreversible actions; must name exact consequence. |
 | `page-container`, `page-header` | ✅ Good | Page shell; keeps titles/subtitles consistent. |
 | `section-card` | ✅ Good | |

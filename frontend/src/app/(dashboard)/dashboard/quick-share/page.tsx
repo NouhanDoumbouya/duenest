@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -26,6 +26,7 @@ import type { StatusTone } from "@/lib/status-badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { PageContainer } from "@/components/ui/page-container";
 import { PageHeader } from "@/components/ui/page-header";
 import { ProductMetric, TrustNotice } from "@/components/ui/product-ui";
@@ -161,22 +162,29 @@ export default function QuickShareListPage() {
     }
   }
 
-  useEffect(() => {
-    let active = true;
+  const load = useCallback(() => {
     listQuickShares()
       .then((data) => {
-        if (active) setSessions(data);
+        setSessions(data);
+        setError(null);
       })
-      .catch((err) => {
-        if (active)
-          setError(
-            err instanceof ApiError ? err.message : "Could not load your shares.",
-          );
-      });
-    return () => {
-      active = false;
-    };
+      .catch((err) =>
+        setError(
+          err instanceof ApiError ? err.message : "Could not load your shares.",
+        ),
+      );
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // Reset to the loading state, then refetch (called from the error retry).
+  const retry = useCallback(() => {
+    setError(null);
+    setSessions(null);
+    load();
+  }, [load]);
 
   const stats = useMemo(() => {
     const list = sessions ?? [];
@@ -354,7 +362,7 @@ export default function QuickShareListPage() {
         )}
 
         {error ? (
-          <p className="text-sm text-destructive">{error}</p>
+          <ErrorState description={error} onRetry={retry} />
         ) : sessions === null ? (
           <div className="space-y-2">
             {[0, 1, 2].map((i) => (
