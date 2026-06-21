@@ -22,7 +22,7 @@ export function SharingTab({ documentId }: { documentId: number }) {
   const [files, setFiles] = useState<DocumentFile[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Unified on the Quick Share engine: sharing a file seeds the wizard and opens
+  // Unified on the SafeSend engine: sharing a file seeds the wizard and opens
   // it, so this tab uses the same secure-share flow as everywhere else.
   function handleShare(file: DocumentFile) {
     setSharePrefill({ files: [fileToSelected(file)] });
@@ -46,7 +46,7 @@ export function SharingTab({ documentId }: { documentId: number }) {
   return (
     <SectionCard
       title="Sharing & access control"
-      description="Share a file through the secure Quick Share wizard. You can also review and revoke any links created before sharing moved to Quick Share."
+      description="Share a file through the secure SafeSend wizard. You can also review and revoke any links created before sharing moved to SafeSend."
     >
       {error && (
         <p
@@ -109,7 +109,7 @@ export function SharingTab({ documentId }: { documentId: number }) {
 }
 
 /**
- * Manage single-file links created before sharing moved to the Quick Share
+ * Manage single-file links created before sharing moved to the SafeSend
  * engine. Opt-in (no requests until opened), so the common case — no legacy
  * links — costs nothing. Lists each file's active links with a Revoke action;
  * new shares are created through the wizard, so there is no create here.
@@ -196,7 +196,7 @@ function LegacyShareLinks({
             </div>
           ) : rows.length === 0 ? (
             <p className="py-2 text-sm text-muted-foreground">
-              No active share links. New shares are created in the Quick Share
+              No active share links. New shares are created in the SafeSend
               wizard.
             </p>
           ) : (

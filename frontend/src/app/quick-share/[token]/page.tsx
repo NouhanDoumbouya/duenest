@@ -57,20 +57,20 @@ function errorFromApi(err: unknown): ClaimError {
     const detail =
       typeof data.detail === "string"
         ? data.detail
-        : "This Quick Share could not be opened.";
+        : "This SafeSend could not be opened.";
     if (state === "expired")
-      return { title: "This Quick Share expired.", message: detail, state };
+      return { title: "This SafeSend expired.", message: detail, state };
     if (state === "revoked")
       return { title: "Access revoked.", message: detail, state };
     if (state === "consumed")
       return {
-        title: "This one-time Quick Share has already been used.",
+        title: "This one-time SafeSend has already been used.",
         message: detail,
         state,
       };
     if (state === "limit_reached")
       return {
-        title: "This Quick Share is no longer available.",
+        title: "This SafeSend is no longer available.",
         message: detail,
         state,
       };
@@ -79,7 +79,7 @@ function errorFromApi(err: unknown): ClaimError {
     return { title: detail, message: detail, state };
   }
   return {
-    title: "This Quick Share could not be opened.",
+    title: "This SafeSend could not be opened.",
     message: err instanceof Error ? err.message : "Please try again later.",
   };
 }
@@ -362,7 +362,7 @@ export default function QuickShareClaimPage() {
           <Logo href="/" size="md" />
           <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground shadow-card">
             <ShieldCheck className="size-3.5 text-brand-success" />
-            Quick Share
+            SafeSend
           </span>
         </header>
 

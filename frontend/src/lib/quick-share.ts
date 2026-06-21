@@ -1,4 +1,4 @@
-// API helpers for Quick Share QR (owner, claim, and "Shared with me").
+// API helpers for SafeSend QR (owner, claim, and "Shared with me").
 //
 // Access codes are passed as the `X-Access-Code` header and re-validated by the
 // backend on every request. File bytes are fetched as blobs so the access token

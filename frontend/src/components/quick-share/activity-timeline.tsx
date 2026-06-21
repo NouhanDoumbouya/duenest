@@ -1,6 +1,6 @@
 "use client";
 
-// A compact, reusable activity timeline for a Quick Share. Renders the owner's
+// A compact, reusable activity timeline for a SafeSend. Renders the owner's
 // audit trail (opens, accepts, previews, downloads, extends, revokes) with a
 // per-action icon. Never shows access codes or file contents — only safe,
 // already-redacted summaries from the backend.

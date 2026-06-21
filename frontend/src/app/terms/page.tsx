@@ -44,7 +44,7 @@ const sections: LegalSection[] = [
   },
   {
     title: "8. Sharing and public links",
-    body: "Quick Share and similar links expose only the items you select. Create them carefully, use access codes and expiry where appropriate, and revoke them when no longer needed. Watermarking can discourage misuse but cannot fully prevent screenshots.",
+    body: "SafeSend and similar links expose only the items you select. Create them carefully, use access codes and expiry where appropriate, and revoke them when no longer needed. Watermarking can discourage misuse but cannot fully prevent screenshots.",
   },
   {
     title: "9. Emergency access limitation",

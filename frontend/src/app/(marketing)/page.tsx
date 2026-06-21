@@ -645,7 +645,7 @@ function SafeSend() {
     <ProductSection
       id="safesend"
       reverse
-      eyebrow="Quick Share · SafeSend"
+      eyebrow="Sharing · SafeSend"
       title="Share access, not raw files."
       description="Send a QR, a secure link, or a DueNest code — through WhatsApp, Telegram, or email — without ever handing over the original file."
       bullets={[

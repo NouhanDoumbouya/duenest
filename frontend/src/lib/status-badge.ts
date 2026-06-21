@@ -3,7 +3,7 @@
  *
  * One source of truth that maps every lifecycle status to a calm visual "tone"
  * and a default human label, so status badges stop drifting in colour and
- * wording across Vault, Bundles/Application Packs, Quick Share/SafeSend, and
+ * wording across Vault, Bundles/Application Packs, SafeSend, and
  * Document Requests. See `docs/design/design-system.md` (status colour map) and
  * `docs/design/microcopy-patterns.md` (status labels).
  *

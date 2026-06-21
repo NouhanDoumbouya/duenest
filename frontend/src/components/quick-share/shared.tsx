@@ -1,6 +1,6 @@
 "use client";
 
-// Shared building blocks for the Quick Share QR experience: the QR renderer
+// Shared building blocks for the SafeSend QR experience: the QR renderer
 // (heavy lib is dynamically imported), a live expiry countdown, permission
 // chips, and small label/formatting helpers used across sender + receiver UIs.
 
@@ -359,7 +359,7 @@ export function QrCode({
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={dataUrl}
-          alt="Quick Share QR code"
+          alt="SafeSend QR code"
           width={size - 24}
           height={size - 24}
           className="quick-share-qr-in h-full w-full"

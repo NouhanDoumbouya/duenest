@@ -1,6 +1,6 @@
 "use client";
 
-// A compact, mobile-friendly file picker for the Quick Share wizard.
+// A compact, mobile-friendly file picker for the SafeSend wizard.
 //
 // Documents load first; a document's files load lazily when it is expanded.
 // Selection is tracked by file id and surfaced back to the parent wizard.

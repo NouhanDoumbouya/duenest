@@ -608,7 +608,7 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
     [features],
   );
 
-  // Continue the just-saved scan into the Quick Share / SafeSend wizard with the
+  // Continue the just-saved scan into the SafeSend wizard with the
   // file preselected. No share/link is created here — the wizard owns all access
   // decisions and requires explicit confirmation.
   const shareSafely = useCallback(() => {

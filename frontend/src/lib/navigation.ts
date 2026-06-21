@@ -314,7 +314,7 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
     items: [
       { label: "Bundles", href: "/dashboard/bundles", icon: Package, featureKey: "bundles" },
       {
-        label: "Quick Share",
+        label: "SafeSend",
         href: "/dashboard/quick-share",
         icon: QrCode,
         featureKey: "quick_share",

@@ -27,7 +27,7 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const justRegistered = searchParams.get("registered") === "1";
-  // Preserve a post-login destination (e.g. a Quick Share claim page). Only
+  // Preserve a post-login destination (e.g. a SafeSend claim page). Only
   // same-origin relative paths are honoured.
   const nextParam = searchParams.get("next");
   // A safe, same-origin deep link / returnTo. When present it always wins, so

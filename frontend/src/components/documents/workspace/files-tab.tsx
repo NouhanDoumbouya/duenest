@@ -40,7 +40,7 @@ export function FilesTab({
   const [previewingFile, setPreviewingFile] = useState<DocumentFile | null>(null);
   const router = useRouter();
 
-  // Sharing is unified on the Quick Share engine: a file's "Share" action seeds
+  // Sharing is unified on the SafeSend engine: a file's "Share" action seeds
   // the share wizard with that file and opens it, instead of a separate dialog.
   function handleShare(file: DocumentFile) {
     setSharePrefill({ files: [fileToSelected(file)] });

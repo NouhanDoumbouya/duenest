@@ -403,7 +403,7 @@ export default function FileInboxPage() {
     }
   }
 
-  // Sharing is unified on the Quick Share engine: an inbox file's "Share" seeds
+  // Sharing is unified on the SafeSend engine: an inbox file's "Share" seeds
   // the share wizard with that file and opens it. Inbox files are owner-owned and
   // shareable directly (no document needed).
   function handleShare(file: DocumentFile) {

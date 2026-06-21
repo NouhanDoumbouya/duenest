@@ -1,4 +1,4 @@
-// SafeSend — the safety + distribution layer that sits on top of Quick Share.
+// SafeSend — the safety + distribution layer that sits on top of SafeSend.
 //
 // Everything here is pure (no React, no DOM unless a function name makes that
 // obvious) so it can be reasoned about and reused across the create flow, the

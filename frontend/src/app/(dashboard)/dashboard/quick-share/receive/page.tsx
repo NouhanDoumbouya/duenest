@@ -58,7 +58,7 @@ export default function ReceiveCodePage() {
         <Link
           href="/dashboard/quick-share"
           className="flex size-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-muted"
-          aria-label="Back to Quick Share"
+          aria-label="Back to SafeSend"
         >
           <ArrowLeft className="size-4" />
         </Link>

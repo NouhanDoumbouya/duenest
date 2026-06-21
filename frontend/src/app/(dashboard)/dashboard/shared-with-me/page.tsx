@@ -97,7 +97,7 @@ export default function SharedWithMePage() {
           <EmptyState
             icon={Inbox}
             title="Nothing shared with you yet"
-            description="When someone shares files with you through a Quick Share QR, they'll appear here after you accept."
+            description="When someone shares files with you through a SafeSend QR, they'll appear here after you accept."
           />
         ) : (
           <ul className="divide-y divide-border">

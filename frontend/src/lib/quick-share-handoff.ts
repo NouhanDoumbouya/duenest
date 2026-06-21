@@ -1,5 +1,5 @@
 /**
- * In-memory, one-time handoff of a freshly created Quick Share's plaintext access
+ * In-memory, one-time handoff of a freshly created SafeSend's plaintext access
  * code from the creation wizard to the detail page (SEC-011).
  *
  * The generated access code is a secret the recipient needs; it must NOT be

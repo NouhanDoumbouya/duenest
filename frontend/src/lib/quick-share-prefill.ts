@@ -3,7 +3,7 @@
  * (a document file, the File Inbox, a Share Room selection) into the single Quick
  * Share creation wizard.
  *
- * Quick Share is the one sharing engine, so sharing from anywhere routes the user
+ * SafeSend is the one sharing engine, so sharing from anywhere routes the user
  * to `/dashboard/quick-share/new` with their items already chosen. Like the access
  * code handoff, this lives only in a module-level variable so it survives the
  * client-side navigation (same JS runtime) and is consumed exactly once — after a

@@ -69,7 +69,7 @@ const sections: LegalSection[] = [
   },
   {
     title: "14. Public sharing links and emergency access",
-    body: "Quick Share and Emergency Access expose only the items you select. Access can require a code, expire, and be revoked. DueNest does not intentionally expose your full vault through these features. Watermarking can discourage misuse but cannot fully prevent screenshots on every device.",
+    body: "SafeSend and Emergency Access expose only the items you select. Access can require a code, expire, and be revoked. DueNest does not intentionally expose your full vault through these features. Watermarking can discourage misuse but cannot fully prevent screenshots on every device.",
   },
   {
     title: "15. Data retention",

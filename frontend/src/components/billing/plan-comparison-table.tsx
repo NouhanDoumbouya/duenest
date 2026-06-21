@@ -16,7 +16,7 @@ const ROWS: Row[] = [
   { key: "documents_limit", label: "Documents", kind: "number" },
   { key: "storage_mb", label: "Storage", kind: "storage" },
   { key: "scanner_scans_per_month", label: "Scanner scans / month", kind: "number" },
-  { key: "quick_shares_per_month", label: "Quick Shares / month", kind: "number" },
+  { key: "quick_shares_per_month", label: "SafeSend links / month", kind: "number" },
   { key: "bundles_limit", label: "Application bundles", kind: "number" },
   { key: "reminders_limit", label: "Reminders", kind: "number" },
   { key: "emergency_protocol_enabled", label: "Emergency Protocol", kind: "bool" },

@@ -1,4 +1,4 @@
-// Types for Quick Share QR (sender, claim, and "Shared with me").
+// Types for SafeSend QR (sender, claim, and "Shared with me").
 
 export type QuickShareMode =
   | "account_to_account"

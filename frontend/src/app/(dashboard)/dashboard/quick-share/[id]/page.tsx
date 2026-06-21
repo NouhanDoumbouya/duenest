@@ -179,7 +179,7 @@ export default function QuickShareDetailPage() {
         .catch(() => setActivity([]));
     } catch (err) {
       setError(
-        err instanceof ApiError ? err.message : "Could not load this Quick Share.",
+        err instanceof ApiError ? err.message : "Could not load this SafeSend.",
       );
     }
   }, [sessionId]);
@@ -217,7 +217,7 @@ export default function QuickShareDetailPage() {
           setError(
             err instanceof ApiError
               ? err.message
-              : "Could not load this Quick Share.",
+              : "Could not load this SafeSend.",
           );
       });
     return () => {
@@ -375,7 +375,7 @@ export default function QuickShareDetailPage() {
           </div>
 
           <h1 className="mt-4 font-heading text-xl font-semibold">
-            {session.title || "Quick Share"}
+            {session.title || "SafeSend"}
           </h1>
 
           {session.recipient_label && (
@@ -404,7 +404,7 @@ export default function QuickShareDetailPage() {
                     {session.is_revoked
                       ? "Access revoked"
                       : session.is_expired
-                        ? "This Quick Share expired"
+                        ? "This SafeSend expired"
                         : "No longer active"}
                   </span>
                 </span>
@@ -959,7 +959,7 @@ export default function QuickShareDetailPage() {
 
       <ConfirmDialog
         open={confirmRevoke}
-        title="Revoke this Quick Share?"
+        title="Revoke this SafeSend?"
         description="Anyone with this QR or link will lose access immediately. This cannot be undone."
         confirmLabel="Revoke access"
         loading={revoking}
@@ -977,7 +977,7 @@ function BackLink() {
       className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
     >
       <ArrowLeft className="size-4" />
-      Quick Share
+      SafeSend
     </Link>
   );
 }

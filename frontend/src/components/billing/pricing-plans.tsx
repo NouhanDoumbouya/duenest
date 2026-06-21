@@ -92,7 +92,7 @@ function planHighlights(plan: BillingPlan): string[] {
       `${entitlement(plan, "storage_mb")?.limit_value ?? 100}MB storage`,
       limitText(plan, "scanner_scans_per_month", "scans / month"),
       "Basic Life Radar & Emergency Access",
-      "Secure sharing with Quick Share",
+      "Secure sharing with SafeSend",
     ].filter(Boolean);
   }
   if (plan.tier === "organization") {

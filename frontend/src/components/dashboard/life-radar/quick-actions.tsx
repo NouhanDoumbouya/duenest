@@ -22,7 +22,7 @@ const ACTIONS: QuickAction[] = [
   { label: "Add document", href: "/dashboard/documents/new", icon: Plus },
   { label: "Review attention", href: "/dashboard/attention", icon: ShieldAlert },
   { label: "Create bundle", href: "/dashboard/bundles/new", icon: Package },
-  { label: "Quick Share", href: "/dashboard/quick-share/new", icon: Share2 },
+  { label: "SafeSend", href: "/dashboard/quick-share/new", icon: Share2 },
   { label: "Emergency access", href: "/dashboard/emergency", icon: LifeBuoy },
 ];
 

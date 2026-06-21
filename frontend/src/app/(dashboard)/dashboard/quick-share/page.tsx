@@ -170,7 +170,7 @@ export default function QuickShareListPage() {
       .catch((err) => {
         if (active)
           setError(
-            err instanceof ApiError ? err.message : "Could not load Quick Shares.",
+            err instanceof ApiError ? err.message : "Could not load your shares.",
           );
       });
     return () => {
@@ -226,7 +226,7 @@ export default function QuickShareListPage() {
     <PageContainer>
       <PageHeader
         eyebrow="Sharing"
-        title="Quick Share"
+        title="SafeSend"
         description="Share safely with SafeSend. Stay in control of access, expiry, and downloads — and revoke anytime."
         actions={
           // One obvious primary action here; "Receive a code" lives once, with
@@ -261,7 +261,7 @@ export default function QuickShareListPage() {
       </div>
 
       <TrustNotice icon={ShieldCheck} title="Your vault stays private">
-        Quick Share sends secure access, never your raw file path. Access is
+        SafeSend sends secure access, never your raw file path. Access is
         checked on DueNest&apos;s servers every time, and you can revoke any share
         instantly.
       </TrustNotice>

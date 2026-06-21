@@ -52,8 +52,8 @@ export default function ShareRoomsPage() {
   const [rooms, setRooms] = useState<ShareRoom[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Creating a new multi-item share is unified on the Quick Share engine: a new
-  // "room" is a multi-item Quick Share session, built in the one share wizard.
+  // Creating a new multi-item share is unified on the SafeSend engine: a new
+  // "room" is a multi-item SafeSend session, built in the one share wizard.
   // Existing rooms below keep working and open on their own detail page.
   function startNewShare() {
     router.push("/dashboard/quick-share/new");

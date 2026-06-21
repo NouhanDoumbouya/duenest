@@ -395,7 +395,7 @@ export default function NewQuickSharePage() {
       router.push(`/dashboard/quick-share/${session.id}`);
     } catch (err) {
       setError(
-        err instanceof ApiError ? err.message : "Could not create this Quick Share.",
+        err instanceof ApiError ? err.message : "Could not create this SafeSend.",
       );
       setSubmitting(false);
     }
@@ -413,7 +413,7 @@ export default function NewQuickSharePage() {
         <Link
           href="/dashboard/quick-share"
           className="flex size-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-muted"
-          aria-label="Back to Quick Share"
+          aria-label="Back to SafeSend"
         >
           <ArrowLeft className="size-4" />
         </Link>
