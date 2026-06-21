@@ -1077,21 +1077,30 @@ function Principles() {
 // ---- Use cases -------------------------------------------------------------
 
 function UseCases() {
-  const cases = [
+  const cases: { title: string; description: string; href?: string }[] = [
     {
       title: "International students",
       description:
         "Track passport, visa, insurance, and student letters — and share them with schools or sponsors.",
+      href: "/use-cases/students",
     },
     {
-      title: "Travelers",
+      title: "Visa applicants",
       description:
-        "Carry a secure backup of travel documents and keep emergency access ready, wherever you are.",
+        "Prepare visa documents, track passport and visa expiry, and share safely.",
+      href: "/use-cases/visa-documents",
     },
     {
       title: "Scholarship applicants",
       description:
-        "Prepare document bundles and avoid missing application requirements at the last minute.",
+        "Prepare document packs and avoid missing application requirements at the last minute.",
+      href: "/use-cases/scholarship-applications",
+    },
+    {
+      title: "Job applicants",
+      description:
+        "Build a job pack with CV and cover-letter drafts, certificates, and deadlines.",
+      href: "/use-cases/job-applications",
     },
     {
       title: "Families",
@@ -1099,14 +1108,10 @@ function UseCases() {
         "Keep important documents organized and prepare emergency access for the people you trust.",
     },
     {
-      title: "Young professionals",
+      title: "Agencies & schools",
       description:
-        "Track contracts, certificates, and the renewal deadlines that matter for your career.",
-    },
-    {
-      title: "Freelancers",
-      description:
-        "Organize contracts, invoices, and renewals, and share only the files a client needs.",
+        "Request, review, and track document submissions from applicants and students.",
+      href: "/use-cases/agencies-schools",
     },
   ];
   return (
@@ -1123,15 +1128,38 @@ function UseCases() {
             <ScrollReveal
               key={c.title}
               delay={(i % 3) * 60}
-              className="surface-hover flex h-full flex-col gap-2 bg-card p-6"
+              className="surface-hover bg-card p-6"
             >
-              <h3 className="font-heading text-base font-semibold">{c.title}</h3>
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                {c.description}
-              </p>
+              {c.href ? (
+                <Link href={c.href} className="group flex h-full flex-col gap-2">
+                  <h3 className="flex items-center gap-1.5 font-heading text-base font-semibold">
+                    {c.title}
+                    <ArrowRight className="size-3.5 opacity-0 transition-opacity group-hover:opacity-100" />
+                  </h3>
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    {c.description}
+                  </p>
+                </Link>
+              ) : (
+                <div className="flex h-full flex-col gap-2">
+                  <h3 className="font-heading text-base font-semibold">{c.title}</h3>
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    {c.description}
+                  </p>
+                </div>
+              )}
             </ScrollReveal>
           ))}
         </div>
+        <ScrollReveal className="mt-8 text-center">
+          <Link
+            href="/use-cases"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+          >
+            See all use cases
+            <ArrowRight className="size-4" />
+          </Link>
+        </ScrollReveal>
       </div>
     </section>
   );
