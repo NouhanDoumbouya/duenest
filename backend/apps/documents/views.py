@@ -1592,7 +1592,14 @@ class _ReminderRuleScopedMixin:
 class DocumentReminderRuleListCreateView(
     _ReminderRuleScopedMixin, generics.ListCreateAPIView
 ):
-    """GET lists reminder rules; POST creates one for the owner-owned document."""
+    """GET lists reminder rules; POST creates one for the owner-owned document.
+
+    A document's reminder rules are a small, bounded set, and the frontend
+    consumes this as a plain array — so opt out of the global default pagination
+    (which would otherwise wrap the list in ``{count, results}`` and break the UI).
+    """
+
+    pagination_class = None
 
     def perform_create(self, serializer):
         enforce_plan_limit(self.request.user, user_plans.RESOURCE_REMINDERS)
