@@ -35,6 +35,7 @@ import {
   TrustNotice,
 } from "@/components/ui/product-ui";
 import { SectionCard } from "@/components/ui/section-card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { TimelineList } from "@/components/timeline/timeline-list";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -555,11 +556,23 @@ export default function BundleDetailPage() {
 
   if (bundle === null) {
     return (
-      <PageContainer width="narrow">
-        <div className="flex items-center justify-center gap-2 rounded-xl border border-border bg-card py-20 text-muted-foreground shadow-card">
-          <Loader2 className="size-5 animate-spin" />
-          <span>Loading application pack...</span>
+      <PageContainer width="wide" className="space-y-6">
+        <span className="sr-only" role="status">
+          Loading application pack…
+        </span>
+        <Skeleton className="h-4 w-40" />
+        <div className="space-y-3">
+          <Skeleton className="h-3 w-28" />
+          <Skeleton className="h-8 w-2/3 max-w-md" />
+          <Skeleton className="h-4 w-full max-w-xl" />
         </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-20 rounded-xl" />
+          ))}
+        </div>
+        <Skeleton className="h-10 w-full max-w-md rounded-lg" />
+        <Skeleton className="h-64 w-full rounded-xl" />
       </PageContainer>
     );
   }
