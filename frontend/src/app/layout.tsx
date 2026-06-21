@@ -44,7 +44,8 @@ export const metadata: Metadata = {
     title: OG_TITLE,
     description: SITE_DESCRIPTION,
     url: SITE_URL,
-    images: [{ url: "/og.png", width: 1200, height: 630, alt: "DueNest" }],
+    // og:image comes from the file-based `opengraph-image` convention (root +
+    // per-use-case), so it's branded and segment-specific with no duplicate tag.
   },
   twitter: {
     card: "summary_large_image",
