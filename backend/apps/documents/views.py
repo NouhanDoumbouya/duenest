@@ -3431,7 +3431,14 @@ class _DocumentVersionScopedMixin:
 
 
 class DocumentVersionListView(_DocumentVersionScopedMixin, generics.ListAPIView):
-    """List a document's version history (newest first)."""
+    """List a document's version history (newest first).
+
+    Consumed by the frontend as a plain array, so opt out of the global default
+    pagination (which would wrap it in ``{count, results}`` and break the
+    Versions tab). A document's version history is bounded.
+    """
+
+    pagination_class = None
 
 
 class DocumentVersionDetailView(
