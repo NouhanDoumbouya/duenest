@@ -3,6 +3,8 @@
 // brand/messaging-guide.md and docs/marketing/use-cases.md — honest, no fake
 // proof, no official-requirement or legal claims.
 
+import type { Metadata } from "next";
+
 export interface UseCase {
   slug: string;
   /** Small label above the title, e.g. "For students". */
@@ -166,4 +168,28 @@ export const USE_CASES: UseCase[] = [
 
 export function getUseCase(slug: string): UseCase | undefined {
   return USE_CASES.find((u) => u.slug === slug);
+}
+
+// Full per-page metadata so a shared use-case link previews with that segment's
+// own title/description (instead of inheriting the site-wide Open Graph title).
+export function buildUseCaseMetadata(slug: string): Metadata {
+  const u = getUseCase(slug);
+  if (!u) return {};
+  const path = `/use-cases/${u.slug}`;
+  return {
+    title: { absolute: u.metaTitle },
+    description: u.metaDescription,
+    alternates: { canonical: path },
+    openGraph: {
+      type: "website",
+      title: u.metaTitle,
+      description: u.metaDescription,
+      url: path,
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: u.metaTitle,
+      description: u.metaDescription,
+    },
+  };
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getUseCase, USE_CASES } from "@/lib/use-cases";
+import { buildUseCaseMetadata, getUseCase, USE_CASES } from "@/lib/use-cases";
 
 describe("use-case content", () => {
   it("has unique, url-safe slugs", () => {
@@ -33,5 +33,16 @@ describe("use-case content", () => {
   it("resolves a use case by slug and returns undefined for unknown", () => {
     expect(getUseCase("students")?.slug).toBe("students");
     expect(getUseCase("nope")).toBeUndefined();
+  });
+
+  it("builds per-page metadata with segment-specific OG/Twitter + canonical", () => {
+    for (const u of USE_CASES) {
+      const m = buildUseCaseMetadata(u.slug);
+      expect(m.openGraph?.title).toBe(u.metaTitle);
+      expect(m.openGraph?.description).toBe(u.metaDescription);
+      expect(m.twitter?.title).toBe(u.metaTitle);
+      expect(m.alternates?.canonical).toBe(`/use-cases/${u.slug}`);
+    }
+    expect(buildUseCaseMetadata("nope")).toEqual({});
   });
 });
