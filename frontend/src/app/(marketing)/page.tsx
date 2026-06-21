@@ -192,17 +192,17 @@ function Hero() {
         <div className="content-fade-in flex flex-col items-start text-left">
           <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card/80 px-3 py-1 text-xs font-medium text-muted-foreground shadow-xs backdrop-blur">
             <span className="flex size-1.5 rounded-full bg-brand-teal" />
-            The Life Admin OS
+            Private life-document readiness
           </span>
 
           <h1 className="mt-7 font-heading text-[2.6rem] leading-[1.04] font-semibold tracking-tight text-balance sm:text-6xl">
-            Stay ready before it&apos;s due.
+            Important documents, ready when life asks.
           </h1>
 
           <p className="mt-6 max-w-md text-lg leading-relaxed text-pretty text-muted-foreground">
-            DueNest keeps your important documents, renewals, and deadlines in
-            one calm place — and quietly watches them, so an expiry or a missed
-            date never catches you off guard.
+            DueNest helps you scan, organize, prepare, track, generate, and
+            safely share important documents — before deadlines, applications,
+            renewals, and emergencies.
           </p>
 
           <div className="mt-9 flex flex-col gap-3 sm:flex-row">
@@ -229,7 +229,7 @@ function Hero() {
 
           <p className="mt-7 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
             <ShieldCheck className="size-4 text-brand-success" />
-            <span>Private by default</span>
+            <span>Private until shared</span>
             <span className="text-border">·</span>
             <span>Secure sharing</span>
             <span className="text-border">·</span>

@@ -16,7 +16,9 @@ const sora = Sora({
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://duenest.app";
 const SITE_TITLE =
-  "DueNest — Stay ready for important documents, renewals, and secure sharing";
+  "DueNest — Important Documents, Ready When Life Asks";
+// Open Graph gets the punchier brand tagline for shared-link previews.
+const OG_TITLE = "Where important documents become ready.";
 const SITE_DESCRIPTION =
   "DueNest helps you organize, prepare, track, generate, and safely share important documents before deadlines, applications, renewals, and emergencies — all from one calm, secure place.";
 
@@ -39,7 +41,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     siteName: "DueNest",
-    title: SITE_TITLE,
+    title: OG_TITLE,
     description: SITE_DESCRIPTION,
     url: SITE_URL,
     images: [{ url: "/og.png", width: 1200, height: 630, alt: "DueNest" }],
