@@ -3,12 +3,13 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 
 import { DocumentForm } from "@/components/documents/document-form";
 import { LifecycleBadge } from "@/components/documents/lifecycle-badge";
 import { DocumentStatusBadge } from "@/components/documents/status-badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer } from "@/components/ui/page-container";
 import { SectionCard } from "@/components/ui/section-card";
@@ -115,9 +116,16 @@ export default function EditDocumentPage() {
             description="Keep the facts and dates current so DueNest can calculate status accurately."
           >
             {doc === null ? (
-              <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground">
-                <Loader2 className="size-5 animate-spin" />
-                <span>Loading document...</span>
+              <div className="space-y-5" aria-busy="true">
+                <span className="sr-only" role="status">
+                  Loading document…
+                </span>
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="space-y-2">
+                    <Skeleton className="h-3 w-24" />
+                    <Skeleton className="h-10 w-full rounded-lg" />
+                  </div>
+                ))}
               </div>
             ) : (
               <DocumentForm

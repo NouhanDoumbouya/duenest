@@ -29,6 +29,7 @@ import { ProductMetric, SegmentedControl } from "@/components/ui/product-ui";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageContainer } from "@/components/ui/page-container";
@@ -222,11 +223,21 @@ export default function OrganizationWorkspacePage({
 
   if (!state) {
     return (
-      <PageContainer>
-        <div className="flex items-center justify-center gap-2 py-20 text-muted-foreground">
-          <Loader2 className="size-5 animate-spin" />
-          <span>Loading organization workspace...</span>
+      <PageContainer className="space-y-6">
+        <span className="sr-only" role="status">
+          Loading organization workspace…
+        </span>
+        <div className="space-y-3">
+          <Skeleton className="h-3 w-28" />
+          <Skeleton className="h-8 w-1/2 max-w-sm" />
+          <Skeleton className="h-4 w-full max-w-xl" />
         </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-20 rounded-xl" />
+          ))}
+        </div>
+        <Skeleton className="h-64 w-full rounded-xl" />
       </PageContainer>
     );
   }
