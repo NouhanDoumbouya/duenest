@@ -98,7 +98,7 @@ function planHighlights(plan: BillingPlan): string[] {
   if (plan.tier === "organization") {
     return [
       "Team workspace & member roles",
-      "Shared readiness packs & bundles",
+      "Shared readiness packs",
       "Per-seat billing & admin controls",
       "Everything in Pro for each member",
     ];

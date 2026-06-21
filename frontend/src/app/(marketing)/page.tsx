@@ -479,7 +479,7 @@ function LifeRadar() {
     "Renewals",
     "Deadlines",
     "Shares",
-    "Bundles",
+    "Application Packs",
     "Emergency setup",
   ];
   const points = [
@@ -506,7 +506,7 @@ function LifeRadar() {
           <SectionHeader
             eyebrow="Life Radar"
             title="Know what needs attention before it becomes a problem."
-            description="Life Radar watches your documents, renewals, deadlines, shares, bundles, and emergency setup — then tells you what to fix first."
+            description="Life Radar watches your documents, renewals, deadlines, shares, application packs, and emergency setup — then tells you what to fix first."
           />
         </ScrollReveal>
         <div className="mt-14 grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
@@ -754,7 +754,7 @@ function Capabilities() {
     },
     {
       icon: Package,
-      title: "Application & renewal bundles",
+      title: "Application & renewal packs",
       description:
         "Group the right documents into a pack with a readiness score — ready for visas, scholarships, jobs, and renewals.",
     },

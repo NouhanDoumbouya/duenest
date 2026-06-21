@@ -34,7 +34,7 @@ const controls = [
     icon: UserCheck,
     title: "Owner-scoped access",
     description:
-      "Documents, files, reminders, checklists, bundles, exports, and account controls are scoped to the signed-in user.",
+      "Documents, files, reminders, checklists, application packs, exports, and account controls are scoped to the signed-in user.",
   },
   {
     icon: ShieldCheck,

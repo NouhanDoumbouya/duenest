@@ -16,7 +16,7 @@ const sections: LegalSection[] = [
   },
   {
     title: "2. Information you provide",
-    body: "Account details you enter (such as name and email), the document records, dates, notes, and files you create or upload, reminders and bundles you build, and any feedback or support messages you send.",
+    body: "Account details you enter (such as name and email), the document records, dates, notes, and files you create or upload, reminders and application packs you build, and any feedback or support messages you send.",
   },
   {
     title: "3. Files and documents",
