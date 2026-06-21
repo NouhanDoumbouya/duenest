@@ -26,7 +26,7 @@
 
 | Proposed primitive | Why | Priority |
 | --- | --- | --- |
-| `tabs` | ✅ **Built.** `components/ui/tabs.tsx` — controlled underlined tabs with optional icon/count and full ARIA roving-tabindex keyboard nav (Arrow/Home/End). `document-tabs.tsx` now delegates to it. Ready to wire Vault smart-views, Bundles, Document Tools. | P0 |
+| `tabs` | ✅ **Built.** Two complementary, both-keyboard-accessible patterns: (1) `components/ui/tabs.tsx` — underlined tabs, optional icon/count, full ARIA roving-tabindex (Arrow/Home/End); `document-tabs.tsx` delegates to it. (2) `SegmentedControl` in `product-ui.tsx` — boxed segmented tabs (used by Application Pack detail, Org detail, Calendar, Founder); now also has roving-tabindex keyboard nav (added hook-free to keep the file server-compatible). Filter **chips** (SafeSend/Documents) intentionally stay `role="group"`+`aria-pressed` — correct for list filters, not tabs. | P0 |
 | `status-badge` | ✅ **Built.** `components/ui/status-badge.tsx` over pure vocabulary in `lib/status-badge.ts` (unit-tested). One mapping from lifecycle status → tone + label, built on the [status color map](./design-system.md#status-color-map-canonical--use-everywhere). First wired into Quick Share. Roll out to Vault/Bundles/Requests next. | P0 |
 | `drawer` / `bottom-sheet` | Mobile document actions, filters, share flows. Mobile-first. | P0 |
 | `dropdown` / `menu` | Row/card overflow actions ("⋯"). | P1 |

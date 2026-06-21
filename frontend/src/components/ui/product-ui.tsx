@@ -1,4 +1,9 @@
-import type { ComponentType, MouseEventHandler, ReactNode } from "react";
+import type {
+  ComponentType,
+  KeyboardEvent as ReactKeyboardEvent,
+  MouseEventHandler,
+  ReactNode,
+} from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -129,6 +134,29 @@ export function SegmentedControl<T extends string>({
   label: string;
   className?: string;
 }) {
+  // WAI-ARIA tabs pattern: roving tabindex + Arrow/Home/End navigation. Done with
+  // DOM traversal (no hooks) so this file stays server-component compatible.
+  function onKeyDown(e: ReactKeyboardEvent<HTMLButtonElement>, index: number) {
+    const keys = ["ArrowRight", "ArrowLeft", "ArrowDown", "ArrowUp", "Home", "End"];
+    if (!keys.includes(e.key)) return;
+    e.preventDefault();
+    const buttons = Array.from(
+      e.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>(
+        '[role="tab"]',
+      ) ?? [],
+    );
+    if (buttons.length === 0) return;
+    let target: number;
+    if (e.key === "Home") target = 0;
+    else if (e.key === "End") target = buttons.length - 1;
+    else {
+      const dir = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : -1;
+      target = (index + dir + buttons.length) % buttons.length;
+    }
+    buttons[target]?.focus();
+    onChange(options[target].value);
+  }
+
   return (
     <div
       className={cn(
@@ -138,13 +166,15 @@ export function SegmentedControl<T extends string>({
       role="tablist"
       aria-label={label}
     >
-      {options.map((option) => (
+      {options.map((option, index) => (
         <button
           key={option.value}
           type="button"
           role="tab"
           aria-selected={value === option.value}
+          tabIndex={value === option.value ? 0 : -1}
           onClick={() => onChange(option.value)}
+          onKeyDown={(e) => onKeyDown(e, index)}
           className={cn(
             "rounded-md px-3 py-1.5 text-sm font-medium transition-all duration-150 ease-out focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none",
             value === option.value
