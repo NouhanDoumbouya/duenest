@@ -525,6 +525,13 @@
     animation: none;
   }
 
+  /* Loading skeletons (Tailwind's animate-pulse) settle to a calm static block
+     instead of pulsing for users who asked for reduced motion. App-wide, so the
+     Skeleton primitive and every ad-hoc animate-pulse placeholder are covered. */
+  .animate-pulse {
+    animation: none;
+  }
+
   /* Motion add-ons: keep everything static and visible when motion is reduced. */
   .live-scan::before,
   .radar-sweep {
