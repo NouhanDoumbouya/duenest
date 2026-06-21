@@ -12,7 +12,8 @@ import {
   Trash2,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/status-badge";
+import type { StatusTone } from "@/lib/status-badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer } from "@/components/ui/page-container";
@@ -22,22 +23,18 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/lib/api";
 import { formatDate } from "@/lib/documents";
 import { listSharedWithMe, removeSharedWithMe } from "@/lib/quick-share";
-import { cn } from "@/lib/utils";
 import type { SharedWithMeItem } from "@/types/quick-share";
 
 const stateBadge: Record<
   SharedWithMeItem["session_state"],
-  { label: string; cls: string }
+  { label: string; tone: StatusTone }
 > = {
-  active: { label: "Active", cls: "bg-brand-success/10 text-brand-success" },
-  awaiting_approval: {
-    label: "Awaiting approval",
-    cls: "bg-brand-amber/10 text-brand-amber",
-  },
-  revoked: { label: "Revoked", cls: "bg-destructive/10 text-destructive" },
-  expired: { label: "Expired", cls: "bg-muted text-muted-foreground" },
-  declined: { label: "Declined", cls: "bg-muted text-muted-foreground" },
-  denied: { label: "Denied", cls: "bg-destructive/10 text-destructive" },
+  active: { label: "Active", tone: "success" },
+  awaiting_approval: { label: "Awaiting approval", tone: "warning" },
+  revoked: { label: "Revoked", tone: "danger" },
+  expired: { label: "Expired", tone: "neutral" },
+  declined: { label: "Declined", tone: "neutral" },
+  denied: { label: "Denied", tone: "danger" },
 };
 
 function permIcon(item: SharedWithMeItem) {
@@ -148,9 +145,7 @@ export default function SharedWithMePage() {
                         {formatDate(item.expires_at)}
                       </span>
                     )}
-                    <Badge className={cn("border-transparent", badge.cls)}>
-                      {badge.label}
-                    </Badge>
+                    <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>
                     <Button
                       variant="ghost"
                       size="icon-sm"

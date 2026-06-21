@@ -12,7 +12,8 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/status-badge";
+import type { StatusTone } from "@/lib/status-badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer } from "@/components/ui/page-container";
@@ -32,11 +33,11 @@ import { listShareRooms } from "@/lib/share-rooms";
 import { cn } from "@/lib/utils";
 import type { RoomStatus, ShareRoom } from "@/types/share-rooms";
 
-const statusClass: Record<RoomStatus, string> = {
-  active: "bg-brand-success/10 text-brand-success",
-  expired: "bg-muted text-muted-foreground",
-  revoked: "bg-destructive/10 text-destructive",
-  limit_reached: "bg-amber-100 text-amber-700",
+const statusTone: Record<RoomStatus, StatusTone> = {
+  active: "success",
+  expired: "neutral",
+  revoked: "danger",
+  limit_reached: "warning",
 };
 
 const statusLabel: Record<RoomStatus, string> = {
@@ -198,12 +199,12 @@ export default function ShareRoomsPage() {
                       </span>
                     }
                     value={
-                      <Badge
-                        variant="outline"
-                        className={cn("shrink-0", statusClass[room.status])}
+                      <StatusBadge
+                        tone={statusTone[room.status]}
+                        className="shrink-0"
                       >
                         {statusLabel[room.status]}
-                      </Badge>
+                      </StatusBadge>
                     }
                     action={
                       <Link
