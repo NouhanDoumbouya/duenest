@@ -37,6 +37,9 @@ export function FilesTab({
 }) {
   const [files, setFiles] = useState<DocumentFile[] | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
+  // Bumped to refetch files + refresh the signed-copies audit after an action
+  // (e.g. a Fill & Sign prepared copy) that creates a file server-side.
+  const [reloadKey, setReloadKey] = useState(0);
   const [pendingDelete, setPendingDelete] = useState<DocumentFile | null>(null);
   const [previewingFile, setPreviewingFile] = useState<DocumentFile | null>(null);
   const router = useRouter();
@@ -129,7 +132,7 @@ export function FilesTab({
     return () => {
       active = false;
     };
-  }, [documentId]);
+  }, [documentId, reloadKey]);
 
   function handleUploaded(file: DocumentFile) {
     setFiles((prev) => [file, ...(prev ?? [])]);
@@ -224,6 +227,10 @@ export function FilesTab({
                 onShare={shareToolResult}
                 saveLabel="Save as new version"
                 onNotify={(message, kind) => setToast({ message, kind })}
+                onPrepared={() => {
+                  setReloadKey((k) => k + 1);
+                  onChanged?.();
+                }}
               />
             )}
           />
@@ -281,7 +288,7 @@ export function FilesTab({
 
       <Toast toast={toast} onDismiss={() => setToast(null)} />
       </SectionCard>
-      <PreparedCopiesSection documentId={documentId} />
+      <PreparedCopiesSection documentId={documentId} reloadKey={reloadKey} />
     </div>
   );
 }

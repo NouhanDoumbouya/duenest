@@ -29,6 +29,7 @@ export function FileToolsButton({
   saveLabel,
   onNotify,
   onShare,
+  onPrepared,
   variant = "outline",
   size = "sm",
   className,
@@ -39,6 +40,8 @@ export function FileToolsButton({
   saveLabel: string;
   onNotify?: (message: string, kind: "success" | "error") => void;
   onShare?: (blob: Blob, name: string) => Promise<void>;
+  /** Called after a Fill & Sign prepared copy is created (a server-side file). */
+  onPrepared?: () => void;
   variant?: React.ComponentProps<typeof Button>["variant"];
   size?: React.ComponentProps<typeof Button>["size"];
   className?: string;
@@ -105,9 +108,10 @@ export function FileToolsButton({
           documentId={file.document}
           fileName={file.original_filename}
           onClose={() => setFillSignOpen(false)}
-          onPrepared={() =>
-            onNotify?.("Signed copy prepared. Your original is preserved.", "success")
-          }
+          onPrepared={() => {
+            onNotify?.("Signed copy prepared. Your original is preserved.", "success");
+            onPrepared?.();
+          }}
         />
       )}
     </>
