@@ -11,6 +11,7 @@ from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
+from apps.ai.models import AiPreference
 from apps.notifications.models import EmailLog, NotificationPreference
 
 User = get_user_model()
@@ -57,6 +58,7 @@ class SendAiDigestsTests(TestCase):
         NotificationPreference.objects.create(
             user=self.user, ai_briefing_digest_enabled=True, email_enabled=True
         )
+        AiPreference.objects.create(user=self.user, ai_enabled=True)
 
     @override_settings(AI_CONFIGURED=False, EMAIL_CONFIGURED=True)
     def test_noop_when_ai_unconfigured(self):

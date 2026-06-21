@@ -21,6 +21,7 @@ from __future__ import annotations
 import logging
 
 from apps.ai.client import ai_available, generate
+from apps.ai.privacy import maybe_redact
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +104,7 @@ def chat(user, *, message: str, history=None) -> dict:
         if context
         else "(The user has no documents in their vault yet.)"
     )
+    blocks = maybe_redact(user, blocks)
     convo = _format_history(history)
     prompt = (
         (f"Conversation so far:\n{convo}\n\n" if convo else "")

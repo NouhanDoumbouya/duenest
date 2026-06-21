@@ -32,6 +32,7 @@ import logging
 from datetime import date
 
 from apps.ai.client import ai_available, generate
+from apps.ai.privacy import maybe_redact
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +134,7 @@ def analyze(user, *, goal: str, deadline=None) -> dict:
         if context
         else "(The user has no documents in their vault yet.)"
     )
+    blocks = maybe_redact(user, blocks)
     deadline_line = (
         f"Target deadline: {deadline_date.isoformat()}.\n" if deadline_date else ""
     )

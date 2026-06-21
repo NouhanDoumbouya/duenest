@@ -39,6 +39,7 @@ class Command(BaseCommand):
             self.stdout.write("Email not configured — nothing to do.")
             return
 
+        from apps.ai.privacy import ai_consented
         from apps.documents.ai_briefing import build_briefing
         from apps.features.flags import is_feature_enabled
         from apps.notifications.models import EmailLog, NotificationPreference
@@ -61,7 +62,8 @@ class Command(BaseCommand):
                 skipped += 1
                 continue
             if not (
-                is_feature_enabled("ai_features", user)
+                ai_consented(user)
+                and is_feature_enabled("ai_features", user)
                 and is_feature_enabled("ai_briefing", user)
             ):
                 skipped += 1

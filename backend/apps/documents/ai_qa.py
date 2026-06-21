@@ -33,6 +33,7 @@ import logging
 import re
 
 from apps.ai.client import ai_available, generate
+from apps.ai.privacy import maybe_redact
 
 logger = logging.getLogger(__name__)
 
@@ -215,6 +216,7 @@ def answer_question(user, question: str) -> dict:
     blocks = "\n\n".join(
         f"[{c['index']}] {c['text']}" for c in context
     )
+    blocks = maybe_redact(user, blocks)
     prompt = (
         f"Question: {question}\n\n"
         f"--- THE USER'S DOCUMENTS ---\n{blocks}"

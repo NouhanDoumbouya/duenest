@@ -87,8 +87,12 @@ def ai_extraction_enabled(user) -> bool:
         from apps.features.flags import is_feature_enabled
     except Exception:  # noqa: BLE001 — flags optional; fail closed
         return False
-    return is_feature_enabled("ai_features", user) and is_feature_enabled(
-        "ai_document_extraction", user
+    from apps.ai.privacy import ai_consented
+
+    return (
+        ai_consented(user)
+        and is_feature_enabled("ai_features", user)
+        and is_feature_enabled("ai_document_extraction", user)
     )
 
 
