@@ -89,7 +89,11 @@ class CreateRequestTests(ShareRequestBaseTest):
         self.assertEqual(data["respond_path"], f"/request/{data['token']}")
 
     def test_create_requires_flag(self):
-        # No FeatureFlag row + non-founder alice -> feature disabled.
+        # Pin the feature OFF (it now defaults to beta_only) so the
+        # "blocked when paused" path is tested for a normal user.
+        FeatureFlag.objects.update_or_create(
+            key="share_requests", defaults={"visibility": Visibility.DISABLED}
+        )
         self.client.force_authenticate(self.alice)
         resp = self.client.post(
             "/api/v1/share-requests/",

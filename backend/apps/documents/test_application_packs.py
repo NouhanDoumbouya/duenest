@@ -36,6 +36,16 @@ def enable(*keys):
         )
 
 
+def disable(*keys):
+    # Pin a feature OFF so the "blocked when paused" path is tested explicitly,
+    # independent of the registry default (these features now default to
+    # beta_only, so a normal user would otherwise be allowed).
+    for key in keys:
+        FeatureFlag.objects.update_or_create(
+            key=key, defaults={"visibility": Visibility.DISABLED}
+        )
+
+
 class ApplicationPackBaseTest(APITestCase):
     def setUp(self):
         self.owner = User.objects.create_user(
@@ -79,7 +89,8 @@ class PackTemplateSeedingTest(ApplicationPackBaseTest):
         )
 
     def test_template_ignored_when_feature_disabled(self):
-        # Feature defaults to founder_only; a normal user must not get seeding.
+        # With the feature paused, a normal user must not get template seeding.
+        disable("application_pack_templates")
         response = self.client.post(
             "/api/v1/document-bundles/",
             {"title": "No seed", "template": "scholarship"},
@@ -207,6 +218,7 @@ class PackMergedPdfTest(ApplicationPackBaseTest):
         )
 
     def test_blocked_when_feature_disabled(self):
+        disable("application_pack_preparation")
         bundle = self._bundle()
         self._attach_file(
             bundle,
@@ -325,6 +337,7 @@ class PackTemplatesEndpointTest(ApplicationPackBaseTest):
     URL = "/api/v1/document-bundles/pack-templates/"
 
     def test_blocked_when_feature_disabled(self):
+        disable("application_pack_templates")
         response = self.client.get(self.URL)
         self.assertEqual(
             response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE
@@ -349,6 +362,7 @@ class PackActivityTimelineTest(ApplicationPackBaseTest):
         ).data
 
     def test_blocked_when_feature_disabled(self):
+        disable("application_pack_timeline")
         bundle = self._make_bundle()
         response = self.client.get(
             f"/api/v1/document-bundles/{bundle['id']}/activity/"

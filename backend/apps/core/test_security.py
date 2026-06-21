@@ -20,6 +20,7 @@ from apps.documents.views import (
     PublicSharedFileVerifyCodeView,
     PublicShareRoomVerifyCodeView,
 )
+from apps.features.models import FeatureFlag, Visibility
 from apps.subscriptions.models import Subscription
 
 User = get_user_model()
@@ -66,6 +67,11 @@ class IDORTests(APITestCase):
         self.assertFalse(self.alice_doc.is_trashed)
 
     def test_cannot_read_another_users_subscription(self):
+        # Subscription Radar is deprecated (flag off by default). Enable it so
+        # this test exercises owner-scoping (404) rather than the 503 gate.
+        FeatureFlag.objects.update_or_create(
+            key="subscriptions", defaults={"visibility": Visibility.ENABLED}
+        )
         self.client.force_authenticate(self.bob)
         self.assertEqual(
             self.client.get(
