@@ -9,6 +9,7 @@ import { DocumentFilesList } from "@/components/documents/document-files-list";
 import { FileToolsButton } from "@/components/documents/file-tools-button";
 import { PageEditorDialog } from "@/components/documents/page-editor-dialog";
 import { PreparedCopiesSection } from "@/components/documents/prepared-copies-section";
+import { listPreparedDocuments } from "@/lib/fill-sign";
 import { DocumentFileUploader } from "@/components/documents/document-file-uploader";
 import { DocumentFileViewer } from "@/components/documents/document-file-viewer";
 import { DocumentTrashedFiles } from "@/components/documents/document-trashed-files";
@@ -40,6 +41,8 @@ export function FilesTab({
   // Bumped to refetch files + refresh the signed-copies audit after an action
   // (e.g. a Fill & Sign prepared copy) that creates a file server-side.
   const [reloadKey, setReloadKey] = useState(0);
+  // Ids of files that are Fill & Sign prepared copies, to badge them in the list.
+  const [preparedFileIds, setPreparedFileIds] = useState<Set<number>>(new Set());
   const [pendingDelete, setPendingDelete] = useState<DocumentFile | null>(null);
   const [previewingFile, setPreviewingFile] = useState<DocumentFile | null>(null);
   const router = useRouter();
@@ -129,6 +132,15 @@ export function FilesTab({
     getDocumentFiles(documentId)
       .then((page) => active && setFiles(page.results))
       .catch(() => active && setFiles([]));
+    listPreparedDocuments({ document: documentId })
+      .then(
+        (prepared) =>
+          active &&
+          setPreparedFileIds(new Set(prepared.map((p) => p.prepared_file.id))),
+      )
+      .catch(() => {
+        /* the badge is optional; ignore */
+      });
     return () => {
       active = false;
     };
@@ -208,6 +220,7 @@ export function FilesTab({
         ) : (
           <DocumentFilesList
             files={files}
+            preparedFileIds={preparedFileIds}
             downloadingId={downloadingId}
             replacingId={replacingId}
             onPreview={setPreviewingFile}

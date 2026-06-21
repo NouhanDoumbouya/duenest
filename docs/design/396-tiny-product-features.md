@@ -12,6 +12,19 @@
 > place to confirm per-module state.
 >
 > Priority: P0 (critical) · P1 (high) · P2 (medium) · P3 (nice). Effort: XS/S/M/L.
+>
+> ## ⚠️ Status reconciliation (read this)
+>
+> The per-row `Status` column below is the **stale first-pass audit** from when this
+> ledger was created. A later code-verification pass found that **many rows marked
+> "deferred" are in fact already implemented** in the mature app. Confirmed examples:
+> File Inbox title + empty-state copy (TF-115/116) exist (`files/page.tsx`); the Vault
+> "smart views" (TF-091/092/093/095/097) exist as the documents-page quick-filters
+> (`documents/page.tsx`: expiring_soon/shared/needs_attention/pinned…); the "expires soon"
+> badge (TF-099) exists (`DocumentStatusBadge`). So "implement them all" is being worked as:
+> **build the genuine gaps, mark already-done rows truthfully, never fabricate.** Rows are
+> updated to `implemented` only as they are code-verified or built — this is in progress,
+> not complete.
 
 ## Index
 
@@ -165,7 +178,7 @@
 | TF-099 | Vault | Badge: Expires soon (amber) | Attention | Stays ready | P0 | S | deferred | |
 | TF-100 | Vault | Badge: In N packs | Context | Awareness | P1 | XS | deferred | |
 | TF-101 | Vault | Badge: Shared | Awareness | Control | P1 | XS | deferred | |
-| TF-102 | Vault | Badge: Prepared copy / Original | Preserve-originals principle | Clarity | P1 | XS | deferred | |
+| TF-102 | Vault | Badge: Prepared copy / Original | Preserve-originals principle | Clarity | P1 | XS | implemented | "Signed copy" badge on prepared copies in the document files list |
 | TF-103 | Vault | Badge: Needs review | Quality | Confidence | P2 | XS | deferred | |
 | TF-104 | Vault | Quick action: View | Core | Speed | P1 | XS | partially implemented | |
 | TF-105 | Vault | Quick action: Rename | Organization | Control | P1 | XS | partially implemented | |

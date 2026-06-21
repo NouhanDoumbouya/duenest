@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { SmartIntakePanel } from "@/components/documents/smart-intake-panel";
 import { fileExtension, formatFileSize } from "@/lib/document-files";
 import { formatDate } from "@/lib/documents";
@@ -43,10 +44,13 @@ export function DocumentFilesList({
   onReplace,
   onEditPages,
   renderTools,
+  preparedFileIds,
 }: {
   files: DocumentFile[];
   downloadingId: number | null;
   replacingId?: number | null;
+  /** File ids that are Fill & Sign prepared copies — badged "Signed copy". */
+  preparedFileIds?: Set<number>;
   onPreview: (file: DocumentFile) => void;
   onDownload: (file: DocumentFile) => void;
   onShare: (file: DocumentFile) => void;
@@ -76,8 +80,11 @@ export function DocumentFilesList({
                 <FileText className="size-5" />
               </span>
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium">
-                  {file.original_filename}
+                <p className="flex items-center gap-2 text-sm font-medium">
+                  <span className="truncate">{file.original_filename}</span>
+                  {preparedFileIds?.has(file.id) && (
+                    <StatusBadge tone="trust">Signed copy</StatusBadge>
+                  )}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   <span className="uppercase">{ext}</span> ·{" "}
