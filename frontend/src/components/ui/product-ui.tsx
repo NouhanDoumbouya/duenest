@@ -1,7 +1,6 @@
 import type {
   ComponentType,
   KeyboardEvent as ReactKeyboardEvent,
-  MouseEventHandler,
   ReactNode,
 } from "react";
 
@@ -266,46 +265,6 @@ export function SectionToolbar({
   );
 }
 
-export function DrawerBackdrop({
-  children,
-  onClose,
-}: {
-  children: ReactNode;
-  onClose: () => void;
-}) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex justify-end bg-foreground/40 backdrop-blur-sm animate-in fade-in duration-150 motion-reduce:animate-none"
-      onClick={onClose}
-    >
-      {children}
-    </div>
-  );
-}
-
-export function DrawerPanel({
-  children,
-  className,
-  label,
-  onClick,
-}: {
-  children: ReactNode;
-  className?: string;
-  label: string;
-  onClick?: MouseEventHandler<HTMLElement>;
-}) {
-  return (
-    <aside
-      className={cn(
-        "h-full w-full max-w-md overflow-y-auto border-l border-border bg-card p-5 shadow-floating animate-in slide-in-from-right-4 duration-200 ease-out motion-reduce:animate-none",
-        className,
-      )}
-      onClick={onClick}
-      role="dialog"
-      aria-modal="true"
-      aria-label={label}
-    >
-      {children}
-    </aside>
-  );
-}
+// Drawer primitives live in their own client module (they need focus-management
+// hooks); re-exported here so existing import sites are unchanged.
+export { DrawerBackdrop, DrawerPanel } from "./drawer";
