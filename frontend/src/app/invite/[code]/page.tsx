@@ -56,7 +56,7 @@ export default function InvitePage({
   return (
     <>
       <SiteHeader />
-      <main className="min-h-dvh bg-background">
+      <main id="main-content" tabIndex={-1} className="min-h-dvh bg-background">
         <section className="border-b border-border bg-card/50">
           <div className="mx-auto grid w-full max-w-6xl gap-10 px-4 py-16 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:py-24">
             <div className="flex flex-col justify-center">

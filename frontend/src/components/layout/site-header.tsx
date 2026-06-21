@@ -40,6 +40,14 @@ export function SiteHeader() {
           : "border-b border-transparent bg-background/60 backdrop-blur-sm",
       )}
     >
+      {/* Skip link: first focusable element, lets keyboard users jump past the
+          nav straight to page content. Hidden until focused. */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-primary-foreground focus:shadow-elevated focus:outline-none focus:ring-2 focus:ring-ring/50"
+      >
+        Skip to content
+      </a>
       <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4 sm:px-6">
         <Logo />
 

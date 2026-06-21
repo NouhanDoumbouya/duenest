@@ -43,7 +43,7 @@ export default function PricingPage() {
   return (
     <>
       <SiteHeader />
-      <main className="mx-auto w-full max-w-6xl px-4 py-14 sm:px-6 lg:py-20">
+      <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-6xl px-4 py-14 sm:px-6 lg:py-20">
         <div className="mx-auto max-w-2xl text-center">
           <p className="text-sm font-semibold text-primary">Pricing</p>
           <h1 className="mt-3 text-4xl font-semibold tracking-tight text-balance">

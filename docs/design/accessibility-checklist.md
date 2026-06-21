@@ -25,7 +25,8 @@
 - [ ] Escape closes dialogs, drawers, command palette, menus.
 - [ ] Focus trapped in modals; returned to trigger on close.
 - [ ] Command palette (⌘K) fully keyboard-operable.
-- [ ] Skip-to-content link on app shell and marketing pages.
+- [x] Skip-to-content link on app shell (`dashboard-shell.tsx`) and all public
+      `SiteHeader` pages → `#main-content` (`<main>` is focusable via `tabIndex={-1}`).
 
 ## Semantics & screen readers
 

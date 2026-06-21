@@ -82,7 +82,7 @@ export default function SecurityPage() {
   return (
     <>
       <SiteHeader />
-      <main className="mx-auto w-full max-w-5xl px-4 py-14 sm:px-6 lg:py-20">
+      <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-5xl px-4 py-14 sm:px-6 lg:py-20">
         <div className="max-w-2xl">
           <p className="text-sm font-semibold text-primary">
             Trust &amp; Security

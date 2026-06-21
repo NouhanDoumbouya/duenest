@@ -308,6 +308,14 @@ export function DashboardShell({
 
   return (
     <div className="flex min-h-dvh bg-background">
+      {/* Skip link: first focusable element, lets keyboard users jump past the
+          sidebar/topbar straight to the page content. Hidden until focused. */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-primary-foreground focus:shadow-elevated focus:outline-none focus:ring-2 focus:ring-ring/50"
+      >
+        Skip to content
+      </a>
       {/* Sidebar (desktop) */}
       <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-sidebar md:flex">
         <div className="flex h-16 items-center border-b border-border px-5">
@@ -401,7 +409,11 @@ export function DashboardShell({
         )}
 
         {/* Extra bottom padding on mobile leaves room for the fixed bottom nav. */}
-        <main className="flex-1 px-4 pt-4 pb-24 sm:px-6 sm:pt-6 md:pb-6 lg:px-10 lg:pt-10 lg:pb-10">
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="flex-1 px-4 pt-4 pb-24 outline-none sm:px-6 sm:pt-6 md:pb-6 lg:px-10 lg:pt-10 lg:pb-10"
+        >
           {children}
         </main>
 

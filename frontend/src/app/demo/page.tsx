@@ -29,7 +29,7 @@ export default function DemoPage() {
   return (
     <>
       <SiteHeader />
-      <main className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 lg:py-16">
+      <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 lg:py-16">
         <div className="grid gap-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
           <div>
             <p className="text-sm font-semibold text-primary">Demo</p>

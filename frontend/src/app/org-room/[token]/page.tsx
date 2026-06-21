@@ -49,7 +49,7 @@ export default function OrganizationRoomPage({
   return (
     <>
       <SiteHeader />
-      <main className="min-h-dvh bg-background">
+      <main id="main-content" tabIndex={-1} className="min-h-dvh bg-background">
         <section className="border-b border-border bg-card/50">
           <div className="mx-auto w-full max-w-5xl px-4 py-16 sm:px-6 lg:py-24">
             <Card className="shadow-elevated">
