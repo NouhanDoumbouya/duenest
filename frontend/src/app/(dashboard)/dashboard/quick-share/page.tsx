@@ -21,7 +21,8 @@ import {
   Users,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/status-badge";
+import type { StatusTone } from "@/lib/status-badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -42,14 +43,17 @@ import { copyToClipboardWithFallback, looksSensitive } from "@/lib/safesend";
 import { cn } from "@/lib/utils";
 import type { QuickShareListItem, QuickShareStatus } from "@/types/quick-share";
 
-const statusClass: Record<QuickShareStatus, string> = {
-  active: "bg-brand-success/10 text-brand-success",
-  accepted: "bg-brand-success/10 text-brand-success",
-  claimed: "bg-accent text-accent-foreground",
-  declined: "bg-muted text-muted-foreground",
-  expired: "bg-muted text-muted-foreground",
-  revoked: "bg-destructive/10 text-destructive",
-  consumed: "bg-muted text-muted-foreground",
+// Map each share status to a canonical badge tone (see lib/status-badge).
+// Preserves the prior semantics: live/accepted shares read positive, revoked
+// reads as action-required, finished states stay quiet.
+const statusTone: Record<QuickShareStatus, StatusTone> = {
+  active: "success",
+  accepted: "success",
+  claimed: "trust",
+  declined: "neutral",
+  expired: "neutral",
+  revoked: "danger",
+  consumed: "neutral",
 };
 
 const statusLabel: Record<QuickShareStatus, string> = {
@@ -467,9 +471,9 @@ function ShareRow({
             {s.claim_count}
           </span>
         )}
-        <Badge className={cn("border-transparent", statusClass[s.status])}>
+        <StatusBadge tone={statusTone[s.status]}>
           {statusLabel[s.status]}
-        </Badge>
+        </StatusBadge>
         {s.is_active && (
           <>
             <Button
