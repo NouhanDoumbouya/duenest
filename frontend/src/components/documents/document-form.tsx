@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { cloneElement, isValidElement, useRef, useState } from "react";
+import type { ReactElement } from "react";
 import Link from "next/link";
 import { ChevronDown, Paperclip, UploadCloud } from "lucide-react";
 
@@ -680,15 +681,36 @@ function Field({
   error?: string;
   children: React.ReactNode;
 }) {
+  // Persistently associate the error text with the control (not just announce
+  // it via role="alert"), so a screen reader reads it whenever the field is
+  // focused — by injecting aria-describedby onto the single child control.
+  const errorId = `${id}-error`;
+  const control =
+    error && isValidElement(children)
+      ? cloneElement(
+          children as ReactElement<{ "aria-describedby"?: string }>,
+          {
+            "aria-describedby": [
+              (children.props as { "aria-describedby"?: string })[
+                "aria-describedby"
+              ],
+              errorId,
+            ]
+              .filter(Boolean)
+              .join(" "),
+          },
+        )
+      : children;
+
   return (
     <div className="flex flex-col gap-2">
       <Label htmlFor={id} className={cn(srLabel && "sr-only")}>
         {label}
         {required && <span className="text-destructive"> *</span>}
       </Label>
-      {children}
+      {control}
       {error && (
-        <p className="text-sm text-destructive" role="alert">
+        <p id={errorId} className="text-sm text-destructive" role="alert">
           {error}
         </p>
       )}
