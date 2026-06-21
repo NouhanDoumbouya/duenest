@@ -258,9 +258,10 @@ function AnswerCard({
   return (
     <Card>
       <CardContent className="space-y-4">
-        <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-          {question}
-        </p>
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-muted-foreground">You asked</p>
+          <p className="text-sm font-medium text-foreground">{question}</p>
+        </div>
 
         {result.answer ? (
           <p className="text-sm leading-relaxed whitespace-pre-wrap">
