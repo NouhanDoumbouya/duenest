@@ -275,6 +275,47 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
     ],
   },
   {
+    heading: "Prepare & share",
+    items: [
+      { label: "Application Packs", href: "/dashboard/bundles", icon: Package, featureKey: "bundles" },
+      {
+        label: "SafeSend",
+        href: "/dashboard/quick-share",
+        icon: QrCode,
+        featureKey: "quick_share",
+      },
+      {
+        label: "Shared with me",
+        href: "/dashboard/shared-with-me",
+        icon: Inbox,
+        featureKey: "shared_with_me",
+      },
+      {
+        label: "Document requests",
+        href: "/dashboard/requests",
+        icon: ClipboardList,
+        featureKey: "share_requests",
+      },
+      {
+        label: "Secure rooms",
+        href: "/dashboard/share-rooms",
+        icon: DoorClosed,
+        featureKey: "secure_rooms",
+      },
+    ],
+  },
+  {
+    heading: "Protect",
+    items: [
+      {
+        label: "Emergency access",
+        href: "/dashboard/emergency",
+        icon: LifeBuoy,
+        featureKey: "emergency_access",
+      },
+    ],
+  },
+  {
     heading: "Assistant",
     items: [
       {
@@ -306,42 +347,6 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
         href: "/dashboard/pack-copilot",
         icon: Target,
         featureKey: "ai_pack_copilot",
-      },
-    ],
-  },
-  {
-    heading: "Prepare & share",
-    items: [
-      { label: "Application Packs", href: "/dashboard/bundles", icon: Package, featureKey: "bundles" },
-      {
-        label: "SafeSend",
-        href: "/dashboard/quick-share",
-        icon: QrCode,
-        featureKey: "quick_share",
-      },
-      {
-        label: "Shared with me",
-        href: "/dashboard/shared-with-me",
-        icon: Inbox,
-        featureKey: "shared_with_me",
-      },
-      {
-        label: "Document requests",
-        href: "/dashboard/requests",
-        icon: ClipboardList,
-        featureKey: "share_requests",
-      },
-      {
-        label: "Secure rooms",
-        href: "/dashboard/share-rooms",
-        icon: DoorClosed,
-        featureKey: "secure_rooms",
-      },
-      {
-        label: "Emergency access",
-        href: "/dashboard/emergency",
-        icon: LifeBuoy,
-        featureKey: "emergency_access",
       },
     ],
   },
