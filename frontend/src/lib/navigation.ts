@@ -312,7 +312,7 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
   {
     heading: "Prepare & share",
     items: [
-      { label: "Bundles", href: "/dashboard/bundles", icon: Package, featureKey: "bundles" },
+      { label: "Application Packs", href: "/dashboard/bundles", icon: Package, featureKey: "bundles" },
       {
         label: "SafeSend",
         href: "/dashboard/quick-share",

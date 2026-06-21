@@ -30,7 +30,7 @@ export default function BundlesPage() {
         if (!active) return;
         setBundles([]);
         setError(
-          err instanceof ApiError ? err.message : "Unable to load bundles.",
+          err instanceof ApiError ? err.message : "Unable to load application packs.",
         );
       });
     return () => {
@@ -46,7 +46,7 @@ export default function BundlesPage() {
             Renewal workspace
           </p>
           <h1 className="mt-2 font-heading text-2xl font-semibold tracking-tight sm:text-3xl">
-            Application &amp; renewal bundles
+            Application &amp; renewal packs
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
             Group the documents and requirements for a renewal, application, or
@@ -58,7 +58,7 @@ export default function BundlesPage() {
           className={cn(buttonVariants())}
         >
           <Plus className="size-4" />
-          New bundle
+          New pack
         </Link>
       </div>
 
@@ -75,7 +75,7 @@ export default function BundlesPage() {
         <div
           className="grid gap-3 sm:grid-cols-2"
           aria-busy="true"
-          aria-label="Loading bundles"
+          aria-label="Loading application packs"
         >
           {Array.from({ length: 4 }).map((_, i) => (
             <div
@@ -94,17 +94,17 @@ export default function BundlesPage() {
       ) : bundles.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border px-4 py-12 text-center">
           <Package className="mx-auto size-7 text-muted-foreground/60" />
-          <p className="mt-3 text-sm font-medium">No bundles yet</p>
+          <p className="mt-3 text-sm font-medium">No application packs yet</p>
           <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-            Create your first bundle to start preparing a renewal or application
-            pack with a clear readiness score.
+            Create your first pack to start preparing a renewal, application, or
+            trip with a clear readiness score.
           </p>
           <Link
             href="/dashboard/bundles/new"
             className={cn(buttonVariants(), "mt-4")}
           >
             <Plus className="size-4" />
-            New bundle
+            New pack
           </Link>
         </div>
       ) : (

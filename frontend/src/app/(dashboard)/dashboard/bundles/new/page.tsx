@@ -106,7 +106,7 @@ export default function NewBundlePage() {
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!form.title.trim()) {
-      setError("Give your bundle a title.");
+      setError("Give your application pack a title.");
       return;
     }
     setSubmitting(true);
@@ -121,7 +121,7 @@ export default function NewBundlePage() {
       router.refresh();
     } catch (err) {
       setError(
-        err instanceof ApiError ? err.message : "Could not create the bundle.",
+        err instanceof ApiError ? err.message : "Could not create the application pack.",
       );
       setSubmitting(false);
     }
@@ -135,13 +135,13 @@ export default function NewBundlePage() {
           className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft className="size-4" />
-          Back to bundles
+          Back to application packs
         </Link>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-xl">New bundle</CardTitle>
+          <CardTitle className="text-xl">New application pack</CardTitle>
           <CardDescription>
             Create a bundle for a renewal, application, or trip. You can add the
             documents and requirements it needs next.
@@ -291,7 +291,7 @@ export default function NewBundlePage() {
                 id="description"
                 value={form.description ?? ""}
                 onChange={(e) => update("description", e.target.value)}
-                placeholder="What is this bundle for?"
+                placeholder="What is this application pack for?"
                 rows={3}
               />
             </div>
@@ -318,7 +318,7 @@ export default function NewBundlePage() {
                 className="w-full sm:w-auto"
               >
                 {submitting && <Loader2 className="size-4 animate-spin" />}
-                {submitting ? "Creating pack…" : "Create bundle"}
+                {submitting ? "Creating pack…" : "Create application pack"}
               </Button>
             </div>
           </form>

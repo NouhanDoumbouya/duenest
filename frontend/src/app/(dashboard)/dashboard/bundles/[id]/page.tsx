@@ -96,7 +96,7 @@ const REQUIREMENT_STATUSES: RequirementStatus[] = [
 ];
 
 const BUNDLE_EXPORT_LABELS: Record<BundleExportType, string> = {
-  bundle_metadata_json: "Full bundle metadata (JSON)",
+  bundle_metadata_json: "Full application pack metadata (JSON)",
   bundle_requirements_csv: "Requirements checklist (CSV)",
 };
 
@@ -364,7 +364,7 @@ export default function BundleDetailPage() {
   const [events, setEvents] = useState<TimelineEvent[]>([]);
   const [bundleExports, setBundleExports] = useState<BundleExportRequest[]>([]);
   const [loadError, setLoadError] = useState<string | null>(
-    validId ? null : "Invalid bundle.",
+    validId ? null : "Invalid application pack.",
   );
   const [error, setError] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -406,8 +406,8 @@ export default function BundleDetailPage() {
         if (!active) return;
         setLoadError(
           err instanceof ApiError && err.status === 404
-            ? "This bundle could not be found."
-            : "Unable to load this bundle.",
+            ? "This application pack could not be found."
+            : "Unable to load this application pack.",
         );
       });
     getDocuments({ ordering: "title" })
@@ -508,12 +508,12 @@ export default function BundleDetailPage() {
         created,
         ...prev.filter((item) => item.id !== created.id),
       ]);
-      setExportMessage("Bundle export is ready.");
+      setExportMessage("Application pack export is ready.");
     } catch (err) {
       setExportError(
         err instanceof ApiError
           ? err.message
-          : "Could not create the bundle export.",
+          : "Could not create the application pack export.",
       );
     } finally {
       setExportBusy(null);
@@ -546,7 +546,7 @@ export default function BundleDetailPage() {
           className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="size-4" />
-          Back to bundles
+          Back to application packs
         </Link>
         <InlineAlert>{loadError}</InlineAlert>
       </PageContainer>
@@ -558,7 +558,7 @@ export default function BundleDetailPage() {
       <PageContainer width="narrow">
         <div className="flex items-center justify-center gap-2 rounded-xl border border-border bg-card py-20 text-muted-foreground shadow-card">
           <Loader2 className="size-5 animate-spin" />
-          <span>Loading bundle...</span>
+          <span>Loading application pack...</span>
         </div>
       </PageContainer>
     );
@@ -573,11 +573,11 @@ export default function BundleDetailPage() {
         className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
       >
         <ArrowLeft className="size-4" />
-        Back to bundles
+        Back to application packs
       </Link>
 
       <PageHeader
-        eyebrow={`${BUNDLE_TYPE_LABELS[bundle.bundle_type]} bundle`}
+        eyebrow={`${BUNDLE_TYPE_LABELS[bundle.bundle_type]} pack`}
         title={bundle.title}
         description={
           bundle.description ||
@@ -622,7 +622,7 @@ export default function BundleDetailPage() {
           </div>
 
           <SegmentedControl
-            label="Bundle workspace"
+            label="Pack workspace"
             value={resolvedTab}
             options={visibleTabs}
             onChange={setActiveTab}
@@ -752,7 +752,7 @@ export default function BundleDetailPage() {
             <div className="space-y-6 content-fade-in">
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg">Bundle timeline</CardTitle>
+                  <CardTitle className="text-lg">Pack timeline</CardTitle>
                   <CardDescription>
                     Upcoming dates tied to this bundle and its requirements.
                   </CardDescription>
@@ -800,9 +800,9 @@ export default function BundleDetailPage() {
                     <Download className="size-4" />
                   </span>
                   <div className="min-w-0">
-                    <CardTitle className="text-lg">Export bundle</CardTitle>
+                    <CardTitle className="text-lg">Export pack</CardTitle>
                     <CardDescription>
-                      Download a bundle-specific metadata file for applications,
+                      Download a pack-specific metadata file for applications,
                       renewals, or handoff review.
                     </CardDescription>
                   </div>
@@ -1031,14 +1031,14 @@ export default function BundleDetailPage() {
             onClick={() => setConfirmDelete(true)}
           >
             <Trash2 className="size-4" />
-            Delete bundle
+            Delete pack
           </Button>
         </aside>
       </div>
 
       <ConfirmDialog
         open={confirmDelete}
-        title="Delete bundle?"
+        title="Delete application pack?"
         description={`"${bundle.title}" and its requirements will be permanently removed. This cannot be undone.`}
         confirmLabel="Delete"
         loading={deleting}

@@ -116,7 +116,7 @@ export function BundleFilesSection({
         setError(
           err instanceof ApiError
             ? err.message
-            : "Could not load the files in this bundle.",
+            : "Could not load the files in this application pack.",
         );
         setLoading(false);
       });
