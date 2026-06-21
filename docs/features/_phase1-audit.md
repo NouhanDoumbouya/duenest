@@ -48,6 +48,21 @@ genuine net-new vertical slice.
   `Pillow==12.2.0`, `pdf2image`. **Server-side Fill & Sign overlay + flatten is feasible
   with existing deps — no new heavy library needed.**
 
+## Genuine gaps found & built
+
+> Two real net-new gaps surfaced once the existing features were verified. Both built
+> with real, tested code (not duplicating anything that existed):
+>
+> 1. **Fill & Sign + Signature Audit Trail** (Phases 7–8) — no model, no tool. Built.
+> 2. **Document Generation persistence** (Phase 6 / Phase 12 #7–8) — `ai_draft` generated
+>    text but never persisted it (no save / drafts library / attach-to-pack). Built
+>    `GeneratedDocument` model + API + tests, and a "Save draft / Saved drafts" loop on the
+>    draft page. `related_pack` supports attach-to-pack (backend; frontend attach is a
+>    refinement).
+>
+> Not built (by design, not a clear gap): an `AISuggestion` persistence model — Smart
+> Intake is **ephemeral + confirm-inline**, which is a valid review-first design.
+
 ## Genuine gaps / real work (ranked)
 
 1. **Fill & Sign + Signature Audit Trail MVP (Phases 7–8)** — the one true net-new slice.
