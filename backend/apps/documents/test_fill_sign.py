@@ -168,6 +168,12 @@ class FillSignTests(APITestCase):
         res = self.client.get(f"/api/v1/fill-sign/prepared/?original_file={self.file.id}")
         self.assertEqual(len(res.json()), 1)
 
+        # Filter by document — the path the document Files-tab audit UI actually uses.
+        res = self.client.get(f"/api/v1/fill-sign/prepared/?document={self.doc.id}")
+        self.assertEqual(len(res.json()), 1)
+        res = self.client.get("/api/v1/fill-sign/prepared/?document=999999")
+        self.assertEqual(res.json(), [])
+
         # Bob sees none of Alice's prepared copies.
         self.client.force_authenticate(self.bob)
         res = self.client.get("/api/v1/fill-sign/prepared/")
