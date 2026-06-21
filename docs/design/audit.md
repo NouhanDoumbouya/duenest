@@ -63,22 +63,14 @@ engineering rules (`AGENTS.md`: focused, reviewable, non-destructive changes).
 
 ## Weaknesses and gaps (the backlog targets)
 
-### 1. Brand vocabulary vs. implementation drift (highest-leverage)
+### 1. Brand vocabulary vs. implementation drift — ✅ RESOLVED
 
-The brand/messaging docs define **canonical feature names** that the app does not use:
-
-| Canonical (brand/messaging) | Implemented route label (`lib/navigation.ts`) |
-| --- | --- |
-| SafeSend | **Quick Share** (`/dashboard/quick-share`) |
-| Application Packs | **Bundles** (`/dashboard/bundles`) |
-| Custom QR | (folded into Quick Share, no standalone nav entry) |
-| AI Assistant | Split across **Chat / Briefing / Ask documents / Draft / Pack Copilot** |
-
-This drift means the product, marketing site, and docs refer to the same feature by
-different names. Either the brand docs or the app labels must become authoritative.
-**Recommendation:** treat the implemented labels as the product surface, and update
-brand/messaging to match — OR rename routes' display labels to the canonical names with
-redirects. This is a decision for the product owner; see navigation-map.md.
+The brand/messaging docs defined canonical names the app didn't use. **Resolved on this
+branch:** the product owner chose to adopt the brand names app-wide, and the user-facing
+display labels were renamed (`Quick Share → SafeSend`, `Bundles → Application Packs`)
+while routes, feature keys, types, and API identifiers were left unchanged. See
+[navigation-map.md](./navigation-map.md#brand--implementation-vocabulary-drift--resolved)
+for the decision record and identifier mapping.
 
 ### 2. No design-system documentation existed
 

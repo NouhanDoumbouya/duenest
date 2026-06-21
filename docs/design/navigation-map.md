@@ -24,8 +24,8 @@
 | | Ask documents | `/dashboard/ask` | `ai_document_qa` |
 | | Draft | `/dashboard/draft` | `ai_document_drafting` |
 | | Pack Copilot | `/dashboard/pack-copilot` | `ai_pack_copilot` |
-| **Prepare & share** | Bundles | `/dashboard/bundles` | `bundles` |
-| | Quick Share | `/dashboard/quick-share` | `quick_share` |
+| **Prepare & share** | Application Packs | `/dashboard/bundles` | `bundles` |
+| | SafeSend | `/dashboard/quick-share` | `quick_share` |
 | | Shared with me | `/dashboard/shared-with-me` | `shared_with_me` |
 | | Document requests | `/dashboard/requests` | `share_requests` |
 | | Secure rooms | `/dashboard/share-rooms` | `secure_rooms` |
@@ -40,34 +40,30 @@
 
 Mobile uses `bottom-nav.tsx`; topbar/shell via `dashboard-shell.tsx` and `site-header.tsx`.
 
-## Brand ↔ implementation vocabulary drift (decision required)
+## Brand ↔ implementation vocabulary drift — ✅ RESOLVED
 
-The brand/messaging docs name features differently from the implemented labels:
+**Decision (product owner): adopt the brand names app-wide (Option B).** The user-facing
+display labels were renamed to match the brand; routes, feature keys, types, and API
+identifiers are unchanged.
 
-| Brand canonical name | Implemented label | Route |
-| --- | --- | --- |
-| **SafeSend** | Quick Share | `/dashboard/quick-share` |
-| **Application Packs** | Bundles | `/dashboard/bundles` |
-| **Custom QR** | (inside Quick Share) | — |
-| **AI Assistant** (one area) | Chat / Briefing / Ask documents / Draft / Pack Copilot | `/dashboard/*` |
+| Brand name (now used everywhere) | Old display label | Route (unchanged) | Internal identifiers (unchanged) |
+| --- | --- | --- | --- |
+| **SafeSend** | Quick Share | `/dashboard/quick-share` | `quick_share`, `QuickShare*`, `getQuickShares` |
+| **Application Packs** | Bundles | `/dashboard/bundles` | `bundles`, `Bundle*`, `getBundles`, `bundle_type`, `in_bundle` |
+| **Custom QR** | (inside SafeSend) | — | — |
+| **AI Assistant** (mental model) | Chat / Briefing / Ask documents / Draft / Pack Copilot | `/dashboard/*` | unchanged |
 
-**This must be resolved before broad copy work**, otherwise the marketing site, brand
-docs, and app keep contradicting each other. Two clean options:
+Implemented across these commits on this branch:
+- `Quick Share → SafeSend` app-wide (display text only; `SafeSend` already existed as the
+  brand concept in `lib/safesend.ts`).
+- `Bundles → Application Packs` on feature surfaces, then public/billing copy, then
+  remaining dashboard copy. Inline short references use "pack"; the feature/nav uses
+  "Application Packs".
 
-- **Option A — Make implemented labels authoritative.** Update `brand/messaging-guide.md`
-  and marketing copy to say "Quick Share" and "Bundles". Lowest code risk.
-- **Option B — Make brand names authoritative.** Rename display labels in
-  `lib/navigation.ts` to "SafeSend" / "Application Packs", keep routes the same (labels
-  are display-only, so no redirects needed), update `navigation.test.ts`. Higher polish,
-  better marketing alignment.
-
-Recommendation: **Option B** for the consumer-facing labels (SafeSend, Application Packs
-are stronger, more ownable names), because routes are unaffected — only the human-readable
-`label` strings change. The AI split (Chat/Briefing/Ask/Draft/Pack Copilot) is fine as
-distinct tools but should sit under an "Assistant" mental model in marketing.
-
-> No labels are changed in this Phase 1 docs branch. This is recorded as the decision the
-> product owner must make first.
+Rationale: routes are unaffected (only human-readable `label`/copy strings changed, so no
+redirects), and the brand had already invested in these stronger, more ownable names.
+The data model intentionally keeps "bundle"/"quick share" identifiers — UI vocabulary and
+storage vocabulary are decoupled.
 
 ## Navigation rules (to preserve)
 
