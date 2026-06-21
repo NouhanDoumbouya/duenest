@@ -5,7 +5,9 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
+  Check,
   CheckCircle2,
+  ChevronRight,
   Download,
   FileText,
   Link2,
@@ -272,83 +274,115 @@ function RequirementRow({
         </Button>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <select
-          aria-label="Requirement status"
-          value={requirement.status}
-          onChange={(e) => changeStatus(e.target.value as RequirementStatus)}
-          disabled={pending}
-          className="h-9 w-full rounded-lg border border-input bg-card px-2 text-xs shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:h-8 sm:w-auto"
-        >
-          {REQUIREMENT_STATUSES.map((status) => (
-            <option key={status} value={status}>
-              {REQUIREMENT_STATUS_LABELS[status]}
-            </option>
-          ))}
-        </select>
-
-        {documents.length > 0 && (
-          <select
-            aria-label="Attach a document from your Vault"
-            value={requirement.linked_document ?? ""}
-            onChange={(e) =>
-              e.target.value && linkDocument(Number(e.target.value))
-            }
-            disabled={pending}
-            className="h-9 w-full rounded-lg border border-input bg-card px-2 text-xs shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:h-8 sm:w-auto sm:max-w-[200px]"
-          >
-            <option value="">Attach from Vault…</option>
-            {documents.map((doc) => (
-              <option key={doc.id} value={doc.id}>
-                {doc.title}
-              </option>
-            ))}
-          </select>
-        )}
-
-        {inboxFiles.length > 0 && (
-          <select
-            aria-label="Attach a file from your File Inbox"
-            value=""
-            onChange={(e) =>
-              e.target.value && linkFile(Number(e.target.value))
-            }
-            disabled={pending}
-            className="h-9 w-full rounded-lg border border-input bg-card px-2 text-xs shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:h-8 sm:w-auto sm:max-w-[200px]"
-          >
-            <option value="">Attach from Inbox…</option>
-            {inboxFiles.map((file) => (
-              <option key={file.id} value={file.id}>
-                {file.original_filename}
-              </option>
-            ))}
-          </select>
-        )}
-
-        {/* Quick actions for items still missing a document. Calm, optional —
-            nothing here forces the user to complete the pack now. */}
-        {requirement.status === "missing" && (
-          <>
-            {scanEnabled && (
-              <Link
-                href="/dashboard/scanner"
-                className="inline-flex h-9 flex-1 items-center justify-center gap-1 rounded-lg border border-input bg-card px-2 text-xs transition-colors hover:bg-muted/50 sm:h-8 sm:flex-none"
-              >
-                <ScanLine className="size-3.5" />
-                Scan
-              </Link>
-            )}
-            <button
-              type="button"
-              onClick={() => changeStatus("skipped")}
+      {/* One primary action per row. Attaching a document is the main job, so
+          the two attach sources (Vault + File Inbox) collapse into a single
+          "Attach…" picker; a contextual "Mark ready" appears once a document is
+          attached; and the rarer manual-status / "not needed" controls move into
+          a quiet "More options" disclosure so the row stays calm. */}
+      <div className="mt-3 space-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {(documents.length > 0 || inboxFiles.length > 0) && (
+            <select
+              aria-label="Attach a document"
+              value=""
+              onChange={(e) => {
+                const v = e.target.value;
+                if (!v) return;
+                const [kind, id] = v.split(":");
+                if (kind === "doc") linkDocument(Number(id));
+                else if (kind === "file") linkFile(Number(id));
+              }}
               disabled={pending}
-              className="inline-flex h-9 flex-1 items-center justify-center rounded-lg border border-input bg-card px-2 text-xs text-muted-foreground transition-colors hover:bg-muted/50 sm:h-8 sm:flex-none"
+              className="h-9 w-full rounded-lg border border-input bg-card px-2 text-xs shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:h-8 sm:w-auto sm:max-w-[220px]"
             >
-              Mark not needed
-            </button>
-          </>
-        )}
-        {pending && <Loader2 className="size-3.5 animate-spin text-muted-foreground" />}
+              <option value="">
+                {requirement.linked_document
+                  ? "Replace document…"
+                  : "Attach document…"}
+              </option>
+              {documents.length > 0 && (
+                <optgroup label="Vault">
+                  {documents.map((doc) => (
+                    <option key={`doc-${doc.id}`} value={`doc:${doc.id}`}>
+                      {doc.title}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {inboxFiles.length > 0 && (
+                <optgroup label="File Inbox">
+                  {inboxFiles.map((file) => (
+                    <option key={`file-${file.id}`} value={`file:${file.id}`}>
+                      {file.original_filename}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+          )}
+
+          {requirement.status === "attached" && (
+            <Button
+              size="sm"
+              onClick={() => changeStatus("completed")}
+              disabled={pending}
+            >
+              <Check className="size-3.5" />
+              Mark ready
+            </Button>
+          )}
+
+          {requirement.status === "missing" && scanEnabled && (
+            <Link
+              href="/dashboard/scanner"
+              className="inline-flex h-9 flex-1 items-center justify-center gap-1 rounded-lg border border-input bg-card px-2 text-xs transition-colors hover:bg-muted/50 sm:h-8 sm:flex-none"
+            >
+              <ScanLine className="size-3.5" />
+              Scan
+            </Link>
+          )}
+
+          {pending && (
+            <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+          )}
+        </div>
+
+        <details className="group/more">
+          <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
+            <ChevronRight className="size-3 transition-transform group-open/more:rotate-90" />
+            More options
+          </summary>
+          <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/30 p-2">
+            <label className="text-[11px] font-medium text-muted-foreground">
+              Status
+            </label>
+            <select
+              aria-label="Requirement status"
+              value={requirement.status}
+              onChange={(e) =>
+                changeStatus(e.target.value as RequirementStatus)
+              }
+              disabled={pending}
+              className="h-8 rounded-lg border border-input bg-card px-2 text-xs shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              {REQUIREMENT_STATUSES.map((status) => (
+                <option key={status} value={status}>
+                  {REQUIREMENT_STATUS_LABELS[status]}
+                </option>
+              ))}
+            </select>
+            {requirement.status !== "skipped" && (
+              <button
+                type="button"
+                onClick={() => changeStatus("skipped")}
+                disabled={pending}
+                className="inline-flex h-8 items-center rounded-lg border border-input bg-card px-2.5 text-xs text-muted-foreground transition-colors hover:bg-muted/50"
+              >
+                Mark not needed
+              </button>
+            )}
+          </div>
+        </details>
       </div>
     </li>
   );
