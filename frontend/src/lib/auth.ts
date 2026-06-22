@@ -16,6 +16,7 @@ import type {
   GoogleAuthResponse,
   LoginRequest,
   LoginResponse,
+  ProfileDetails,
   RegisterRequest,
   User,
 } from "@/types/auth";
@@ -112,6 +113,30 @@ export async function uploadAvatar(file: File): Promise<User> {
 /** Remove the uploaded profile picture. Returns the updated user. */
 export async function removeAvatar(): Promise<User> {
   return apiFetch<User>("/users/me/avatar/", { method: "DELETE" });
+}
+
+// ---- Saved personal details (encrypted, owner-only; for form pre-fill) ------
+
+/** Fetch the user's saved personal details (unset fields come back as ""). */
+export async function getProfileDetails(): Promise<ProfileDetails> {
+  return apiFetch<ProfileDetails>("/users/me/profile-details/");
+}
+
+/** Partially update saved details (send "" to clear a field). Returns the full set. */
+export async function updateProfileDetails(
+  patch: Partial<ProfileDetails>,
+): Promise<ProfileDetails> {
+  return apiFetch<ProfileDetails>("/users/me/profile-details/", {
+    method: "PATCH",
+    body: patch,
+  });
+}
+
+/** Clear all saved details. */
+export async function clearProfileDetails(): Promise<ProfileDetails> {
+  return apiFetch<ProfileDetails>("/users/me/profile-details/", {
+    method: "DELETE",
+  });
 }
 
 // ---- Account recovery: password reset + email verification (SEC-007) -------

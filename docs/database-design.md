@@ -294,6 +294,28 @@ DueNest should use a custom user model from the beginning because changing the u
 
 ---
 
+### Model: `UserProfileDetails`
+
+Optional personal details a user opts to save, to pre-fill their own forms later
+(Profile → "Your details").
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `user` | OneToOne(User) | Yes | Primary key; cascade-deleted with the account |
+| `data_ciphertext` | BinaryField | No | Encrypted JSON of all detail fields (AES-256-GCM, AAD-bound via `apps.core.security.encryption`). Null when nothing is saved. |
+| `updated_at` | DateTime | Yes | Last update |
+
+Fields carried inside the encrypted blob (all optional strings): `legal_name`,
+`preferred_name`, `date_of_birth`, `nationality`, `phone`, `address_street`,
+`address_city`, `address_region`, `address_postal_code`, `address_country`,
+`passport_number`, `national_id`.
+
+**Security:** these PII values are never stored in plaintext — the whole record
+is a single AES-256-GCM ciphertext blob, returned only to the owner, never
+shared, and removed with the account.
+
+---
+
 ## 7.5 User Onboarding and Account-Control Models
 
 ### Model: `UserOnboardingState`

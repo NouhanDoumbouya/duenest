@@ -8,6 +8,7 @@ from .views import (
     CookieTokenRefreshView,
     CsrfTokenView,
     CurrentUserAvatarView,
+    CurrentUserProfileDetailsView,
     CurrentUserView,
     DemoDocumentDataClearView,
     DemoDocumentDataCreateView,
@@ -60,6 +61,11 @@ urlpatterns = [
         "users/me/avatar/",
         CurrentUserAvatarView.as_view(),
         name="users-me-avatar",
+    ),
+    path(
+        "users/me/profile-details/",
+        CurrentUserProfileDetailsView.as_view(),
+        name="users-me-profile-details",
     ),
     path("onboarding/state/", OnboardingStateView.as_view(), name="onboarding-state"),
     path(

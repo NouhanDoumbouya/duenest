@@ -149,6 +149,7 @@ DueNest data should be treated according to sensitivity.
 | Data Type | Sensitivity | Examples | Protection Level |
 | --- | --- | --- | --- |
 | Account data | High | email, full name, password hash | Strong access control |
+| Saved profile details | Very high | DOB, address, passport/national ID numbers saved for form pre-fill | Encrypted at rest (AES-256-GCM, AAD-bound), owner-only, opt-in, never shared, removed with the account |
 | Uploaded documents | Very high | passport, visa, ID, certificates, contracts | Private storage and strict authorization |
 | Document metadata | High | expiry dates, document types, file names | User-scoped API access |
 | Renewal data | Medium to high | subscriptions, costs, provider names | User-scoped API access |

@@ -37,6 +37,25 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
         fields = ["first_name", "last_name"]
 
 
+class ProfileDetailsSerializer(serializers.Serializer):
+    """Validates the optional personal details a user saves for pre-filling their
+    own forms. Not model-bound — values are persisted encrypted in
+    ``UserProfileDetails`` (a single ciphertext blob). Every field is optional."""
+
+    legal_name = serializers.CharField(required=False, allow_blank=True, max_length=200)
+    preferred_name = serializers.CharField(required=False, allow_blank=True, max_length=120)
+    date_of_birth = serializers.CharField(required=False, allow_blank=True, max_length=32)
+    nationality = serializers.CharField(required=False, allow_blank=True, max_length=120)
+    phone = serializers.CharField(required=False, allow_blank=True, max_length=40)
+    address_street = serializers.CharField(required=False, allow_blank=True, max_length=200)
+    address_city = serializers.CharField(required=False, allow_blank=True, max_length=120)
+    address_region = serializers.CharField(required=False, allow_blank=True, max_length=120)
+    address_postal_code = serializers.CharField(required=False, allow_blank=True, max_length=32)
+    address_country = serializers.CharField(required=False, allow_blank=True, max_length=120)
+    passport_number = serializers.CharField(required=False, allow_blank=True, max_length=64)
+    national_id = serializers.CharField(required=False, allow_blank=True, max_length=64)
+
+
 class PasswordResetRequestSerializer(serializers.Serializer):
     email = serializers.EmailField()
 

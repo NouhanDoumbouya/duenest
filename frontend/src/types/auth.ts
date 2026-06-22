@@ -16,6 +16,23 @@ export interface User {
   profile_image_url?: string;
 }
 
+/** Optional, owner-only personal details saved to pre-fill the user's own forms.
+ *  Stored encrypted at rest on the backend; all fields optional. */
+export interface ProfileDetails {
+  legal_name: string;
+  preferred_name: string;
+  date_of_birth: string;
+  nationality: string;
+  phone: string;
+  address_street: string;
+  address_city: string;
+  address_region: string;
+  address_postal_code: string;
+  address_country: string;
+  passport_number: string;
+  national_id: string;
+}
+
 /** The access/refresh pair returned by SimpleJWT. */
 export interface AuthTokens {
   access: string;

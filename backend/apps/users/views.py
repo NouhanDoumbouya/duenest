@@ -29,12 +29,14 @@ from .serializers import (
     GoogleAuthSerializer,
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
+    ProfileDetailsSerializer,
     ProfileUpdateSerializer,
     RegisterSerializer,
     UserOnboardingStateSerializer,
     UserSerializer,
 )
 from .avatars import AvatarProcessingError, build_avatar_data_url
+from .models import UserProfileDetails
 from .services import (
     ExportGenerationError,
     build_account_data_summary,
@@ -209,6 +211,41 @@ class CurrentUserAvatarView(APIView):
             request.user.avatar_image = ""
             request.user.save(update_fields=["avatar_image"])
         return Response(UserSerializer(request.user).data)
+
+
+class CurrentUserProfileDetailsView(APIView):
+    """Owner-scoped personal details the user opts to save for pre-filling their
+    own forms. Stored encrypted at rest (see UserProfileDetails); returned only
+    to the owner and never shared.
+
+    GET    returns all fields (unset ones as empty strings).
+    PATCH  partially updates fields (send "" to clear one).
+    DELETE clears every saved detail.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        details, _ = UserProfileDetails.objects.get_or_create(user=request.user)
+        return Response(details.get_details())
+
+    def patch(self, request):
+        serializer = ProfileDetailsSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        details, _ = UserProfileDetails.objects.get_or_create(user=request.user)
+        merged = {**details.get_details(), **serializer.validated_data}
+        details.set_details(merged)
+        details.save()
+        return Response(details.get_details())
+
+    def delete(self, request):
+        details = UserProfileDetails.objects.filter(user=request.user).first()
+        if details and details.data_ciphertext is not None:
+            details.data_ciphertext = None
+            details.save(update_fields=["data_ciphertext", "updated_at"])
+        return Response(
+            {key: "" for key in UserProfileDetails.PROFILE_FIELDS}
+        )
 
 
 class CookieTokenRefreshView(TokenRefreshView):

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -26,7 +26,15 @@ import { PageContainer } from "@/components/ui/page-container";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
 import { ApiError } from "@/lib/api";
-import { removeAvatar, updateProfile, uploadAvatar } from "@/lib/auth";
+import {
+  clearProfileDetails,
+  getProfileDetails,
+  removeAvatar,
+  updateProfile,
+  updateProfileDetails,
+  uploadAvatar,
+} from "@/lib/auth";
+import type { ProfileDetails } from "@/types/auth";
 
 const ACCOUNT_AREAS = [
   { label: "Plan & Billing", href: "/dashboard/settings/billing", icon: CreditCard },
@@ -247,11 +255,204 @@ export default function ProfilePage() {
         </div>
       </SectionCard>
 
-      <p className="px-1 text-xs leading-relaxed text-muted-foreground">
-        Coming soon: save details like your address and document numbers here, so
-        DueNest can offer to fill them into forms for you — always with your
-        confirmation, never shared automatically.
-      </p>
+      <ProfileDetailsSection />
     </PageContainer>
+  );
+}
+
+const EMPTY_DETAILS: ProfileDetails = {
+  legal_name: "",
+  preferred_name: "",
+  date_of_birth: "",
+  nationality: "",
+  phone: "",
+  address_street: "",
+  address_city: "",
+  address_region: "",
+  address_postal_code: "",
+  address_country: "",
+  passport_number: "",
+  national_id: "",
+};
+
+const DETAIL_GROUPS: {
+  title: string;
+  fields: {
+    key: keyof ProfileDetails;
+    label: string;
+    type?: string;
+    autoComplete?: string;
+  }[];
+}[] = [
+  {
+    title: "Identity",
+    fields: [
+      { key: "legal_name", label: "Full legal name", autoComplete: "name" },
+      { key: "preferred_name", label: "Preferred name" },
+      { key: "date_of_birth", label: "Date of birth", type: "date" },
+      { key: "nationality", label: "Nationality" },
+    ],
+  },
+  {
+    title: "Contact & address",
+    fields: [
+      { key: "phone", label: "Phone", type: "tel", autoComplete: "tel" },
+      { key: "address_street", label: "Street address", autoComplete: "address-line1" },
+      { key: "address_city", label: "City", autoComplete: "address-level2" },
+      { key: "address_region", label: "State / region", autoComplete: "address-level1" },
+      { key: "address_postal_code", label: "Postal code", autoComplete: "postal-code" },
+      { key: "address_country", label: "Country", autoComplete: "country-name" },
+    ],
+  },
+  {
+    title: "Document numbers",
+    fields: [
+      { key: "passport_number", label: "Passport number" },
+      { key: "national_id", label: "National ID number" },
+    ],
+  },
+];
+
+/**
+ * Optional saved details for pre-filling the user's own forms. Loaded and saved
+ * via the owner-only, encrypted profile-details API. Everything is opt-in and
+ * clearable; we're explicit that nothing is shared or used without confirmation.
+ */
+function ProfileDetailsSection() {
+  const [details, setDetails] = useState<ProfileDetails | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    getProfileDetails()
+      .then((d) => active && setDetails(d))
+      .catch(() => active && setLoadError(true));
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  function update(key: keyof ProfileDetails, value: string) {
+    setDetails((d) => ({ ...(d ?? EMPTY_DETAILS), [key]: value }));
+    setSaved(false);
+  }
+
+  async function handleSave(e: FormEvent) {
+    e.preventDefault();
+    if (!details) return;
+    setSaving(true);
+    setError(null);
+    setSaved(false);
+    try {
+      setDetails(await updateProfileDetails(details));
+      setSaved(true);
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : "Couldn't save your details.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleClear() {
+    setSaving(true);
+    setError(null);
+    setSaved(false);
+    try {
+      setDetails(await clearProfileDetails());
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : "Couldn't clear your details.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const hasAny =
+    details != null && Object.values(details).some((v) => v.trim() !== "");
+
+  return (
+    <SectionCard
+      title="Your details"
+      description="Optional. Saved securely to help pre-fill your own forms later."
+    >
+      <p className="mb-4 flex items-start gap-2 rounded-lg border border-primary/15 bg-primary/[0.04] px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+        <Lock className="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden />
+        <span>
+          Encrypted at rest and visible only to you. DueNest never shares these
+          or fills them in without asking. Leave anything blank, or clear it all
+          whenever you like.
+        </span>
+      </p>
+
+      {loadError ? (
+        <p className="text-sm text-destructive">
+          Couldn&apos;t load your saved details. Please refresh and try again.
+        </p>
+      ) : details === null ? (
+        <div className="space-y-2">
+          <div className="h-9 w-full animate-pulse rounded-md bg-muted" />
+          <div className="h-9 w-2/3 animate-pulse rounded-md bg-muted" />
+        </div>
+      ) : (
+        <form onSubmit={handleSave} className="space-y-6">
+          {DETAIL_GROUPS.map((group) => (
+            <fieldset key={group.title} className="space-y-3">
+              <legend className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                {group.title}
+              </legend>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {group.fields.map((f) => (
+                  <div key={f.key} className="grid gap-1.5">
+                    <Label htmlFor={`detail-${f.key}`}>{f.label}</Label>
+                    <Input
+                      id={`detail-${f.key}`}
+                      type={f.type ?? "text"}
+                      value={details[f.key]}
+                      onChange={(e) => update(f.key, e.target.value)}
+                      autoComplete={f.autoComplete}
+                    />
+                  </div>
+                ))}
+              </div>
+            </fieldset>
+          ))}
+
+          {error && <p className="text-sm text-destructive">{error}</p>}
+
+          <div className="flex flex-wrap items-center gap-3">
+            <Button type="submit" disabled={saving}>
+              {saving ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Check className="size-4" />
+              )}
+              Save details
+            </Button>
+            {saved && (
+              <span className="inline-flex items-center gap-1.5 text-sm text-brand-success">
+                <Check className="size-4" /> Saved
+              </span>
+            )}
+            {hasAny && (
+              <Button
+                type="button"
+                variant="ghost"
+                className="text-destructive hover:text-destructive"
+                onClick={handleClear}
+                disabled={saving}
+              >
+                <Trash2 className="size-4" /> Clear all
+              </Button>
+            )}
+          </div>
+        </form>
+      )}
+    </SectionCard>
   );
 }

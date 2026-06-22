@@ -613,6 +613,35 @@ Required.
   applies). Returns the updated user.
 - Invalid or unreadable uploads, or files larger than 8 MB, return `400`.
 
+## 13.2.2 Saved personal details (for form pre-fill)
+
+```http
+GET    /api/v1/users/me/profile-details/
+PATCH  /api/v1/users/me/profile-details/
+DELETE /api/v1/users/me/profile-details/
+```
+
+### Authentication
+
+Required. Strictly owner-scoped — only ever reads/writes the signed-in user's
+own record.
+
+### Fields
+
+All optional strings: `legal_name`, `preferred_name`, `date_of_birth`,
+`nationality`, `phone`, `address_street`, `address_city`, `address_region`,
+`address_postal_code`, `address_country`, `passport_number`, `national_id`.
+
+### Behavior
+
+- **GET** returns every field (unset ones as `""`).
+- **PATCH** partially updates; send `""` to clear a single field. Returns the
+  full set.
+- **DELETE** clears all saved details.
+- Values are **encrypted at rest** (AES-256-GCM, AAD-bound) as a single
+  ciphertext blob — DueNest never stores them in plaintext. They are returned
+  only to the owner, never shared, and are removed with the account.
+
 ---
 
 # 13.3 Onboarding, Trust, Demo, and Account Controls API (implemented)

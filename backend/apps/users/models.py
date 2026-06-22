@@ -1,7 +1,14 @@
+import json
+
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
+
+from apps.core.security.encryption import (
+    decrypt_field_value,
+    encrypt_field_value,
+)
 
 
 class User(AbstractUser):
@@ -140,3 +147,77 @@ class AccountDeletionRequest(models.Model):
     @property
     def can_cancel(self) -> bool:
         return self.status == self.Status.REQUESTED
+
+
+class UserProfileDetails(models.Model):
+    """Owner-scoped personal details a user opts to save, to pre-fill their own
+    forms later.
+
+    The whole record is stored as a single AES-256-GCM ciphertext blob
+    (AAD-bound via ``apps.core.security.encryption``), so DueNest never holds
+    these PII values in plaintext at rest. It is returned only to the owner and
+    is never shared. Cleared with the account (``on_delete=CASCADE``).
+    """
+
+    # Plaintext field names carried inside the encrypted blob.
+    PROFILE_FIELDS = (
+        "legal_name",
+        "preferred_name",
+        "date_of_birth",
+        "nationality",
+        "phone",
+        "address_street",
+        "address_city",
+        "address_region",
+        "address_postal_code",
+        "address_country",
+        "passport_number",
+        "national_id",
+    )
+
+    _AAD_MODEL = "userprofiledetails"
+    _AAD_FIELD = "data"
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        primary_key=True,
+        related_name="profile_details",
+    )
+    # Encrypted JSON of the saved PROFILE_FIELDS. Null when nothing is stored.
+    data_ciphertext = models.BinaryField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Profile details for user {self.user_id}"
+
+    def get_details(self) -> dict:
+        """Decrypt and return every field (missing ones as empty strings)."""
+        raw: dict = {}
+        if self.data_ciphertext:
+            decoded = decrypt_field_value(
+                bytes(self.data_ciphertext),
+                model=self._AAD_MODEL,
+                field=self._AAD_FIELD,
+                record_id=self.user_id,
+            )
+            raw = json.loads(decoded)
+        return {key: raw.get(key, "") for key in self.PROFILE_FIELDS}
+
+    def set_details(self, values: dict) -> None:
+        """Encrypt and store the given fields. Blank values are dropped; if
+        nothing remains, the ciphertext is cleared entirely."""
+        cleaned = {
+            key: str(values.get(key, "")).strip()
+            for key in self.PROFILE_FIELDS
+            if str(values.get(key, "")).strip()
+        }
+        if not cleaned:
+            self.data_ciphertext = None
+            return
+        self.data_ciphertext = encrypt_field_value(
+            json.dumps(cleaned, ensure_ascii=False),
+            model=self._AAD_MODEL,
+            field=self._AAD_FIELD,
+            record_id=self.user_id,
+        )
