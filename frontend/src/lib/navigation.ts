@@ -220,7 +220,9 @@ export interface SidebarParent {
 export type SidebarItem = SidebarLeaf | SidebarParent;
 
 export interface SidebarGroup {
-  heading: string;
+  /** Omitted for the top group so primary items (e.g. Overview) sit ungrouped,
+   *  like a home link, instead of under a single-item heading. */
+  heading?: string;
   items: SidebarItem[];
 }
 
@@ -230,7 +232,7 @@ export function isSidebarParent(item: SidebarItem): item is SidebarParent {
 
 export const SIDEBAR_GROUPS: SidebarGroup[] = [
   {
-    heading: "Main",
+    // No heading — Overview reads as a top-level home link, not a 1-item group.
     items: [
       {
         label: "Overview",
@@ -367,7 +369,7 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
       { label: "Trust & security", href: "/dashboard/trust", icon: ShieldCheck },
       { label: "Plan & Billing", href: "/dashboard/settings/billing", icon: CreditCard },
       { label: "Data & privacy", href: "/dashboard/settings/data", icon: Settings },
-      { label: "AI & privacy", href: "/dashboard/settings/ai", icon: Lock, featureKey: "ai_features" },
+      { label: "AI settings", href: "/dashboard/settings/ai", icon: Lock, featureKey: "ai_features" },
       { label: "Feedback", href: "/dashboard/feedback", icon: MessageSquare, featureKey: "feedback" },
     ],
   },

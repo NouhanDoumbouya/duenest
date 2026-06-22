@@ -55,7 +55,7 @@ export default function AiSettingsPage() {
     <PageContainer width="narrow">
       <PageHeader
         eyebrow="Settings"
-        title="AI & privacy"
+        title="AI settings"
         description="DueNest's AI features are off until you turn them on — and you stay in control of what's shared."
       />
 

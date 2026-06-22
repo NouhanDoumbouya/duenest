@@ -233,10 +233,15 @@ export function SidebarNav({
         if (items.length === 0) return null;
 
         return (
-          <div key={group.heading} className="flex flex-col gap-0.5">
-            <p className="px-3 pb-1.5 text-[0.68rem] font-semibold tracking-wider text-muted-foreground/70 uppercase">
-              {group.heading}
-            </p>
+          <div
+            key={group.heading ?? items[0]?.href ?? "primary"}
+            className="flex flex-col gap-0.5"
+          >
+            {group.heading && (
+              <p className="px-3 pb-1.5 text-[0.68rem] font-semibold tracking-wider text-muted-foreground/70 uppercase">
+                {group.heading}
+              </p>
+            )}
             {items.map((item) => {
               if (isSidebarParent(item)) {
                 const active = isSectionActive(pathname, item.sectionKey);
