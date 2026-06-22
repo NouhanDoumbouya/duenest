@@ -25,7 +25,12 @@ import {
 } from "lucide-react";
 
 import { useFeatures } from "@/components/features/feature-flags-provider";
-import { ACCOUNT_NAV, isSidebarParent, SIDEBAR_GROUPS } from "@/lib/navigation";
+import {
+  ACCOUNT_NAV,
+  ASSISTANT_TOOLS,
+  isSidebarParent,
+  SIDEBAR_GROUPS,
+} from "@/lib/navigation";
 import { searchWorkspace, type SearchResult } from "@/lib/search";
 import { cn } from "@/lib/utils";
 
@@ -115,6 +120,19 @@ function useStaticCommands(): Command[] {
           });
         }
       }
+    }
+
+    // Assistant tools are surfaced on the Assistant home, not the sidebar —
+    // keep them reachable from ⌘K.
+    for (const item of ASSISTANT_TOOLS) {
+      if (!visible(item.featureKey) || !item.icon) continue;
+      nav.push({
+        id: `nav-${item.href}`,
+        label: item.label,
+        href: item.href,
+        icon: item.icon,
+        group: "Go to",
+      });
     }
 
     // Account/settings destinations live in the avatar menu, not the sidebar —

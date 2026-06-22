@@ -28,7 +28,6 @@ import {
   Lock,
   LifeBuoy,
   MessageSquare,
-  MessagesSquare,
   Package,
   PenLine,
   QrCode,
@@ -319,37 +318,15 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
     ],
   },
   {
+    // One Assistant entry — a chat-first hub. The specialized tools (Ask,
+    // Briefing, Draft, Pack Copilot) are surfaced as modes on the Assistant home
+    // (ASSISTANT_TOOLS) and reachable from ⌘K, instead of five sidebar rows.
     heading: "Assistant",
     items: [
       {
-        label: "Chat",
+        label: "Assistant",
         href: "/dashboard/assistant",
-        icon: MessagesSquare,
-        featureKey: "ai_chat",
-      },
-      {
-        label: "Briefing",
-        href: "/dashboard/briefing",
-        icon: Zap,
-        featureKey: "ai_briefing",
-      },
-      {
-        label: "Ask documents",
-        href: "/dashboard/ask",
         icon: Sparkles,
-        featureKey: "ai_document_qa",
-      },
-      {
-        label: "Draft",
-        href: "/dashboard/draft",
-        icon: PenLine,
-        featureKey: "ai_document_drafting",
-      },
-      {
-        label: "Pack Copilot",
-        href: "/dashboard/pack-copilot",
-        icon: Target,
-        featureKey: "ai_pack_copilot",
       },
     ],
   },
@@ -371,6 +348,18 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
  * indexed in ⌘K) rather than the primary sidebar, so the rail stays focused on
  * the product instead of duplicating the account menu.
  */
+/**
+ * The Assistant's specialized tools. Chat is the hub itself (the Assistant
+ * home), so it isn't listed here. Rendered as "modes" on the Assistant home and
+ * indexed in ⌘K, rather than as separate sidebar rows.
+ */
+export const ASSISTANT_TOOLS: SidebarLeaf[] = [
+  { label: "Ask documents", href: "/dashboard/ask", icon: Sparkles, featureKey: "ai_document_qa" },
+  { label: "Briefing", href: "/dashboard/briefing", icon: Zap, featureKey: "ai_briefing" },
+  { label: "Draft", href: "/dashboard/draft", icon: PenLine, featureKey: "ai_document_drafting" },
+  { label: "Pack Copilot", href: "/dashboard/pack-copilot", icon: Target, featureKey: "ai_pack_copilot" },
+];
+
 export const ACCOUNT_NAV: SidebarLeaf[] = [
   { label: "Profile", href: "/dashboard/settings/profile", icon: UserRound },
   { label: "Plan & Billing", href: "/dashboard/settings/billing", icon: CreditCard },

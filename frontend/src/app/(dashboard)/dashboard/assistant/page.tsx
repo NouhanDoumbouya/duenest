@@ -20,6 +20,8 @@ import {
 } from "lucide-react";
 
 import { AiActivationCard } from "@/components/ai/ai-activation-card";
+import { useFeatures } from "@/components/features/feature-flags-provider";
+import { ASSISTANT_TOOLS } from "@/lib/navigation";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -52,6 +54,14 @@ export default function AssistantPage() {
   const [error, setError] = useState<string | null>(null);
   const [notEnabled, setNotEnabled] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+
+  // Specialized tools to offer as "modes" on the hub — only the enabled ones.
+  const features = useFeatures();
+  const tools = ASSISTANT_TOOLS.filter((tool) => {
+    if (!tool.featureKey) return true;
+    const state = features[tool.featureKey];
+    return state ? state.enabled : true;
+  });
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -114,7 +124,7 @@ export default function AssistantPage() {
       <PageContainer width="narrow">
         <PageHeader
           eyebrow="Assistant"
-          title="Chat"
+          title="Assistant"
           description="Ask anything about your documents and life admin."
         />
         <Card>
@@ -176,6 +186,33 @@ export default function AssistantPage() {
                 </button>
               ))}
             </div>
+
+            {/* Specialized modes — chat is the default, but you can jump
+                straight to a focused tool. */}
+            {tools.length > 0 && (
+              <div className="w-full max-w-md pt-2">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Or open a tool
+                </p>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  {tools.map((tool) => {
+                    const Icon = tool.icon;
+                    return (
+                      <Link
+                        key={tool.href}
+                        href={tool.href}
+                        className="group flex items-center gap-2.5 rounded-xl border border-border bg-card p-3 text-left transition-colors hover:border-brand-teal/40 hover:bg-muted/50"
+                      >
+                        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+                          {Icon && <Icon className="size-4" />}
+                        </span>
+                        <span className="text-sm font-medium">{tool.label}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <>
