@@ -5,6 +5,10 @@ storage) for staging/beta, and how to configure provider-neutral object storage.
 
 The frontend (Next.js) deploys to Vercel and is out of scope here.
 
+> **Production domains & email (certanest.com, app/api/mail):** for the domain
+> map, DNS, env vars, CORS/CSRF, Resend SPF/DKIM/DMARC, smoke test, and rollback,
+> see [CERTANEST_PRODUCTION_DOMAINS.md](CERTANEST_PRODUCTION_DOMAINS.md).
+
 > **Scaling & infrastructure modes:** for how CertaNest runs in lean vs.
 > scale-ready mode (Redis cache, Celery workers, the scheduler, queues, process
 > types, caching rules, and upgrade triggers), see
