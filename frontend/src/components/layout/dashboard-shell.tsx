@@ -14,11 +14,9 @@ import {
   Bell,
   CheckCheck,
   ChevronsUpDown,
-  CreditCard,
-  Database,
   LogOut,
   Search,
-  ShieldCheck,
+  UserRound,
   X,
 } from "lucide-react";
 
@@ -26,6 +24,7 @@ import { BottomNav } from "@/components/layout/bottom-nav";
 import { CommandPalette } from "@/components/command-palette/command-palette";
 import { Logo } from "@/components/layout/logo";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
+import { ACCOUNT_NAV } from "@/lib/navigation";
 import { Button } from "@/components/ui/button";
 import { getFounderMe } from "@/lib/founder";
 import { logout } from "@/lib/auth";
@@ -43,18 +42,6 @@ export interface ShellUser {
   name: string;
   email: string;
 }
-
-function initials(name: string) {
-  const parts = name.trim().split(/\s+/);
-  const letters = (parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "");
-  return letters.toUpperCase() || name.slice(0, 2).toUpperCase();
-}
-
-const ACCOUNT_LINKS = [
-  { label: "Plan & Billing", href: "/dashboard/settings/billing", icon: CreditCard },
-  { label: "Data & privacy", href: "/dashboard/settings/data", icon: Database },
-  { label: "Trust & security", href: "/dashboard/trust", icon: ShieldCheck },
-] as const;
 
 /**
  * The sidebar's account control: the user chip is a trigger that opens an
@@ -111,7 +98,7 @@ function UserFooter({
     <div ref={ref} className="relative border-t border-border p-3">
       {open && (
         <div className="absolute inset-x-3 bottom-[calc(100%-0.25rem)] z-50 mb-2 overflow-hidden rounded-xl border border-border bg-card p-1.5 shadow-floating">
-          {ACCOUNT_LINKS.map((link) => {
+          {ACCOUNT_NAV.map((link) => {
             const Icon = link.icon;
             return (
               <Link
@@ -120,7 +107,7 @@ function UserFooter({
                 onClick={() => setOpen(false)}
                 className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
-                <Icon className="size-4 shrink-0" />
+                {Icon && <Icon className="size-4 shrink-0" />}
                 {link.label}
               </Link>
             );
@@ -147,8 +134,10 @@ function UserFooter({
         aria-expanded={open}
         className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       >
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand-navy text-xs font-semibold text-white ring-2 ring-brand-teal/20">
-          {initials(user.name)}
+        {/* Default human avatar. An uploadable profile picture (and the Google
+            picture) will replace this in the profile/upload phase. */}
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand-navy text-white ring-2 ring-brand-teal/20">
+          <UserRound className="size-5" aria-hidden />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium">{user.name}</span>

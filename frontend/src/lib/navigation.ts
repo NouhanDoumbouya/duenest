@@ -363,16 +363,19 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
       },
     ],
   },
-  {
-    heading: "Account",
-    items: [
-      { label: "Trust & security", href: "/dashboard/trust", icon: ShieldCheck },
-      { label: "Plan & Billing", href: "/dashboard/settings/billing", icon: CreditCard },
-      { label: "Data & privacy", href: "/dashboard/settings/data", icon: Settings },
-      { label: "AI settings", href: "/dashboard/settings/ai", icon: Lock, featureKey: "ai_features" },
-      { label: "Feedback", href: "/dashboard/feedback", icon: MessageSquare, featureKey: "feedback" },
-    ],
-  },
+];
+
+/**
+ * Account / settings destinations. These live in the user-avatar menu (and are
+ * indexed in ⌘K) rather than the primary sidebar, so the rail stays focused on
+ * the product instead of duplicating the account menu.
+ */
+export const ACCOUNT_NAV: SidebarLeaf[] = [
+  { label: "Plan & Billing", href: "/dashboard/settings/billing", icon: CreditCard },
+  { label: "Data & privacy", href: "/dashboard/settings/data", icon: Settings },
+  { label: "AI settings", href: "/dashboard/settings/ai", icon: Lock, featureKey: "ai_features" },
+  { label: "Trust & security", href: "/dashboard/trust", icon: ShieldCheck },
+  { label: "Feedback", href: "/dashboard/feedback", icon: MessageSquare, featureKey: "feedback" },
 ];
 
 /** Founder-only entry, rendered as its own group when the viewer has access. */

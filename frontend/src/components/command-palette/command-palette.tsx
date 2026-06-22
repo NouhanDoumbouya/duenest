@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 
 import { useFeatures } from "@/components/features/feature-flags-provider";
-import { isSidebarParent, SIDEBAR_GROUPS } from "@/lib/navigation";
+import { ACCOUNT_NAV, isSidebarParent, SIDEBAR_GROUPS } from "@/lib/navigation";
 import { searchWorkspace, type SearchResult } from "@/lib/search";
 import { cn } from "@/lib/utils";
 
@@ -116,6 +116,20 @@ function useStaticCommands(): Command[] {
         }
       }
     }
+
+    // Account/settings destinations live in the avatar menu, not the sidebar —
+    // keep them reachable from ⌘K so search coverage is unchanged.
+    for (const item of ACCOUNT_NAV) {
+      if (!visible(item.featureKey) || !item.icon) continue;
+      nav.push({
+        id: `nav-${item.href}`,
+        label: item.label,
+        href: item.href,
+        icon: item.icon,
+        group: "Go to",
+      });
+    }
+
     return [...actions, ...nav];
   }, [features]);
 }
