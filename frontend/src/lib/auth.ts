@@ -94,6 +94,26 @@ export async function getCurrentUser(): Promise<User> {
   return apiFetch<User>("/users/me/");
 }
 
+/** Update basic profile identity (name only). Returns the updated user. */
+export async function updateProfile(payload: {
+  first_name?: string;
+  last_name?: string;
+}): Promise<User> {
+  return apiFetch<User>("/users/me/", { method: "PATCH", body: payload });
+}
+
+/** Upload a new profile picture (multipart). Returns the updated user. */
+export async function uploadAvatar(file: File): Promise<User> {
+  const form = new FormData();
+  form.append("avatar", file);
+  return apiFetch<User>("/users/me/avatar/", { method: "POST", body: form });
+}
+
+/** Remove the uploaded profile picture. Returns the updated user. */
+export async function removeAvatar(): Promise<User> {
+  return apiFetch<User>("/users/me/avatar/", { method: "DELETE" });
+}
+
 // ---- Account recovery: password reset + email verification (SEC-007) -------
 // These match the backend endpoints in apps/users (account_recovery.py).
 

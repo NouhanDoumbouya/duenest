@@ -31,6 +31,14 @@ class User(AbstractUser):
     # Optional profile picture URL returned by Google.
     avatar_url = models.URLField(blank=True, default="")
 
+    # User-uploaded profile picture, stored as a small, re-encoded base64 data
+    # URL (max ~256px, JPEG/PNG). Kept in-row rather than object storage so it
+    # serves uniformly in both cookie and Bearer deployments without exposing a
+    # storage URL — consistent with DueNest never delivering files via public
+    # storage links. Re-encoding through Pillow strips EXIF and guarantees a
+    # clean raster image (no SVG/script payloads).
+    avatar_image = models.TextField(blank=True, default="")
+
     # Email verification (SEC-007). Google accounts are created already verified
     # (Google asserts a verified email); password signups start unverified and
     # confirm via a time-limited emailed token.

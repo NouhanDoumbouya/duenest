@@ -68,9 +68,15 @@ export default function DashboardLayout({
     user.username;
 
   return (
-    <DashboardUserProvider value={user}>
+    <DashboardUserProvider user={user} setUser={setUser}>
       <FeatureFlagsProvider>
-        <DashboardShell user={{ name: fullName, email: user.email }}>
+        <DashboardShell
+          user={{
+            name: fullName,
+            email: user.email,
+            avatarUrl: user.profile_image_url || undefined,
+          }}
+        >
           {children}
         </DashboardShell>
         <PlanLimitListener />

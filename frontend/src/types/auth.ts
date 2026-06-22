@@ -11,6 +11,9 @@ export interface User {
   first_name: string;
   last_name: string;
   plan: UserPlan;
+  /** Effective avatar to display: an uploaded picture (data URL) or the Google
+   *  picture, else empty (render a default human avatar). */
+  profile_image_url?: string;
 }
 
 /** The access/refresh pair returned by SimpleJWT. */

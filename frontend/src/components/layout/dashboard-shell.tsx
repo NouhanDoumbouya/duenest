@@ -41,6 +41,9 @@ import type { NotificationRecord, NotificationSummary } from "@/types/notificati
 export interface ShellUser {
   name: string;
   email: string;
+  /** Effective avatar (uploaded data URL or Google picture). Falls back to a
+   *  default human icon when absent. */
+  avatarUrl?: string;
 }
 
 /**
@@ -134,10 +137,19 @@ function UserFooter({
         aria-expanded={open}
         className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       >
-        {/* Default human avatar. An uploadable profile picture (and the Google
-            picture) will replace this in the profile/upload phase. */}
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand-navy text-white ring-2 ring-brand-teal/20">
-          <UserRound className="size-5" aria-hidden />
+        {/* Profile picture when set (uploaded or Google), else a default human
+            avatar. Manage it on the Profile page. */}
+        <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand-navy text-white ring-2 ring-brand-teal/20">
+          {user.avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={user.avatarUrl}
+              alt=""
+              className="size-full object-cover"
+            />
+          ) : (
+            <UserRound className="size-5" aria-hidden />
+          )}
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium">{user.name}</span>

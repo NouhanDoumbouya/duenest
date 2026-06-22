@@ -275,6 +275,8 @@ DueNest should use a custom user model from the beginning because changing the u
 | `date_joined` | DateTime | Yes | Account creation time |
 | `updated_at` | DateTime | Yes | Last profile update |
 | `plan` | CharField | Yes | `free` or `pro_placeholder`; default `free`. Drives internal usage limits (see `apps/users/plans.py`). No real billing yet. |
+| `avatar_url` | URLField | No | Profile picture URL from Google sign-in (blank otherwise). |
+| `avatar_image` | TextField | No | User-uploaded profile picture, stored inline as a small re-encoded base64 `data:` URL (≈256px, EXIF-stripped). Kept in-row rather than object storage so it serves in both cookie and Bearer deployments without exposing a storage URL. The API exposes an effective `profile_image_url` (uploaded → Google → empty). |
 
 ### Constraints
 

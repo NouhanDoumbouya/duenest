@@ -3,6 +3,7 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import generics, status
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
@@ -28,10 +29,12 @@ from .serializers import (
     GoogleAuthSerializer,
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
+    ProfileUpdateSerializer,
     RegisterSerializer,
     UserOnboardingStateSerializer,
     UserSerializer,
 )
+from .avatars import AvatarProcessingError, build_avatar_data_url
 from .services import (
     ExportGenerationError,
     build_account_data_summary,
@@ -165,6 +168,47 @@ class CurrentUserView(APIView):
     def get(self, request):
         serializer = UserSerializer(request.user)
         return Response(serializer.data)
+
+    def patch(self, request):
+        """Edit basic identity (name only). Email/username are intentionally not
+        editable here — they're identity-sensitive and have their own flows."""
+        serializer = ProfileUpdateSerializer(
+            request.user, data=request.data, partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(UserSerializer(request.user).data)
+
+
+class CurrentUserAvatarView(APIView):
+    """Upload (POST, multipart 'avatar') or remove (DELETE) the signed-in user's
+    profile picture. The image is downscaled and re-encoded server-side and kept
+    inline as a data URL (see User.avatar_image), so it never relies on a public
+    storage URL. Returns the updated user payload."""
+
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        upload = request.FILES.get("avatar")
+        if upload is None:
+            return Response(
+                {"detail": "No image was uploaded (field 'avatar')."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            data_url = build_avatar_data_url(upload.read())
+        except AvatarProcessingError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        request.user.avatar_image = data_url
+        request.user.save(update_fields=["avatar_image"])
+        return Response(UserSerializer(request.user).data)
+
+    def delete(self, request):
+        if request.user.avatar_image:
+            request.user.avatar_image = ""
+            request.user.save(update_fields=["avatar_image"])
+        return Response(UserSerializer(request.user).data)
 
 
 class CookieTokenRefreshView(TokenRefreshView):

@@ -39,6 +39,7 @@ import {
   Sparkles,
   Target,
   Trash2,
+  UserRound,
   Vault,
   Wrench,
   Zap,
@@ -371,6 +372,7 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
  * the product instead of duplicating the account menu.
  */
 export const ACCOUNT_NAV: SidebarLeaf[] = [
+  { label: "Profile", href: "/dashboard/settings/profile", icon: UserRound },
   { label: "Plan & Billing", href: "/dashboard/settings/billing", icon: CreditCard },
   { label: "Data & privacy", href: "/dashboard/settings/data", icon: Settings },
   { label: "AI settings", href: "/dashboard/settings/ai", icon: Lock, featureKey: "ai_features" },

@@ -585,6 +585,34 @@ Required.
 }
 ```
 
+> Implementation note: `GET /users/me/` includes a read-only
+> **`profile_image_url`** — the effective avatar to display, resolved as the
+> user's uploaded picture (an inline `data:` URL) → the Google picture
+> (`avatar_url`) → empty string (the client then shows a default human avatar).
+> `PATCH /users/me/` accepts **`first_name`** and **`last_name`** only; email and
+> username are identity-sensitive and are not editable here.
+
+## 13.2.1 Profile picture
+
+```http
+POST   /api/v1/users/me/avatar/   (multipart/form-data, field: "avatar")
+DELETE /api/v1/users/me/avatar/
+```
+
+### Authentication
+
+Required.
+
+### Behavior
+
+- **POST** accepts an image file (`avatar`). It is re-encoded server-side
+  (EXIF-stripped, downscaled to ~256px, JPEG) and stored inline on the user as a
+  base64 `data:` URL — DueNest never serves avatars via a public/object-storage
+  URL, consistent with its file-delivery model. Returns the updated user.
+- **DELETE** clears the uploaded picture (the Google picture, if any, then
+  applies). Returns the updated user.
+- Invalid or unreadable uploads, or files larger than 8 MB, return `400`.
+
 ---
 
 # 13.3 Onboarding, Trust, Demo, and Account Controls API (implemented)

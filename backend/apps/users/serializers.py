@@ -11,13 +11,30 @@ User = get_user_model()
 
 
 class UserSerializer(serializers.ModelSerializer):
+    # Effective avatar to display: an uploaded picture wins, then the Google
+    # picture, else empty (the client renders a default human avatar). Uploaded
+    # avatars are returned inline as a data URL (see User.avatar_image).
+    profile_image_url = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         fields = [
             "id", "username", "email", "first_name", "last_name", "plan",
-            "email_verified",
+            "email_verified", "profile_image_url",
         ]
-        read_only_fields = ["id", "plan", "email_verified"]
+        read_only_fields = ["id", "plan", "email_verified", "profile_image_url"]
+
+    def get_profile_image_url(self, obj) -> str:
+        return obj.avatar_image or obj.avatar_url or ""
+
+
+class ProfileUpdateSerializer(serializers.ModelSerializer):
+    """Editable identity fields for the profile page. Deliberately excludes
+    email/username (identity-sensitive) and everything read-only."""
+
+    class Meta:
+        model = User
+        fields = ["first_name", "last_name"]
 
 
 class PasswordResetRequestSerializer(serializers.Serializer):

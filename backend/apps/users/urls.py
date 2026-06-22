@@ -7,6 +7,7 @@ from .views import (
     AccountRequestDeletionView,
     CookieTokenRefreshView,
     CsrfTokenView,
+    CurrentUserAvatarView,
     CurrentUserView,
     DemoDocumentDataClearView,
     DemoDocumentDataCreateView,
@@ -55,6 +56,11 @@ urlpatterns = [
         name="auth-email-verify",
     ),
     path("users/me/", CurrentUserView.as_view(), name="users-me"),
+    path(
+        "users/me/avatar/",
+        CurrentUserAvatarView.as_view(),
+        name="users-me-avatar",
+    ),
     path("onboarding/state/", OnboardingStateView.as_view(), name="onboarding-state"),
     path(
         "onboarding/complete/",
