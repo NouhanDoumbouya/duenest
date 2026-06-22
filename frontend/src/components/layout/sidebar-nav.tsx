@@ -54,6 +54,15 @@ function LeafLink({
           : "text-muted-foreground hover:bg-muted hover:text-foreground",
       )}
     >
+      {/* Active "you are here" accent — a calm teal marker tying the nav to the
+          brand-teal icon language. Top-level only; children read via the group's
+          left rule. */}
+      {active && variant === "top" && (
+        <span
+          aria-hidden
+          className="absolute left-1 top-1/2 h-4 w-1 -translate-y-1/2 rounded-full bg-brand-teal"
+        />
+      )}
       {Icon && (
         <Icon
           className={cn(
@@ -104,6 +113,12 @@ function CollapsibleItem({
             : "text-muted-foreground hover:bg-muted hover:text-foreground",
         )}
       >
+        {parentActive && (
+          <span
+            aria-hidden
+            className="absolute left-1 top-1/2 h-4 w-1 -translate-y-1/2 rounded-full bg-brand-teal"
+          />
+        )}
         <Link
           href={parent.href}
           onClick={onNavigate}

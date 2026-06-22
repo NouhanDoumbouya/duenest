@@ -38,7 +38,7 @@ export function StatCard({ stat }: { stat: Stat }) {
             <Icon className="size-4" />
           </span>
         </div>
-        <p className="mt-4 font-heading text-[2rem] leading-none font-semibold tracking-tight">
+        <p className="mt-4 font-heading text-[2rem] leading-none font-semibold tracking-tight tabular-nums">
           {stat.value}
         </p>
         <p className="mt-2 text-sm text-muted-foreground">{stat.hint}</p>

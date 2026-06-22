@@ -31,7 +31,7 @@ export function LifeRadarMetricCard({ metric }: { metric: LifeRadarMetric }) {
   return (
     <Link
       href={metric.href}
-      className="group flex h-full flex-col justify-between gap-3 rounded-xl border border-border bg-card p-4 transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none motion-reduce:hover:translate-y-0"
+      className="group flex h-full flex-col justify-between gap-3 rounded-xl border border-border bg-card p-4 transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-elevated focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none motion-reduce:hover:translate-y-0"
     >
       <div className="flex items-start justify-between gap-2">
         <span
@@ -47,7 +47,9 @@ export function LifeRadarMetricCard({ metric }: { metric: LifeRadarMetric }) {
         )}
       </div>
       <div>
-        <p className="text-xl font-semibold tracking-tight">{metric.value}</p>
+        <p className="font-heading text-xl font-semibold tracking-tight tabular-nums">
+          {metric.value}
+        </p>
         <p className="text-sm font-medium">{metric.label}</p>
         <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
           {metric.subtitle}
