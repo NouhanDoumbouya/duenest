@@ -77,7 +77,7 @@ export function PersonaSplit() {
             )}
           >
             <div className="flex items-center gap-3">
-              <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-brand-navy text-brand-teal">
+              <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-brand-navy text-brand-teal-bright">
                 <Icon className="size-5" />
               </span>
               <Eyebrow>{p.eyebrow}</Eyebrow>

@@ -65,7 +65,7 @@ export function SetupChecklistCard({
       <CardHeader className="gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <span className="flex size-9 items-center justify-center rounded-lg bg-brand-navy text-brand-teal">
+            <span className="flex size-9 items-center justify-center rounded-lg bg-brand-navy text-brand-teal-bright">
               {complete ? (
                 <ShieldCheck className="size-4" />
               ) : (

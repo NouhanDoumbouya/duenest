@@ -113,7 +113,7 @@ export function FoldersView({
               className={cn(
                 "flex size-12 shrink-0 items-center justify-center rounded-xl",
                 tile.all
-                  ? "bg-brand-navy text-brand-teal"
+                  ? "bg-brand-navy text-brand-teal-bright"
                   : "bg-accent text-accent-foreground",
               )}
             >

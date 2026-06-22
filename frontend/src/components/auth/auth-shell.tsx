@@ -33,7 +33,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
       <aside className="relative hidden flex-col justify-between overflow-hidden bg-brand-navy p-12 text-white lg:flex">
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 opacity-90 [background:radial-gradient(70%_55%_at_12%_-5%,rgba(20,184,166,0.28),transparent_60%),radial-gradient(60%_55%_at_100%_105%,rgba(37,99,235,0.34),transparent_60%)]"
+          className="pointer-events-none absolute inset-0 opacity-90 [background:radial-gradient(70%_55%_at_12%_-5%,rgba(94,234,212,0.22),transparent_60%),radial-gradient(60%_55%_at_100%_105%,rgba(16,185,129,0.26),transparent_60%)]"
         />
         <div
           aria-hidden
@@ -45,7 +45,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
 
         <div className="relative space-y-8">
           <p className="max-w-md font-heading text-[1.7rem] leading-snug font-semibold">
-            Bring calm to your documents, deadlines, and renewals.
+            Life documents, deadlines, and proof — ready when life asks.
           </p>
           <ul className="space-y-3">
             {trustPoints.map((point) => {
@@ -55,7 +55,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
                   key={point.title}
                   className="flex gap-3 rounded-xl border border-white/10 bg-white/[0.04] p-3.5 backdrop-blur-sm"
                 >
-                  <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-white/10 text-brand-teal ring-1 ring-white/15">
+                  <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-white/10 text-brand-teal-bright ring-1 ring-white/15">
                     <Icon className="size-4" />
                   </span>
                   <span>
