@@ -11,6 +11,46 @@ import type { NextConfig } from "next";
 const BACKEND_ORIGIN =
   process.env.BACKEND_ORIGIN ?? "http://127.0.0.1:8000";
 
+// The Django API sets its own security headers (apps.core.middleware), and Vercel
+// only adds HSTS to the frontend — so the Next app itself shipped without the
+// rest. These headers are applied to all FRONTEND routes (the `/api/*` proxy is
+// excluded below so the backend's headers and blob/document responses are
+// untouched). `X-Frame-Options: DENY` is safe: every in-app preview iframe loads
+// a `blob:`/`srcDoc` source (no HTTP headers), not a framed page. The
+// Permissions-Policy keeps `camera`/`microphone`/`geolocation` for same-origin so
+// the Scanner (getUserMedia) and Emergency optional-location keep working.
+const SECURITY_HEADERS = [
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  {
+    key: "Permissions-Policy",
+    value:
+      "camera=(self), microphone=(self), geolocation=(self), payment=(), usb=(), bluetooth=()",
+  },
+  // Report-Only (NON-blocking): a starter Content-Security-Policy so violations
+  // surface in the console without breaking anything. To ENFORCE it later, Next's
+  // bootstrap inline scripts need a nonce (middleware) instead of 'unsafe-inline'.
+  {
+    key: "Content-Security-Policy-Report-Only",
+    value: [
+      "default-src 'self'",
+      "base-uri 'self'",
+      "object-src 'none'",
+      "form-action 'self'",
+      "frame-ancestors 'none'",
+      "img-src 'self' data: blob: https:",
+      "font-src 'self' data:",
+      "style-src 'self' 'unsafe-inline'",
+      "script-src 'self' 'unsafe-inline' https://*.vercel-scripts.com",
+      "connect-src 'self' https://api.certanest.com https://*.vercel-insights.com https://*.vercel-scripts.com",
+      "frame-src 'self' blob:",
+      "worker-src 'self' blob:",
+      "manifest-src 'self'",
+    ].join("; "),
+  },
+];
+
 const nextConfig: NextConfig = {
   // Tree-shake large icon packages so only the icons actually used are bundled.
   // `lucide-react` is already optimized by Next by default; `simple-icons`
@@ -24,6 +64,16 @@ const nextConfig: NextConfig = {
   // slash handling and the proxied request never resolves. Skipping the redirect
   // lets the rewrite forward the trailing-slash URL to Django as-is.
   skipTrailingSlashRedirect: true,
+  // Apply security headers to every frontend route EXCEPT the `/api/*` proxy,
+  // whose responses (JSON + document blobs) are owned by the Django backend.
+  async headers() {
+    return [
+      {
+        source: "/((?!api/).*)",
+        headers: SECURITY_HEADERS,
+      },
+    ];
+  },
   async rewrites() {
     return [
       // Preserve the trailing slash that CertaNest's API requires. The plain
