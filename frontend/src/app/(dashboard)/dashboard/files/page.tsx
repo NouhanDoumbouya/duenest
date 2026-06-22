@@ -17,6 +17,7 @@ import {
   Square,
   Trash2,
   Upload,
+  Wrench,
   X,
 } from "lucide-react";
 
@@ -24,10 +25,15 @@ import { useFeature } from "@/components/features/feature-flags-provider";
 import { DocumentFileViewer } from "@/components/documents/document-file-viewer";
 import { DuplicateWarningDialog } from "@/components/documents/duplicate-warning-dialog";
 import { MoveToVaultDialog } from "@/components/documents/move-to-vault-dialog";
-import { FileToolsButton } from "@/components/documents/file-tools-button";
+import { useFileTools } from "@/components/documents/file-tools-button";
 import { SmartIntakePanel } from "@/components/documents/smart-intake-panel";
 import { FileThumbnail } from "@/components/documents/file-thumbnail";
 import { Button, buttonVariants } from "@/components/ui/button";
+import {
+  OverflowMenu,
+  OverflowMenuItem,
+  OverflowMenuSeparator,
+} from "@/components/ui/overflow-menu";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
@@ -78,6 +84,113 @@ const TYPE_SUGGESTIONS = [
   "Certificate",
   "Contract",
 ];
+
+/**
+ * The action cluster for one inbox file: the primary "Organize" and "Preview"
+ * stay inline; secondary actions (Download, Share, Tools, Fill & Sign, Move to
+ * trash) collapse into a ⋯ menu so a long inbox reads cleanly. Its own component
+ * so the per-file tool dialogs can mount here — outside the ⋯ popover, which
+ * would otherwise tear them down when it closes.
+ */
+function FileInboxRowActions({
+  file,
+  expanded,
+  busy,
+  onToggleOrganize,
+  onPreview,
+  onDownload,
+  onShare,
+  onTrash,
+  onSaveTool,
+  onShareTool,
+  onNotify,
+}: {
+  file: DocumentFile;
+  expanded: boolean;
+  busy: boolean;
+  onToggleOrganize: () => void;
+  onPreview: () => void;
+  onDownload: () => void;
+  onShare: () => void;
+  onTrash: () => void;
+  onSaveTool: (blob: Blob, name: string) => Promise<void>;
+  onShareTool: (blob: Blob, name: string) => Promise<void>;
+  onNotify: (message: string, kind: "success" | "error") => void;
+}) {
+  const tools = useFileTools({
+    file,
+    loadBlob: () => getInboxFileDownloadBlob(file.id),
+    onSave: onSaveTool,
+    onShare: onShareTool,
+    saveLabel: "Save to Inbox",
+    onNotify,
+  });
+
+  return (
+    <div className="mt-4 flex flex-wrap items-center gap-2">
+      <Button
+        type="button"
+        size="sm"
+        onClick={onToggleOrganize}
+        aria-expanded={expanded}
+      >
+        {expanded ? (
+          <>
+            <X className="size-4" />
+            Close
+          </>
+        ) : (
+          <>
+            <FolderInput className="size-4" />
+            Organize
+          </>
+        )}
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={onPreview}
+        disabled={!file.is_previewable}
+      >
+        <Eye className="size-4" />
+        Preview
+      </Button>
+
+      <OverflowMenu label={`More actions for ${file.original_filename}`}>
+        <OverflowMenuItem icon={Download} onSelect={onDownload} disabled={busy}>
+          Download
+        </OverflowMenuItem>
+        <OverflowMenuItem icon={Share2} onSelect={onShare}>
+          Share
+        </OverflowMenuItem>
+        {tools.hasAnyTool && (
+          <OverflowMenuItem icon={Wrench} onSelect={tools.openTools}>
+            Tools
+          </OverflowMenuItem>
+        )}
+        <OverflowMenuSeparator />
+        <OverflowMenuItem
+          icon={Trash2}
+          destructive
+          onSelect={onTrash}
+          disabled={busy}
+        >
+          Move to trash
+        </OverflowMenuItem>
+      </OverflowMenu>
+
+      {busy && (
+        <Loader2
+          className="size-4 animate-spin text-muted-foreground"
+          aria-label="Working…"
+        />
+      )}
+
+      {tools.dialogs}
+    </div>
+  );
+}
 
 export default function FileInboxPage() {
   const router = useRouter();
@@ -952,82 +1065,26 @@ export default function FileInboxPage() {
 
                   <SmartIntakePanel fileId={file.id} />
 
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() =>
-                        setExpandedFile(
-                          expandedFile === file.id ? null : file.id,
-                        )
-                      }
-                      aria-expanded={expandedFile === file.id}
-                    >
-                      {expandedFile === file.id ? (
-                        <>
-                          <X className="size-4" />
-                          Close
-                        </>
-                      ) : (
-                        <>
-                          <FolderInput className="size-4" />
-                          Organize
-                        </>
-                      )}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPreviewFile(file)}
-                      disabled={!file.is_previewable}
-                    >
-                      <Eye className="size-4" />
-                      Preview
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDownload(file)}
-                      disabled={busyFileId === file.id}
-                    >
-                      {busyFileId === file.id ? (
-                        <Loader2 className="size-4 animate-spin" />
-                      ) : (
-                        <Download className="size-4" />
-                      )}
-                      Download
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleShare(file)}
-                    >
-                      <Share2 className="size-4" />
-                      Share
-                    </Button>
-                    <FileToolsButton
-                      file={file}
-                      loadBlob={() => getInboxFileDownloadBlob(file.id)}
-                      onSave={saveToolResult}
-                      onShare={shareToolResult}
-                      saveLabel="Save to Inbox"
-                      onNotify={(message, kind) => setToast({ message, kind })}
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="text-destructive hover:text-destructive"
-                      onClick={() => handleTrash(file)}
-                      disabled={busyFileId === file.id}
-                    >
-                      <Trash2 className="size-4" />
-                      Move to trash
-                    </Button>
-                  </div>
+                  <FileInboxRowActions
+                    file={file}
+                    expanded={expandedFile === file.id}
+                    busy={busyFileId === file.id}
+                    onToggleOrganize={() =>
+                      setExpandedFile(
+                        expandedFile === file.id ? null : file.id,
+                      )
+                    }
+                    onPreview={() => setPreviewFile(file)}
+                    onDownload={() => handleDownload(file)}
+                    onShare={() => handleShare(file)}
+                    onTrash={() => handleTrash(file)}
+                    onSaveTool={saveToolResult}
+                    onShareTool={shareToolResult}
+                    onNotify={(message, kind) => setToast({ message, kind })}
+                  />
+                  {/* The Organize drawer below stays in place; only the action
+                      cluster moved into FileInboxRowActions (Organize + Preview
+                      inline, the rest behind a ⋯ menu). */}
                 </div>
 
                 {expandedFile === file.id && (

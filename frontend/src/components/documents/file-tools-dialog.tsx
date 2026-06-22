@@ -8,6 +8,7 @@ import {
   EyeOff,
   Loader2,
   Minimize2,
+  PenLine,
   Plus,
   Scissors,
   Share2,
@@ -73,6 +74,8 @@ export function FileToolsDialog({
   onClose,
   onNotify,
   onShare,
+  showFillSign = false,
+  onFillSign,
 }: {
   file: DocumentFile;
   /** Fetch the original file's bytes (owner-scoped). */
@@ -90,6 +93,14 @@ export function FileToolsDialog({
    * offers "Share this copy". The original is never shared.
    */
   onShare?: (blob: Blob, name: string) => Promise<void>;
+  /**
+   * Fill & Sign lives alongside the transform tools (it's a PDF tool too), but
+   * runs server-side on the original. When available, the picker shows it as an
+   * option that hands off via `onFillSign` (the caller opens the Fill & Sign
+   * flow). Only offered on the original — not when chaining off a produced copy.
+   */
+  showFillSign?: boolean;
+  onFillSign?: () => void;
 }) {
   const [step, setStep] = useState<Step>("pick");
   const [tier, setTier] = useState<TierId>("smaller");
@@ -353,40 +364,70 @@ export function FileToolsDialog({
 
         {step === "pick" && (
           <div className="mt-4 grid gap-2">
-            {tools.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No tools are available for this file type right now.
-              </p>
-            ) : (
-              tools.map((tool) => {
-                const Icon = TOOL_ICON[tool.id];
+            {/* Fill & Sign runs on the original, so it's only offered before any
+                chaining (working === null). */}
+            {(() => {
+              const fillSignAvailable = showFillSign && !working;
+              if (tools.length === 0 && !fillSignAvailable) {
                 return (
-                  <button
-                    key={tool.id}
-                    type="button"
-                    onClick={() => runTool(tool.id)}
-                    disabled={busy}
-                    className="flex items-center gap-3 rounded-xl border border-border px-3 py-3 text-left transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none disabled:opacity-60"
-                  >
-                    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
-                      {busy ? (
-                        <Loader2 className="size-4 animate-spin" />
-                      ) : (
-                        <Icon className="size-4" />
-                      )}
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-sm font-medium">
-                        {tool.label}
-                      </span>
-                      <span className="block text-xs text-muted-foreground">
-                        {tool.description}
-                      </span>
-                    </span>
-                  </button>
+                  <p className="text-sm text-muted-foreground">
+                    No tools are available for this file type right now.
+                  </p>
                 );
-              })
-            )}
+              }
+              return (
+                <>
+                  {tools.map((tool) => {
+                    const Icon = TOOL_ICON[tool.id];
+                    return (
+                      <button
+                        key={tool.id}
+                        type="button"
+                        onClick={() => runTool(tool.id)}
+                        disabled={busy}
+                        className="flex items-center gap-3 rounded-xl border border-border px-3 py-3 text-left transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none disabled:opacity-60"
+                      >
+                        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+                          {busy ? (
+                            <Loader2 className="size-4 animate-spin" />
+                          ) : (
+                            <Icon className="size-4" />
+                          )}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-medium">
+                            {tool.label}
+                          </span>
+                          <span className="block text-xs text-muted-foreground">
+                            {tool.description}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                  {fillSignAvailable && (
+                    <button
+                      type="button"
+                      onClick={() => onFillSign?.()}
+                      disabled={busy}
+                      className="flex items-center gap-3 rounded-xl border border-border px-3 py-3 text-left transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none disabled:opacity-60"
+                    >
+                      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+                        <PenLine className="size-4" />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium">
+                          Fill &amp; Sign
+                        </span>
+                        <span className="block text-xs text-muted-foreground">
+                          Add text and a signature, then save a signed copy
+                        </span>
+                      </span>
+                    </button>
+                  )}
+                </>
+              );
+            })()}
             <p className="mt-1 text-xs text-muted-foreground">
               Each tool creates a new copy — your original is unchanged.
             </p>
