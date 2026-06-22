@@ -3904,10 +3904,17 @@ POST   /api/v1/organizations/
 GET    /api/v1/organizations/:id/
 PATCH  /api/v1/organizations/:id/
 DELETE /api/v1/organizations/:id/
+POST   /api/v1/organizations/:id/logo/    (multipart 'logo'; admins)
+DELETE /api/v1/organizations/:id/logo/
 ```
 
 `POST` creates the organization and an active owner membership for the
 authenticated user. `DELETE` archives the organization and is owner-only.
+
+Branding: `PATCH` accepts `brand_color` (a `#RRGGBB` hex) and the `logo`
+endpoint sets/clears the org logo (re-encoded + stored inline as a data URL,
+admins only). Both are surfaced to recipients on public request pages
+(`organization_brand_color`, `organization_logo`).
 Lists are paginated by DRF.
 
 ### 30.2 Members and invites

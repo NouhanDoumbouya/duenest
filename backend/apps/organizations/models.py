@@ -50,6 +50,11 @@ class Organization(models.Model):
     description = models.TextField(blank=True)
     website = models.URLField(blank=True)
     country = models.CharField(max_length=100, blank=True)
+    # Recipient-facing branding for public request pages. brand_color is a hex
+    # string (e.g. "#0f766e"); logo_image is a small re-encoded base64 data URL
+    # (same in-row, no-public-URL approach as user avatars).
+    brand_color = models.CharField(max_length=9, blank=True, default="")
+    logo_image = models.TextField(blank=True, default="")
     organization_type = models.CharField(
         max_length=40,
         choices=OrganizationType.choices,

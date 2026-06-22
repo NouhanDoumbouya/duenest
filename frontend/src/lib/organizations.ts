@@ -226,6 +226,40 @@ export function createOrganizationRequest(
   });
 }
 
+/** Update editable organization fields (name, description, brand colour…). */
+export function updateOrganization(
+  id: number,
+  payload: Partial<Organization>,
+): Promise<Organization> {
+  return apiFetch<Organization>(`/organizations/${id}/`, {
+    method: "PATCH",
+    body: payload,
+    auth: true,
+  });
+}
+
+/** Upload the org logo shown on recipient-facing request pages (admins only). */
+export function uploadOrganizationLogo(
+  id: number,
+  file: File,
+): Promise<Organization> {
+  const form = new FormData();
+  form.append("logo", file);
+  return apiFetch<Organization>(`/organizations/${id}/logo/`, {
+    method: "POST",
+    body: form,
+    auth: true,
+  });
+}
+
+/** Remove the org logo. */
+export function removeOrganizationLogo(id: number): Promise<Organization> {
+  return apiFetch<Organization>(`/organizations/${id}/logo/`, {
+    method: "DELETE",
+    auth: true,
+  });
+}
+
 /** Reusable + system request templates available to this organization. */
 export function listOrganizationRequestTemplates(
   id: number,

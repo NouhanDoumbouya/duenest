@@ -1,4 +1,5 @@
 import os
+import re
 
 from django.utils import timezone
 from rest_framework import serializers
@@ -98,6 +99,8 @@ class OrganizationSerializer(serializers.ModelSerializer):
             "description",
             "website",
             "country",
+            "brand_color",
+            "logo_image",
             "organization_type",
             "created_by",
             "archived_at",
@@ -110,6 +113,8 @@ class OrganizationSerializer(serializers.ModelSerializer):
         read_only_fields = [
             "id",
             "slug",
+            # logo_image is set via the dedicated logo endpoint, not here.
+            "logo_image",
             "created_by",
             "archived_at",
             "is_archived",
@@ -118,6 +123,14 @@ class OrganizationSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+    def validate_brand_color(self, value: str) -> str:
+        value = (value or "").strip()
+        if value and not re.fullmatch(r"#[0-9a-fA-F]{6}", value):
+            raise serializers.ValidationError(
+                "Use a 6-digit hex colour like #0F766E."
+            )
+        return value
 
     def get_user_role(self, obj):
         request = self.context.get("request")
@@ -736,12 +749,20 @@ class OrganizationActivitySerializer(serializers.ModelSerializer):
 
 class PublicDocumentRequestSerializer(serializers.ModelSerializer):
     organization_name = serializers.CharField(source="organization.name", read_only=True)
+    organization_brand_color = serializers.CharField(
+        source="organization.brand_color", read_only=True
+    )
+    organization_logo = serializers.CharField(
+        source="organization.logo_image", read_only=True
+    )
 
     class Meta:
         model = DocumentRequest
         fields = [
             "id",
             "organization_name",
+            "organization_brand_color",
+            "organization_logo",
             "title",
             "description",
             "required_file_type",

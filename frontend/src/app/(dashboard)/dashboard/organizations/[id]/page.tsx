@@ -6,6 +6,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -65,8 +66,11 @@ import {
   getOrganizationSummary,
   listOrganizationRequestTemplates,
   rejectOrganizationRequest,
+  removeOrganizationLogo,
   submitOrganizationRequest,
+  updateOrganization,
   uploadOrganizationDocumentFile,
+  uploadOrganizationLogo,
 } from "@/lib/organizations";
 import { cn } from "@/lib/utils";
 import type {
@@ -328,11 +332,16 @@ export default function OrganizationWorkspacePage({
       />
 
       {tab === "overview" && (
-        <OverviewTab
-          state={state}
-          overdueRequests={overdueRequests}
-          submittedRequests={submittedRequests}
-        />
+        <div className="space-y-6">
+          <OverviewTab
+            state={state}
+            overdueRequests={overdueRequests}
+            submittedRequests={submittedRequests}
+          />
+          {canManage && (
+            <BrandingCard state={state} onRefresh={refresh} onError={setError} />
+          )}
+        </div>
       )}
       {tab === "requests" && (
         <RequestsTab
@@ -538,6 +547,145 @@ function OverviewTab({
         </SectionCard>
       </div>
     </div>
+  );
+}
+
+function BrandingCard({
+  state,
+  onRefresh,
+  onError,
+}: {
+  state: WorkspaceState;
+  onRefresh: (message?: string) => Promise<void>;
+  onError: (message: string | null) => void;
+}) {
+  const org = state.organization;
+  const [color, setColor] = useState(org.brand_color || "#0f766e");
+  const [busy, setBusy] = useState(false);
+  const logoInput = useRef<HTMLInputElement>(null);
+
+  async function saveColor() {
+    setBusy(true);
+    onError(null);
+    try {
+      await updateOrganization(org.id, { brand_color: color });
+      await onRefresh("Brand colour saved.");
+    } catch (err) {
+      onError(
+        err instanceof ApiError ? err.message : "Couldn't save brand colour.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onLogo(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setBusy(true);
+    onError(null);
+    try {
+      await uploadOrganizationLogo(org.id, file);
+      await onRefresh("Logo updated.");
+    } catch (err) {
+      onError(
+        err instanceof ApiError ? err.message : "Couldn't upload that logo.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeLogo() {
+    setBusy(true);
+    onError(null);
+    try {
+      await removeOrganizationLogo(org.id);
+      await onRefresh("Logo removed.");
+    } catch (err) {
+      onError(
+        err instanceof ApiError ? err.message : "Couldn't remove the logo.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <SectionCard
+      title="Branding"
+      description="Shown to people on your public request upload pages."
+    >
+      <div className="space-y-5">
+        <div className="flex flex-wrap items-center gap-4">
+          <span className="flex h-12 w-20 items-center justify-center overflow-hidden rounded-lg border border-border bg-muted/40">
+            {org.logo_image ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={org.logo_image}
+                alt="Logo"
+                className="max-h-12 max-w-full object-contain"
+              />
+            ) : (
+              <span className="text-xs text-muted-foreground">No logo</span>
+            )}
+          </span>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => logoInput.current?.click()}
+              disabled={busy}
+            >
+              <Upload className="size-4" />
+              {org.logo_image ? "Change logo" : "Upload logo"}
+            </Button>
+            {org.logo_image && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive"
+                onClick={removeLogo}
+                disabled={busy}
+              >
+                Remove
+              </Button>
+            )}
+          </div>
+          <input
+            ref={logoInput}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={onLogo}
+          />
+        </div>
+
+        <Field label="Brand colour">
+          <div className="flex items-center gap-3">
+            <input
+              type="color"
+              value={color}
+              onChange={(event) => setColor(event.target.value)}
+              className="h-9 w-12 cursor-pointer rounded border border-input bg-transparent"
+              aria-label="Brand colour"
+            />
+            <Input
+              value={color}
+              onChange={(event) => setColor(event.target.value)}
+              className="w-32"
+            />
+            <Button type="button" size="sm" onClick={saveColor} disabled={busy}>
+              {busy && <Loader2 className="size-4 animate-spin" />}
+              Save
+            </Button>
+          </div>
+        </Field>
+      </div>
+    </SectionCard>
   );
 }
 

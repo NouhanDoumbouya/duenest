@@ -129,6 +129,14 @@ export default function OrganizationRequestPage({
                 ) : request ? (
                   <form className="space-y-5" onSubmit={handleSubmit}>
                     <div>
+                      {request.organization_logo && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={request.organization_logo}
+                          alt={request.organization_name}
+                          className="mb-3 h-10 w-auto rounded"
+                        />
+                      )}
                       <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                         {request.organization_name}
                       </p>
@@ -200,7 +208,16 @@ export default function OrganizationRequestPage({
                       />
                     </div>
 
-                    <Button type="submit" size="lg" disabled={submitting || !file}>
+                    <Button
+                      type="submit"
+                      size="lg"
+                      disabled={submitting || !file}
+                      style={
+                        request.organization_brand_color
+                          ? { backgroundColor: request.organization_brand_color }
+                          : undefined
+                      }
+                    >
                       {submitting ? (
                         <Loader2 className="size-4 animate-spin" />
                       ) : (

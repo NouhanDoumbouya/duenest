@@ -53,6 +53,8 @@ export interface Organization {
   description: string;
   website: string;
   country: string;
+  brand_color: string;
+  logo_image: string;
   organization_type: OrganizationType;
   created_by: number | null;
   archived_at: string | null;
@@ -341,6 +343,8 @@ export interface OrganizationCalendarEvent {
 export interface PublicDocumentRequest {
   id: number;
   organization_name: string;
+  organization_brand_color: string;
+  organization_logo: string;
   title: string;
   description: string;
   required_file_type: string;

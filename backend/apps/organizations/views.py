@@ -19,6 +19,7 @@ from rest_framework.views import APIView
 
 from apps.core.security import file_validation
 from apps.core.security.encryption import DecryptionError
+from apps.users.avatars import AvatarProcessingError, build_avatar_data_url
 from .file_encryption import (
     encrypt_org_document_file,
     encrypt_submission_file,
@@ -972,6 +973,34 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         return Response(
             OrganizationRequestTemplateSerializer(template).data,
             status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["post", "delete"], url_path="logo")
+    def logo(self, request, pk=None):
+        """Upload (POST, multipart 'logo') or remove (DELETE) the org logo shown
+        on recipient-facing request pages. Re-encoded server-side and stored
+        inline as a data URL (same approach as user avatars). Admins only."""
+        organization = self.get_organization(pk)
+        require_role(request.user, organization, ADMIN_ROLES)
+        if request.method == "DELETE":
+            if organization.logo_image:
+                organization.logo_image = ""
+                organization.save(update_fields=["logo_image", "updated_at"])
+            return Response(OrganizationSerializer(organization, context={"request": request}).data)
+
+        upload = request.FILES.get("logo")
+        if upload is None:
+            return Response(
+                {"detail": "No image was uploaded (field 'logo')."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            organization.logo_image = build_avatar_data_url(upload.read())
+        except AvatarProcessingError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        organization.save(update_fields=["logo_image", "updated_at"])
+        return Response(
+            OrganizationSerializer(organization, context={"request": request}).data
         )
 
     # ---- Summary / activity / reports ------------------------------------

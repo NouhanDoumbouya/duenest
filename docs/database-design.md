@@ -2001,7 +2001,9 @@ keeps personal documents private and avoids partially shared personal records.
 
 - **Organization** - shared workspace metadata: name, slug, description,
   website, country, organization type, creator, archive timestamp, and
-  timestamps.
+  timestamps. Recipient-facing branding: `brand_color` (hex) and `logo_image`
+  (a small re-encoded base64 data URL, same in-row/no-public-URL approach as
+  user avatars) shown on public request upload pages.
 - **OrganizationMembership** - user membership with role (`owner`, `admin`,
   `member`, `viewer`) and status (`active`, `invited`, `suspended`, `left`).
   Unique per `(organization, user)`.
