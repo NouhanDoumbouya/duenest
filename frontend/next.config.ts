@@ -19,14 +19,14 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ["simple-icons"],
   },
-  // DueNest's API requires trailing slashes (Django APPEND_SLASH). Without this,
+  // CertaNest's API requires trailing slashes (Django APPEND_SLASH). Without this,
   // Next 308-redirects "/api/v1/x/" -> "/api/v1/x", which then fights Django's
   // slash handling and the proxied request never resolves. Skipping the redirect
   // lets the rewrite forward the trailing-slash URL to Django as-is.
   skipTrailingSlashRedirect: true,
   async rewrites() {
     return [
-      // Preserve the trailing slash that DueNest's API requires. The plain
+      // Preserve the trailing slash that CertaNest's API requires. The plain
       // `:path*` capture drops the final "/", which makes Django (APPEND_SLASH)
       // 301 GETs and 500 POSTs. This slash-suffixed rule keeps it; the fallback
       // handles slash-less paths (e.g. /calendar/export.ics).

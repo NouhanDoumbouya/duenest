@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://duenest.app";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://certanest.com";
 
 // Allow crawling of public marketing pages; keep private app areas and
 // token-gated routes out of search indexes. Documents are private — none of the

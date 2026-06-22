@@ -1,10 +1,10 @@
-# DueNest PWA Lite Foundation
+# CertaNest PWA Lite Foundation
 
-DueNest is installable and app-like **without caching sensitive private data**.
+CertaNest is installable and app-like **without caching sensitive private data**.
 This document describes what the PWA Lite Foundation includes, what it
 deliberately excludes, and the security rules that shape it.
 
-> DueNest stores passports, visas, IDs, insurance, financial, organization and
+> CertaNest stores passports, visas, IDs, insurance, financial, organization and
 > emergency documents. Caching is therefore intentionally conservative: **no
 > private documents, no decrypted files, no authenticated API responses, and no
 > navigation HTML are ever stored on the device.**
@@ -40,7 +40,7 @@ Offline document access would require storing decrypted (or re-decryptable)
 file bytes/metadata on the device, outside the server's authorization and
 encryption guarantees. For a vault of identity and financial documents that is
 an unacceptable exposure (lost/shared device, forensic recovery, other apps).
-DueNest keeps private data server-side behind authenticated, ownership-checked
+CertaNest keeps private data server-side behind authenticated, ownership-checked
 endpoints and shows a calm offline page instead.
 
 ## 4. How service worker caching works
@@ -181,7 +181,7 @@ keep the private key in the environment only — never commit it.
 Users can set a daily quiet-hours window (in their notification timezone) from
 the push settings card. During quiet hours, **device pushes are held back but
 in-app notifications are never suppressed** — the user still sees everything next
-time they open DueNest. The window may wrap midnight (e.g. 22:00 → 07:00).
+time they open CertaNest. The window may wrap midnight (e.g. 22:00 → 07:00).
 
 ### Not yet included (future)
 
@@ -196,9 +196,9 @@ numbers, filenames, names, or emergency details.
 
 Safe examples:
 
-- `An important DueNest reminder needs your attention.`
-- `Emergency access activity detected. Open DueNest to review.`
-- `A shared item was accessed. Open DueNest for details.`
+- `An important CertaNest reminder needs your attention.`
+- `Emergency access activity detected. Open CertaNest to review.`
+- `A shared item was accessed. Open CertaNest for details.`
 - `A security event needs your review.`
 
 Unsafe (never):
@@ -230,7 +230,7 @@ Unsafe (never):
 1. Deploy (or `next start` over HTTPS) — the SW only registers in production.
 2. Open the site in Chrome on Android; visit an allowed route (e.g. `/` or
    `/dashboard`) and wait ~8s.
-3. The DueNest install banner appears with **Install** / **Maybe later**.
+3. The CertaNest install banner appears with **Install** / **Maybe later**.
 4. Tap **Install** → the native Chrome install sheet appears → confirm.
 5. The app opens standalone; the banner no longer appears (`appinstalled` +
    standalone detection).
@@ -247,7 +247,7 @@ Unsafe (never):
 
 **Clearing an installed PWA to retest:**
 
-- Android: long-press the DueNest icon → Uninstall (or Chrome → Site settings →
+- Android: long-press the CertaNest icon → Uninstall (or Chrome → Site settings →
   remove). Then Chrome → DevTools → Application → Clear storage to reset the
   dismissal timestamp.
 - iOS: long-press the home-screen icon → Remove App.

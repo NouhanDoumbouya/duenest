@@ -1,4 +1,4 @@
-# DueNest — Security Remediation (SEC-001 … SEC-012)
+# CertaNest — Security Remediation (SEC-001 … SEC-012)
 
 Implementation record for the remediation sprint addressing the findings in
 [expert-cybersecurity-audit.md](expert-cybersecurity-audit.md).

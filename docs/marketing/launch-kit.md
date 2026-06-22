@@ -1,4 +1,4 @@
-# DueNest — Launch Kit
+# CertaNest — Launch Kit
 
 Ready-to-use copy for beta outreach and launch. All copy is honest: no fake
 testimonials, numbers, awards, certifications, or legal/official claims. See
@@ -6,11 +6,11 @@ testimonials, numbers, awards, certifications, or legal/official claims. See
 
 ## One-liner & pitches
 
-- **One-liner:** DueNest is where important documents become ready.
+- **One-liner:** CertaNest is where important documents become ready.
 - **Short pitch:** Your important documents are scattered when you need them most.
-  DueNest brings them into one private workspace — scan, organize, prepare, track
+  CertaNest brings them into one private workspace — scan, organize, prepare, track
   deadlines, build application packs, and share safely.
-- **Long pitch:** DueNest is a private life-document readiness platform. It helps
+- **Long pitch:** CertaNest is a private life-document readiness platform. It helps
   you store, scan, organize, prepare, track, generate, understand, request,
   fill/sign, and safely share important documents before deadlines, applications,
   renewals, and emergencies. Instead of hunting through phone, email, WhatsApp,
@@ -32,7 +32,7 @@ testimonials, numbers, awards, certifications, or legal/official claims. See
 - **AI Assistant** — Understand, generate, and prepare documents — review-first.
 - **Emergency Access** — Critical documents for trusted people, read-only.
 - **Document Requests** — Request missing documents via secure upload links.
-- **DueNest Portals** — For schools, agencies, HR, and programs to collect,
+- **CertaNest Portals** — For schools, agencies, HR, and programs to collect,
   review, and track document submissions.
 
 ## Segment messages (pain → promise → CTA)
@@ -52,26 +52,26 @@ testimonials, numbers, awards, certifications, or legal/official claims. See
 
 ## Social launch posts (drafts)
 
-1. **Personal:** I built DueNest because my important documents were always
+1. **Personal:** I built CertaNest because my important documents were always
    scattered when I needed them most. It's a private place to scan, organize,
    track deadlines, build application packs, and share safely. Private until you
    share. Beta is open.
 2. **Student:** Passport, visa, transcripts, scholarship docs — all in different
-   places? DueNest keeps your important documents ready and reminds you before
+   places? CertaNest keeps your important documents ready and reminds you before
    anything expires. Join the beta.
 3. **Visa / scholarship:** A missing or expired document can cost you an
-   application. DueNest helps you prepare a complete pack, track expiry, and share
+   application. CertaNest helps you prepare a complete pack, track expiry, and share
    safely with expiry + revocation (no public link). Join the beta.
 4. **Job application:** Tailoring a CV and cover letter for every role? Build a
-   job application pack in DueNest — drafts, supporting documents, deadlines, and
+   job application pack in CertaNest — drafts, supporting documents, deadlines, and
    secure sharing in one place. Join the beta.
 5. **Agency / school:** Chasing documents from applicants over email and WhatsApp?
-   DueNest Portals let you request, review, and track submissions securely. Early
+   CertaNest Portals let you request, review, and track submissions securely. Early
    access for organizations is open.
 
 ## Beta invite message
 
-> You're invited to try DueNest — a private place to get your important documents
+> You're invited to try CertaNest — a private place to get your important documents
 > ready. In a few minutes you can: scan a document, organize your Vault, build an
 > application pack, add a deadline, and try SafeSend (secure sharing with expiry
 > and revocation). Your originals are preserved and nothing is shared publicly
@@ -79,17 +79,17 @@ testimonials, numbers, awards, certifications, or legal/official claims. See
 
 ## Cold outreach (schools / agencies)
 
-> Hi [name] — if your team collects documents from students/applicants, DueNest
+> Hi [name] — if your team collects documents from students/applicants, CertaNest
 > Portals may help: request specific documents via secure upload links, review
 > and track what's complete, and send reminders — without email/WhatsApp chaos.
 > Happy to set up a short walkthrough. No ads, privacy-first, you control access.
 
 ## FAQ / objection handling
 
-- **Why not Google Drive?** Drive stores files; DueNest makes them *ready* —
+- **Why not Google Drive?** Drive stores files; CertaNest makes them *ready* —
   deadline tracking, application packs, checklists, secure expiring shares, and
   emergency access, built for documents.
-- **Why not Adobe Scan?** Scanning is one step. DueNest takes the scan into a
+- **Why not Adobe Scan?** Scanning is one step. CertaNest takes the scan into a
   Vault, packs, reminders, and safe sharing — the whole readiness workflow.
 - **Is my data private?** Documents are private until you choose to share. No
   public link is created without your confirmation; shares can expire and be
@@ -100,7 +100,7 @@ testimonials, numbers, awards, certifications, or legal/official claims. See
   flows work without it.
 - **Are templates official?** No. Templates are generic and editable.
   Requirements vary — always verify with the official source.
-- **Is signing legally binding?** DueNest helps prepare a signed *copy*. It is not
+- **Is signing legally binding?** CertaNest helps prepare a signed *copy*. It is not
   a legal e-signature service; legal acceptance depends on recipient and jurisdiction.
 - **Is it free?** There's a free plan to start, with premium and organization
   plans for heavier use. No ads.

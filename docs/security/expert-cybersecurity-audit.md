@@ -1,4 +1,4 @@
-# DueNest — Expert Cybersecurity Audit
+# CertaNest — Expert Cybersecurity Audit
 
 **Audit type:** Authorized, internal application-security review (pre-launch SaaS storing sensitive life documents)
 **Reviewer role:** Senior application-security engineer
@@ -14,11 +14,11 @@
 
 ## 1. Executive summary
 
-DueNest is a **notably security-conscious codebase** for a pre-launch product. The team has clearly invested in the hard parts: envelope encryption of vault files (AES-256-GCM with per-file wrapped DEKs and AAD binding), HttpOnly-cookie JWT auth with CSRF enforcement on the cookie path, consistent owner-scoped querysets (strong protection against IDOR), high-entropy share tokens (`secrets.token_urlsafe(32)`), hashed access codes (`make_password`/`check_password`), provider-neutral private-by-default object storage, a security-headers middleware, a log-redaction filter, and verified Stripe webhook signatures with idempotency.
+CertaNest is a **notably security-conscious codebase** for a pre-launch product. The team has clearly invested in the hard parts: envelope encryption of vault files (AES-256-GCM with per-file wrapped DEKs and AAD binding), HttpOnly-cookie JWT auth with CSRF enforcement on the cookie path, consistent owner-scoped querysets (strong protection against IDOR), high-entropy share tokens (`secrets.token_urlsafe(32)`), hashed access codes (`make_password`/`check_password`), provider-neutral private-by-default object storage, a security-headers middleware, a log-redaction filter, and verified Stripe webhook signatures with idempotency.
 
 `python manage.py check --deploy` against the production settings module is essentially clean (only the intentionally-conservative HSTS choices flag). Object-level authorization on the personal vault is implemented correctly and consistently.
 
-The findings below are therefore **not** a story of a broadly insecure app. They are a focused set of real gaps that matter *because* DueNest stores passports, visas, IDs and financial papers:
+The findings below are therefore **not** a story of a broadly insecure app. They are a focused set of real gaps that matter *because* CertaNest stores passports, visas, IDs and financial papers:
 
 - An **access-code brute-force bypass** on the public share / emergency / room endpoints (the dedicated verify endpoints are throttled, but the metadata/preview/download endpoints that accept the same code header are not).
 - **Organization document files and public-request submissions are stored unencrypted** (plain `FileField`), diverging from the encryption-at-rest guarantee the personal vault provides and the product markets.
@@ -156,7 +156,7 @@ org secure rooms (metadata only), `/billing/plans/`, `/billing/webhook/`, `/auth
 - **Affected files:**
   - [backend/apps/organizations/models.py](../../backend/apps/organizations/models.py) — `OrganizationDocumentFile.file = FileField(...)` (L314), `DocumentRequestSubmission.file = FileField(...)` (L526), `org_document_file_upload_to` (L27), `org_request_upload_to` (L18)
   - [backend/apps/organizations/views.py](../../backend/apps/organizations/views.py) — file create action (L380-422), `PublicDocumentRequestView` (L930)
-- **Description:** The personal vault encrypts every file at rest (`encrypt_uploaded_file` → AES-256-GCM, see [file_encryption.py](../../backend/apps/documents/file_encryption.py)) and streams plaintext only through authenticated, ownership-checked views. **Organization** documents and public document-request submissions instead use a **plain Django `FileField`**: the uploaded bytes are written to storage as-is (plaintext), with no envelope encryption, no AAD binding, and no `encryption_status` lifecycle. This contradicts DueNest's stated/marketed "encrypted at rest" guarantee for exactly the data (org member passports, scholarship/visa packets, IDs) that is highly sensitive.
+- **Description:** The personal vault encrypts every file at rest (`encrypt_uploaded_file` → AES-256-GCM, see [file_encryption.py](../../backend/apps/documents/file_encryption.py)) and streams plaintext only through authenticated, ownership-checked views. **Organization** documents and public document-request submissions instead use a **plain Django `FileField`**: the uploaded bytes are written to storage as-is (plaintext), with no envelope encryption, no AAD binding, and no `encryption_status` lifecycle. This contradicts CertaNest's stated/marketed "encrypted at rest" guarantee for exactly the data (org member passports, scholarship/visa packets, IDs) that is highly sensitive.
 - **Evidence (code):** `OrganizationFileUploadSerializer.validate_file` checks size/extension/content-type then returns the raw `uploaded`; the view stores `file=uploaded` directly. No call to the `apps.core.security.encryption` pipeline anywhere in `apps/organizations`.
 - **Attack scenario:** Any read access to the storage bucket/volume (mis-set bucket policy, leaked storage credentials, backup exposure, provider subpoena, insider) yields **cleartext** org documents. With local-filesystem storage in a misconfigured deployment, the path is even reachable directly.
 - **Impact:** Confidentiality breach of organization members' sensitive documents; breaks the product's central privacy promise and likely data-protection commitments.

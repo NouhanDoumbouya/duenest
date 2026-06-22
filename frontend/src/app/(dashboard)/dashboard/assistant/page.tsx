@@ -148,7 +148,7 @@ export default function AssistantPage() {
           <Sparkles className="size-4" />
         </span>
         <div className="min-w-0">
-          <p className="font-heading text-sm font-semibold">DueNest Assistant</p>
+          <p className="font-heading text-sm font-semibold">CertaNest Assistant</p>
           <p className="truncate text-xs text-muted-foreground">
             Answers from your own documents · you confirm every action
           </p>

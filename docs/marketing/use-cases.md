@@ -1,8 +1,8 @@
-# DueNest — Use-Case Pages (content)
+# CertaNest — Use-Case Pages (content)
 
 Content blocks for segment/use-case pages (or landing sections). Routing-light:
 ship as sections/docs now; promote to `/use-cases/*` routes when the app is
-ready. Each block: pain → DueNest solution → workflow → features → CTA → trust note.
+ready. Each block: pain → CertaNest solution → workflow → features → CTA → trust note.
 
 All copy is honest — no fake proof, no official-requirement or legal claims.
 
@@ -73,7 +73,7 @@ All copy is honest — no fake proof, no official-requirement or legal claims.
 - **Solution:** Request, review, track, and safely manage submissions in one place.
 - **Workflow:** Create a portal → request specific documents via secure upload
   links → review status → send reminders → organize received documents.
-- **Features:** DueNest Portals, Document Requests, checklists, Deadlines, SafeSend,
+- **Features:** CertaNest Portals, Document Requests, checklists, Deadlines, SafeSend,
   Organizations workspace.
 - **CTA:** Create a portal.
 - **Trust:** Upload links are scoped; recipients never see your workspace.

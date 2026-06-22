@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Sign in",
-  description: "Sign in to your DueNest workspace.",
+  description: "Sign in to your CertaNest workspace.",
   alternates: { canonical: "/login" },
 };
 

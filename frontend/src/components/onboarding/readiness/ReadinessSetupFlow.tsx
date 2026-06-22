@@ -245,7 +245,7 @@ export function ReadinessSetupFlow() {
   // ---- save document + optional reminder --------------------------------
   const saveDocument = useCallback(async () => {
     if (!name.trim()) {
-      setError("Give your document a name so DueNest can track it.");
+      setError("Give your document a name so CertaNest can track it.");
       return;
     }
     setBusy(true);
@@ -481,7 +481,7 @@ function WelcomeStep({
           Let’s make your first important document ready.
         </h1>
         <p className="text-muted-foreground">
-          Add one document, set what matters, and DueNest will help you stay ready
+          Add one document, set what matters, and CertaNest will help you stay ready
           before it’s due.
         </p>
       </div>
@@ -512,7 +512,7 @@ function UseCaseStep({
   return (
     <div className="space-y-5">
       <div className="space-y-1 text-center">
-        <h2 className="text-xl font-semibold">What do you want DueNest to help with first?</h2>
+        <h2 className="text-xl font-semibold">What do you want CertaNest to help with first?</h2>
         <p className="text-sm text-muted-foreground">Pick one. You can change focus anytime.</p>
       </div>
       <div className="grid gap-2.5 sm:grid-cols-2">
@@ -742,9 +742,9 @@ function ExpiryStep(props: {
   return (
     <div className="space-y-5">
       <div className="space-y-1">
-        <h2 className="text-xl font-semibold">When should DueNest remind you?</h2>
+        <h2 className="text-xl font-semibold">When should CertaNest remind you?</h2>
         <p className="text-sm text-muted-foreground">
-          DueNest will show this in Life Radar before it becomes urgent.
+          CertaNest will show this in Life Radar before it becomes urgent.
         </p>
       </div>
 
@@ -841,9 +841,9 @@ function SuccessStep({
           <h2 className="text-xl font-semibold">Your first document is ready.</h2>
           <p className="text-sm text-muted-foreground">
             {preview.hasReminder
-              ? `DueNest will remind you ${preview.reminderStatus}.`
+              ? `CertaNest will remind you ${preview.reminderStatus}.`
               : preview.hasExpiry
-                ? "DueNest is now watching this date for you."
+                ? "CertaNest is now watching this date for you."
                 : "Your document is now organized in your Vault."}
           </p>
         </div>

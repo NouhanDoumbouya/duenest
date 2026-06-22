@@ -1,4 +1,4 @@
-# DueNest Portals (Organizations)
+# CertaNest Portals (Organizations)
 
 > Documents **existing** code (`apps/organizations`). Recorded for Phase 17.
 

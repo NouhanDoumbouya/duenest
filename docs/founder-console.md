@@ -8,7 +8,7 @@
 
 ## Purpose
 
-Founder Console V1 is DueNest's private operating center for a solo founder. It
+Founder Console V1 is CertaNest's private operating center for a solo founder. It
 shows product usage, activation, adoption, feedback, failures, security signals,
 beta users, launch readiness, templates, and country-level activity without
 turning founder access into a vault browser.

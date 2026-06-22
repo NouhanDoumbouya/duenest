@@ -3,7 +3,7 @@ interface SyncManagerLike {
 }
 
 /**
- * Register the DueNest service worker so the scanner's OpenCV cache + Background
+ * Register the CertaNest service worker so the scanner's OpenCV cache + Background
  * Sync flush keep working. Returns the registration, or null when service
  * workers are unsupported. Failures are swallowed — the scanner works fully
  * without a service worker (OpenCV just re-downloads, queue flushes on the

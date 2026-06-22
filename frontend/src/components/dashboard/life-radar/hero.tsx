@@ -69,7 +69,7 @@ export function LifeRadarHero({
 
           <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
             <ShieldCheck className="size-3.5 text-brand-success" aria-hidden />
-            DueNest is watching · Last checked {lastChecked}
+            CertaNest is watching · Last checked {lastChecked}
           </p>
         </div>
 

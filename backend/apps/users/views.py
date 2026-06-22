@@ -422,7 +422,7 @@ class GoogleAuthView(APIView):
     """
     POST /api/v1/auth/google/
 
-    Exchange a verified Google ID token for DueNest Simple JWT tokens.
+    Exchange a verified Google ID token for CertaNest Simple JWT tokens.
 
     This sits alongside the normal username/password login; it does not
     replace it. The flow is: verify the Google token -> find or create the

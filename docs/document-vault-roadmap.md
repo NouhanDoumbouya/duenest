@@ -1,21 +1,21 @@
-# DueNest Document Vault Roadmap
+# CertaNest Document Vault Roadmap
 
 **Version:** v0.1
 **Status:** Planning
-**Scope:** The Documents module of DueNest
+**Scope:** The Documents module of CertaNest
 **Owner doc:** This file is the source of truth for the documents-first product and technical roadmap. Detailed models live in `database-design.md`, endpoints in `api-spec.md`, security in `security-plan.md`, and sequencing in `roadmap.md`.
 
 ---
 
 ## 1. Positioning
 
-DueNest is **not** basic document storage. It is being built as a:
+CertaNest is **not** basic document storage. It is being built as a:
 
 > **Premium document renewal and expiry management vault** that helps users store important documents, understand what needs attention, prepare renewals, and avoid last-minute expiry stress.
 
 The product promise:
 
-> **DueNest helps you keep important documents ready, complete, secure, and renewed on time.**
+> **CertaNest helps you keep important documents ready, complete, secure, and renewed on time.**
 
 The Documents module is the first module to reach a pay-worthy bar. Subscriptions, application packs, an AI assistant, and broader life-admin tasks come **after** the vault is strong on its own.
 
@@ -29,7 +29,7 @@ The Documents module is the first module to reach a pay-worthy bar. Subscription
 - What should I prepare for an upcoming renewal?
 - Who can I safely share a document with?
 
-The difference between "free" and "pay-worthy" is the difference between *"upload documents"* and *"DueNest tells me what is safe, what is expiring, what is missing, what needs renewal, and what to do next."*
+The difference between "free" and "pay-worthy" is the difference between *"upload documents"* and *"CertaNest tells me what is safe, what is expiring, what is missing, what needs renewal, and what to do next."*
 
 ---
 
@@ -52,7 +52,7 @@ The first realistic paid MVP is a **beautiful, trustworthy document vault that t
 
 ### Why users would pay
 
-DueNest helps users **avoid expiry mistakes, lost-document chaos, and last-minute renewal stress**. A single missed passport, visa, insurance, or license deadline can cost money, delay an application, or block travel. The vault's value is not storage — it is *peace of mind that nothing important is quietly expiring*.
+CertaNest helps users **avoid expiry mistakes, lost-document chaos, and last-minute renewal stress**. A single missed passport, visa, insurance, or license deadline can cost money, delay an application, or block travel. The vault's value is not storage — it is *peace of mind that nothing important is quietly expiring*.
 
 What the MVP deliberately leaves out: family/dependent vaults, billing, native
 mobile, organization/team vaults, and full raw-file archive exports. OCR,

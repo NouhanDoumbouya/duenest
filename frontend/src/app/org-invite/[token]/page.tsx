@@ -85,7 +85,7 @@ export default function OrganizationInvitePage({
                 Organization invite
               </span>
               <h1 className="mt-5 max-w-2xl font-heading text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
-                Join a DueNest team workspace
+                Join a CertaNest team workspace
               </h1>
               <p className="mt-5 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
                 Accept the invite with the account that matches the invited

@@ -1,4 +1,4 @@
-# DueNest — Microcopy Patterns
+# CertaNest — Microcopy Patterns
 
 > Aligns with `brand/voice-and-tone.md` and `brand/messaging-guide.md`. Voice: calm,
 > precise, trustworthy, human, practical. This is the reusable copy library.
@@ -66,7 +66,7 @@ language under Deadlines & Renewals.
 | Vault | Your Vault is empty. | Start with one important document. | Scan document / Upload file |
 | File Inbox | File Inbox is clear. | New scans and uploads appear here before you organize them. | — |
 | Bundles | No application packs yet. | Prepare documents for a visa, scholarship, job, university, travel, or custom need. | Create pack |
-| Deadlines | No deadlines yet. | Add expiry dates and renewals so DueNest can remind you. | Add deadline |
+| Deadlines | No deadlines yet. | Add expiry dates and renewals so CertaNest can remind you. | Add deadline |
 | Quick Share | No shared documents yet. | Share sensitive documents with expiry, access control, and QR. | Share safely |
 | AI | Ask about a selected document or generate a draft. | — | Select a document |
 | Emergency | No emergency pack yet. | Prepare critical documents for trusted access. | Create emergency pack |

@@ -1,4 +1,4 @@
-# DueNest API Specification
+# CertaNest API Specification
 
 **Version:** v0.1  
 **Status:** Planning  
@@ -12,9 +12,9 @@
 
 ## 1. API Specification Summary
 
-This document defines the planned REST API for DueNest.
+This document defines the planned REST API for CertaNest.
 
-DueNest APIs will support:
+CertaNest APIs will support:
 
 - user authentication
 - user profile management
@@ -56,7 +56,7 @@ http://localhost:8000/api/v1/
 ### Production
 
 ```txt
-https://api.duenest.com/api/v1/
+https://api.certanest.com/api/v1/
 ```
 
 The production domain is a placeholder and may change.
@@ -110,7 +110,7 @@ Content-Type: multipart/form-data
 
 ## 6. Authentication Strategy
 
-DueNest will use JWT-based authentication.
+CertaNest will use JWT-based authentication.
 
 ### Token Types
 
@@ -483,12 +483,12 @@ POST /api/v1/auth/google/
 ```
 
 Exchanges a Google ID token (obtained by the frontend via Google Sign-In) for
-DueNest Simple JWT tokens. This sits alongside username/password login and does
+CertaNest Simple JWT tokens. This sits alongside username/password login and does
 not replace it.
 
 The backend verifies the ID token against `GOOGLE_OAUTH_CLIENT_ID`, then either
 finds the matching user (by Google id, then by email) or creates a new one, and
-returns DueNest tokens.
+returns CertaNest tokens.
 
 ### Request
 
@@ -607,7 +607,7 @@ Required.
 
 - **POST** accepts an image file (`avatar`). It is re-encoded server-side
   (EXIF-stripped, downscaled to ~256px, JPEG) and stored inline on the user as a
-  base64 `data:` URL — DueNest never serves avatars via a public/object-storage
+  base64 `data:` URL — CertaNest never serves avatars via a public/object-storage
   URL, consistent with its file-delivery model. Returns the updated user.
 - **DELETE** clears the uploaded picture (the Google picture, if any, then
   applies). Returns the updated user.
@@ -639,7 +639,7 @@ All optional strings: `legal_name`, `preferred_name`, `date_of_birth`,
   full set.
 - **DELETE** clears all saved details.
 - Values are **encrypted at rest** (AES-256-GCM, AAD-bound) as a single
-  ciphertext blob — DueNest never stores them in plaintext. They are returned
+  ciphertext blob — CertaNest never stores them in plaintext. They are returned
   only to the owner, never shared, and are removed with the account.
 
 ---
@@ -1264,7 +1264,7 @@ viewers cannot access this log.
 
 # 13.8 Document Reminder Rules API (implemented)
 
-Reminder rules let users define when DueNest should remind them before a
+Reminder rules let users define when CertaNest should remind them before a
 document expires or reaches its renewal date. The document reminder API still
 returns calculated upcoming rule dates synchronously. Actual in-app/email
 delivery is handled separately by the notification worker command documented in
@@ -1358,7 +1358,7 @@ is today or in the future, sorted by reminder date and document title.
 
 # 13B. Document Renewal Workspace API (implemented)
 
-The Renewal Workspace moves DueNest from *"something is expiring"* to *"here is
+The Renewal Workspace moves CertaNest from *"something is expiring"* to *"here is
 what you need to prepare."* It adds preparation checklists, application/renewal
 bundles, an aggregated timeline, and an OCR-assisted extraction foundation.
 
@@ -1945,7 +1945,7 @@ Opt-in, **key-gated** flagship feature. Request body:
   `Document.expiry_date` (never the model): each matched document carries
   `expires_before_deadline`.
 - A requirement the model marks `have` but cites no owned document for is
-  **downgraded to `unclear`** — DueNest never claims a match it can't point to.
+  **downgraded to `unclear`** — CertaNest never claims a match it can't point to.
 - **Never official.** Requirements vary by country/institution/case; the model
   is instructed to say so and to prefer `unclear` over guessing. Owner-scoped;
   gated by `ai_features` + `ai_pack_copilot` (503 when off) and platform config
@@ -2199,7 +2199,7 @@ and proof records must belong to the requesting user.
 
 ## 13D. Billing, plans & promo codes
 
-DueNest's own monetization (the `apps.billing` app) — distinct from the user
+CertaNest's own monetization (the `apps.billing` app) — distinct from the user
 subscription tracker in §section above. Provider-aware (`manual` for offline
 dev/test, `stripe` for production). Prices are integer minor units. See
 `docs/BILLING.md` for setup. The live Stripe path is integration-ready but not
@@ -3457,7 +3457,7 @@ The v0.1 API is acceptable when:
 
 # 25. Summary
 
-The DueNest API should be secure, consistent, and product-focused.
+The CertaNest API should be secure, consistent, and product-focused.
 
 The first version should prioritize:
 
@@ -3763,15 +3763,15 @@ existing models (no duplicate table), owner-scoped, and carry a
 deep-link to the parent document's Renewal tab (or a bundle's Timeline tab)
 with an `#appointments` anchor, so "Open appointment" lands on the appointment
 itself rather than the top of the record. The `.ics` export is
-one-way and uses safe `DueNest: ...` titles only - no tokens, access codes,
+one-way and uses safe `CertaNest: ...` titles only - no tokens, access codes,
 internal paths, or sensitive numbers. **No Google/Outlook/two-way sync exists.**
 
 # 29. Subscription / Recurring Renewal Tracker V1
 
 A user-facing tracker for the user's **own** recurring payments and renewals
 (streaming, software, domains, hosting, insurance, telecom, gym, memberships,
-etc.). This is **not** DueNest SaaS billing: there is no Stripe, no payment
-checkout, no bank/card integration, and no DueNest paid-plan subscription here.
+etc.). This is **not** CertaNest SaaS billing: there is no Stripe, no payment
+checkout, no bank/card integration, and no CertaNest paid-plan subscription here.
 
 All endpoints are authenticated and strictly owner-scoped. `owner` is always set
 from the request and never trusted from the client; another user's subscriptions
@@ -4082,7 +4082,7 @@ but blank), `one_time`, `max_claims?`, `max_views?` / `max_downloads?`
 — reaching the view cap closes the share, reaching the download cap blocks
 further downloads), `require_sender_approval`, `watermark_enabled`,
 `privacy_screen_enabled` (screenshot deterrence on the public viewer),
-`verified` (request a tamper-evident, DueNest-signed share — honoured only when
+`verified` (request a tamper-evident, CertaNest-signed share — honoured only when
 the `verified_shares` feature flag is enabled for the caller; otherwise silently
 ignored), and the
 item lists `file_ids[]`, `document_ids[]`, `bundle_ids[]`, and `proof_ids[]` (all must be owned by the requester; others are skipped, and a
@@ -4093,7 +4093,7 @@ shares all of the bundle's currently available files (the same file-set as
 `document-bundles/:id/files/`), and a `proof_id` shares the proof's linked file —
 all reflecting their contents over time; empty/trashed items are skipped. The create response
 includes the one-time plain `access_code` (when generated), the session `token`
-for the owner to build the QR, and the `dn_code` — a short, human-typable DueNest
+for the owner to build the QR, and the `dn_code` — a short, human-typable CertaNest
 code (e.g. `DN-4KQ7-PXMR`) the owner can read out for the "Receive code" flow.
 `dn_code` is independent of the secret token (never derived from it); the legacy
 `fallback_code` field is kept as an alias of `dn_code`. The `access_code_hash` is
@@ -4115,7 +4115,7 @@ GET /api/v1/verify/<token>/        # tamper-evidence result for a share
 ```
 
 A **verified** share carries an Ed25519-signed manifest of its files' SHA-256
-hashes (DueNest holds the private key; only the public key is exposed, so
+hashes (CertaNest holds the private key; only the public key is exposed, so
 verification can become independent/offline later). Both endpoints are public
 (`AllowAny`, rate-limited) and return **metadata only — never document bytes**.
 
@@ -4126,7 +4126,7 @@ files:[{name, sha256, matches}] }`. `status` is `verified` (signature valid and
 every file matches), `altered` (signature valid but a file changed),
 `not_verified` (the share was not created as a verified share), or `not_found`
 (404). Verification asserts **provenance + integrity only** — that these exact
-files are an unaltered copy shared from a DueNest account — not the document's
+files are an unaltered copy shared from a CertaNest account — not the document's
 real-world authenticity.
 
 ### 31.1b Share Requests — inbound fulfilment
@@ -4171,13 +4171,13 @@ people); each responder may submit once. Reject reasons: foreign file (400),
 missing required item (400), own request (400), already responded (409),
 closed/expired (410).
 
-## 31.2b Receive by DueNest code — public
+## 31.2b Receive by CertaNest code — public
 
 ```txt
 POST /api/v1/quick-share/receive/   { code }
 ```
 
-Resolves a typed DueNest code (case-insensitive; dashes/spaces and an optional
+Resolves a typed CertaNest code (case-insensitive; dashes/spaces and an optional
 `DN` prefix are tolerated) to its share. On success returns `{ ok, token,
 claim_path, mode }` so the caller hands off to the normal, fully guarded claim
 flow (login, access code, accept, permission checks all still apply). Unknown

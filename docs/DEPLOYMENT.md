@@ -1,11 +1,11 @@
-# DueNest Deployment Guide
+# CertaNest Deployment Guide
 
-How to deploy the DueNest backend (Django + PostgreSQL + S3-compatible object
+How to deploy the CertaNest backend (Django + PostgreSQL + S3-compatible object
 storage) for staging/beta, and how to configure provider-neutral object storage.
 
 The frontend (Next.js) deploys to Vercel and is out of scope here.
 
-> **Scaling & infrastructure modes:** for how DueNest runs in lean vs.
+> **Scaling & infrastructure modes:** for how CertaNest runs in lean vs.
 > scale-ready mode (Redis cache, Celery workers, the scheduler, queues, process
 > types, caching rules, and upgrade triggers), see
 > [scale-ready-lean-foundation.md](deployment/scale-ready-lean-foundation.md).
@@ -32,7 +32,7 @@ the code already reads/writes via Django's storage API.
 
 ## 2. Object storage (provider-neutral)
 
-DueNest uses provider-neutral `STORAGE_*` environment variables and maps them to
+CertaNest uses provider-neutral `STORAGE_*` environment variables and maps them to
 django-storages/boto3 internally. Any S3-compatible provider works.
 
 | Env var | Purpose | Example |
@@ -97,18 +97,18 @@ Same variables; only the endpoint/region differ:
 DJANGO_SETTINGS_MODULE=config.settings.production
 DJANGO_SECRET_KEY=<long-random>
 DJANGO_DEBUG=False
-DJANGO_ALLOWED_HOSTS=api.duenest.com
+DJANGO_ALLOWED_HOSTS=api.certanest.com
 DATABASE_URL=postgres://user:pass@host:5432/duenest
-DJANGO_CORS_ALLOWED_ORIGINS=https://app.duenest.com
-DJANGO_CSRF_TRUSTED_ORIGINS=https://app.duenest.com
-DJANGO_CSP_CONNECT_SRC=https://api.duenest.com
-DUENEST_APP_BASE_URL=https://app.duenest.com
+DJANGO_CORS_ALLOWED_ORIGINS=https://app.certanest.com
+DJANGO_CSRF_TRUSTED_ORIGINS=https://app.certanest.com
+DJANGO_CSP_CONNECT_SRC=https://api.certanest.com
+DUENEST_APP_BASE_URL=https://app.certanest.com
 DUENEST_ACTIVE_KEK_VERSION=v1
 DUENEST_KEK_V1_B64=<base64 32-byte key>   # generate_encryption_key
 # + all STORAGE_* vars from section 2
 # + EMAIL_* vars (see docs/EMAIL_REMINDERS.md) for all transactional email
 #   (invite, waitlist, password reset, email verification, reminders)
-# + FRONTEND_APP_URL=https://app.duenest.com  (links in invite/reset/verification emails)
+# + FRONTEND_APP_URL=https://app.certanest.com  (links in invite/reset/verification emails)
 ```
 
 Production settings **fail closed** if the encryption KEK is missing/malformed.

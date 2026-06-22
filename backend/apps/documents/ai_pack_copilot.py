@@ -177,7 +177,7 @@ _MAX_BUNDLE_REQUIREMENTS = 40
 
 def create_bundle_from_copilot(user, *, goal: str, deadline=None, requirements) -> "object":
     """
-    Turn a copilot analysis into a real DueNest bundle (insight -> action).
+    Turn a copilot analysis into a real CertaNest bundle (insight -> action).
 
     Creates a draft application bundle titled after the goal, one requirement per
     item, with matched OWNED documents linked (status ATTACHED) and the rest left

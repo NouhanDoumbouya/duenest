@@ -1,4 +1,4 @@
-// Life Radar — pure helpers that turn already-fetched DueNest data into a ranked,
+// Life Radar — pure helpers that turn already-fetched CertaNest data into a ranked,
 // human "what to fix first" picture. No fetching, no React: everything here is a
 // pure function so it stays fast, testable, and predictable.
 //
@@ -127,7 +127,7 @@ function documentReason(doc: DocumentRecord): string {
   if (doc.is_expired) return "This document may no longer be accepted.";
   if (doc.missing_file) return "A key file is still missing.";
   if (doc.missing_expiry_date)
-    return "No expiry date set, so DueNest can't track it.";
+    return "No expiry date set, so CertaNest can't track it.";
   if (doc.is_expiring_soon || doc.is_renewal_due)
     return "Renewal preparation may take time.";
   return doc.status_reason || "This document needs a quick review.";
@@ -325,7 +325,7 @@ export function buildLifeRadarStatusSentence(
   items: FixFirstItem[],
 ): string {
   if (items.length === 0) {
-    return "You're clear this week. DueNest will keep watching your documents, renewals, shares, and emergency setup.";
+    return "You're clear this week. CertaNest will keep watching your documents, renewals, shares, and emergency setup.";
   }
   const counts = new Map<RiskType, number>();
   for (const item of items) counts.set(item.type, (counts.get(item.type) ?? 0) + 1);

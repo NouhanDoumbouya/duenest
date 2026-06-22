@@ -29,11 +29,11 @@ logger = logging.getLogger("duenest.notifications")
 _PUSH_TTL_SECONDS = 60 * 60 * 24  # 1 day
 
 # Lock-screen copy. The title stays a constant brand string and the body is
-# category-level only — enough to know whether to open DueNest now, but never a
+# category-level only — enough to know whether to open CertaNest now, but never a
 # document name, date, amount, recipient, or any other private specific. The
 # real detail is shown only inside the authenticated app.
-_GENERIC_TITLE = "DueNest"
-_GENERIC_BODY = "You have a new update in DueNest."
+_GENERIC_TITLE = "CertaNest"
+_GENERIC_BODY = "You have a new update in CertaNest."
 
 
 def _push_body(notification_type: str) -> str:
@@ -105,7 +105,7 @@ def _safe_payload(notification) -> dict:
 
     We deliberately do NOT forward the notification's own title/message to the
     lock screen, because some notification copy can reference user context. The
-    push only nudges the user to open DueNest, where the authenticated UI shows
+    push only nudges the user to open CertaNest, where the authenticated UI shows
     the real (sensitive) detail. Only the internal action URL is included so the
     click lands on the right page.
     """
@@ -145,7 +145,7 @@ def _send_one(subscription, payload: dict) -> str:
             ttl=_PUSH_TTL_SECONDS,
             # Urgency "high" tells the push service to wake the device and deliver
             # promptly even under Android Doze, instead of holding it until the
-            # user next opens the app. DueNest pushes are deadline reminders, so
+            # user next opens the app. CertaNest pushes are deadline reminders, so
             # prompt background delivery is the whole point.
             headers={"Urgency": "high"},
             timeout=10,
@@ -196,7 +196,7 @@ def push_notification(notification) -> dict:
             return summary
 
         # Quiet hours hold back the device nudge only; the notification is still
-        # delivered in-app and will be seen next time DueNest is opened.
+        # delivered in-app and will be seen next time CertaNest is opened.
         if _in_quiet_hours(prefs):
             summary["quiet"] = 1
             return summary

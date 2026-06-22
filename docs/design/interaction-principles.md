@@ -1,4 +1,4 @@
-# DueNest — Interaction Principles
+# CertaNest — Interaction Principles
 
 The product feeling we are protecting:
 **"I trust this. I understand this. I know exactly what to do next."**
@@ -7,7 +7,7 @@ Core promise: **Important documents, ready when life asks.**
 
 ## Product principles (applied to every screen)
 
-1. **Readiness over storage.** DueNest is where documents become *ready*, not where
+1. **Readiness over storage.** CertaNest is where documents become *ready*, not where
    files sit. Surfaces should push toward a next state, not just display.
 2. **Calm over chaos.** Every screen reduces anxiety. Urgency is communicated with Due
    Amber, never with fear, fake countdowns, or red-everywhere.

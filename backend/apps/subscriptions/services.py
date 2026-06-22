@@ -72,7 +72,7 @@ UPCOMING_DAYS = 30
 DEADLINE_SOON_DAYS = 7
 TRIAL_ENDING_DAYS = 7
 
-# Review-intelligence thresholds. Transparent, rule-based, manual - DueNest
+# Review-intelligence thresholds. Transparent, rule-based, manual - CertaNest
 # never inspects bank or real usage data.
 HIGH_YEARLY_COST_THRESHOLD = Decimal(500)
 LAST_USED_STALE_DAYS = 90

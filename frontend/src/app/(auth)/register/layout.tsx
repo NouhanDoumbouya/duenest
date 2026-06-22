@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Create your account",
   description:
-    "Create your DueNest account to start organizing documents, renewals, and deadlines.",
+    "Create your CertaNest account to start organizing documents, renewals, and deadlines.",
   alternates: { canonical: "/register" },
 };
 

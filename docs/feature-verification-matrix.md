@@ -2,7 +2,7 @@
 
 Date: 2026-06-13
 
-This matrix tracks the current private-beta product surface for DueNest. Status
+This matrix tracks the current private-beta product surface for CertaNest. Status
 means:
 
 - Done: implemented and usable in the current app.

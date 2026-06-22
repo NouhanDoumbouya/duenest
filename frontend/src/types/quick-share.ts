@@ -75,7 +75,7 @@ export interface QuickShareSession {
   is_revoked: boolean;
   expires_at: string;
   revoked_at: string | null;
-  // Human-typable DueNest code for the "Receive code" flow (also aliased as
+  // Human-typable CertaNest code for the "Receive code" flow (also aliased as
   // fallback_code for backward compatibility).
   dn_code: string;
   access_code_required: boolean;
@@ -147,7 +147,7 @@ export interface CreateQuickSharePayload {
   watermark_enabled: boolean;
   // Screenshot deterrence on the public viewer (blurs when the tab loses focus).
   privacy_screen_enabled?: boolean;
-  // Tamper-evident, DueNest-signed share (feature-flagged server-side).
+  // Tamper-evident, CertaNest-signed share (feature-flagged server-side).
   verified?: boolean;
   file_ids: number[];
   // Whole documents to share; each exposes its current active files.

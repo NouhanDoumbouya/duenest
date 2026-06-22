@@ -35,7 +35,7 @@ describe("share package", () => {
   });
 });
 
-describe("DueNest code", () => {
+describe("CertaNest code", () => {
   it("normalizes lowercase, spaces, and dashes to canonical form", () => {
     expect(normalizeDueNestCode("dn 4kq7 pxmr")).toBe("DN-4KQ7-PXMR");
     expect(normalizeDueNestCode("DN-4KQ7-PXMR")).toBe("DN-4KQ7-PXMR");
@@ -104,7 +104,7 @@ describe("SafeSend recommendation", () => {
     expect(rec.preset.permission).toBe("view_only");
   });
 
-  it("surfaces all methods for a DueNest user", () => {
+  it("surfaces all methods for a CertaNest user", () => {
     const rec = buildSafeSendRecommendation({
       sensitive: false,
       purpose: "family",
@@ -155,25 +155,25 @@ describe("share message", () => {
   it("includes link and code but never raw paths", () => {
     const msg = buildShareMessage({
       template: "friendly",
-      link: "https://duenest.app/quick-share/abc",
+      link: "https://certanest.com/quick-share/abc",
       code: "DN-4KQ7-PXMR",
       permissionLabel: "View only",
       expiryLabel: "24 hours",
     });
-    expect(msg).toContain("https://duenest.app/quick-share/abc");
+    expect(msg).toContain("https://certanest.com/quick-share/abc");
     expect(msg).toContain("DN-4KQ7-PXMR");
-    expect(msg).toContain("Shared securely through DueNest");
+    expect(msg).toContain("Shared securely through CertaNest");
     expect(msg).not.toContain("/media/");
   });
 
   it("minimal template is link-first and terse", () => {
     const msg = buildShareMessage({
       template: "minimal",
-      link: "https://duenest.app/x",
+      link: "https://certanest.com/x",
       permissionLabel: "View only",
       expiryLabel: "1 hour",
     });
-    expect(msg).toBe("Secure DueNest share: https://duenest.app/x");
+    expect(msg).toBe("Secure CertaNest share: https://certanest.com/x");
   });
 });
 

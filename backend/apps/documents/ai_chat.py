@@ -3,7 +3,7 @@ Conversational assistant — chat grounded in the user's vault (KEY-GATED).
 
 A natural-language assistant that answers from the user's own documents and,
 when the user wants to *do* something, proposes **confirm-gated actions**: typed
-suggestions the UI renders as buttons that hand off into DueNest's existing
+suggestions the UI renders as buttons that hand off into CertaNest's existing
 (already confirmation-gated) flows — draft a letter, run the Pack Copilot, open a
 document, or view the briefing.
 
@@ -55,7 +55,7 @@ _SCHEMA = {
 }
 
 _SYSTEM = (
-    "You are DueNest's friendly life-admin assistant. Answer the user using ONLY "
+    "You are CertaNest's friendly life-admin assistant. Answer the user using ONLY "
     "their own documents (provided below) — never invent facts, dates, or "
     "numbers; if you don't know, say so. You CANNOT take actions yourself. When "
     "the user wants to do something, propose it as a confirm-gated action for "

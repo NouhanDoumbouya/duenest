@@ -177,7 +177,7 @@ function CampaignForm({
     channel: "",
     source: "",
     medium: "",
-    landing_url: "https://duenest.com/",
+    landing_url: "https://certanest.com/",
     goal: "",
   });
   const [busy, setBusy] = useState(false);
@@ -213,7 +213,7 @@ function CampaignForm({
           <Field id="channel" label="Channel" value={form.channel} onChange={set("channel")} placeholder="facebook" />
           <Field id="source" label="Source" value={form.source} onChange={set("source")} placeholder="facebook" />
           <Field id="medium" label="Medium" value={form.medium} onChange={set("medium")} placeholder="community" />
-          <Field id="landing_url" label="Landing URL" value={form.landing_url} onChange={set("landing_url")} placeholder="https://duenest.com/" />
+          <Field id="landing_url" label="Landing URL" value={form.landing_url} onChange={set("landing_url")} placeholder="https://certanest.com/" />
           <Field id="goal" label="Goal" value={form.goal} onChange={set("goal")} placeholder="100 student signups" />
         </div>
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}

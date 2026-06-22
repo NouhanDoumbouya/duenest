@@ -389,7 +389,7 @@ export default function QuickShareDetailPage() {
               {session.share_method === "link"
                 ? "Share by secure link — copy it below."
                 : session.share_method === "code"
-                  ? "Share by DueNest code — they enter it under Receive a code."
+                  ? "Share by CertaNest code — they enter it under Receive a code."
                   : "Share by QR — let them scan the code below."}
             </p>
           )}
@@ -450,7 +450,7 @@ export default function QuickShareDetailPage() {
                       : "border-border bg-card text-muted-foreground hover:bg-muted",
                   )}
                 >
-                  DueNest badge
+                  CertaNest badge
                 </button>
               </div>
 
@@ -664,7 +664,7 @@ export default function QuickShareDetailPage() {
           {!inactive && methods.code && (
             <div className="mt-6 flex flex-col items-center gap-1 text-xs text-muted-foreground">
               <div className="flex items-center justify-center gap-2 rounded-lg border border-primary/40 bg-primary/5 px-3 py-2">
-                <span>DueNest code:</span>
+                <span>CertaNest code:</span>
                 <button
                   type="button"
                   onClick={() => copy(session.dn_code, "code")}
@@ -752,7 +752,7 @@ export default function QuickShareDetailPage() {
             <p className="text-sm font-semibold">Share it</p>
             <p className="text-xs text-muted-foreground">
               Send secure access, never the raw file. The recipient opens it on
-              DueNest, and you can revoke anytime.
+              CertaNest, and you can revoke anytime.
             </p>
           </div>
 

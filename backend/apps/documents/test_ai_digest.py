@@ -109,7 +109,7 @@ class SendAiDigestsTests(TestCase):
             email_type="ai_briefing_digest",
             category="lifecycle",
             recipient="u@x.com",
-            subject="Your DueNest weekly briefing",
+            subject="Your CertaNest weekly briefing",
             status="sent",
         )
         b, f, send = _patches()

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" fill="none" role="img" aria-label="CertaNest">
+  <title>CertaNest — Secure Nest mark (official icon)</title>
+  <!-- Outer protective wall -->
+  <path d="M12 18 C12 38 15 45 32 45 C49 45 52 38 52 18" stroke="#0F766E" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Inner wall (layered vault-nest) -->
+  <path d="M18 21 C18 35 21 39 32 39 C43 39 46 35 46 21" stroke="#0F766E" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
+  <!-- Nested readiness checkmark -->
+  <path d="M25.8 28.3 L30 33 L39.4 20.8" stroke="#10B981" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

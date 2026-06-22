@@ -1,8 +1,8 @@
 # Billing, Plans & Promo Codes
 
-DueNest's own monetization layer (the `apps.billing` app). This is **separate**
+CertaNest's own monetization layer (the `apps.billing` app). This is **separate**
 from `apps.subscriptions`, which tracks a *user's own* recurring payments
-(Netflix, Spotify, …). This document covers DueNest's plans, entitlements,
+(Netflix, Spotify, …). This document covers CertaNest's plans, entitlements,
 checkout, promo codes, webhooks, and the founder billing console.
 
 > **Status:** The data model, entitlement engine, promo engine, webhook handler,
@@ -130,18 +130,18 @@ revocable), and the branded-receipt configuration (below).
 
 ## Branded receipts
 
-DueNest can email a **branded receipt** when a subscription payment succeeds
+CertaNest can email a **branded receipt** when a subscription payment succeeds
 (Stripe `invoice.paid` / `invoice.payment_succeeded`, and the manual/dev provider
 on a non-trial activation). Receipts are **off by default** and founder-configured
 from the founder console (Billing tab) via `ReceiptSettings` (singleton):
 
 - `enabled` — master switch.
 - `mode` — `email_link` (branded email + provider's hosted invoice/PDF),
-  `email_pdf` (branded email + a DueNest-generated `fpdf2` PDF attachment), or
+  `email_pdf` (branded email + a CertaNest-generated `fpdf2` PDF attachment), or
   `email_only`.
 - `send_for_manual` — also send for the offline manual provider (dev/demo).
 - `business_legal_name` / `business_address` / `tax_id` / `support_email` —
-  optional merchant details printed on the receipt (blank shows DueNest branding
+  optional merchant details printed on the receipt (blank shows CertaNest branding
   only; the template/PDF render them only when present).
 
 Sending lives in `apps/billing/receipts.py`, reuses the branded email shell

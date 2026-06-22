@@ -319,7 +319,7 @@ export default function FounderMapPage() {
                 No country activity yet
               </h2>
               <p className="text-sm text-muted-foreground">
-                Country-level activity will appear here once DueNest receives
+                Country-level activity will appear here once CertaNest receives
                 privacy-safe country metadata from product events, waitlist
                 entries, or beta activity.
               </p>
@@ -429,7 +429,7 @@ export default function FounderMapPage() {
           <ShieldCheck className="mt-0.5 size-4 shrink-0 text-brand-success" />
           <p>
             {data.privacy_note} Country activity is aggregated from privacy-safe
-            metadata. DueNest does not show GPS, street-level location, raw IP
+            metadata. CertaNest does not show GPS, street-level location, raw IP
             addresses, document contents, access codes, or share tokens here.
           </p>
         </CardContent>

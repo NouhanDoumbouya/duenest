@@ -111,7 +111,7 @@ class PushDeliveryTests(APITestCase):
             user=self.user, endpoint="https://push.example.com/x", p256dh="k", auth="a"
         )
         with mock.patch("pywebpush.webpush") as wp:
-            result = _send_one(sub, {"title": "DueNest", "body": "x", "url": "/dashboard"})
+            result = _send_one(sub, {"title": "CertaNest", "body": "x", "url": "/dashboard"})
         self.assertEqual(result, "sent")
         kwargs = wp.call_args.kwargs
         self.assertEqual(kwargs["headers"]["Urgency"], "high")
@@ -161,7 +161,7 @@ class PushDeliveryTests(APITestCase):
             Notification.Type.SHARE_VIEWED: "There's new activity on something you shared.",
             Notification.Type.EMERGENCY_VIEWED: "Emergency access needs your review.",
             Notification.Type.SECURITY_ALERT: "A security alert needs your review.",
-            Notification.Type.GENERIC_REMINDER: "You have a new update in DueNest.",
+            Notification.Type.GENERIC_REMINDER: "You have a new update in CertaNest.",
         }
         for ntype, expected in cases.items():
             note = Notification.objects.create(

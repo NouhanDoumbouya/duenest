@@ -76,7 +76,7 @@ export function SetupChecklistCard({
           </div>
           <CardDescription className="mt-2">
             {complete
-              ? "You’re set up and ready. DueNest is watching your important dates."
+              ? "You’re set up and ready. CertaNest is watching your important dates."
               : nextStep
                 ? `Next: ${nextStep.title}`
                 : "Finish the remaining optional trust and sharing checks."}

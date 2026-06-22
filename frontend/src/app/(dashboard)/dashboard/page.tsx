@@ -541,7 +541,7 @@ function BrandNewState() {
   return (
     <SectionCard
       title="Start with one thing"
-      description="Pick a goal — DueNest starts watching the dates that matter as soon as you add something. You can do the rest later."
+      description="Pick a goal — CertaNest starts watching the dates that matter as soon as you add something. You can do the rest later."
     >
       <div className="grid gap-3 sm:grid-cols-2">
         {primary.map((goal) => (

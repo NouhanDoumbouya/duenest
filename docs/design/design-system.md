@@ -1,4 +1,4 @@
-# DueNest — Design System
+# CertaNest — Design System
 
 > Source of truth: `frontend/src/app/globals.css` (tokens + motion) and
 > `frontend/src/components/ui/*` (primitives). This document **describes** the system

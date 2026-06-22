@@ -358,7 +358,7 @@ export function buildPrintableCardData(
 ): PrintableCardData {
   const instant = pack.unlock_mode === "instant_code";
   return {
-    heading: "DueNest Emergency Access",
+    heading: "CertaNest Emergency Access",
     instruction: "If I need help, scan this QR.",
     lockedMessage: instant
       ? "This QR opens selected documents with the access code."

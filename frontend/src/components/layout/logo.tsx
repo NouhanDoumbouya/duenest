@@ -18,7 +18,7 @@ const wordSize: Record<LogoSize, string> = {
 };
 
 /**
- * The DueNest brand mark (the real icon from brand/logo).
+ * The CertaNest brand mark (Secure Nest Mark).
  * Use `onDark` on dark surfaces to swap to the light-tile variant.
  */
 export function LogoMark({
@@ -33,8 +33,8 @@ export function LogoMark({
   const px = markPx[size];
   return (
     <Image
-      src={onDark ? "/brand/duenest-icon-light.svg" : "/brand/duenest-icon.svg"}
-      alt="DueNest"
+      src={onDark ? "/brand/certanest-icon-light.svg" : "/brand/certanest-icon.svg"}
+      alt="CertaNest"
       width={px}
       height={px}
       priority
@@ -65,7 +65,7 @@ export function Logo({
           wordSize[size],
         )}
       >
-        DueNest
+        CertaNest
       </span>
     </span>
   );

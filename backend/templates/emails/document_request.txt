@@ -6,4 +6,4 @@
 {{ action_label|default:"Upload documents" }}:
 {{ action_url }}
 {% endif %}{% endblock %}
-{% block footer %}You received this because {{ org_name|default:"an organization" }} requested documents from you through DueNest. If you weren't expecting this, you can ignore it.{% endblock %}
+{% block footer %}You received this because {{ org_name|default:"an organization" }} requested documents from you through CertaNest. If you weren't expecting this, you can ignore it.{% endblock %}

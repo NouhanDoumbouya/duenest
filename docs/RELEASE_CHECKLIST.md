@@ -1,6 +1,6 @@
 # Release Checklist
 
-A practical pre-release checklist for DueNest. See `PRIVATE_BETA_READINESS.md`
+A practical pre-release checklist for CertaNest. See `PRIVATE_BETA_READINESS.md`
 for the broader readiness snapshot and `FEATURE_FLAGS.md` for kill-switch usage.
 
 ## Before each beta deploy

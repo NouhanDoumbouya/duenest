@@ -1,6 +1,6 @@
 # Security & Privacy Checklist
 
-Living checklist for DueNest. ✅ done · 🟡 partial · ⛔ not started / blocker.
+Living checklist for CertaNest. ✅ done · 🟡 partial · ⛔ not started / blocker.
 See `docs/ENCRYPTION.md` for the encryption design and `docs/security-plan.md`
 for the broader plan.
 
@@ -46,7 +46,7 @@ for the broader plan.
 - ✅ Key rotation documented.
 - ⛔ Production secret management, backups, monitoring, external review.
 
-> Encryption being implemented does **not** make DueNest production-ready.
+> Encryption being implemented does **not** make CertaNest production-ready.
 > Deployment hardening, backups, monitoring, email, and an external security
 > review are still required.
 

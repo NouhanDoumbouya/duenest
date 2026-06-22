@@ -1,7 +1,7 @@
 """
-Provider-neutral AI configuration for DueNest.
+Provider-neutral AI configuration for CertaNest.
 
-DueNest's AI features (Claude-powered document understanding, drafting, and
+CertaNest's AI features (Claude-powered document understanding, drafting, and
 Q&A) are **key-gated**, mirroring the email configuration pattern
 (``apps.notifications.email_config``):
 
@@ -37,7 +37,7 @@ def _as_int(value: str, default: int) -> int:
 
 def resolve_ai_settings(get: Getter) -> dict:
     """
-    Return DueNest AI settings derived from env vars.
+    Return CertaNest AI settings derived from env vars.
 
     Keys returned: AI_PROVIDER, ANTHROPIC_API_KEY, AI_MODEL, AI_MAX_TOKENS,
     AI_CONFIGURED.

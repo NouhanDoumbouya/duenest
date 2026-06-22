@@ -1,11 +1,11 @@
 # Private Beta Waitlist and Invite Workflow
 
 **Status:** Implemented  
-**Scope:** Controlled early access for DueNest private beta
+**Scope:** Controlled early access for CertaNest private beta
 
 ## Purpose
 
-DueNest uses a waitlist and invite-code system so early access can be reviewed
+CertaNest uses a waitlist and invite-code system so early access can be reviewed
 and paced by the founder instead of opening registration publicly to everyone.
 
 ## Public Flow

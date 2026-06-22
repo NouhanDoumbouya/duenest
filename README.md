@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="./brand/logo/duenest-logo.png" alt="DueNest Logo" width="220" />
+  <img src="./brand/logo/duenest-logo.png" alt="CertaNest Logo" width="220" />
 </p>
 
-<h1 align="center">DueNest</h1>
+<h1 align="center">CertaNest</h1>
 
 <p align="center">
   <strong>AI-powered life admin platform for documents, deadlines, renewals, reminders, and application-ready document packs.</strong>
@@ -25,13 +25,13 @@
 
 ## Overview
 
-**DueNest** is a SaaS-ready full-stack platform designed to help users manage important documents, deadlines, renewals, reminders, subscriptions, and reusable application document packs in one secure workspace.
+**CertaNest** is a SaaS-ready full-stack platform designed to help users manage important documents, deadlines, renewals, reminders, subscriptions, and reusable application document packs in one secure workspace.
 
 The platform helps users organize essential files, track expiry dates, manage recurring obligations, receive deadline reminders, and prepare application-ready document bundles for jobs, scholarships, visas, internships, universities, grants, and professional opportunities.
 
-The long-term vision is to turn DueNest into an **AI-powered life admin operating system** for students, professionals, immigrants, freelancers, families, and small teams.
+The long-term vision is to turn CertaNest into an **AI-powered life admin operating system** for students, professionals, immigrants, freelancers, families, and small teams.
 
-DueNest is being built **documents-first**: the immediate focus is making the
+CertaNest is being built **documents-first**: the immediate focus is making the
 Documents module a premium, pay-worthy **document renewal and expiry management
 vault** before expanding into subscriptions, application packs, and AI. See the
 [Document Vault Roadmap](./docs/document-vault-roadmap.md) for the phased plan,
@@ -87,7 +87,7 @@ For many people, missing one important deadline can delay an application, create
 
 ## Solution
 
-DueNest provides one secure workspace where users can:
+CertaNest provides one secure workspace where users can:
 
 * Store essential documents
 * Track expiry dates and renewal deadlines
@@ -97,13 +97,13 @@ DueNest provides one secure workspace where users can:
 * Organize documents by category, purpose, and status
 * Later use AI to extract dates, classify documents, and suggest actions automatically
 
-DueNest is not only a reminder app. It is designed to become a trusted system for managing important personal, academic, professional, and administrative obligations.
+CertaNest is not only a reminder app. It is designed to become a trusted system for managing important personal, academic, professional, and administrative obligations.
 
 ---
 
 ## Product Vision
 
-DueNest is built around one core question:
+CertaNest is built around one core question:
 
 > What important document, deadline, renewal, or application requirement am I about to miss?
 
@@ -149,7 +149,7 @@ This version introduces intelligent document processing.
 
 ### v0.3 — Application Packs & Secure Sharing
 
-This version makes DueNest more useful for real applications.
+This version makes CertaNest more useful for real applications.
 
 * Create reusable document packs
 * Download selected documents as ZIP files
@@ -161,7 +161,7 @@ This version makes DueNest more useful for real applications.
 
 ### v0.4 — Integrations
 
-This version connects DueNest with user workflows.
+This version connects CertaNest with user workflows.
 
 * Gmail scanning for renewal and subscription emails
 * Google Calendar reminders
@@ -171,7 +171,7 @@ This version connects DueNest with user workflows.
 
 ### v1.0 — SaaS-Ready Product
 
-This version prepares DueNest for public demonstration or launch.
+This version prepares CertaNest for public demonstration or launch.
 
 * Polished landing page
 * Demo account
@@ -252,7 +252,7 @@ Planned:
 
 ## Platform Strategy
 
-DueNest will be built in this order:
+CertaNest will be built in this order:
 
 1. **Responsive Web App**
    The main product experience for document management, dashboards, uploads, tables, application packs, and settings.
@@ -270,7 +270,7 @@ The first version will prioritize a high-quality web dashboard because the produ
 ## Planned Architecture
 
 ```txt
-DueNest
+CertaNest
 │
 ├── Frontend
 │   └── Next.js + TypeScript
@@ -348,7 +348,7 @@ duenest/
 
 ## Brand Assets
 
-DueNest brand assets are stored in the [`brand/`](./brand/) folder.
+CertaNest brand assets are stored in the [`brand/`](./brand/) folder.
 
 This includes:
 
@@ -827,7 +827,7 @@ Users can receive reminders before important deadlines and renewal dates.
 
 ### Goal
 
-Prepare a presentable DueNest v0.1 MVP for portfolio, recruiter, and demo use.
+Prepare a presentable CertaNest v0.1 MVP for portfolio, recruiter, and demo use.
 
 ### Tasks
 
@@ -872,7 +872,7 @@ Detailed project documentation is maintained in the [`docs/`](./docs/) folder.
 
 ## Security Principles
 
-DueNest may handle sensitive personal documents, so security is a core product principle.
+CertaNest may handle sensitive personal documents, so security is a core product principle.
 
 Planned security practices include:
 
@@ -986,7 +986,7 @@ test: add document ownership tests
 
 ## Why This Project Matters
 
-DueNest is not a basic CRUD project. It is designed to demonstrate real software engineering ability through:
+CertaNest is not a basic CRUD project. It is designed to demonstrate real software engineering ability through:
 
 * Full-stack architecture
 * Authentication
@@ -1007,7 +1007,7 @@ The goal is to build something that can serve as both a standout portfolio proje
 
 ## Disclaimer
 
-DueNest is currently in early development. The project is not yet production-ready and should not be used to store real sensitive documents until security, storage, access control, deployment hardening, and privacy controls are fully implemented.
+CertaNest is currently in early development. The project is not yet production-ready and should not be used to store real sensitive documents until security, storage, access control, deployment hardening, and privacy controls are fully implemented.
 
 ---
 
@@ -1015,10 +1015,10 @@ DueNest is currently in early development. The project is not yet production-rea
 
 Built by **Nouhan Doumbouya**.
 
-DueNest is built as a flagship full-stack SaaS project focused on real-world product design, secure document workflows, deadline intelligence, and AI-powered automation.
+CertaNest is built as a flagship full-stack SaaS project focused on real-world product design, secure document workflows, deadline intelligence, and AI-powered automation.
 
 ---
 
 ## Note
 
-DueNest has completed its planning, branding, documentation, and initial Django REST Framework backend foundation. The next phase is backend authentication.
+CertaNest has completed its planning, branding, documentation, and initial Django REST Framework backend foundation. The next phase is backend authentication.

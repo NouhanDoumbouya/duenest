@@ -270,7 +270,7 @@ export default function QuickShareListPage() {
 
       <TrustNotice icon={ShieldCheck} title="Your vault stays private">
         SafeSend sends secure access, never your raw file path. Access is
-        checked on DueNest&apos;s servers every time, and you can revoke any share
+        checked on CertaNest&apos;s servers every time, and you can revoke any share
         instantly.
       </TrustNotice>
 

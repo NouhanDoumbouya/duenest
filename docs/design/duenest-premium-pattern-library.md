@@ -1,6 +1,6 @@
-# DueNest — Premium Pattern Library
+# CertaNest — Premium Pattern Library
 
-> DueNest-specific UX patterns. Each pattern says where it appears, its layout /
+> CertaNest-specific UX patterns. Each pattern says where it appears, its layout /
 > copy / interaction / mobile / a11y rules, and the anti-patterns to avoid.
 >
 > Built on the existing system: tokens + motion in `frontend/src/app/globals.css`,
@@ -36,7 +36,7 @@ Conventions used below:
 
 - **Purpose:** make the user feel seen before pitching features.
 - **Where:** landing `Pain` (before/after two-card).
-- **Layout:** two cards — "Without DueNest" (amber dots) vs "With DueNest"
+- **Layout:** two cards — "Without CertaNest" (amber dots) vs "With CertaNest"
   (success checks).
 - **Copy:** concrete frustrations ("scattered across WhatsApp, email, Drive").
 - **Interaction:** `reveal` on scroll with small stagger.
@@ -50,7 +50,7 @@ Conventions used below:
 - **Where:** landing `Connected` (`SystemFlow`), `HowItWorks`.
 - **Layout:** 3 numbered steps OR connected node flow; connectors animate via
   `flow-line`.
-- **Copy:** verbs first — Add it once / DueNest watches / You stay ready.
+- **Copy:** verbs first — Add it once / CertaNest watches / You stay ready.
 - **Mobile:** vertical steps; connectors hidden or simplified.
 - **Anti-pattern:** fake dashboards with unreadable micro-text.
 
@@ -193,7 +193,7 @@ Conventions used below:
 
 - **Purpose:** let a third party upload exactly what's requested, nothing more.
 - **Where:** `app/request/[token]`, `app/org-request/[token]`.
-- **Layout:** DueNest logo → request title → requested type → requester (if safe) →
+- **Layout:** CertaNest logo → request title → requested type → requester (if safe) →
   instructions → upload area → submit → trust note.
 - **Copy:** "This upload goes only to the person or organization that requested it."
 - **Mobile:** single column, large upload target.

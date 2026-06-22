@@ -490,9 +490,9 @@ export default function NewQuickSharePage() {
               ))}
             </div>
             <p className="text-xs text-muted-foreground">
-              Every share always has a QR, a secure link, and a DueNest code. This
+              Every share always has a QR, a secure link, and a CertaNest code. This
               just sets what we surface first. QR is best in person · link is best
-              for chat apps · code is best for DueNest users.
+              for chat apps · code is best for CertaNest users.
             </p>
           </Field>
         </div>
@@ -531,7 +531,7 @@ export default function NewQuickSharePage() {
                 active={mode === "account_to_account"}
                 onClick={() => setMode("account_to_account")}
                 icon={<Users className="size-4" />}
-                title="A DueNest user"
+                title="A CertaNest user"
                 description="They sign in, accept, and the files appear in their Shared with me."
               />
               <ChoiceCard
@@ -679,7 +679,7 @@ export default function NewQuickSharePage() {
                     }}
                     icon={<Save className="size-4" />}
                     title="Can save a copy"
-                    description="They can save their own copy into their DueNest vault."
+                    description="They can save their own copy into their CertaNest vault."
                   />
                 </div>
                 {permission === "save_copy_allowed" && (
@@ -783,7 +783,7 @@ export default function NewQuickSharePage() {
                     <ToggleRow
                       icon={<BadgeCheck className="size-4" />}
                       title="Verified share"
-                      description="Add a DueNest signature so the recipient can confirm these exact files are authentic and unaltered — on a public verify page."
+                      description="Add a CertaNest signature so the recipient can confirm these exact files are authentic and unaltered — on a public verify page."
                       checked={verified}
                       onChange={(v) => {
                         setVerified(v);
@@ -1120,7 +1120,7 @@ function WatermarkPreview() {
               key={i}
               className="-rotate-[30deg] text-[10px] font-semibold whitespace-nowrap text-foreground select-none"
             >
-              DueNest · Secure
+              CertaNest · Secure
             </span>
           ))}
         </div>
@@ -1185,7 +1185,7 @@ function StickyShareSummary({
   const parts = [
     `${itemCount} item${itemCount === 1 ? "" : "s"}`,
     packageLabel,
-    mode === "account_to_account" ? "DueNest user" : "Public",
+    mode === "account_to_account" ? "CertaNest user" : "Public",
     permissionLabel,
     expiryLabel,
     accessCode ? "Code" : null,
@@ -1344,7 +1344,7 @@ function ReviewStep({
   const sendParts = [
     m.qr && "QR",
     m.link && "Secure link",
-    m.code && "DueNest code",
+    m.code && "CertaNest code",
   ].filter(Boolean) as string[];
 
   return (
@@ -1389,7 +1389,7 @@ function ReviewStep({
           <SafetyRow label="Package" value={sendParts.join(" + ")} />
           <SafetyRow
             label="Recipient"
-            value={mode === "account_to_account" ? "A DueNest user" : "Anyone with the link"}
+            value={mode === "account_to_account" ? "A CertaNest user" : "Anyone with the link"}
           />
           {recipient && <SafetyRow label="For" value={recipient} />}
         </SafetySection>
@@ -1409,7 +1409,7 @@ function ReviewStep({
         <SafetySection title="Control">
           <p className="text-xs text-muted-foreground">
             You can revoke access anytime. Opens, previews, and downloads may be
-            logged. DueNest never exposes your full vault.
+            logged. CertaNest never exposes your full vault.
           </p>
         </SafetySection>
       </div>

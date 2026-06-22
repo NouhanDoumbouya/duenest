@@ -1,5 +1,5 @@
 """
-Tests for DueNest Calendar V1: owner-scoped aggregation across documents,
+Tests for CertaNest Calendar V1: owner-scoped aggregation across documents,
 reminders, bundles, shares, and rooms; filtering; summary; and safe .ics export.
 """
 

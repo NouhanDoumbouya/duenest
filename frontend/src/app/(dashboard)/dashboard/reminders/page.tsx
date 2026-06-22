@@ -75,7 +75,7 @@ export default function RemindersPage() {
 
       <SectionCard
         title="Upcoming reminders"
-        description="Sorted by the next date DueNest would remind you."
+        description="Sorted by the next date CertaNest would remind you."
       >
         {error ? (
           <ErrorState description={error} onRetry={retry} />
@@ -152,7 +152,7 @@ export default function RemindersPage() {
       </SectionCard>
 
       <p className="text-center text-xs text-muted-foreground">
-        DueNest now turns due reminders into in-app notifications and
+        CertaNest now turns due reminders into in-app notifications and
         privacy-safe email reminders when the backend command runs.
       </p>
     </PageContainer>

@@ -46,7 +46,7 @@ export { looksSensitive } from "@/lib/safesend";
 
 /**
  * Optional QR appearance. `dark` is the module color, `light` the background
- * (defaults to white), `logo` centers a DueNest badge, and `margin` is the
+ * (defaults to white), `logo` centers a CertaNest badge, and `margin` is the
  * quiet-zone width in modules (defaults to 1; wider helps print scanning).
  */
 export interface QrStyle {
@@ -56,7 +56,7 @@ export interface QrStyle {
   margin?: number;
   /**
    * Optional custom center logo as a raster data URL (PNG/JPEG/WebP only —
-   * validated client-side, never stored). Takes the place of the DueNest badge
+   * validated client-side, never stored). Takes the place of the CertaNest badge
    * and, like it, raises error correction to H so the code stays scannable.
    */
   logoSrc?: string;
@@ -143,7 +143,7 @@ export function saveDefaultQrStyle(style: QrStyle): void {
  * Generate a PNG data URL for a QR encoding `value`. The heavy `qrcode` lib is
  * dynamically imported so only the screens that need a QR pay for it. When
  * `style.logo` is set, the error-correction level is raised to H and a small
- * DueNest badge is drawn over the (redundant) center modules.
+ * CertaNest badge is drawn over the (redundant) center modules.
  */
 export async function generateQrDataUrl(
   value: string,
@@ -171,7 +171,7 @@ export async function generateQrDataUrl(
 
 /**
  * Build a scalable SVG QR (qrcode lib output) with an optional centered mark.
- * The mark is drawn as SVG (white cushion + DueNest monogram, or an embedded
+ * The mark is drawn as SVG (white cushion + CertaNest monogram, or an embedded
  * raster `<image>` for a custom logo) so the SVG is self-contained.
  */
 export async function generateQrSvg(
@@ -278,7 +278,7 @@ async function overlayCenterMark(
     ctx.drawImage(logo, c - dw / 2, c - dh / 2, dw, dh);
     ctx.restore();
   } else {
-    // Brand-colored badge with the DueNest monogram.
+    // Brand-colored badge with the CertaNest monogram.
     ctx.fillStyle = dark;
     roundRect(ctx, c - badge / 2, c - badge / 2, badge, badge, badge * 0.26);
     ctx.fill();

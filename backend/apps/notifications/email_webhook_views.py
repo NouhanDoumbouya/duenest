@@ -127,5 +127,5 @@ class UnsubscribeView(APIView):
             reason=SuppressedEmail.Reason.UNSUBSCRIBE,
         )
         return Response(
-            {"detail": "You've been unsubscribed from non-essential DueNest emails."}
+            {"detail": "You've been unsubscribed from non-essential CertaNest emails."}
         )

@@ -1,5 +1,5 @@
 """
-Centralized accessor for DueNest's configured object/file storage.
+Centralized accessor for CertaNest's configured object/file storage.
 
 The whole codebase already reads and writes file content exclusively through
 Django's storage API (``FieldFile.save`` / ``FieldFile.open``), which routes to
@@ -59,7 +59,7 @@ def signed_url(name: str, expire: int | None = None) -> str | None:
     Return a short-lived signed URL for a stored object, if the backend supports
     it. Returns ``None`` for the local filesystem backend.
 
-    NOTE: DueNest does not use this for delivering user files (contents are
+    NOTE: CertaNest does not use this for delivering user files (contents are
     encrypted ciphertext and are streamed through authenticated views). It exists
     only for diagnostics/admin and intentionally never yields a public URL.
     """

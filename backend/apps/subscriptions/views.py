@@ -44,7 +44,7 @@ class _SubscriptionsDeprecatedMixin:
     """
     Server-side deprecation gate for the legacy Subscription Radar.
 
-    DueNest is a life-document readiness platform, not a subscription/finance
+    CertaNest is a life-document readiness platform, not a subscription/finance
     tracker. The ``subscriptions`` feature flag defaults to ``disabled``, so this
     raises a controlled 503 for every action (list/detail/create/lifecycle).
     UI hiding alone is not enough — the API must refuse too. A founder can still

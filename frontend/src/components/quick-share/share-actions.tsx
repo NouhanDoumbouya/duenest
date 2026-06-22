@@ -3,7 +3,7 @@
 // SafeSend distribution surface: app share buttons (native share, WhatsApp,
 // Telegram, email, SMS), copy actions (link, code, full message), QR download,
 // and a downloadable branded share card. Never sends the raw file — only the
-// secure link, DueNest code, QR, and access instructions.
+// secure link, CertaNest code, QR, and access instructions.
 
 import { useMemo, useState } from "react";
 import {
@@ -62,7 +62,7 @@ export interface ShareActionsProps {
   shareUrl: string;
   /** Secure link to surface in messages (omit for code-only packages). */
   link?: string;
-  /** DueNest code to surface in messages (omit when not part of the package). */
+  /** CertaNest code to surface in messages (omit when not part of the package). */
   code?: string;
   title?: string;
   purpose?: string;
@@ -143,7 +143,7 @@ export function ShareDistributionActions(props: ShareActionsProps) {
     }
     try {
       await navigator.share({
-        title: title || "Secure DueNest share",
+        title: title || "Secure CertaNest share",
         text: message,
         url: link ?? shareUrl,
       });
@@ -279,7 +279,7 @@ export function ShareDistributionActions(props: ShareActionsProps) {
           {code && (
             <Button
               variant="outline"
-              onClick={() => copy(code, "code", "DueNest code copied.")}
+              onClick={() => copy(code, "code", "CertaNest code copied.")}
               className="justify-start font-mono"
             >
               {copied === "code" ? (
@@ -287,7 +287,7 @@ export function ShareDistributionActions(props: ShareActionsProps) {
               ) : (
                 <IdCard className="size-4" />
               )}
-              {copied === "code" ? "Copied" : "DueNest code"}
+              {copied === "code" ? "Copied" : "CertaNest code"}
             </Button>
           )}
           <Button
@@ -531,7 +531,7 @@ async function buildShareCardDataUrl(input: ShareCardInput): Promise<string> {
   ctx.textAlign = "center";
   ctx.fillStyle = navy;
   ctx.font = "700 34px system-ui, -apple-system, sans-serif";
-  ctx.fillText("DueNest", cx, y);
+  ctx.fillText("CertaNest", cx, y);
 
   y += 34;
   ctx.fillStyle = accent;
@@ -590,7 +590,7 @@ async function buildShareCardDataUrl(input: ShareCardInput): Promise<string> {
   // Footer
   ctx.fillStyle = muted;
   ctx.font = "500 13px system-ui, -apple-system, sans-serif";
-  ctx.fillText("Shared securely through DueNest", cx, H - 36);
+  ctx.fillText("Shared securely through CertaNest", cx, H - 36);
 
   return canvas.toDataURL("image/png");
 }

@@ -1,13 +1,13 @@
 """
-Provider-neutral object-storage configuration for DueNest.
+Provider-neutral object-storage configuration for CertaNest.
 
-DueNest keeps storage *provider-agnostic*. Operators configure storage through
+CertaNest keeps storage *provider-agnostic*. Operators configure storage through
 neutral ``STORAGE_*`` environment variables (never AWS-specific names in the
 public ``.env.example``); this module maps them to the django-storages S3
 backend internally. Any S3-compatible provider works: Cloudflare R2 (preferred
 for beta), Railway buckets, AWS S3, MinIO, or other custom S3 endpoints.
 
-Security note: DueNest stores **app-encrypted ciphertext** in object storage and
+Security note: CertaNest stores **app-encrypted ciphertext** in object storage and
 streams decrypted bytes through authenticated, ownership-checked Django views.
 It never exposes object-storage URLs for file delivery. The S3 backend is still
 configured *private by default* (no ACL, signed URLs only) as defense in depth,

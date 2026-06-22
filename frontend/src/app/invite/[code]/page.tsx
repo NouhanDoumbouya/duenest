@@ -65,7 +65,7 @@ export default function InvitePage({
                 Founder invite
               </span>
               <h1 className="mt-5 max-w-2xl font-heading text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
-                You have been invited to DueNest private beta
+                You have been invited to CertaNest private beta
               </h1>
               <p className="mt-5 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
                 Create your account with this invite code to start organizing
@@ -86,7 +86,7 @@ export default function InvitePage({
                         Checking your invite
                       </h2>
                       <p className="mt-2 text-sm text-muted-foreground">
-                        Validating this private beta code with DueNest.
+                        Validating this private beta code with CertaNest.
                       </p>
                     </div>
                   </div>
@@ -118,7 +118,7 @@ export default function InvitePage({
                         Your invite is ready
                       </h2>
                       <p className="mt-2 text-sm text-muted-foreground">
-                        {result?.label || "DueNest private beta invite"}
+                        {result?.label || "CertaNest private beta invite"}
                       </p>
                     </div>
                     <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 font-mono text-sm font-medium">

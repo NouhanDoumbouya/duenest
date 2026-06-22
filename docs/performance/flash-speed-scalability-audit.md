@@ -1,4 +1,4 @@
-# DueNest — Flash-Speed, Scalability & Production-Readiness Audit
+# CertaNest — Flash-Speed, Scalability & Production-Readiness Audit
 
 > **Audit-only sprint.** This document inspects the real code and identifies
 > concrete bottlenecks and scaling risks. No broad optimizations were
@@ -14,7 +14,7 @@
 
 ## 1. Executive summary
 
-DueNest is, for its current stage, an **unusually well-built codebase** from a
+CertaNest is, for its current stage, an **unusually well-built codebase** from a
 correctness and security standpoint, and the *most common* performance traps
 have already been avoided in the hot path:
 
@@ -70,7 +70,7 @@ for normal account sizes today. The *perceived* speed is held back by the
 client-rendered, fetch-after-hydration frontend (no skeleton-on-server, no
 SSR/streaming) and by the absence of any caching for stable data. With
 skeleton-first rendering, a few cached endpoints, and selective server
-rendering, DueNest can credibly feel instant. It is not there today.
+rendering, CertaNest can credibly feel instant. It is not there today.
 
 ## 4. Private beta readiness verdict
 
@@ -476,7 +476,7 @@ Not run in this audit (no seeded staging environment available here; see § 25).
 
 ## 19. Million-user scaling path
 
-Honest assessment: **DueNest cannot serve millions of users today**, primarily
+Honest assessment: **CertaNest cannot serve millions of users today**, primarily
 because of the missing async/cache layer and the in-request file/OCR work — not
 because of the data model, which is sound. Staged path:
 

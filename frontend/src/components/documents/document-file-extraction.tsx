@@ -166,7 +166,7 @@ export function DocumentFileExtraction({
           <div className="flex-1">
             <p className="text-sm font-medium">Extract details from a file</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              DueNest reads what it can from the file and stages suggestions for
+              CertaNest reads what it can from the file and stages suggestions for
               you to review. Nothing is sent to any third-party service, and
               your document is only updated once you apply reviewed details.
             </p>

@@ -1,4 +1,4 @@
-// Shared helpers for the DueNest k6 skeletons. No secrets are hardcoded — every
+// Shared helpers for the CertaNest k6 skeletons. No secrets are hardcoded — every
 // value comes from the environment (see tools/performance/README.md).
 import { check } from "k6";
 

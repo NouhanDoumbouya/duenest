@@ -1,5 +1,5 @@
 """
-Celery application for DueNest background jobs.
+Celery application for CertaNest background jobs.
 
 Lean mode (default): ``ENABLE_BACKGROUND_JOBS`` is False, so Django sets
 ``CELERY_TASK_ALWAYS_EAGER = True`` and every task runs inline, in-process, with

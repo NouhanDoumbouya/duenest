@@ -56,7 +56,7 @@ export default function AiSettingsPage() {
       <PageHeader
         eyebrow="Settings"
         title="AI settings"
-        description="DueNest's AI features are off until you turn them on — and you stay in control of what's shared."
+        description="CertaNest's AI features are off until you turn them on — and you stay in control of what's shared."
       />
 
       {loading ? (
@@ -95,7 +95,7 @@ export default function AiSettingsPage() {
           <ToggleRow
             icon={Sparkles}
             title="Enable AI features"
-            description="Let DueNest use Claude to read your documents and power Ask, Draft, Briefing, Pack Copilot, and Smart Intake. When off, none of your document content is ever sent to the AI provider."
+            description="Let CertaNest use Claude to read your documents and power Ask, Draft, Briefing, Pack Copilot, and Smart Intake. When off, none of your document content is ever sent to the AI provider."
             checked={prefs.ai_enabled}
             saving={saving === "ai_enabled"}
             onChange={(v) => update({ ai_enabled: v }, "ai_enabled")}

@@ -6,7 +6,7 @@ import Link from "next/link";
 /**
  * Calm offline fallback served by the service worker when a navigation fails.
  * Intentionally contains NO private data — no document names, metadata, or
- * cached vault content. DueNest does not keep private documents offline.
+ * cached vault content. CertaNest does not keep private documents offline.
  */
 export default function OfflinePage() {
   const [online, setOnline] = useState(true);
@@ -34,14 +34,14 @@ export default function OfflinePage() {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/icons/icon-192.png"
-          alt="DueNest"
+          alt="CertaNest"
           width={72}
           height={72}
           className="mx-auto mb-6 rounded-2xl shadow-sm"
         />
         <h1 className="text-2xl font-semibold tracking-tight">You are offline</h1>
         <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-          For your privacy, DueNest does not store private documents offline on
+          For your privacy, CertaNest does not store private documents offline on
           this device. Reconnect to access your vault.
         </p>
 

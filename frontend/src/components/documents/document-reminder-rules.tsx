@@ -275,7 +275,7 @@ export function DocumentReminderRules({
         <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center">
           <p className="text-sm font-medium">No reminder rules yet</p>
           <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-            Add the first rule to calculate when DueNest should remind you about
+            Add the first rule to calculate when CertaNest should remind you about
             this document later.
           </p>
         </div>

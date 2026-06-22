@@ -62,7 +62,7 @@ function errorFromApi(err: unknown): RoomError {
 
 function WatermarkOverlay({ metadata }: { metadata: PublicRoomMetadata }) {
   const line = [
-    "Shared via DueNest",
+    "Shared via CertaNest",
     metadata.watermark_text,
     `ID ${metadata.short_id}`,
     new Date().toLocaleString(),
@@ -342,7 +342,7 @@ export default function PublicRoomPage() {
                   </p>
                 )}
                 <p className="mt-3 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-                  This was shared securely through DueNest. Access may expire or
+                  This was shared securely through CertaNest. Access may expire or
                   be revoked by the owner.
                 </p>
                 {!metadata.download_allowed && (

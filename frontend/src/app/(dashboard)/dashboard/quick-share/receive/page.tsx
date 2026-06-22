@@ -65,7 +65,7 @@ export default function ReceiveCodePage() {
         <div>
           <h1 className="text-page-title">Receive a code</h1>
           <p className="text-sm text-muted-foreground">
-            Enter the DueNest code a sender gave you to open what they shared.
+            Enter the CertaNest code a sender gave you to open what they shared.
           </p>
         </div>
       </div>
@@ -77,7 +77,7 @@ export default function ReceiveCodePage() {
         {error && <InlineAlert tone="danger">{error}</InlineAlert>}
 
         <div className="space-y-2">
-          <Label htmlFor="dn-code">DueNest code</Label>
+          <Label htmlFor="dn-code">CertaNest code</Label>
           <div className="relative">
             <Input
               id="dn-code"
@@ -118,9 +118,9 @@ export default function ReceiveCodePage() {
       </form>
 
       <TrustNotice icon={ShieldCheck} title="Codes are checked on our servers">
-        A DueNest code only points to a share — it never carries files or
+        A CertaNest code only points to a share — it never carries files or
         permissions. Access, login, any access code, and expiry are all verified
-        by DueNest before anything opens, and the sender can revoke at any time.
+        by CertaNest before anything opens, and the sender can revoke at any time.
       </TrustNotice>
     </PageContainer>
   );

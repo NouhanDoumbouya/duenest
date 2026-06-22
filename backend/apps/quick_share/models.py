@@ -1,7 +1,7 @@
 """
 Quick Share QR — a fast, secure, account-to-account / public document exchange.
 
-Quick Share sits on top of DueNest's existing secure-document model. A session
+Quick Share sits on top of CertaNest's existing secure-document model. A session
 is a token-gated collection of explicitly selected files (never the whole vault),
 with a permission, expiry, optional access code, optional one-time / limited
 claims, and optional sender approval. Every access rule is enforced server-side.
@@ -26,7 +26,7 @@ from django.utils import timezone
 # have the same entropy and shape as secure-room / share-link tokens.
 from apps.documents.models import generate_share_token
 
-# Human-typable DueNest code alphabet: upper-case letters + digits with the
+# Human-typable CertaNest code alphabet: upper-case letters + digits with the
 # visually ambiguous characters removed (no 0/O, 1/I/L, 5/S, 2/Z, 8/B). The
 # code is for the "Receive code" flow and must be easy to read aloud and type.
 DN_CODE_ALPHABET = "ACDEFGHJKMNPQRTUVWXY3467"
@@ -34,7 +34,7 @@ DN_CODE_ALPHABET = "ACDEFGHJKMNPQRTUVWXY3467"
 
 def generate_dn_code() -> str:
     """
-    Short, human-typable DueNest code, e.g. ``DN-4KQ7-PXMR``.
+    Short, human-typable CertaNest code, e.g. ``DN-4KQ7-PXMR``.
 
     Independent of the secret session token (never derived from it) so it can be
     spoken or typed without weakening the token. Eight characters drawn from a
@@ -79,7 +79,7 @@ class QuickShareSession(models.Model):
         # leads with (the others remain available).
         QR = "qr", "QR code"
         LINK = "link", "Secure link"
-        CODE = "code", "DueNest code"
+        CODE = "code", "CertaNest code"
 
     class Permission(models.TextChoices):
         VIEW_ONLY = "view_only", "View only"

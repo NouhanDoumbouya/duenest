@@ -1,4 +1,4 @@
-# DueNest — 369 Delightful Details Ledger
+# CertaNest — 369 Delightful Details Ledger
 
 > 369 small moments of delight that make users feel **calmer, safer, faster, smarter,
 > and more in control** — never distracted, manipulated, or addicted. Delight here comes
@@ -534,5 +534,5 @@
 - **deferred:** the bulk — backlog for the implementation phases.
 
 These statuses are a **first pass**. No delight was implemented in code on this docs-only
-branch. The north star (DD-369) holds the whole ledger together: DueNest should reward
+branch. The north star (DD-369) holds the whole ledger together: CertaNest should reward
 users for being **ready**.

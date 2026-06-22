@@ -148,7 +148,7 @@ export default function RespondToRequestPage() {
     <main className="flex min-h-dvh flex-col items-center bg-muted/40 px-4 py-10">
       <div className="mb-6 flex items-center gap-2">
         <LogoMark size="sm" />
-        <span className="font-heading text-lg font-semibold">DueNest</span>
+        <span className="font-heading text-lg font-semibold">CertaNest</span>
       </div>
 
       <div className="w-full max-w-lg">
@@ -171,7 +171,7 @@ export default function RespondToRequestPage() {
               </h1>
               <p className="mt-2 text-sm text-muted-foreground">
                 Your documents were sent to {meta?.requester_name}. They&apos;ll
-                find them in their DueNest account.
+                find them in their CertaNest account.
               </p>
             </div>
           </Card>
@@ -272,7 +272,7 @@ export default function RespondToRequestPage() {
             ) : !loggedIn ? (
               <div className="mt-5 rounded-lg border border-border bg-muted/40 p-4 text-center">
                 <p className="text-sm text-muted-foreground">
-                  Sign in to fulfil this from your DueNest vault — pick documents
+                  Sign in to fulfil this from your CertaNest vault — pick documents
                   you already have, no re-uploading.
                 </p>
                 <Link
@@ -285,7 +285,7 @@ export default function RespondToRequestPage() {
                   </Button>
                 </Link>
                 <p className="mt-3 text-xs text-muted-foreground">
-                  New to DueNest?{" "}
+                  New to CertaNest?{" "}
                   <Link
                     href={`/register?next=/request/${token}`}
                     className="font-medium text-primary hover:underline"

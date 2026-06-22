@@ -20,7 +20,7 @@ Without this, **no email sends** (receipts, trials, dunning, invites, resets).
 ```env
 EMAIL_PROVIDER=resend
 RESEND_API_KEY=re_...                      # also used as the SMTP password
-DEFAULT_FROM_EMAIL=DueNest <noreply@yourdomain.com>
+DEFAULT_FROM_EMAIL=CertaNest <noreply@yourdomain.com>
 RESEND_WEBHOOK_SECRET=whsec_...            # from the Resend webhook settings
 BACKEND_PUBLIC_URL=https://api.yourdomain.com   # builds unsubscribe links
 DUENEST_APP_BASE_URL=https://app.yourdomain.com # builds in-app links
@@ -88,7 +88,7 @@ Without `beat`, those scheduled emails never fire.
 ## 4. Founder console setup (after the above)
 
 1. **Founder → Billing**
-   - Turn **receipts on** and pick the format (email + link / DueNest PDF / email only).
+   - Turn **receipts on** and pick the format (email + link / CertaNest PDF / email only).
    - Fill **merchant details** (legal name, address, tax ID) for compliant receipts.
    - Set **email timing**: trial-ending / renewal lead days, grace-period length,
      and (optionally) the dunning follow-up delay.

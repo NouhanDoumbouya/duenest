@@ -106,7 +106,7 @@ export default function BillingSettingsPage() {
           Plan &amp; Billing
         </h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Manage your DueNest plan, payment, and usage. Your documents are never
+          Manage your CertaNest plan, payment, and usage. Your documents are never
           deleted if you downgrade.
         </p>
       </div>

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Reset your password",
-  description: "Request a password reset link for your DueNest account.",
+  description: "Request a password reset link for your CertaNest account.",
   alternates: { canonical: "/forgot-password" },
 };
 

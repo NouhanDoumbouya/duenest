@@ -932,14 +932,14 @@ class FounderEmailAnalyticsView(APIView):
 # Sample context so previews/test-sends render with realistic dynamic bits
 # (links, codes, dates) across every branded template. Missing keys render empty.
 _EMAIL_PREVIEW_SAMPLE = {
-    "invite_url": "https://app.duenest.com/invite/SAMPLE-CODE",
+    "invite_url": "https://app.certanest.com/invite/SAMPLE-CODE",
     "invite_code": "DN-SAMPLE",
-    "reset_url": "https://app.duenest.com/reset-password?token=sample",
-    "verify_url": "https://app.duenest.com/verify-email?token=sample",
-    "action_url": "https://app.duenest.com/dashboard/settings/billing",
+    "reset_url": "https://app.certanest.com/reset-password?token=sample",
+    "verify_url": "https://app.certanest.com/verify-email?token=sample",
+    "action_url": "https://app.certanest.com/dashboard/settings/billing",
     "action_label": "Manage billing",
     "detail_line": "Sample: your plan renews 30 Jun 2026.",
-    "preferences_url": "https://app.duenest.com/dashboard/notifications/settings",
+    "preferences_url": "https://app.certanest.com/dashboard/notifications/settings",
 }
 
 

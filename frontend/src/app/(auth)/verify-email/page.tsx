@@ -82,7 +82,7 @@ function VerifyEmailInner() {
           {status === "verifying" && "Confirming your email…"}
           {status === "success" && "Thanks — your account is confirmed."}
           {status === "error" && "We couldn't confirm this link."}
-          {status === "no-token" && "Confirm your DueNest email address."}
+          {status === "no-token" && "Confirm your CertaNest email address."}
         </CardDescription>
       </CardHeader>
 
@@ -107,7 +107,7 @@ function VerifyEmailInner() {
               href="/dashboard"
               className={buttonVariants({ className: "h-11 w-full text-sm" })}
             >
-              Continue to DueNest
+              Continue to CertaNest
             </Link>
           </>
         )}

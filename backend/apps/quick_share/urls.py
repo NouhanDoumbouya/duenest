@@ -69,7 +69,7 @@ urlpatterns = [
         QuickShareActivityView.as_view(),
         name="quick-share-session-activity",
     ),
-    # Receive by DueNest code (resolve a typed code to its share)
+    # Receive by CertaNest code (resolve a typed code to its share)
     path(
         "quick-share/receive/",
         QuickShareReceiveCodeView.as_view(),

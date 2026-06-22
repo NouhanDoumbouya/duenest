@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 // Private, token-gated route — must never be indexed or cached by search engines.
 export const metadata: Metadata = {
-  title: "Secure share · DueNest",
+  title: "Secure share · CertaNest",
   robots: {
     index: false,
     follow: false,

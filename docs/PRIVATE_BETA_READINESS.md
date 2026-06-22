@@ -14,7 +14,7 @@ production launch. This is an internal readiness note, not a launch claim.
 - File Inbox: upload, attach-to-document, create-document-from-file.
 
 ### Quick Share 2.0
-- Secure Link, DueNest Code, QR, Shared by Me, Shared with Me, Bundle sharing,
+- Secure Link, CertaNest Code, QR, Shared by Me, Shared with Me, Bundle sharing,
   premium secure viewer with watermark/view-only/download/save-copy, expiry,
   revocation, hashed access codes, activity logs. **No Nearby Share.** See
   `QUICK_SHARE_2.md` and `SECURE_SHARING_SECURITY.md`.
@@ -90,6 +90,6 @@ production launch. This is an internal readiness note, not a launch claim.
 
 ## Honest non-claims
 
-DueNest does not claim: perfect OCR accuracy, perfect screenshot prevention,
+CertaNest does not claim: perfect OCR accuracy, perfect screenshot prevention,
 zero-knowledge or "military-grade" encryption, payment processing, or
 lawyer-reviewed legal pages.

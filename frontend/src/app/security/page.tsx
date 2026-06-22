@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils";
 export const metadata: Metadata = {
   title: "Trust & Security",
   description:
-    "How DueNest protects your documents: encryption at rest, owner-scoped access, revocable and expiring sharing, and honest limitations.",
+    "How CertaNest protects your documents: encryption at rest, owner-scoped access, revocable and expiring sharing, and honest limitations.",
   alternates: { canonical: "/security" },
 };
 
@@ -29,7 +29,7 @@ const controls = [
     icon: Lock,
     title: "Encrypted at rest",
     description:
-      "Uploaded files are encrypted at rest. DueNest decrypts a file only after its permission checks pass.",
+      "Uploaded files are encrypted at rest. CertaNest decrypts a file only after its permission checks pass.",
   },
   {
     icon: UserCheck,
@@ -66,9 +66,9 @@ const controls = [
 const limitations = [
   "Watermarking can help discourage misuse, but no web app can fully prevent screenshots on every device.",
   "Public links remain useful only because of the protections you set — use expiry, revocation, and access codes appropriately.",
-  "Do not store full card numbers or banking credentials in DueNest.",
+  "Do not store full card numbers or banking credentials in CertaNest.",
   "Do not paste passwords or access codes into feedback or support messages.",
-  "DueNest does not provide legal, medical, immigration, tax, or financial advice.",
+  "CertaNest does not provide legal, medical, immigration, tax, or financial advice.",
 ];
 
 const notDoing = [
@@ -90,7 +90,7 @@ export default function SecurityPage() {
             Built for sensitive life-admin
           </h1>
           <p className="mt-4 text-lg leading-relaxed text-pretty text-muted-foreground">
-            DueNest is built around private, user-owned document workflows. This
+            CertaNest is built around private, user-owned document workflows. This
             page is an honest beta transparency draft and should receive legal
             and security review before wider public launch.
           </p>
@@ -104,7 +104,7 @@ export default function SecurityPage() {
           </p>
         </div>
 
-        <h2 className="mt-12 text-xl font-semibold">How DueNest protects your data</h2>
+        <h2 className="mt-12 text-xl font-semibold">How CertaNest protects your data</h2>
         <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {controls.map((control) => {
             const Icon = control.icon;
@@ -134,7 +134,7 @@ export default function SecurityPage() {
           </section>
 
           <section className="space-y-4 rounded-2xl border border-border bg-card p-6">
-            <h2 className="text-lg font-semibold">What DueNest does not do</h2>
+            <h2 className="text-lg font-semibold">What CertaNest does not do</h2>
             <ul className="space-y-3 text-sm leading-relaxed text-muted-foreground">
               {notDoing.map((item) => (
                 <li key={item} className="flex items-start gap-2.5">

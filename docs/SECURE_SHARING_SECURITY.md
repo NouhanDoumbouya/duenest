@@ -1,6 +1,6 @@
 # Secure Sharing — Security Model
 
-This document captures the security rules DueNest enforces for Quick Share,
+This document captures the security rules CertaNest enforces for Quick Share,
 file share links, secure rooms, and emergency access. **Frontend permissions are
 never the security boundary — every rule below is enforced server-side.**
 
@@ -52,7 +52,7 @@ written to logs.**
 ## Watermark / screenshot limitation (honest)
 
 Watermarking deters misuse but **cannot fully prevent screenshots on every
-device**. DueNest does not claim screenshot prevention.
+device**. CertaNest does not claim screenshot prevention.
 
 ## Tests
 

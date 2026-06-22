@@ -1,6 +1,6 @@
-# DueNest Encryption
+# CertaNest Encryption
 
-DueNest applies **application-level encryption at rest** to uploaded files and
+CertaNest applies **application-level encryption at rest** to uploaded files and
 selected sensitive fields. The server can still decrypt after permission checks
 (this is **not** zero-knowledge encryption and is **not** "military-grade").
 

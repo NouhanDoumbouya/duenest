@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" fill="none" role="img" aria-label="CertaNest">
+  <title>CertaNest — Certainty Loop mark (icon)</title>
+  <!-- Protective open loop, suggesting C -->
+  <path d="M46 18 A22 22 0 1 0 46 46" stroke="#0F766E" stroke-width="5" stroke-linecap="round"/>
+  <!-- Rising stroke, suggesting N and forward certainty -->
+  <path d="M27 42 L41 22" stroke="#10B981" stroke-width="5" stroke-linecap="round"/>
+  <path d="M27 42 V27" stroke="#0F766E" stroke-width="5" stroke-linecap="round" opacity="0.55"/>
+  <path d="M41 22 V37" stroke="#0F766E" stroke-width="5" stroke-linecap="round" opacity="0.55"/>
+</svg>

@@ -1,15 +1,15 @@
 # OCR & Document Intelligence
 
-This document describes how DueNest assists users in turning raw files into
+This document describes how CertaNest assists users in turning raw files into
 organized, actionable documents. It reflects the current implementation and is
 intentionally honest about its limits.
 
 ## Philosophy
 
 Document Intelligence is a **review-staged assistant**, not an automatic
-pipeline. DueNest may suggest a document's details, but **the owner always
+pipeline. CertaNest may suggest a document's details, but **the owner always
 reviews and explicitly applies** anything before it changes their document.
-DueNest does not claim perfect extraction accuracy.
+CertaNest does not claim perfect extraction accuracy.
 
 ## Architecture
 

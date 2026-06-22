@@ -97,7 +97,7 @@ function RegisterForm() {
               <div>
                 <p className="font-medium">Private beta access</p>
                 <p className="mt-1 text-muted-foreground">
-                  DueNest is currently invite-only so early access stays
+                  CertaNest is currently invite-only so early access stays
                   focused and supportable.
                 </p>
               </div>
@@ -191,7 +191,7 @@ function RegisterForm() {
                   placeholder="DN-ABCDE-12345"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Enter the code from your DueNest private beta invite.
+                  Enter the code from your CertaNest private beta invite.
                 </p>
               </div>
             )}

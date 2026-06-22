@@ -1,6 +1,6 @@
-# DueNest — Detailed Premium UI Spec
+# CertaNest — Detailed Premium UI Spec
 
-> The concrete build spec for premium DueNest. It **codifies the system that
+> The concrete build spec for premium CertaNest. It **codifies the system that
 > already ships** (tokens/motion in `frontend/src/app/globals.css`, primitives in
 > `frontend/src/components/ui/*`) and specifies the rules to apply consistently.
 > Where this spec and code disagree, prefer the token — never hardcode hex.
@@ -173,7 +173,7 @@ scheduling/workforce scope.
 - Packs: "No packs yet. Prepare documents for a visa, scholarship, job, university,
   travel, or renewal." → Create pack.
 - Deadlines: "No deadlines yet. Add expiry dates, renewals, or application
-  deadlines so DueNest can remind you." → Add deadline.
+  deadlines so CertaNest can remind you." → Add deadline.
 - SafeSend: "No shared documents yet. Share sensitive documents with expiry, access
   control, and QR." → Share safely.
 - AI: "Select a document to ask questions, extract dates, or generate a draft." →

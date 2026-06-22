@@ -1,7 +1,7 @@
 """
 Share Requests — inbound "please provide X, Y, Z" fulfilment.
 
-A requester (a DueNest user) lists the documents they need; a logged-in responder
+A requester (a CertaNest user) lists the documents they need; a logged-in responder
 fulfils the checklist from their own vault. The fulfilment is delivered through the
 existing Quick Share engine — a session owned by the responder with a pre-accepted
 claim for the requester — so it lands in the requester's "Shared with me".

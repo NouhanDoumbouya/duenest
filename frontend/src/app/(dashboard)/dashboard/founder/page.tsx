@@ -163,7 +163,7 @@ export default function FounderOverviewPage() {
           <CardContent>
             {data.recent_activity_summary.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                Product events will appear here as users interact with DueNest.
+                Product events will appear here as users interact with CertaNest.
               </p>
             ) : (
               <ul className="space-y-2">

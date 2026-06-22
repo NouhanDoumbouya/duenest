@@ -435,7 +435,7 @@ function PackView({
       </div>
 
       <div className="rounded-xl border border-border bg-accent/40 px-4 py-3 text-sm text-accent-foreground">
-        Only the items selected by the owner are visible here. Their full DueNest
+        Only the items selected by the owner are visible here. Their full CertaNest
         vault remains private.
       </div>
 

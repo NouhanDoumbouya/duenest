@@ -63,7 +63,7 @@ export function FoldersView({
           <EmptyState
             icon={FileText}
             title="Start your document vault"
-            description="Add a document and DueNest tracks its status and dates for you — no folders to keep tidy. Your vault surfaces what's expiring and what needs attention."
+            description="Add a document and CertaNest tracks its status and dates for you — no folders to keep tidy. Your vault surfaces what's expiring and what needs attention."
             action={
               <Link
                 href="/dashboard/documents/new"

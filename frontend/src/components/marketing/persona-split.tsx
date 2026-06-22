@@ -13,7 +13,7 @@ import { Eyebrow } from "@/components/marketing/section";
 /**
  * A two-audience block — the people keeping their own documents ready, and the
  * organizations who request and review them. Inspired by the dual "for manager /
- * for applicant" framing on premium SaaS pages, mapped to DueNest's two real
+ * for applicant" framing on premium SaaS pages, mapped to CertaNest's two real
  * sides so it complements (not duplicates) the granular use-case grid below.
  * Server component — no client JS.
  */

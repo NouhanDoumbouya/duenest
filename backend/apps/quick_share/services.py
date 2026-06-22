@@ -381,7 +381,7 @@ def get_or_create_receiver_claim(session, user, request=None):
 
 def _display_name(user) -> str:
     full = (getattr(user, "get_full_name", lambda: "")() or "").strip()
-    return full or getattr(user, "email", "") or "A DueNest user"
+    return full or getattr(user, "email", "") or "A CertaNest user"
 
 
 @transaction.atomic
@@ -524,7 +524,7 @@ def save_copy_to_vault(session, receiver, source_file, *, target_document_id=Non
         document = Document.objects.create(
             owner=receiver,
             title=source_file.original_filename or "Shared document",
-            notes="Saved from a DueNest Quick Share.",
+            notes="Saved from a CertaNest Quick Share.",
         )
 
     # Decrypt the source (the claim was already validated by the caller), then

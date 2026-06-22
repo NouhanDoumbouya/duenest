@@ -93,7 +93,7 @@ export function AiActivationCard({
           <div>
             <p className="font-medium">Turn on your AI assistant</p>
             <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-              Let DueNest read your own documents to answer questions, draft
+              Let CertaNest read your own documents to answer questions, draft
               letters, build application packs, and tell you what needs attention.
               It&apos;s powered by Claude, your documents aren&apos;t used to train
               AI, and you can turn it off any time.

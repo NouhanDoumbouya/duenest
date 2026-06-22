@@ -1,5 +1,5 @@
 """
-Application-level encryption for DueNest.
+Application-level encryption for CertaNest.
 
 Design (see docs/ENCRYPTION.md):
 
@@ -120,7 +120,7 @@ def encrypt_bytes(plaintext: bytes, aad: bytes) -> EncryptedPayload:
     """
     Seal ``plaintext`` under a new wrapped DEK with the active KEK.
 
-    Suitable for in-memory blobs (DueNest caps uploads at 10 MB). The returned
+    Suitable for in-memory blobs (CertaNest caps uploads at 10 MB). The returned
     ciphertext already includes the GCM authentication tag.
     """
     kek_version, _ = key_provider.get_active_kek()

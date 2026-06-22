@@ -83,7 +83,7 @@ export default function ActionCenterPage() {
       ) : actions.length === 0 ? (
         <EmptyGrowthState
           title="No urgent growth actions"
-          body="DueNest will surface opportunities as data comes in. You can also add your own."
+          body="CertaNest will surface opportunities as data comes in. You can also add your own."
         />
       ) : (
         <div className="space-y-4">

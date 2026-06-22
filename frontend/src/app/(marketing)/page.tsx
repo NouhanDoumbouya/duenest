@@ -43,13 +43,13 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
-  title: { absolute: "DueNest — Important Documents, Ready When Life Asks" },
+  title: { absolute: "CertaNest — Important Documents, Ready When Life Asks" },
   description:
-    "DueNest helps you scan, organize, prepare, track, generate, and safely share important documents before deadlines, applications, renewals, and emergencies. Private by default. Join the beta.",
+    "CertaNest helps you scan, organize, prepare, track, generate, and safely share important documents before deadlines, applications, renewals, and emergencies. Private by default. Join the beta.",
   alternates: { canonical: "/" },
 };
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://duenest.app";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://certanest.com";
 
 // Private-beta vs public-launch messaging. Defaults to beta (waitlist-gated) so
 // nothing changes until launch; set NEXT_PUBLIC_PRIVATE_BETA_ENABLED=false at
@@ -62,7 +62,7 @@ const PRIVATE_BETA =
 // CTA shared by the hero and final call-to-action.
 const PRIMARY_CTA = PRIVATE_BETA
   ? { href: "/waitlist", label: "Join the beta" }
-  : { href: "/register", label: "Start your 14-day free trial" };
+  : { href: "/register", label: "Start organizing" };
 
 // AI marketing is gated on its OWN flag (default off), independent of the
 // beta/launch flag, so the AI story can be turned on the moment AI features are
@@ -74,16 +74,16 @@ const AI_ENABLED =
 // can never drift apart.
 const FAQ_ITEMS: { q: string; a: string }[] = [
   {
-    q: "Is DueNest free?",
-    a: "DueNest is free during its private beta. Paid Pro and Organization plans are previewed on the pricing page, but pricing isn't final yet.",
+    q: "Is CertaNest free?",
+    a: "CertaNest is free during its private beta. Paid Pro and Organization plans are previewed on the pricing page, but pricing isn't final yet.",
   },
   {
     q: "Is my data private?",
     a: "Yes. Nothing is shared until you choose to, and files are encrypted at rest. A share or emergency access exposes only the items you pick — never your whole vault.",
   },
   {
-    q: "Does DueNest read my documents?",
-    a: "Only to help you. DueNest can optionally pull key fields and dates from a file so you type less, and always asks you to confirm before saving. We never sell your data.",
+    q: "Does CertaNest read my documents?",
+    a: "Only to help you. CertaNest can optionally pull key fields and dates from a file so you type less, and always asks you to confirm before saving. We never sell your data.",
   },
   {
     q: "Can I export or delete my data?",
@@ -95,23 +95,23 @@ const FAQ_ITEMS: { q: string; a: string }[] = [
   },
   {
     q: "Why not just use Google Drive?",
-    a: "Drive stores files; DueNest makes them ready. It adds deadline and renewal tracking, application packs with checklists, secure shares that expire and can be revoked, and emergency access — built around documents, not just storage.",
+    a: "Drive stores files; CertaNest makes them ready. It adds deadline and renewal tracking, application packs with checklists, secure shares that expire and can be revoked, and emergency access — built around documents, not just storage.",
   },
   {
     q: "Why not Adobe Scan or a plain scanner app?",
-    a: "Scanning is one step. DueNest takes the scan into a Vault, organizes it, tracks its expiry, adds it to application packs, and lets you share it safely — the whole readiness workflow, not just a clean PDF.",
+    a: "Scanning is one step. CertaNest takes the scan into a Vault, organizes it, tracks its expiry, adds it to application packs, and lets you share it safely — the whole readiness workflow, not just a clean PDF.",
   },
   {
     q: "Are the application pack templates official?",
     a: "No. Templates are generic and fully editable starting points. Requirements vary, so always verify with the official institution or source.",
   },
   {
-    q: "Is signing in DueNest legally binding?",
-    a: "DueNest helps you prepare a signed copy with a signature image, date, and initials. It is not a legal e-signature service — legal acceptance depends on the recipient and jurisdiction.",
+    q: "Is signing in CertaNest legally binding?",
+    a: "CertaNest helps you prepare a signed copy with a signature image, date, and initials. It is not a legal e-signature service — legal acceptance depends on the recipient and jurisdiction.",
   },
   {
     q: "How do reminders work?",
-    a: "DueNest tracks expiry dates and renewal rules, surfaces what needs attention first, and shows it on a calendar and timeline. Rule-based checks — no AI guesswork.",
+    a: "CertaNest tracks expiry dates and renewal rules, surfaces what needs attention first, and shows it on a calendar and timeline. Rule-based checks — no AI guesswork.",
   },
   {
     q: "What happens after the beta?",
@@ -122,7 +122,7 @@ const FAQ_ITEMS: { q: string; a: string }[] = [
   ...(AI_ENABLED
     ? [
         {
-          q: "Does DueNest use AI?",
+          q: "Does CertaNest use AI?",
           a: "Optionally, and only to assist you. AI can read your own documents to extract details and answer questions you ask — always as suggestions you confirm, never auto-saved. Your reminders and deadline checks stay rule-based, so nothing important is left to a guess. AI only ever sees your own documents; it is never used to train models or sold.",
         },
       ]
@@ -134,13 +134,13 @@ const STRUCTURED_DATA = {
   "@graph": [
     {
       "@type": "Organization",
-      name: "DueNest",
+      name: "CertaNest",
       url: SITE_URL,
       logo: `${SITE_URL}/og.png`,
     },
     {
       "@type": "SoftwareApplication",
-      name: "DueNest",
+      name: "CertaNest",
       applicationCategory: "BusinessApplication",
       operatingSystem: "Web",
       url: SITE_URL,
@@ -200,26 +200,27 @@ function Hero() {
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 -top-40 -z-10 h-[560px] [background:radial-gradient(48%_62%_at_72%_-4%,rgba(37,99,235,0.16),transparent_70%),radial-gradient(40%_52%_at_12%_6%,rgba(20,184,166,0.14),transparent_70%),radial-gradient(30%_40%_at_50%_30%,rgba(204,251,241,0.18),transparent_75%)]"
+        className="pointer-events-none absolute inset-x-0 -top-40 -z-10 h-[560px] [background:radial-gradient(48%_62%_at_72%_-4%,rgba(15,118,110,0.16),transparent_70%),radial-gradient(40%_52%_at_12%_6%,rgba(16,185,129,0.12),transparent_70%),radial-gradient(30%_40%_at_50%_30%,rgba(215,237,233,0.20),transparent_75%)]"
       />
       <div className="mx-auto grid w-full max-w-6xl items-center gap-14 px-4 py-20 sm:px-6 lg:grid-cols-[1.04fr_1fr] lg:py-28">
         <div className="content-fade-in flex flex-col items-start text-left">
           <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card/80 px-3 py-1 text-xs font-medium text-muted-foreground shadow-xs backdrop-blur">
             <span className="flex size-1.5 rounded-full bg-brand-teal" />
-            A calmer home for important documents
+            Your life-admin, securely organized
           </span>
 
           <h1 className="mt-6 font-heading text-[2.7rem] leading-[1.02] font-semibold tracking-tight text-balance sm:text-6xl lg:text-[4rem]">
-            Important documents, ready when life asks.
+            Life documents, deadlines, and proof — ready when life asks.
           </h1>
 
           <p className="mt-5 max-w-md text-lg leading-relaxed text-pretty text-muted-foreground">
-            Stop scrambling for a passport, visa, or signed form when a
-            deadline, application, or emergency arrives.
+            CertaNest helps you organize essential files, track renewals and
+            subscriptions, prepare reusable application packs, and share trusted
+            access securely.
           </p>
 
           {/* The whole product in four verbs — so a first-time visitor
-              understands what DueNest does at a glance (the 10-second test). */}
+              understands what CertaNest does at a glance (the 10-second test). */}
           <ul className="mt-6 flex flex-wrap gap-x-5 gap-y-2">
             {[
               { icon: ScanLine, label: "Scan" },
@@ -291,7 +292,7 @@ function TrustBar() {
     { icon: Radar, label: "Rule-based — no AI guesswork" },
   ];
   return (
-    <section aria-label="How DueNest protects your documents" className="border-y border-border bg-card/50">
+    <section aria-label="How CertaNest protects your documents" className="border-y border-border bg-card/50">
       <div className="mx-auto flex w-full max-w-6xl flex-col items-center gap-4 px-4 py-5 sm:px-6 lg:flex-row lg:justify-between lg:py-4">
         <ul className="grid w-full grid-cols-2 gap-x-6 gap-y-3 sm:flex sm:flex-wrap sm:items-center sm:justify-center sm:gap-x-7 lg:justify-start">
           {facts.map((f) => {
@@ -326,11 +327,11 @@ function HowItWorks() {
     {
       icon: ScanLine,
       title: "Add it once",
-      body: "Scan or upload a document — DueNest captures the key dates and details for you.",
+      body: "Scan or upload a document — CertaNest captures the key dates and details for you.",
     },
     {
       icon: Radar,
-      title: "DueNest watches",
+      title: "CertaNest watches",
       body: "Rule-based checks track every expiry, renewal, and deadline quietly in the background.",
     },
     {
@@ -346,7 +347,7 @@ function HowItWorks() {
           <SectionHeader
             eyebrow="How it works"
             title="Three steps to never being caught off guard."
-            description="No setup marathon. Add what matters once, and DueNest keeps it ready for the moment you need it."
+            description="No setup marathon. Add what matters once, and CertaNest keeps it ready for the moment you need it."
           />
         </ScrollReveal>
         <div className="mt-12 grid gap-5 sm:grid-cols-3">
@@ -393,7 +394,7 @@ function Connected() {
           <SectionHeader
             eyebrow="One connected system"
             title="Not five apps. One place that keeps you ready."
-            description="Add a document once. DueNest tracks it, shares it on your terms, and keeps it ready for the moment you need it."
+            description="Add a document once. CertaNest tracks it, shares it on your terms, and keeps it ready for the moment you need it."
           />
         </ScrollReveal>
         <ScrollReveal delay={80} className="mt-12">
@@ -426,7 +427,7 @@ function Pain() {
           <SectionHeader
             eyebrow="The problem"
             title="Life admin gets messy fast."
-            description="Important documents are usually remembered only when something goes wrong. DueNest brings them into one calm place — before a deadline becomes an emergency."
+            description="Important documents are usually remembered only when something goes wrong. CertaNest brings them into one calm place — before a deadline becomes an emergency."
           />
         </ScrollReveal>
         <div className="mx-auto mt-12 grid max-w-4xl gap-5 md:grid-cols-2">
@@ -435,7 +436,7 @@ function Pain() {
               <span className="flex size-6 items-center justify-center rounded-full bg-destructive/10 text-destructive">
                 <X className="size-3.5" />
               </span>
-              Without DueNest
+              Without CertaNest
             </p>
             <ul className="mt-4 space-y-3">
               {before.map((p) => (
@@ -457,7 +458,7 @@ function Pain() {
               <span className="flex size-6 items-center justify-center rounded-full bg-brand-success/15 text-brand-success">
                 <Check className="size-3.5" />
               </span>
-              With DueNest
+              With CertaNest
             </p>
             <ul className="mt-4 space-y-3">
               {after.map((p) => (
@@ -499,7 +500,7 @@ function LifeRadar() {
     {
       icon: ShieldCheck,
       title: "A calm week stays calm",
-      body: "“Nothing urgent. DueNest will keep watching.” Peace of mind, by default.",
+      body: "“Nothing urgent. CertaNest will keep watching.” Peace of mind, by default.",
     },
   ];
   return (
@@ -780,7 +781,7 @@ function Toolkit() {
       icon: Sparkles,
       title: "Details filled in for you",
       description:
-        "DueNest reads key fields and dates from a file, then asks you to confirm before saving — you stay in control.",
+        "CertaNest reads key fields and dates from a file, then asks you to confirm before saving — you stay in control.",
     },
     {
       icon: DoorClosed,
@@ -926,7 +927,7 @@ function Security() {
             Built for sensitive life documents.
           </h2>
           <p className="mt-4 text-pretty text-muted-foreground">
-            DueNest is designed around controlled access. You choose what to
+            CertaNest is designed around controlled access. You choose what to
             share, how long it lasts, and when to revoke it. We&apos;re honest
             about what we can and can&apos;t guarantee.
           </p>
@@ -1060,12 +1061,12 @@ function Principles() {
     {
       icon: Radar,
       title: "Honest by design",
-      body: "Reminders are rule-based — real expiry dates and renewal rules, no AI guesswork. When DueNest reads a file, it asks you to confirm before saving. We're clear about what we can and can't guarantee.",
+      body: "Reminders are rule-based — real expiry dates and renewal rules, no AI guesswork. When CertaNest reads a file, it asks you to confirm before saving. We're clear about what we can and can't guarantee.",
     },
     {
       icon: Sparkles,
       title: "Built to be relied on",
-      body: "DueNest is built like software you trust with what matters: considered, fast, accessible, and steadily improved with the people using it. Details get the care your documents deserve.",
+      body: "CertaNest is built like software you trust with what matters: considered, fast, accessible, and steadily improved with the people using it. Details get the care your documents deserve.",
     },
   ];
   return (
@@ -1075,7 +1076,7 @@ function Principles() {
           <SectionHeader
             eyebrow="How we build"
             title="The standards behind your documents."
-            description="DueNest holds sensitive, sometimes irreplaceable paperwork. We build it the way that responsibility demands — and we're transparent about how."
+            description="CertaNest holds sensitive, sometimes irreplaceable paperwork. We build it the way that responsibility demands — and we're transparent about how."
           />
         </ScrollReveal>
         <div className="mt-12 grid gap-5 sm:grid-cols-2">
@@ -1110,7 +1111,7 @@ function Principles() {
             Built by a small, independent team that treats your documents the way
             we&apos;d want ours treated — with care, restraint, and a bias for
             keeping you in control.{" "}
-            <span className="font-medium text-foreground">— The DueNest team</span>
+            <span className="font-medium text-foreground">— The CertaNest team</span>
           </p>
         </ScrollReveal>
       </div>
@@ -1166,7 +1167,7 @@ function UseCases() {
           <SectionHeader
             eyebrow="Use cases"
             title="Built for the people juggling important documents."
-            description="Whether you're keeping your own documents ready or collecting them from others, DueNest works from both sides."
+            description="Whether you're keeping your own documents ready or collecting them from others, CertaNest works from both sides."
           />
         </ScrollReveal>
         <ScrollReveal delay={80} className="mt-12">
@@ -1247,10 +1248,10 @@ function Faq() {
           ))}
         </ScrollReveal>
         <p className="mx-auto mt-8 max-w-xl text-center text-sm leading-relaxed text-muted-foreground">
-          A note on the beta: DueNest is still being shaped with early users. You
+          A note on the beta: CertaNest is still being shaped with early users. You
           can export or delete your data anytime, and we&apos;ll always be clear
           about what changes before it does.{" "}
-          <span className="font-medium text-foreground">— The DueNest team</span>
+          <span className="font-medium text-foreground">— The CertaNest team</span>
         </p>
       </div>
     </section>

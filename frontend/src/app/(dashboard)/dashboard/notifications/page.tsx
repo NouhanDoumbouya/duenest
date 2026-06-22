@@ -145,7 +145,7 @@ export default function NotificationsPage() {
       <PageHeader
         eyebrow="Workspace"
         title="Notifications"
-        description="Reminders and account alerts generated from your DueNest deadlines."
+        description="Reminders and account alerts generated from your CertaNest deadlines."
         actions={
           <>
             <Link
@@ -240,7 +240,7 @@ export default function NotificationsPage() {
           <EmptyState
             icon={Bell}
             title="You’re all caught up"
-            description="DueNest will notify you here when documents, renewals, checklists, or emergency access items need attention."
+            description="CertaNest will notify you here when documents, renewals, checklists, or emergency access items need attention."
             action={
               <Link
                 href="/dashboard/notifications/settings"
@@ -277,7 +277,7 @@ export default function NotificationsPage() {
                     </p>
                     <p className="mt-2 text-xs text-muted-foreground">
                       {NOTIFICATION_TYPE_LABELS[notification.type]} ·{" "}
-                      {notification.source_type || "DueNest"} ·{" "}
+                      {notification.source_type || "CertaNest"} ·{" "}
                       {formatNotificationTime(notification.created_at)}
                     </p>
                   </div>

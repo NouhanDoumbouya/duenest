@@ -140,7 +140,7 @@ export const NAV_SECTIONS: NavSection[] = [
         label: "Notifications",
         href: "/dashboard/notifications",
         featureKey: "notification_center",
-        description: "Everything DueNest has flagged for you, in one place.",
+        description: "Everything CertaNest has flagged for you, in one place.",
       },
       {
         label: "Calendar",

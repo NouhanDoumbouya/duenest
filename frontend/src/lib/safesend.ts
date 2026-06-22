@@ -52,7 +52,7 @@ const SENSITIVE_PURPOSES: SharePurpose[] = [
 
 // ---- Share package ---------------------------------------------------------
 //
-// Every share always has a QR, a secure link, and a DueNest code. The package
+// Every share always has a QR, a secure link, and a CertaNest code. The package
 // is purely about what the sender wants to *lead with* / surface first; it maps
 // down to a single `share_method` hint the backend already understands.
 
@@ -92,8 +92,8 @@ export function buildSharePackageOptions(): SharePackageOption[] {
     },
     {
       id: "code",
-      label: "DueNest code only",
-      helper: "Best for DueNest users — they type a short code under Receive a code.",
+      label: "CertaNest code only",
+      helper: "Best for CertaNest users — they type a short code under Receive a code.",
     },
     {
       id: "qr_code",
@@ -282,7 +282,7 @@ export const PERMISSION_PRESETS: Record<
 export interface RecommendationInput {
   sensitive: boolean;
   purpose: SharePurpose;
-  /** account_to_account = a DueNest user, public = anyone with the link. */
+  /** account_to_account = a CertaNest user, public = anyone with the link. */
   forDueNestUser: boolean;
   itemCount: number;
 }
@@ -446,7 +446,7 @@ export function buildShareReadinessChecks(
   return checks;
 }
 
-// ---- DueNest code formatting -----------------------------------------------
+// ---- CertaNest code formatting -----------------------------------------------
 
 const DN_CODE_ALPHABET = "ACDEFGHJKMNPQRTUVWXY3467";
 
@@ -551,32 +551,32 @@ export function buildShareMessage(input: ShareMessageInput): string {
   switch (input.template) {
     case "professional":
       lines.push(
-        `Hello, I'm sharing the requested document${subject} securely through DueNest. The access link will expire automatically.`,
+        `Hello, I'm sharing the requested document${subject} securely through CertaNest. The access link will expire automatically.`,
       );
       break;
     case "formal":
       lines.push(
-        `Please find a document${subject} shared securely via DueNest. Access is time-limited and controlled.`,
+        `Please find a document${subject} shared securely via CertaNest. Access is time-limited and controlled.`,
       );
       break;
     case "minimal":
       // Minimal is link-first and terse.
-      if (input.link) return `Secure DueNest share: ${input.link}`;
-      if (input.code) return `Secure DueNest share — code: ${input.code}`;
-      return "Secure DueNest share.";
+      if (input.link) return `Secure CertaNest share: ${input.link}`;
+      if (input.code) return `Secure CertaNest share — code: ${input.code}`;
+      return "Secure CertaNest share.";
     case "organization":
       lines.push(
-        `Sharing a document${subject} securely through DueNest on behalf of our organization. Access is logged and time-limited.`,
+        `Sharing a document${subject} securely through CertaNest on behalf of our organization. Access is logged and time-limited.`,
       );
       break;
     case "family":
       lines.push(
-        `Hey — sharing this${subject} safely through DueNest. It opens securely and closes on its own.`,
+        `Hey — sharing this${subject} safely through CertaNest. It opens securely and closes on its own.`,
       );
       break;
     case "friendly":
     default:
-      lines.push(`I'm sharing this${subject} securely through DueNest.`);
+      lines.push(`I'm sharing this${subject} securely through CertaNest.`);
       break;
   }
 
@@ -589,16 +589,16 @@ export function buildShareMessage(input: ShareMessageInput): string {
   }
   if (input.code) {
     lines.push("");
-    lines.push(`DueNest code: ${input.code}`);
+    lines.push(`CertaNest code: ${input.code}`);
   }
   lines.push("");
-  lines.push("Shared securely through DueNest.");
+  lines.push("Shared securely through CertaNest.");
   return lines.join("\n");
 }
 
 export function buildEmailSubject(title?: string): string {
   const t = title?.trim();
-  return t ? `Secure DueNest share — ${t}` : "Secure DueNest document share";
+  return t ? `Secure CertaNest share — ${t}` : "Secure CertaNest document share";
 }
 
 // ---- Distribution targets --------------------------------------------------

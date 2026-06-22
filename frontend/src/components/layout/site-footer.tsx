@@ -82,7 +82,7 @@ export function SiteFooter() {
 
         <div className="mt-10 flex flex-col gap-3 border-t border-border pt-6 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <p>
-            © {new Date().getFullYear()} DueNest. Documents, deadlines, and
+            © {new Date().getFullYear()} CertaNest. Documents, deadlines, and
             renewals in one calm place.
           </p>
           <p>Private beta · Legal pages are drafts under review.</p>

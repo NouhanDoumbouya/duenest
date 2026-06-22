@@ -3,4 +3,4 @@
 
 Verify here:
 {{ verify_url }}{% endblock %}
-{% block footer %}If you didn't create a DueNest account, you can ignore this email.{% endblock %}
+{% block footer %}If you didn't create a CertaNest account, you can ignore this email.{% endblock %}

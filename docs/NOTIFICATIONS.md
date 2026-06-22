@@ -1,6 +1,6 @@
-# DueNest Notifications
+# CertaNest Notifications
 
-DueNest notifications are owner-scoped records that surface due reminders and
+CertaNest notifications are owner-scoped records that surface due reminders and
 safe account events in the dashboard notification center.
 
 ## Implemented Scope
@@ -159,8 +159,8 @@ notifications. This is **opt-in and privacy-safe**:
   sends a **category-level** push: the body says what *kind* of thing needs
   attention (e.g. "A subscription renewal is coming up.") but never names the
   document, file, recipient, amount, date, or any private detail. The title is a
-  constant "DueNest" and only an internal URL is included. The real content is
-  shown after the user opens DueNest and is authenticated.
+  constant "CertaNest" and only an internal URL is included. The real content is
+  shown after the user opens CertaNest and is authenticated.
 - Endpoints: `GET /notifications/push/public-key/`,
   `POST /notifications/push/subscribe/`, `POST /notifications/push/unsubscribe/`.
 - `pywebpush` is imported lazily; if absent or unconfigured, push is a no-op.

@@ -10,7 +10,7 @@ export interface UseCase {
   /** Small label above the title, e.g. "For students". */
   eyebrow: string;
   title: string;
-  /** SEO <title> (without the " · DueNest" template suffix). */
+  /** SEO <title> (without the " · CertaNest" template suffix). */
   metaTitle: string;
   metaDescription: string;
   pain: string;
@@ -28,7 +28,7 @@ export const USE_CASES: UseCase[] = [
     slug: "students",
     eyebrow: "For students",
     title: "Keep your important documents ready",
-    metaTitle: "DueNest for Students — Keep Your Documents Ready",
+    metaTitle: "CertaNest for Students — Keep Your Documents Ready",
     metaDescription:
       "Academic, visa, scholarship, and job documents in one private place — organized, tracked before they expire, and ready to share safely.",
     pain: "Academic, visa, scholarship, and job documents are scattered across phone, email, WhatsApp, and Drive — and something always expires at the worst time.",
@@ -48,7 +48,7 @@ export const USE_CASES: UseCase[] = [
     slug: "visa-documents",
     eyebrow: "For visa applicants",
     title: "Prepare and track your visa documents",
-    metaTitle: "DueNest for Visa Documents — Prepare & Track",
+    metaTitle: "CertaNest for Visa Documents — Prepare & Track",
     metaDescription:
       "Prepare a complete visa document pack, track passport and visa expiry, and share safely with expiry and revocation — not a public link.",
     pain: "A missing or expired document can delay or derail a visa application.",
@@ -68,7 +68,7 @@ export const USE_CASES: UseCase[] = [
     slug: "scholarship-applications",
     eyebrow: "For scholarship applicants",
     title: "Build a complete scholarship pack",
-    metaTitle: "DueNest for Scholarship Applications",
+    metaTitle: "CertaNest for Scholarship Applications",
     metaDescription:
       "Build a complete scholarship pack with an editable checklist, document drafts, and deadline tracking — so nothing is missing at submission.",
     pain: "Scholarship packs come together last-minute and incomplete.",
@@ -88,7 +88,7 @@ export const USE_CASES: UseCase[] = [
     slug: "job-applications",
     eyebrow: "For job applicants",
     title: "Build a job application pack",
-    metaTitle: "DueNest for Job Applications",
+    metaTitle: "CertaNest for Job Applications",
     metaDescription:
       "Build a job application pack with CV and cover-letter drafts, supporting documents, deadline tracking, and secure sharing — all in one place.",
     pain: "Every role needs a tailored CV, cover letter, certificates, and its own deadline.",
@@ -102,13 +102,13 @@ export const USE_CASES: UseCase[] = [
       "Export or share securely",
     ],
     features: ["Application Packs", "Document Generation", "Deadlines & Renewals", "Document Tools", "SafeSend"],
-    trustNote: "Drafts are starting points you edit — DueNest never promises acceptance.",
+    trustNote: "Drafts are starting points you edit — CertaNest never promises acceptance.",
   },
   {
     slug: "document-sharing",
     eyebrow: "For safe sharing",
     title: "Share sensitive documents without losing control",
-    metaTitle: "DueNest for Secure Document Sharing",
+    metaTitle: "CertaNest for Secure Document Sharing",
     metaDescription:
       "Share sensitive documents with expiry, access rules, QR, and revocation. No public link is created without your confirmation.",
     pain: "Sensitive documents get shared over email and WhatsApp and can't be taken back.",
@@ -128,7 +128,7 @@ export const USE_CASES: UseCase[] = [
     slug: "agencies-schools",
     eyebrow: "For agencies & schools",
     title: "Collect and track documents from many people",
-    metaTitle: "DueNest for Agencies & Schools — Document Portals",
+    metaTitle: "CertaNest for Agencies & Schools — Document Portals",
     metaDescription:
       "Request, review, track, and safely manage document submissions from applicants, clients, and students — without email and WhatsApp chaos.",
     pain: "Collecting documents from many applicants, clients, or students is chaotic.",
@@ -141,14 +141,14 @@ export const USE_CASES: UseCase[] = [
       "Send reminders",
       "Organize received documents safely",
     ],
-    features: ["DueNest Portals", "Document Requests", "Deadlines & Renewals", "SafeSend", "Organizations"],
+    features: ["CertaNest Portals", "Document Requests", "Deadlines & Renewals", "SafeSend", "Organizations"],
     trustNote: "Upload links are scoped — recipients never see your workspace.",
   },
   {
     slug: "families",
     eyebrow: "For families",
     title: "Keep your family's documents ready",
-    metaTitle: "DueNest for Families — Documents Ready for Emergencies",
+    metaTitle: "CertaNest for Families — Documents Ready for Emergencies",
     metaDescription:
       "Keep your family's important documents organized in one private place, and prepare read-only emergency access for the people you trust.",
     pain: "Everyone's important documents are spread out — and impossible to find in an emergency.",

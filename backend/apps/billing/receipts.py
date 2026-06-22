@@ -1,12 +1,12 @@
 """
-Branded subscription receipt emails for DueNest.
+Branded subscription receipt emails for CertaNest.
 
 A receipt is sent for a successful subscription payment (Stripe ``invoice.paid``
 or the manual/dev provider), when a founder has enabled receipts in the founder
 console. The format is founder-configurable (:class:`ReceiptSettings.Mode`):
 
 * ``email_link`` — branded email linking to the provider's hosted invoice/PDF
-* ``email_pdf``  — branded email with a DueNest-generated PDF attached
+* ``email_pdf``  — branded email with a CertaNest-generated PDF attached
 * ``email_only`` — branded email, no PDF
 
 Sending is **idempotent** (guarded by ``InvoiceRecord.receipt_sent_at``) because
@@ -94,7 +94,7 @@ def _fmt_date(value) -> str:
 def build_receipt_context(invoice: InvoiceRecord, cfg: ReceiptSettings) -> dict:
     """Build the template/PDF context for a paid invoice."""
     sub = invoice.subscription
-    plan_name = sub.plan.name if sub and sub.plan_id else "DueNest subscription"
+    plan_name = sub.plan.name if sub and sub.plan_id else "CertaNest subscription"
     interval_label = _interval_label(sub.billing_interval) if sub else ""
     period_start = _fmt_date(invoice.period_start or (sub.current_period_start if sub else None))
     period_end = _fmt_date(invoice.period_end or (sub.current_period_end if sub else None))
@@ -105,9 +105,9 @@ def build_receipt_context(invoice: InvoiceRecord, cfg: ReceiptSettings) -> dict:
     invoice_url = invoice.hosted_invoice_url or invoice.invoice_pdf_url or ""
     tax = invoice.tax_amount or 0
     return {
-        "subject": f"Your DueNest receipt — {plan_name}",
+        "subject": f"Your CertaNest receipt — {plan_name}",
         "heading": "Thanks for your payment",
-        "intro": "Here's the receipt for your DueNest subscription payment.",
+        "intro": "Here's the receipt for your CertaNest subscription payment.",
         "plan_name": plan_name,
         "interval_label": interval_label,
         "amount_display": format_money(amount, invoice.currency),
@@ -129,7 +129,7 @@ def build_receipt_context(invoice: InvoiceRecord, cfg: ReceiptSettings) -> dict:
 
 
 def build_receipt_pdf(context: dict) -> bytes:
-    """Render a one-page, DueNest-branded PDF receipt (pure-Python, fpdf2)."""
+    """Render a one-page, CertaNest-branded PDF receipt (pure-Python, fpdf2)."""
     from fpdf import FPDF
 
     def latin1(text: str) -> str:
@@ -141,7 +141,7 @@ def build_receipt_pdf(context: dict) -> bytes:
 
     pdf.set_font("Helvetica", "B", 20)
     pdf.set_text_color(16, 32, 51)
-    pdf.cell(0, 11, "DueNest", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 11, "CertaNest", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("Helvetica", "", 11)
     pdf.set_text_color(110, 122, 138)
     pdf.cell(0, 7, "Payment receipt", new_x="LMARGIN", new_y="NEXT")
@@ -189,7 +189,7 @@ def _send(to_email: str, context: dict, *, attach_pdf: bool) -> None:
     if attach_pdf:
         try:
             pdf_bytes = build_receipt_pdf(context)
-            attachments = [("DueNest-receipt.pdf", pdf_bytes, "application/pdf")]
+            attachments = [("CertaNest-receipt.pdf", pdf_bytes, "application/pdf")]
         except Exception:  # noqa: BLE001 — fall back to a link/email if PDF fails
             logger.exception("receipt PDF generation failed; sending without it")
             context["has_pdf"] = False
@@ -253,10 +253,10 @@ def send_test_receipt(user) -> None:
     cfg = ReceiptSettings.load()
     now = timezone.now()
     context = {
-        "subject": "Your DueNest receipt — Sample (test)",
+        "subject": "Your CertaNest receipt — Sample (test)",
         "heading": "Thanks for your payment",
         "intro": "This is a sample receipt so you can preview the format. No payment was made.",
-        "plan_name": "DueNest Pro",
+        "plan_name": "CertaNest Pro",
         "interval_label": "Yearly",
         "amount_display": format_money(4900, "usd"),
         "period_display": f"{_fmt_date(now)} – {_fmt_date(now + timezone.timedelta(days=365))}",

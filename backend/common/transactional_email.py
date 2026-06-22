@@ -47,9 +47,9 @@ TRANSACTIONAL_EMAILS: dict[str, TransactionalEmail] = {
         name="Private-beta invite",
         trigger="Sent when you send a private-beta invite to someone on the waitlist.",
         template="invite",
-        subject="Your DueNest invite is ready",
+        subject="Your CertaNest invite is ready",
         body=(
-            "You've been invited to the DueNest private beta — the calm place to "
+            "You've been invited to the CertaNest private beta — the calm place to "
             "keep your important documents, renewals, and deadlines, and share "
             "them securely when life asks for proof."
         ),
@@ -59,9 +59,9 @@ TRANSACTIONAL_EMAILS: dict[str, TransactionalEmail] = {
         name="Waitlist confirmation",
         trigger="Sent automatically the moment someone joins the waitlist.",
         template="waitlist_confirmation",
-        subject="You're on the DueNest waitlist",
+        subject="You're on the CertaNest waitlist",
         body=(
-            "Thanks for joining the DueNest private-beta waitlist. DueNest keeps "
+            "Thanks for joining the CertaNest private-beta waitlist. CertaNest keeps "
             "your important documents, renewals, and deadlines in one calm place "
             "— and quietly watches them so nothing slips. We'll email you an "
             "invite as spots open up."
@@ -72,9 +72,9 @@ TRANSACTIONAL_EMAILS: dict[str, TransactionalEmail] = {
         name="Password reset",
         trigger="Sent when a user requests a password reset.",
         template="password_reset",
-        subject="Reset your DueNest password",
+        subject="Reset your CertaNest password",
         body=(
-            "We received a request to reset your DueNest password. Use the button "
+            "We received a request to reset your CertaNest password. Use the button "
             "below to choose a new one. This link is single-use and expires soon."
         ),
     ),
@@ -83,9 +83,9 @@ TRANSACTIONAL_EMAILS: dict[str, TransactionalEmail] = {
         name="Email verification",
         trigger="Sent when a user registers or changes their email address.",
         template="email_verification",
-        subject="Verify your DueNest email",
+        subject="Verify your CertaNest email",
         body=(
-            "Confirm your email to finish setting up DueNest and keep your account "
+            "Confirm your email to finish setting up CertaNest and keep your account "
             "secure."
         ),
     ),
@@ -95,9 +95,9 @@ TRANSACTIONAL_EMAILS: dict[str, TransactionalEmail] = {
         name="Payment failed (dunning)",
         trigger="Sent when a subscription payment fails (first dunning notice).",
         template="billing_lifecycle",
-        subject="Action needed: your DueNest payment failed",
+        subject="Action needed: your CertaNest payment failed",
         body=(
-            "We couldn't process your latest DueNest payment. Your Pro features "
+            "We couldn't process your latest CertaNest payment. Your Pro features "
             "stay active during a short grace period — please update your payment "
             "method to avoid losing access."
         ),
@@ -109,9 +109,9 @@ TRANSACTIONAL_EMAILS: dict[str, TransactionalEmail] = {
         name="Payment failed — follow-up reminder",
         trigger="Sent a few days later if a failed payment is still unresolved.",
         template="billing_lifecycle",
-        subject="Reminder: update your DueNest payment method",
+        subject="Reminder: update your CertaNest payment method",
         body=(
-            "We still haven't been able to process your DueNest payment. Please "
+            "We still haven't been able to process your CertaNest payment. Please "
             "update your payment method soon to avoid losing Pro access when the "
             "grace period ends."
         ),
@@ -122,9 +122,9 @@ TRANSACTIONAL_EMAILS: dict[str, TransactionalEmail] = {
         name="Trial ending soon",
         trigger="Sent a few days before a free trial ends.",
         template="billing_lifecycle",
-        subject="Your DueNest trial ends soon",
+        subject="Your CertaNest trial ends soon",
         body=(
-            "Your DueNest free trial is ending soon. Keep your documents, "
+            "Your CertaNest free trial is ending soon. Keep your documents, "
             "renewals, and deadlines watched without interruption by choosing a "
             "plan before it ends."
         ),
@@ -135,9 +135,9 @@ TRANSACTIONAL_EMAILS: dict[str, TransactionalEmail] = {
         name="Renewal upcoming",
         trigger="Sent shortly before a paid plan renews.",
         template="billing_lifecycle",
-        subject="Your DueNest plan renews soon",
+        subject="Your CertaNest plan renews soon",
         body=(
-            "This is a friendly heads-up that your DueNest subscription will "
+            "This is a friendly heads-up that your CertaNest subscription will "
             "renew soon. No action is needed to stay subscribed — manage or "
             "cancel any time from your billing settings."
         ),
@@ -148,9 +148,9 @@ TRANSACTIONAL_EMAILS: dict[str, TransactionalEmail] = {
         name="Subscription canceled (win-back)",
         trigger="Sent when a subscription is canceled.",
         template="billing_lifecycle",
-        subject="Your DueNest subscription was canceled",
+        subject="Your CertaNest subscription was canceled",
         body=(
-            "Your DueNest subscription has been canceled. We'd love to keep "
+            "Your CertaNest subscription has been canceled. We'd love to keep "
             "watching your important documents and deadlines — you can resubscribe "
             "any time and pick up right where you left off."
         ),
@@ -161,7 +161,7 @@ TRANSACTIONAL_EMAILS: dict[str, TransactionalEmail] = {
         name="Refund issued",
         trigger="Sent when a refund is issued.",
         template="billing_lifecycle",
-        subject="Your DueNest refund has been issued",
+        subject="Your CertaNest refund has been issued",
         body=(
             "We've issued a refund to your original payment method. Depending on "
             "your bank, it may take a few business days to appear on your statement."
@@ -174,7 +174,7 @@ TRANSACTIONAL_EMAILS: dict[str, TransactionalEmail] = {
         name="Trial ended",
         trigger="Sent when a free trial ends without upgrading.",
         template="billing_lifecycle",
-        subject="Your DueNest trial has ended",
+        subject="Your CertaNest trial has ended",
         body=(
             "Your free trial has ended, so your account is now on the Free plan. "
             "Your documents and data are exactly where you left them — upgrade any "
@@ -190,7 +190,7 @@ TRANSACTIONAL_EMAILS: dict[str, TransactionalEmail] = {
         template="document_request",
         subject="You've been asked to provide documents",
         body=(
-            "An organization is requesting documents from you through DueNest. "
+            "An organization is requesting documents from you through CertaNest. "
             "Use the secure link below to upload them — no account needed. The "
             "link expires for your security."
         ),

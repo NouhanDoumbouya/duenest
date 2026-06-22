@@ -1,9 +1,9 @@
 import { Globe } from "lucide-react";
 
 /**
- * A calm, scrolling strip of the document types DueNest is built around —
+ * A calm, scrolling strip of the document types CertaNest is built around —
  * inspired by the "global coverage" marquee on premium SaaS sites, but framed
- * honestly: DueNest is country-agnostic, so this signals breadth ("works with
+ * honestly: CertaNest is country-agnostic, so this signals breadth ("works with
  * the documents that matter, from anywhere") rather than a coverage claim.
  *
  * Pure CSS marquee (see `.marquee` / `.marquee-track` in globals.css): the chip
@@ -36,7 +36,7 @@ function Chip({ label }: { label: string }) {
 export function CoverageStrip() {
   return (
     <section
-      aria-label="Document types DueNest is built for"
+      aria-label="Document types CertaNest is built for"
       className="overflow-hidden border-y border-border bg-card/40 py-12 sm:py-14"
     >
       <div className="mx-auto mb-8 flex w-full max-w-6xl items-center justify-center gap-2 px-4 text-center sm:px-6">

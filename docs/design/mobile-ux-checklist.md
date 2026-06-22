@@ -1,4 +1,4 @@
-# DueNest — Mobile / PWA UX Checklist
+# CertaNest — Mobile / PWA UX Checklist
 
 > Several items are **already implemented** in `globals.css` and PWA components — marked
 > ✅. The rest are verification/backlog items.

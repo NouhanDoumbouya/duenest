@@ -119,7 +119,7 @@ export default function TrustCenterPage() {
                 <CardTitle>Encrypted at rest</CardTitle>
                 <CardDescription>
                   Uploaded files are encrypted at rest with per-file keys, and
-                  those keys are protected with a separate master key. DueNest
+                  those keys are protected with a separate master key. CertaNest
                   decrypts files only after permission checks pass. This is not
                   zero-knowledge encryption.
                 </CardDescription>

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="0 0 64 64" fill="none" role="img" aria-label="CertaNest construction grid">
+  <title>CertaNest — Secure Nest refined, construction grid</title>
+  <!-- Artboard -->
+  <rect x="0.5" y="0.5" width="63" height="63" rx="3" fill="#F8F6F1" stroke="#E2E8F0" stroke-width="0.5"/>
+  <!-- 4px construction grid -->
+  <g stroke="#E2E8F0" stroke-width="0.25">
+    <path d="M4 0V64M8 0V64M12 0V64M16 0V64M20 0V64M24 0V64M28 0V64M32 0V64M36 0V64M40 0V64M44 0V64M48 0V64M52 0V64M56 0V64M60 0V64"/>
+    <path d="M0 4H64M0 8H64M0 12H64M0 16H64M0 20H64M0 24H64M0 28H64M0 32H64M0 36H64M0 40H64M0 44H64M0 48H64M0 52H64M0 56H64M0 60H64"/>
+  </g>
+  <!-- Safe-area keyline (6px padding) -->
+  <rect x="6" y="6" width="52" height="52" rx="10" fill="none" stroke="#D6A85A" stroke-width="0.4" stroke-dasharray="1.5 1.5"/>
+  <!-- Center axes -->
+  <g stroke="#0F766E" stroke-width="0.3" opacity="0.4">
+    <path d="M32 0V64"/><path d="M0 32H64"/>
+  </g>
+  <!-- The refined mark -->
+  <path d="M11 19 C11 39 15 45 32 45 C49 45 53 39 53 19" stroke="#0F766E" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M17 22 C17 36 20 39 32 39 C44 39 47 36 47 22" stroke="#0F766E" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.45"/>
+  <path d="M25.5 28 L30 33 L40 20" stroke="#10B981" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

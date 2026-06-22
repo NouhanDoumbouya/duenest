@@ -1,10 +1,10 @@
-DueNest
+CertaNest
 ==========================================================
 
 {% block content %}{% endblock %}
 
 ----------------------------------------------------------
-{% block footer %}DueNest — your documents, renewals, and deadlines in one calm place.{% endblock %}
+{% block footer %}CertaNest — your documents, renewals, and deadlines in one calm place.{% endblock %}
 
-You received this email from DueNest. We never include document
+You received this email from CertaNest. We never include document
 contents, files, access codes, or share tokens in email.

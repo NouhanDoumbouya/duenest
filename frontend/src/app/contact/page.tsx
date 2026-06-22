@@ -17,12 +17,12 @@ import { cn } from "@/lib/utils";
 export const metadata: Metadata = {
   title: "Contact & Support",
   description:
-    "How to reach DueNest for support, feedback, and security reports during the private beta.",
+    "How to reach CertaNest for support, feedback, and security reports during the private beta.",
   alternates: { canonical: "/contact" },
 };
 
-const SUPPORT_EMAIL = "support@duenest.app";
-const SECURITY_EMAIL = "security@duenest.app";
+const SUPPORT_EMAIL = "support@certanest.com";
+const SECURITY_EMAIL = "security@certanest.com";
 
 const channels = [
   {
@@ -58,7 +58,7 @@ export default function ContactPage() {
           Contact &amp; support
         </h1>
         <p className="mt-4 max-w-2xl text-lg leading-relaxed text-pretty text-muted-foreground">
-          DueNest is in a private beta, so support is hands-on and may take a
+          CertaNest is in a private beta, so support is hands-on and may take a
           little time. We read everything and use it to make the product better.
         </p>
 
@@ -107,7 +107,7 @@ export default function ContactPage() {
               We aim to reply as quickly as we can, but response times vary
               during the private beta. For anything urgent and official (legal,
               medical, immigration, or financial), please contact the relevant
-              authority directly — DueNest is an organization tool, not an
+              authority directly — CertaNest is an organization tool, not an
               emergency or advisory service.
             </p>
           </div>

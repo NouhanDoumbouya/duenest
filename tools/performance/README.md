@@ -1,6 +1,6 @@
-# DueNest performance / load-test harness
+# CertaNest performance / load-test harness
 
-Safe, **local/staging-only** load-test skeletons for the DueNest API. These are
+Safe, **local/staging-only** load-test skeletons for the CertaNest API. These are
 [k6](https://k6.io/) scripts. They are templates: they read all targets and
 credentials from environment variables and never hardcode secrets, tokens, or
 document IDs.
@@ -50,7 +50,7 @@ read/upload load.
 
 ### Getting an auth cookie for a test account (staging)
 
-DueNest uses HttpOnly cookie auth. The simplest safe way to capture a session
+CertaNest uses HttpOnly cookie auth. The simplest safe way to capture a session
 for load testing is to log in with a **dedicated throwaway staging account** in
 a browser, then copy the `Cookie` request header from DevTools → Network into
 `AUTH_COOKIE`. Never use a real user's session.

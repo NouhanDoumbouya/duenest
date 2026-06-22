@@ -18,7 +18,7 @@ import { PhoneFrame } from "@/components/marketing/mockups";
 import { cn } from "@/lib/utils";
 
 /**
- * The hero "product story" visual: the DueNest app shown on a realistic phone —
+ * The hero "product story" visual: the CertaNest app shown on a realistic phone —
  * a calm readiness home (what needs attention, what's ready) — with two small
  * floating accents (an active SafeSend share and a confirm-before-save AI
  * suggestion) hinting at the wider system without cluttering it.
@@ -49,7 +49,7 @@ export function HeroReadinessComposite() {
 
           {/* App header */}
           <div className="flex items-center justify-between px-4 pt-2 pb-3">
-            <span className="font-heading text-sm font-semibold">DueNest</span>
+            <span className="font-heading text-sm font-semibold">CertaNest</span>
             <span className="flex items-center gap-2 text-muted-foreground">
               <Bell className="size-4" />
               <span className="flex size-6 items-center justify-center rounded-full bg-brand-navy text-[10px] font-semibold text-white ring-2 ring-brand-teal/20">

@@ -1,4 +1,4 @@
-# DueNest Roadmap
+# CertaNest Roadmap
 
 **Version:** v0.1  
 **Status:** Planning  
@@ -13,7 +13,7 @@
 
 ## 0. Product refocus — life-document readiness platform (2026-06-21)
 
-DueNest is now focused as a **private life-document readiness platform**: store,
+CertaNest is now focused as a **private life-document readiness platform**: store,
 scan, organize, prepare, track, generate, understand, and safely share important
 documents before deadlines, applications, renewals, and emergencies.
 
@@ -27,16 +27,16 @@ app. The legacy **Subscription Radar** is **deprecated**:
   quick search, and public/marketing/legal copy.
 - Generic recurring reminders and renewal tracking are **preserved** and now live
   under **Deadlines & Renewals** (`/dashboard/reminders`).
-- DueNest's own paid plans (Stripe `billing` app) are unchanged.
+- CertaNest's own paid plans (Stripe `billing` app) are unchanged.
 
 Items below that describe subscription/finance tracking as a product feature are
 superseded by this refocus and Deadlines & Renewals.
 
 ## 1. Roadmap Summary
 
-This roadmap defines how DueNest will move from a well-documented product concept to a working MVP.
+This roadmap defines how CertaNest will move from a well-documented product concept to a working MVP.
 
-DueNest will be built gradually through focused sprints. Each sprint should produce a clear deliverable that can be committed, reviewed, tested, and demonstrated.
+CertaNest will be built gradually through focused sprints. Each sprint should produce a clear deliverable that can be committed, reviewed, tested, and demonstrated.
 
 The goal is not to build everything at once. The goal is to build the right foundation first, then progressively add useful and technically impressive features.
 
@@ -44,7 +44,7 @@ The goal is not to build everything at once. The goal is to build the right foun
 
 ## 2. Execution Philosophy
 
-DueNest should be built with the following execution principles:
+CertaNest should be built with the following execution principles:
 
 - Build consistently, even if progress is small.
 - Prioritize working features over perfect plans.
@@ -102,7 +102,7 @@ flowchart TD
 
 ## 4. Product Build Order
 
-DueNest will be built in this order:
+CertaNest will be built in this order:
 
 1. Project foundation
 2. Product documentation
@@ -149,7 +149,7 @@ DueNest will be built in this order:
 
 ```mermaid
 timeline
-    title DueNest Version Roadmap
+    title CertaNest Version Roadmap
 
     v0.1 Core MVP
         : Authentication
@@ -257,15 +257,15 @@ keep working (no migration); their public endpoints and the Share Rooms list
 remain for back-compat. See `docs/architecture.md` §35 "Anatomy of Sharing".
 
 **Verifiable Shares (differentiator, behind `verified_shares`):** an opt-in,
-DueNest-signed tamper-evident share. The recipient gets a public `/verify/<token>`
-page confirming the files are an unaltered copy shared from a DueNest account
+CertaNest-signed tamper-evident share. The recipient gets a public `/verify/<token>`
+page confirming the files are an unaltered copy shared from a CertaNest account
 (provenance + integrity — not real-world document authenticity). Ed25519; the
 public key is published so independent/offline verification can follow.
 
 **Share Requests (differentiator, behind `share_requests`):** sharing inverted into
 fulfilment — a requester lists the documents they need; a logged-in recipient fills
 the checklist from their vault in a few taps, delivered through the Quick Share
-engine into the requester's "Shared with me". v1 is DueNest-user-to-DueNest-user; a
+engine into the requester's "Shared with me". v1 is CertaNest-user-to-CertaNest-user; a
 growth loop and a showcase for application packs.
 
 **Minimal-disclosure shares (differentiator, behind `private_share`):** redact a
@@ -288,7 +288,7 @@ verification.
 
 ### v0.4 — Integrations
 
-Focus: connecting DueNest with user workflows.
+Focus: connecting CertaNest with user workflows.
 
 Planned features:
 
@@ -345,7 +345,7 @@ Planned features:
 
 This execution timeline starts from **Monday, June 8, 2026**.
 
-The plan is intentionally realistic because DueNest is being built as a side project while balancing studies, BaraLink, and other responsibilities.
+The plan is intentionally realistic because CertaNest is being built as a side project while balancing studies, BaraLink, and other responsibilities.
 
 The timeline includes:
 
@@ -357,7 +357,7 @@ The timeline includes:
 
 ```mermaid
 gantt
-    title DueNest v0.1 Execution Timeline with Buffer Time
+    title CertaNest v0.1 Execution Timeline with Buffer Time
     dateFormat  YYYY-MM-DD
     axisFormat  %d %b
 
@@ -427,7 +427,7 @@ gantt
 
 ## 10. Buffer Strategy
 
-DueNest is not planned as a full-time project, so buffer time is part of the roadmap by design.
+CertaNest is not planned as a full-time project, so buffer time is part of the roadmap by design.
 
 ### Weekly Buffer
 
@@ -798,7 +798,7 @@ Users can create reminders and receive in-app notifications for important dates.
 
 ### Deliverable
 
-A presentable DueNest v0.1 MVP ready for recruiter/demo use.
+A presentable CertaNest v0.1 MVP ready for recruiter/demo use.
 
 ### Definition of Done
 
@@ -828,7 +828,7 @@ A presentable DueNest v0.1 MVP ready for recruiter/demo use.
 
 ### Deliverable
 
-DueNest is ready for deployment planning.
+CertaNest is ready for deployment planning.
 
 ---
 
@@ -855,7 +855,7 @@ A small research prototype or documented plan for v0.2 AI extraction.
 
 ## 11.5 Documents-First Build Sequence
 
-DueNest is now sequenced **documents-first**: make the Documents module a
+CertaNest is now sequenced **documents-first**: make the Documents module a
 pay-worthy product before expanding into subscriptions, application packs, an AI
 assistant, and broader life-admin tasks. The full plan, paid-MVP definition,
 prioritization, and data/API/security planning live in
@@ -867,7 +867,7 @@ A beautiful, mobile-friendly vault that **thinks for the user**: document
 records + type templates, file upload, in-app preview, secure download, smart
 expiry/status intelligence, missing-information detection, an "Attention Needed"
 inbox, search/filter/sort, a polished detail page, reminder rules, and renewal
-checklists — all behind strong ownership checks. Users pay because DueNest helps
+checklists — all behind strong ownership checks. Users pay because CertaNest helps
 them **avoid expiry mistakes, lost-document chaos, and last-minute renewal
 stress**.
 
@@ -948,7 +948,7 @@ These are future improvements, not first-version requirements.
 
 ## 13. MVP Completion Criteria
 
-DueNest v0.1 is considered complete when:
+CertaNest v0.1 is considered complete when:
 
 - users can register and log in
 - users can access a protected dashboard
@@ -992,7 +992,7 @@ Each PR should be focused and easy to review.
 ### Good PR Examples
 
 ```txt
-docs: add DueNest roadmap
+docs: add CertaNest roadmap
 backend: set up Django project
 backend: add custom user model
 feat: add document upload API
@@ -1185,7 +1185,7 @@ Return to the v0.1 scope and remove non-essential features.
 
 ## 19. Summary
 
-DueNest should be built slowly but professionally.
+CertaNest should be built slowly but professionally.
 
 The immediate priority is not to build every advanced feature. The immediate priority is to create a stable, secure, and useful MVP that demonstrates strong engineering judgment.
 
@@ -1276,7 +1276,7 @@ Now implemented on `feature/premium-sharing-bundle-rooms-calendar`:
   blocking; no false "screenshots blocked" claims).
 - **Secure Rooms / Shared Packs** — controlled collection sharing with owner UI
   (`/dashboard/share-rooms`) and a polished public page (`/rooms/:token`).
-- **DueNest Calendar V1** — internal, owner-scoped aggregation across documents,
+- **CertaNest Calendar V1** — internal, owner-scoped aggregation across documents,
   reminders, bundles, appointments, proofs, shares, and rooms, with Month +
   Upcoming views, a dashboard widget, and one-way `.ics` export.
 
@@ -1295,7 +1295,7 @@ trial endings flow into Calendar, Timeline, Attention Needed, and a dashboard
 "Upcoming renewals" widget. Free plan caps subscriptions at 10. Founder
 subscription adoption metrics are aggregate only.
 
-Explicitly out of scope (this is **not** DueNest billing): Stripe / paid-plan
+Explicitly out of scope (this is **not** CertaNest billing): Stripe / paid-plan
 checkout, bank/card integrations, storing card or banking details, live currency
 conversion, automatic cancellation, AI, and email/push reminder delivery
 (reminders are in-app via Calendar/Timeline). Deferred: receipt file uploads and
@@ -1337,7 +1337,7 @@ Quick Share 2.0 presents multiple **distinct** sharing methods rather than QR
 alone:
 
 1. Share by secure link — shipped (the session token is the secure link)
-2. Share by DueNest code — **shipped (Phase 1)**
+2. Share by CertaNest code — **shipped (Phase 1)**
 3. Share by QR — shipped (V1)
    _(explicit method picker across all three — **shipped, Phase 3**)_
 4. Shared by Me / Shared with Me management — shipped (V1)
@@ -1347,7 +1347,7 @@ alone:
 8. Expiry / revocation / activity logs — shipped (V1; activity now surfaced in
    the sender UI, Phase 4)
 
-### Shipped: Phase 1 — real DueNest code + Receive flow
+### Shipped: Phase 1 — real CertaNest code + Receive flow
 
 Each session now carries a dedicated, unique, human-typable `dn_code` (e.g.
 `DN-4KQ7-PXMR`) generated independently of the secret token (never derived from
@@ -1379,7 +1379,7 @@ methods resolve to the same session token server-side and remain available, so
 nothing is overpromised. The create wizard becomes a four-step flow
 (Select → Method → Protection → Review) with an explicit method choice, and the
 sender's result screen leads with the chosen method (primary "Copy secure link"
-for `link`, an emphasized DueNest code for `code`, the QR hero for `qr`).
+for `link`, an emphasized CertaNest code for `code`, the QR hero for `qr`).
 
 ### Shipped: Phase 4 — secure-viewer polish + activity surfacing
 
@@ -1402,14 +1402,14 @@ This completes the planned Quick Share 2.0 phases (1–4).
 ### Guardrail: no fake "Nearby Share"
 
 **Nearby Share must NOT be shipped as a user-facing mode while it is only
-QR/code-powered.** QR already solves in-person sharing, the DueNest code already
+QR/code-powered.** QR already solves in-person sharing, the CertaNest code already
 solves account-to-account claiming, and secure links already solve remote
 sharing. A "Nearby Share" tab/card/route that merely re-wraps QR or code sharing
 would be misleading UX and fake product complexity, and would make the product
 look less trustworthy.
 
 Do not introduce any of the following copy unless a real nearby
-discovery/pairing mechanism exists: "Nearby Share", "Find nearby DueNest users",
+discovery/pairing mechanism exists: "Nearby Share", "Find nearby CertaNest users",
 "Share with nearby devices", "Nearby devices around you", "Bluetooth-style
 sharing", or "Tap to share".
 

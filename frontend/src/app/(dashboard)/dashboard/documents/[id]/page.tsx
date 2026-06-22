@@ -100,7 +100,7 @@ function reminderIsActive(doc: DocumentRecord): boolean {
 function nextStep(doc: DocumentRecord): string {
   if (doc.is_expired) return "Renew or archive this document after the renewal is complete.";
   if (doc.missing_file) return "Upload a scan or copy so this record is usable when needed.";
-  if (doc.missing_expiry_date) return "Add the expiry date so DueNest can track risk accurately.";
+  if (doc.missing_expiry_date) return "Add the expiry date so CertaNest can track risk accurately.";
   if (!reminderIsActive(doc)) return "Add a reminder rule before the next important date.";
   return "No urgent action. Keep the record current when details change.";
 }

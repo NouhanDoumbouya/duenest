@@ -896,7 +896,7 @@ export default function FileInboxPage() {
         <div className="flex flex-col gap-3 rounded-lg border border-brand-success/30 bg-brand-success/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm">
             <span className="font-semibold">Document added.</span> Add an expiry
-            date so DueNest can protect you.
+            date so CertaNest can protect you.
           </p>
           <div className="flex shrink-0 items-center gap-2">
             <Link

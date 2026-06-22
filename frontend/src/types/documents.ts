@@ -1,4 +1,4 @@
-// Types for the DueNest documents API (GET/POST/PATCH/DELETE /api/v1/documents/).
+// Types for the CertaNest documents API (GET/POST/PATCH/DELETE /api/v1/documents/).
 // These mirror the backend DocumentSerializer.
 
 export type DocumentStatus = "active" | "expired" | "renewal_due" | "archived";

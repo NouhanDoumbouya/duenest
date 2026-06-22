@@ -164,7 +164,7 @@ def get_document_health(
         computed_status = "missing_expiry_date"
         urgency_level = "low"
         status_reason = (
-            "This document has no expiry date, so DueNest cannot track "
+            "This document has no expiry date, so CertaNest cannot track "
             "renewal timing yet."
         )
         needs_attention = True
@@ -1711,7 +1711,7 @@ def calendar_events_summary(events: list, today: date | None = None) -> dict:
     }
 
 
-def build_calendar_ics(events: list, *, calendar_name: str = "DueNest") -> str:
+def build_calendar_ics(events: list, *, calendar_name: str = "CertaNest") -> str:
     """
     Render calendar events as a one-way .ics document.
 
@@ -1720,7 +1720,7 @@ def build_calendar_ics(events: list, *, calendar_name: str = "DueNest") -> str:
     lines = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
-        "PRODID:-//DueNest//Calendar V1//EN",
+        "PRODID:-//CertaNest//Calendar V1//EN",
         f"X-WR-CALNAME:{calendar_name}",
     ]
     stamp = timezone.now().strftime("%Y%m%dT%H%M%SZ")
@@ -1741,7 +1741,7 @@ def build_calendar_ics(events: list, *, calendar_name: str = "DueNest") -> str:
             f"UID:{ev.id}@duenest",
             f"DTSTAMP:{stamp}",
             f"DTSTART;VALUE=DATE:{date_str}",
-            f"SUMMARY:{esc('DueNest: ' + ev.title)}",
+            f"SUMMARY:{esc('CertaNest: ' + ev.title)}",
             f"DESCRIPTION:{esc(ev.description)}",
             "END:VEVENT",
         ]
@@ -3450,7 +3450,7 @@ def build_documents_zip(user, file_ids):
         ).select_related("document")
     )
 
-    root = "DueNest_Files"
+    root = "CertaNest_Files"
     used_arcnames: set = set()
     included_files: list = []
     warnings: list = []

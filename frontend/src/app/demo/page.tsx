@@ -35,7 +35,7 @@ export default function DemoPage() {
           <div>
             <Eyebrow>Demo</Eyebrow>
             <h1 className="mt-3 text-4xl font-semibold tracking-tight">
-              Preview DueNest with fake document data
+              Preview CertaNest with fake document data
             </h1>
             <p className="mt-4 text-lg leading-relaxed text-muted-foreground">
               The authenticated setup page can create clearly labeled sample

@@ -167,7 +167,7 @@ export default function FounderOverviewPage() {
       <FounderPageHeader
         eyebrow="Founder Console"
         title="Overview"
-        description="A private operating view for DueNest usage, activation, feedback, errors, security, beta readiness, and launch progress."
+        description="A private operating view for CertaNest usage, activation, feedback, errors, security, beta readiness, and launch progress."
         actions={<RangePicker value={range} onChange={setRange} />}
       />
 

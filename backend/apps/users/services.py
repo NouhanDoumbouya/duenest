@@ -232,7 +232,7 @@ def build_document_setup_checklist(user) -> dict:
         _setup_step(
             key="add_expiry_or_renewal",
             title="Add an expiry or renewal date",
-            description="Give DueNest a date it can track before it becomes urgent.",
+            description="Give CertaNest a date it can track before it becomes urgent.",
             completed=has_date_tracking,
             href="/dashboard/documents",
             metric=has_date_tracking,
@@ -240,7 +240,7 @@ def build_document_setup_checklist(user) -> dict:
         _setup_step(
             key="review_attention_needed",
             title="Review Attention Needed",
-            description="Check the documents DueNest has flagged for follow-up.",
+            description="Check the documents CertaNest has flagged for follow-up.",
             completed=attention_reviewed,
             href="/dashboard/documents?quick=needs_attention",
             metric=attention_count,
@@ -273,7 +273,7 @@ def build_document_setup_checklist(user) -> dict:
         _setup_step(
             key="review_trust_center",
             title="Review the Trust Center",
-            description="See DueNest's current security and privacy posture.",
+            description="See CertaNest's current security and privacy posture.",
             completed=trust_reviewed,
             href="/dashboard/trust",
             is_required=False,
@@ -571,7 +571,7 @@ def create_document_demo_data(user) -> dict:
         notes=_demo_notes("Fake insurance policy example."),
     )
 
-    file_bytes = b"%PDF-1.4\n% DueNest demo file only\n"
+    file_bytes = b"%PDF-1.4\n% CertaNest demo file only\n"
     demo_file = DocumentFile.objects.create(
         document=passport,
         uploaded_by=user,

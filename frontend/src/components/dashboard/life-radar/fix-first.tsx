@@ -109,7 +109,7 @@ export function FixFirstSection({
         <div>
           <p className="text-sm font-semibold">Nothing urgent right now.</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            DueNest will keep watching your documents, renewals, shares, and
+            CertaNest will keep watching your documents, renewals, shares, and
             emergency setup.
           </p>
         </div>

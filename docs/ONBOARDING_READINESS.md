@@ -1,7 +1,7 @@
 # Readiness Setup (onboarding & activation)
 
 An action-based onboarding flow that gets a new user to their first "aha" moment
-fast: *"I added an important document, DueNest knows when it expires, and it will
+fast: *"I added an important document, CertaNest knows when it expires, and it will
 remind me before it's due."* It teaches through action, not slides.
 
 - Route: `/dashboard/readiness-setup`

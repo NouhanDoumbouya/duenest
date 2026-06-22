@@ -5756,7 +5756,7 @@ class PackCopilotView(APIView):
 
 class PackCopilotCreateBundleView(APIView):
     """
-    Turn a Pack Copilot analysis into a real DueNest bundle (one tap).
+    Turn a Pack Copilot analysis into a real CertaNest bundle (one tap).
 
     POST ``{"goal", "deadline"?, "requirements": [{name, description,
     document_ids}]}`` → creates a draft application bundle with one requirement
