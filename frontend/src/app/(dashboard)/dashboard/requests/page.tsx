@@ -30,6 +30,21 @@ interface DraftItem {
   is_required: boolean;
 }
 
+function formatBytes(bytes: number): string {
+  if (!bytes) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), 3);
+  return `${(bytes / 1024 ** i).toFixed(i ? 1 : 0)} ${units[i]}`;
+}
+
+/** Absolute backend URL for an owner-auth download path (cookie auth carries
+ *  the session on the same origin). */
+function backendUrl(path: string): string {
+  const base = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
+  const origin = base.replace(/\/api\/v1\/?$/, "");
+  return `${origin}${path}`;
+}
+
 // Request status -> canonical badge tone (see lib/status-badge). Open requests
 // read positive, responded reads informational, finished states stay quiet.
 const statusTone: Record<string, StatusTone> = {
@@ -45,6 +60,7 @@ export default function ShareRequestsPage() {
 
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
+  const [allowExternal, setAllowExternal] = useState(false);
   const [items, setItems] = useState<DraftItem[]>([
     { label: "", is_required: true },
   ]);
@@ -86,6 +102,7 @@ export default function ShareRequestsPage() {
       const payload = {
         title: title.trim(),
         message: message.trim(),
+        allow_external_upload: allowExternal,
         items: validItems.map<CreateShareRequestItem>((item) => ({
           label: item.label.trim(),
           is_required: item.is_required,
@@ -95,6 +112,7 @@ export default function ShareRequestsPage() {
       setRequests((prev) => [created, ...(prev ?? [])]);
       setTitle("");
       setMessage("");
+      setAllowExternal(false);
       setItems([{ label: "", is_required: true }]);
     } catch (err) {
       setCreateError(
@@ -209,6 +227,45 @@ export default function ShareRequestsPage() {
                     Delete
                   </Button>
                 </div>
+
+                {req.allow_external_upload && (
+                  <div className="mt-3 border-t border-border pt-3">
+                    <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                      <Inbox className="size-3.5" />
+                      External uploads
+                      {req.submissions.length > 0
+                        ? ` · ${req.submissions.length}`
+                        : " · open link"}
+                    </p>
+                    {req.submissions.length > 0 && (
+                      <ul className="mt-2 space-y-1.5">
+                        {req.submissions.map((s) => (
+                          <li
+                            key={s.id}
+                            className="flex items-center justify-between gap-3 text-sm"
+                          >
+                            <span className="min-w-0">
+                              <span className="block truncate font-medium">
+                                {s.original_filename || "Uploaded file"}
+                              </span>
+                              <span className="block truncate text-xs text-muted-foreground">
+                                {[s.submitted_by_email, formatBytes(s.file_size)]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                              </span>
+                            </span>
+                            <a
+                              href={backendUrl(s.download_path)}
+                              className="shrink-0 text-sm font-medium text-primary hover:underline"
+                            >
+                              Download
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
               </div>
             ))
           )}
@@ -310,6 +367,24 @@ export default function ShareRequestsPage() {
                   Add item
                 </Button>
               </div>
+
+              <label className="flex items-start gap-2.5 rounded-lg border border-border bg-muted/30 p-3 text-sm">
+                <input
+                  type="checkbox"
+                  checked={allowExternal}
+                  onChange={(e) => setAllowExternal(e.target.checked)}
+                  className="mt-0.5 size-4 accent-primary"
+                />
+                <span>
+                  <span className="font-medium">
+                    Let people without a DueNest account upload
+                  </span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    They get a secure link to upload files directly — no sign-up.
+                    Files are encrypted and only you can open them. Pro feature.
+                  </span>
+                </span>
+              </label>
 
               {createError && <InlineAlert tone="danger">{createError}</InlineAlert>}
 

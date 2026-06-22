@@ -4134,15 +4134,29 @@ real-world authenticity.
 ```txt
 # Owner (founder-gated by the `share_requests` flag)
 GET    /api/v1/share-requests/                       # list own requests
-POST   /api/v1/share-requests/                       # { title, message?, expires_at?, items:[{label, is_required?, ...}] }
-GET    /api/v1/share-requests/:id/                   # detail (token + items)
+POST   /api/v1/share-requests/                       # { title, message?, expires_at?, allow_external_upload?, items:[...] }
+GET    /api/v1/share-requests/:id/                   # detail (token + items + external submissions)
 POST   /api/v1/share-requests/:id/                   # close (stop accepting responses)
 DELETE /api/v1/share-requests/:id/                   # delete
+GET    /api/v1/share-requests/:id/submissions/:sid/download/  # owner-only; streams a decrypted external upload
 
 # Public / responder (NOT flag-gated — the responder may not be a founder)
 GET    /api/v1/share-requests/respond/:token/        # checklist metadata only (no vault data)
 POST   /api/v1/share-requests/respond/:token/submit/ # auth; { items:[{ item_id, file_ids?, document_ids? }] }
+
+# Public external upload — people WITHOUT a DueNest account
+POST   /api/v1/public/share-requests/:token/upload/  # multipart 'file' (+email?, notes?); AllowAny
 ```
+
+`allow_external_upload` (a **paid** capability — free users get a
+`plan_limit_exceeded` 403) opens the request to anonymous uploads via
+`public/share-requests/:token/upload/`. That endpoint reuses the organization
+public-upload hardening: rate-limiting, strict file validation (extension /
+declared type / magic bytes), malware scan (fail-closed), per-link abuse caps,
+and **encryption-at-rest** (envelope encryption, AAD-bound). Uploads are streamed
+back only through the owner-checked `submissions/:sid/download/` route — never a
+storage URL.
+
 
 A requester lists the documents they need; a **logged-in** responder fulfils the
 checklist from their own vault. `respond/:token/` returns

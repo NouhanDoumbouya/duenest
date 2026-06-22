@@ -9,6 +9,17 @@ export interface ShareRequestItem {
   sort_order: number;
 }
 
+export interface ShareRequestSubmission {
+  id: number;
+  submitted_by_email: string;
+  original_filename: string;
+  content_type: string;
+  file_size: number;
+  notes: string;
+  download_path: string;
+  created_at: string;
+}
+
 export interface ShareRequest {
   id: number;
   title: string;
@@ -17,8 +28,10 @@ export interface ShareRequest {
   respond_path: string;
   status: ShareRequestStatus;
   is_open: boolean;
+  allow_external_upload: boolean;
   expires_at: string | null;
   items: ShareRequestItem[];
+  submissions: ShareRequestSubmission[];
   response_count: number;
   created_at: string;
   updated_at: string;
@@ -35,6 +48,7 @@ export interface CreateShareRequestPayload {
   title: string;
   message?: string;
   expires_at?: string | null;
+  allow_external_upload?: boolean;
   items: CreateShareRequestItem[];
 }
 
@@ -52,6 +66,7 @@ export interface PublicShareRequest {
   requester_name: string;
   status: ShareRequestStatus;
   is_open: boolean;
+  allow_external_upload: boolean;
   expires_at: string | null;
   items: PublicShareRequestItem[];
 }

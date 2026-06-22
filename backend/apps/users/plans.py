@@ -50,6 +50,8 @@ RESOURCE_LABELS = {
     RESOURCE_ORGANIZATION_REQUESTS: "organization document requests",
     RESOURCE_ORGANIZATION_CAMPAIGNS: "organization campaigns",
     RESOURCE_ORGANIZATION_ROOMS: "organization secure rooms",
+    # Personal external document collection (share requests open to non-users).
+    "external_collection_requests": "external collection requests",
 }
 
 # Storage is reported but not hard-enforced on its own (the file count limit is

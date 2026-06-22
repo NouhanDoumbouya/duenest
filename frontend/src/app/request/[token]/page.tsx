@@ -3,10 +3,21 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { CheckCircle2, FileText, Inbox, Loader2, LogIn } from "lucide-react";
+import {
+  CheckCircle2,
+  FileText,
+  FileUp,
+  Inbox,
+  Loader2,
+  LogIn,
+  ShieldCheck,
+} from "lucide-react";
 
 import { LogoMark } from "@/components/layout/logo";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { ApiError } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 import { getDocuments } from "@/lib/documents";
@@ -14,6 +25,7 @@ import { getFileInbox } from "@/lib/document-files";
 import {
   getPublicShareRequest,
   submitShareRequestResponse,
+  uploadExternalShareRequest,
 } from "@/lib/share-requests";
 import { cn } from "@/lib/utils";
 import type { PublicShareRequest } from "@/types/share-requests";
@@ -35,6 +47,11 @@ export default function RespondToRequestPage() {
   const [selections, setSelections] = useState<Record<number, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+  // External (no-account) upload path.
+  const [extFile, setExtFile] = useState<File | null>(null);
+  const [extEmail, setExtEmail] = useState("");
+  const [extNotes, setExtNotes] = useState("");
+  const [uploaded, setUploaded] = useState(false);
 
   const loadVault = useCallback(async () => {
     const [docs, inbox] = await Promise.all([
@@ -82,6 +99,26 @@ export default function RespondToRequestPage() {
 
   const requiredMissing =
     meta?.items.some((i) => i.is_required && !selections[i.id]) ?? false;
+
+  async function handleExternalUpload() {
+    if (!extFile) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await uploadExternalShareRequest(token, {
+        file: extFile,
+        email: extEmail.trim(),
+        notes: extNotes.trim(),
+      });
+      setUploaded(true);
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : "Could not upload your file.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   async function handleSubmit() {
     if (!meta) return;
@@ -138,6 +175,16 @@ export default function RespondToRequestPage() {
               </p>
             </div>
           </Card>
+        ) : uploaded ? (
+          <Card>
+            <div className="flex flex-col items-center py-4 text-center">
+              <CheckCircle2 className="size-12 text-brand-success" />
+              <h1 className="mt-4 font-heading text-xl font-semibold">Uploaded</h1>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Your file was sent securely to {meta?.requester_name}. Thank you.
+              </p>
+            </div>
+          </Card>
         ) : meta ? (
           <Card>
             <p className="text-sm text-muted-foreground">
@@ -157,6 +204,71 @@ export default function RespondToRequestPage() {
               <p className="mt-5 rounded-lg bg-muted px-3 py-3 text-sm text-muted-foreground">
                 This request is no longer accepting responses.
               </p>
+            ) : !loggedIn && meta.allow_external_upload ? (
+              <div className="mt-5 space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="ext-email">Your email (optional)</Label>
+                  <Input
+                    id="ext-email"
+                    type="email"
+                    inputMode="email"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    value={extEmail}
+                    onChange={(e) => setExtEmail(e.target.value)}
+                    placeholder="you@example.com"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="ext-file">File</Label>
+                  <Input
+                    id="ext-file"
+                    type="file"
+                    accept="image/*,.pdf,.doc,.docx"
+                    onChange={(e) => setExtFile(e.target.files?.[0] ?? null)}
+                  />
+                  <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                    <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-brand-success" />
+                    Encrypted on upload. Only {meta.requester_name} can open it.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="ext-notes">Notes (optional)</Label>
+                  <Textarea
+                    id="ext-notes"
+                    rows={2}
+                    value={extNotes}
+                    onChange={(e) => setExtNotes(e.target.value)}
+                  />
+                </div>
+                {error && (
+                  <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                    {error}
+                  </p>
+                )}
+                <Button
+                  onClick={handleExternalUpload}
+                  disabled={submitting || !extFile}
+                  className="w-full"
+                >
+                  {submitting ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <FileUp className="size-4" />
+                  )}
+                  Upload file
+                </Button>
+                <p className="text-center text-xs text-muted-foreground">
+                  Have a DueNest account?{" "}
+                  <Link
+                    href={`/login?next=/request/${token}`}
+                    className="font-medium text-primary hover:underline"
+                  >
+                    Sign in to use your vault
+                  </Link>
+                </p>
+              </div>
             ) : !loggedIn ? (
               <div className="mt-5 rounded-lg border border-border bg-muted/40 p-4 text-center">
                 <p className="text-sm text-muted-foreground">

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import ShareRequest, ShareRequestItem
+from .models import ShareRequest, ShareRequestItem, ShareRequestSubmission
 
 
 def _display_name(user) -> str:
@@ -28,6 +28,8 @@ class ShareRequestCreateSerializer(serializers.Serializer):
     title = serializers.CharField(max_length=255)
     message = serializers.CharField(required=False, allow_blank=True, default="")
     expires_at = serializers.DateTimeField(required=False, allow_null=True)
+    # Opt-in: also accept uploads from people without a DueNest account (paid).
+    allow_external_upload = serializers.BooleanField(required=False, default=False)
     items = ShareRequestItemSerializer(many=True)
 
     def validate_items(self, value):
@@ -43,10 +45,34 @@ class ShareRequestCreateSerializer(serializers.Serializer):
         return value
 
 
+class ShareRequestSubmissionSerializer(serializers.ModelSerializer):
+    """Owner-facing metadata for an external upload — never the file bytes."""
+
+    download_path = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ShareRequestSubmission
+        fields = [
+            "id",
+            "submitted_by_email",
+            "original_filename",
+            "content_type",
+            "file_size",
+            "notes",
+            "download_path",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+    def get_download_path(self, obj):
+        return f"/api/v1/share-requests/{obj.request_id}/submissions/{obj.id}/download/"
+
+
 class ShareRequestSerializer(serializers.ModelSerializer):
     """Owner-facing detail (includes the token to build the respond link)."""
 
     items = ShareRequestItemSerializer(many=True, read_only=True)
+    submissions = ShareRequestSubmissionSerializer(many=True, read_only=True)
     respond_path = serializers.SerializerMethodField()
     response_count = serializers.SerializerMethodField()
     is_open = serializers.BooleanField(read_only=True)
@@ -61,8 +87,10 @@ class ShareRequestSerializer(serializers.ModelSerializer):
             "respond_path",
             "status",
             "is_open",
+            "allow_external_upload",
             "expires_at",
             "items",
+            "submissions",
             "response_count",
             "created_at",
             "updated_at",
@@ -89,6 +117,7 @@ def build_public_request(request_obj) -> dict:
         "requester_name": _display_name(request_obj.owner),
         "status": request_obj.status,
         "is_open": request_obj.is_open,
+        "allow_external_upload": request_obj.allow_external_upload,
         "expires_at": request_obj.expires_at,
         "items": PublicShareRequestItemSerializer(
             request_obj.items.all(), many=True

@@ -43,6 +43,21 @@ export function getPublicShareRequest(
   );
 }
 
+/** Public — upload a file as a non-DueNest person (no auth). */
+export function uploadExternalShareRequest(
+  token: string,
+  payload: { file: File; email?: string; notes?: string },
+): Promise<{ ok: boolean; detail: string }> {
+  const form = new FormData();
+  form.append("file", payload.file);
+  if (payload.email) form.append("email", payload.email);
+  if (payload.notes) form.append("notes", payload.notes);
+  return apiFetch<{ ok: boolean; detail: string }>(
+    `/public/share-requests/${encodeURIComponent(token)}/upload/`,
+    { method: "POST", body: form, auth: false },
+  );
+}
+
 export function submitShareRequestResponse(
   token: string,
   items: {

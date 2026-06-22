@@ -14,6 +14,8 @@ Security invariants:
 
 from __future__ import annotations
 
+import uuid
+
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
@@ -44,6 +46,10 @@ class ShareRequest(models.Model):
     status = models.CharField(
         max_length=20, choices=Status.choices, default=Status.OPEN
     )
+    # When True, the request also accepts uploads from people WITHOUT a DueNest
+    # account (via the public token) — gated to paid plans. The default keeps the
+    # existing DueNest-user-only responder flow unchanged.
+    allow_external_upload = models.BooleanField(default=False)
     expires_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -136,3 +142,47 @@ class ShareRequestResponse(models.Model):
 
     def __str__(self):
         return f"Response(request={self.request_id} responder={self.responder_id})"
+
+
+def share_submission_upload_to(instance, filename: str) -> str:
+    return (
+        f"share_request_submissions/{instance.request_id}/"
+        f"{instance.file_uuid.hex}.enc"
+    )
+
+
+class ShareRequestSubmission(models.Model):
+    """A file uploaded against a ShareRequest by an external (non-DueNest) person
+    through the public token.
+
+    Stored encrypted at rest (envelope encryption, AAD-bound) exactly like
+    organization request submissions. Plaintext bytes are never written to
+    storage; the file is streamed back only through an owner-checked view.
+    """
+
+    request = models.ForeignKey(
+        ShareRequest,
+        on_delete=models.CASCADE,
+        related_name="submissions",
+    )
+    submitted_by_email = models.EmailField(blank=True)
+    file = models.FileField(
+        upload_to=share_submission_upload_to, null=True, blank=True
+    )
+    original_filename = models.CharField(max_length=255, blank=True)
+    content_type = models.CharField(max_length=120, blank=True)
+    file_size = models.PositiveIntegerField(default=0)
+    # Encryption-at-rest binding (see file_encryption.py).
+    file_uuid = models.UUIDField(default=uuid.uuid4, editable=False)
+    is_encrypted = models.BooleanField(default=False)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["request", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"ShareRequestSubmission(request={self.request_id})"

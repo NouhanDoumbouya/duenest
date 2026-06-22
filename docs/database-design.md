@@ -1957,6 +1957,14 @@ table — the response is a Quick Share session owned by the responder with a
 pre-accepted `QuickShareClaim` for the requester, so it surfaces in the requester's
 existing "Shared with me". The request stays open to collect multiple responses.
 
+`ShareRequest.allow_external_upload` (a paid capability) additionally opens the
+request to people **without** a DueNest account. Their uploads are stored as
+`ShareRequestSubmission` rows (submitted_by_email, original_filename,
+content_type, file_size, notes, `file`, `file_uuid`, `is_encrypted`) — the file
+is **encrypted at rest** (envelope encryption, AAD-bound to the submission UUID +
+request owner, like organization submissions) and streamed back only through an
+owner-checked download view, never a storage URL.
+
 ### Calendar
 
 DueNest Calendar V1 adds **no new table** — events are aggregated on demand from
