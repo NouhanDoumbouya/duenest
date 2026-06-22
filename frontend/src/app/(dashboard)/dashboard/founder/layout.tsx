@@ -151,7 +151,7 @@ export default function FounderLayout({ children }: { children: ReactNode }) {
           Founder Console
         </h1>
         <p className="mt-1.5 max-w-3xl text-muted-foreground">
-          Operate DueNest through aggregate metrics, feedback, templates,
+          Operate CertaNest through aggregate metrics, feedback, templates,
           errors, security signals, and privacy-safe support metadata.
         </p>
       </div>

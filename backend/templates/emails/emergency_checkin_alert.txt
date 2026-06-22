@@ -1,7 +1,7 @@
 {% extends "emails/base.txt" %}
 {% block content %}Hello {{ contact_name }},
 
-{{ owner_name }} set up a safety check-in with DueNest and listed you as a trusted contact. They did not check in by their deadline, so this alert was sent automatically.
+{{ owner_name }} set up a safety check-in with CertaNest and listed you as a trusted contact. They did not check in by their deadline, so this alert was sent automatically.
 
 Message from {{ owner_name }}:
 {{ message }}
@@ -10,4 +10,4 @@ Last known location:
 {{ location_text }}
 {% endif %}
 If you think something may be wrong, please try to reach {{ owner_name }} directly.{% endblock %}
-{% block footer %}You received this because {{ owner_name }} listed you as an emergency trusted contact in DueNest. DueNest never includes document contents, files, or access codes in email.{% endblock %}
+{% block footer %}You received this because {{ owner_name }} listed you as an emergency trusted contact in CertaNest. CertaNest never includes document contents, files, or access codes in email.{% endblock %}

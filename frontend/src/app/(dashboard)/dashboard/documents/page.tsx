@@ -1261,7 +1261,7 @@ function DocumentsPageInner() {
                   ? "Try another category, clear filters, or add a document."
                   : filtersActive
                     ? "Try clearing filters or adjusting your search."
-                    : "Add a document and DueNest tracks its status and dates for you — no folders to keep tidy. Your vault surfaces what's expiring and what needs attention."
+                    : "Add a document and CertaNest tracks its status and dates for you — no folders to keep tidy. Your vault surfaces what's expiring and what needs attention."
               }
               action={
                 filtersActive ? (

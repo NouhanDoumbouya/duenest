@@ -5,7 +5,7 @@ import { LegalShell, type LegalSection } from "@/components/marketing/legal-shel
 export const metadata: Metadata = {
   title: "Data & Deletion",
   description:
-    "How to delete files, request a data export, and request account deletion in DueNest. A private-beta draft.",
+    "How to delete files, request a data export, and request account deletion in CertaNest. A private-beta draft.",
   alternates: { canonical: "/data-deletion" },
 };
 
@@ -61,7 +61,7 @@ export default function DataDeletionPage() {
     <LegalShell
       eyebrow="Data & Deletion"
       title="Your data and deletion"
-      intro="How to delete files, request a data export, and request account deletion in DueNest. You stay in control of your records."
+      intro="How to delete files, request a data export, and request account deletion in CertaNest. You stay in control of your records."
       sections={sections}
       footerLinks={[
         { label: "Privacy", href: "/privacy" },

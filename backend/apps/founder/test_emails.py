@@ -26,7 +26,7 @@ def _entry(email="recruit@example.com"):
 @override_settings(
     EMAIL_CONFIGURED=True,
     EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
-    DEFAULT_FROM_EMAIL="DueNest <noreply@duenest.app>",
+    DEFAULT_FROM_EMAIL="CertaNest <noreply@duenest.app>",
     FRONTEND_APP_URL="https://app.duenest.test",
 )
 class FounderEmailSendingTests(TestCase):
@@ -62,7 +62,7 @@ class FounderEmailDeferredTests(TestCase):
 @override_settings(
     EMAIL_CONFIGURED=True,
     EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
-    DEFAULT_FROM_EMAIL="DueNest <noreply@duenest.app>",
+    DEFAULT_FROM_EMAIL="CertaNest <noreply@duenest.app>",
 )
 class TransactionalEmailConfigTests(TestCase):
     """Founder-console overrides: subject/body edits + enabled toggle."""
@@ -105,4 +105,4 @@ class TransactionalEmailConfigTests(TestCase):
             to="a@example.com",
         )
         self.assertTrue(sent)
-        self.assertIn("reset your DueNest password", mail.outbox[0].body)
+        self.assertIn("reset your CertaNest password", mail.outbox[0].body)

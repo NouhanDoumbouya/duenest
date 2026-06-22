@@ -10,7 +10,7 @@ import { NextResponse, type NextRequest } from "next/server";
 //
 // Requirement: the auth cookies must be visible to this middleware, i.e. the
 // frontend and backend share a registrable domain (dev: both on "localhost";
-// prod: e.g. app./api.duenest.com with AUTH_COOKIE_DOMAIN=.duenest.com). In a
+// prod: e.g. app./api.certanest.com with AUTH_COOKIE_DOMAIN=.certanest.com). In a
 // split-domain setup the cookies aren't visible here; protection then relies on
 // the client layout + backend (see docs/AUTH.md).
 

@@ -29,7 +29,7 @@ type Status = "loading" | "unsupported" | "unconfigured" | "ready";
 
 const REASON_COPY: Record<string, string> = {
   denied:
-    "Notifications are blocked for DueNest in this browser. Enable them in your browser settings, then try again.",
+    "Notifications are blocked for CertaNest in this browser. Enable them in your browser settings, then try again.",
   unconfigured: "Push delivery isn't configured on this server yet.",
   unsupported: "This browser or device doesn't support push notifications.",
   error: "We couldn't enable push on this device. Please try again.",
@@ -136,7 +136,7 @@ export function PushDeviceCard() {
   return (
     <SectionCard
       title="Push notifications on this device"
-      description="Get a gentle nudge on your device when something needs attention — even when DueNest isn't open."
+      description="Get a gentle nudge on your device when something needs attention — even when CertaNest isn't open."
     >
       <div className="space-y-4">
         <div className="flex items-start gap-3 rounded-xl border border-border bg-muted/30 px-4 py-3">
@@ -146,7 +146,7 @@ export function PushDeviceCard() {
           <p className="text-sm leading-relaxed text-muted-foreground">
             Lock-screen previews stay generic — they never show document names,
             who opened a share, or any private detail. The actual update is shown
-            only after you open DueNest and sign in.
+            only after you open CertaNest and sign in.
           </p>
         </div>
 
@@ -155,7 +155,7 @@ export function PushDeviceCard() {
         )}
         {status === "unsupported" && (
           <p className="text-sm text-muted-foreground">
-            {REASON_COPY.unsupported} On iPhone or iPad, install DueNest to your
+            {REASON_COPY.unsupported} On iPhone or iPad, install CertaNest to your
             Home Screen first.
           </p>
         )}
@@ -204,7 +204,7 @@ export function PushDeviceCard() {
                 <span className="block text-sm font-medium">Quiet hours</span>
                 <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
                   Hold back device pushes overnight. Notifications still appear
-                  in DueNest — only the lock-screen nudge waits until quiet hours
+                  in CertaNest — only the lock-screen nudge waits until quiet hours
                   end.
                 </span>
               </span>

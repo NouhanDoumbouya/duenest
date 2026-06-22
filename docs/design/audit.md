@@ -1,4 +1,4 @@
-# DueNest — Product Design Audit
+# CertaNest — Product Design Audit
 
 > Grounded audit performed on branch `feature/world-class-duenest-product-design-system`
 > (off `origin/main`). This documents the **actual** state of the codebase, not an
@@ -22,7 +22,7 @@ Inspected directly:
 
 ## Headline conclusion
 
-DueNest is **not** an early-stage landing page. It is a large, mature, already-branded
+CertaNest is **not** an early-stage landing page. It is a large, mature, already-branded
 product with ~30 dashboard modules, a real token-based design system, structured
 feature-flagged navigation, motion utilities with `prefers-reduced-motion` handling,
 mobile/PWA hardening, and an existing brand-and-messaging foundation.

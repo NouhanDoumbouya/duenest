@@ -1,7 +1,7 @@
 """
 Proactive Autopilot — an AI "what to do now" briefing (KEY-GATED).
 
-DueNest already computes real per-document health (expiry, renewal, missing
+CertaNest already computes real per-document health (expiry, renewal, missing
 file/expiry) in :func:`apps.documents.services.get_document_health`. This turns
 those raw signals into a calm, prioritized briefing: "here are the few things
 worth doing now, why, and the next action" — the anxiety-reducing payoff of the

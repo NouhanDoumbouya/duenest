@@ -293,7 +293,7 @@ function NotificationBell() {
               <div className="px-4 py-8 text-center">
                 <p className="text-sm font-medium">You’re all caught up</p>
                 <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                  DueNest will notify you when tracked deadlines need attention.
+                  CertaNest will notify you when tracked deadlines need attention.
                 </p>
               </div>
             ) : (

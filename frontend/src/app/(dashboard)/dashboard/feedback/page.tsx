@@ -207,7 +207,7 @@ export default function FeedbackPage() {
                 Submit feedback
               </Button>
               <a
-                href="mailto:support@duenest.app"
+                href="mailto:support@certanest.com"
                 className={cn(buttonVariants({ variant: "outline" }))}
               >
                 <Mail className="size-4" />

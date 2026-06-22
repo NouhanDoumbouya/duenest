@@ -125,7 +125,7 @@ export default function OrganizationRoomPage({
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-8 sm:px-6">
           <Logo />
           <p className="text-sm text-muted-foreground">
-            Shared securely through DueNest.
+            Shared securely through CertaNest.
           </p>
         </div>
       </footer>

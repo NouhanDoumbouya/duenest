@@ -22,7 +22,7 @@ export function InstallPrompt({
     <div
       role="dialog"
       aria-label={
-        mode === "ios" ? "Add DueNest to your Home Screen" : "Install DueNest"
+        mode === "ios" ? "Add CertaNest to your Home Screen" : "Install CertaNest"
       }
       className="fixed inset-x-0 bottom-0 z-[65] mx-auto w-full max-w-md p-3"
       style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
@@ -40,11 +40,11 @@ export function InstallPrompt({
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold">
               {mode === "ios"
-                ? "Add DueNest to your Home Screen"
-                : "Install DueNest"}
+                ? "Add CertaNest to your Home Screen"
+                : "Install CertaNest"}
             </p>
             <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-              Open DueNest faster from your home screen and keep your life-admin
+              Open CertaNest faster from your home screen and keep your life-admin
               dashboard one tap away.
             </p>
           </div>

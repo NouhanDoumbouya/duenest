@@ -90,7 +90,7 @@ export default function SharedWithMePage() {
       <PageHeader
         eyebrow="Sharing"
         title="Shared with me"
-        description="Files other DueNest users have shared with you. Your access follows the sender's rules and can be revoked by them at any time."
+        description="Files other CertaNest users have shared with you. Your access follows the sender's rules and can be revoked by them at any time."
       />
 
       <SectionCard title="Recent shares">

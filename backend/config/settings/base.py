@@ -45,7 +45,7 @@ FOUNDER_ALLOW_ALL_STAFF = config(
     "FOUNDER_ALLOW_ALL_STAFF", default=False, cast=bool
 )
 
-# ---- Billing (DueNest's own monetization) ----------------------------------
+# ---- Billing (CertaNest's own monetization) ----------------------------------
 # Provider-aware. "manual" works fully offline for local dev/tests; "stripe"
 # uses the Stripe API and requires the keys below. Secrets never reach the
 # frontend — only STRIPE_PUBLISHABLE_KEY is safe to expose.
@@ -278,9 +278,9 @@ EMAIL_USE_SSL = _email["EMAIL_USE_SSL"]
 EMAIL_CONFIGURED = _email["EMAIL_CONFIGURED"]
 EMAIL_TIMEOUT = config("EMAIL_TIMEOUT", default=10, cast=int)
 
-DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="DueNest <noreply@localhost>")
+DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="CertaNest <noreply@localhost>")
 SERVER_EMAIL = config("SERVER_EMAIL", default=DEFAULT_FROM_EMAIL)
-SUPPORT_EMAIL = config("SUPPORT_EMAIL", default="support@duenest.com")
+SUPPORT_EMAIL = config("SUPPORT_EMAIL", default="support@certanest.com")
 
 # ---------------------------------------------------------------------------
 # AI (Claude / document intelligence) — KEY-GATED, built dark by default.

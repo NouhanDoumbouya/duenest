@@ -116,7 +116,7 @@ export default function ProfilePage() {
       <PageHeader
         eyebrow="Account"
         title="Profile"
-        description="Your identity in DueNest. Update your photo and name — manage the rest from the areas below."
+        description="Your identity in CertaNest. Update your photo and name — manage the rest from the areas below."
       />
 
       {error && (
@@ -384,7 +384,7 @@ function ProfileDetailsSection() {
       <p className="mb-4 flex items-start gap-2 rounded-lg border border-primary/15 bg-primary/[0.04] px-3 py-2 text-xs leading-relaxed text-muted-foreground">
         <Lock className="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden />
         <span>
-          Encrypted at rest and visible only to you. DueNest never shares these
+          Encrypted at rest and visible only to you. CertaNest never shares these
           or fills them in without asking. Leave anything blank, or clear it all
           whenever you like.
         </span>

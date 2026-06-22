@@ -20,7 +20,7 @@ shows a broken image.
 - Use only logo assets you are licensed to use. **Do not hotlink** logos from
   external sites, and do not commit trademarked assets you don't have rights to.
 - Logos are used purely as visual identifiers for a user's own subscription
-  tracking. **DueNest is not affiliated with these brands.**
+  tracking. **CertaNest is not affiliated with these brands.**
 - Until a real asset is added, templates display a brand-colored monogram, which
   is intentional and fully supported.
 

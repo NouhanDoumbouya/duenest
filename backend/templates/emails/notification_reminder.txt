@@ -5,8 +5,8 @@
 {% if due_date %}
 Date: {{ due_date }}
 {% endif %}
-Open DueNest: {{ action_url }}
+Open CertaNest: {{ action_url }}
 
-DueNest reminder emails never include document contents, access codes, share
+CertaNest reminder emails never include document contents, access codes, share
 tokens, emergency tokens, raw OCR text, private notes, or files.{% endblock %}
 {% block footer %}Manage notification preferences: {{ preferences_url }}{% endblock %}

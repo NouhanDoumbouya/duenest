@@ -58,7 +58,7 @@ const RIGHT_ITEMS: BottomNavItem[] = [
   },
 ];
 
-// Ways to get a document into DueNest. Scan is the primary, scan-forward option.
+// Ways to get a document into CertaNest. Scan is the primary, scan-forward option.
 interface AddAction {
   icon: LucideIcon;
   title: string;
@@ -179,13 +179,13 @@ export function BottomNav({ onOpenMore }: { onOpenMore: () => void }) {
           <div
             role="dialog"
             aria-modal="true"
-            aria-label="Add to DueNest"
+            aria-label="Add to CertaNest"
             className="fixed inset-x-0 bottom-0 z-50 rounded-t-2xl border-t border-border bg-card p-4 shadow-floating"
             style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 1rem)" }}
           >
             <div className="mx-auto max-w-lg">
               <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-border" aria-hidden />
-              <p className="px-1 pb-2 text-sm font-semibold">Add to DueNest</p>
+              <p className="px-1 pb-2 text-sm font-semibold">Add to CertaNest</p>
               <div className="space-y-2">
                 <input
                   ref={fileRef}
@@ -279,7 +279,7 @@ export function BottomNav({ onOpenMore }: { onOpenMore: () => void }) {
             <button
               type="button"
               onClick={() => setAddOpen((v) => !v)}
-              aria-label="Add to DueNest"
+              aria-label="Add to CertaNest"
               aria-expanded={addOpen}
               aria-haspopup="dialog"
               className="flex min-h-14 flex-col items-center justify-end gap-1 px-1 pb-1.5 focus-visible:outline-none"

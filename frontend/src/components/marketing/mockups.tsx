@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils";
 import { LiveCountdown } from "@/components/marketing/live-countdown";
 
 // Polished, static product mockups for the marketing page. Built entirely from
-// the real DueNest design tokens (no screenshots, no image files) so they stay
+// the real CertaNest design tokens (no screenshots, no image files) so they stay
 // crisp at any size, add no layout shift, and never ship a heavy bundle. Every
 // number/scenario is realistic and matches what the product actually does.
 //
@@ -247,7 +247,7 @@ export function LifeRadarMockup() {
   ];
 
   return (
-    <BrowserFrame url="app.duenest.com/dashboard">
+    <BrowserFrame url="app.certanest.com/dashboard">
       <div className="space-y-4 p-4 sm:p-5">
         {/* Header row */}
         <div className="flex items-center justify-between">
@@ -433,7 +433,7 @@ export function VaultMockup() {
     },
   ];
   return (
-    <BrowserFrame url="app.duenest.com/vault">
+    <BrowserFrame url="app.certanest.com/vault">
       <div className="space-y-4 p-4 sm:p-5">
         <div className="flex items-center justify-between">
           <p className="font-heading text-sm font-semibold">Your vault</p>
@@ -556,7 +556,7 @@ export function EmergencyMockup() {
     { label: "Test emergency access", done: false },
   ];
   return (
-    <BrowserFrame url="app.duenest.com/emergency">
+    <BrowserFrame url="app.certanest.com/emergency">
       <div className="grid gap-4 p-4 sm:grid-cols-[1fr_auto] sm:p-5">
         <div className="space-y-3">
           <div className="flex items-center justify-between">
@@ -653,7 +653,7 @@ export function DeadlinesRenewalsMockup() {
     },
   ];
   return (
-    <BrowserFrame url="app.duenest.com/reminders">
+    <BrowserFrame url="app.certanest.com/reminders">
       <div className="space-y-4 p-4 sm:p-5">
         <div className="flex items-center justify-between">
           <p className="font-heading text-sm font-semibold">
@@ -699,7 +699,7 @@ export function DeadlinesRenewalsMockup() {
           ))}
         </div>
         <p className="text-[11px] text-muted-foreground">
-          DueNest reminds you before documents expire and deadlines pass.
+          CertaNest reminds you before documents expire and deadlines pass.
         </p>
       </div>
     </BrowserFrame>

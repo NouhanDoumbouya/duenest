@@ -1,6 +1,6 @@
 # Activating AI
 
-DueNest's AI features are built **dark**: fully shipped, tested, and dormant
+CertaNest's AI features are built **dark**: fully shipped, tested, and dormant
 until a founder turns them on. Activation is deliberate and reversible. This is
 the runbook.
 

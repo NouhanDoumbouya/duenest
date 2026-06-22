@@ -1,7 +1,7 @@
 import { CalendarClock, FileText, RefreshCw, ShieldCheck } from "lucide-react";
 
 /**
- * A lightweight, illustrative mock of the DueNest dashboard for the hero.
+ * A lightweight, illustrative mock of the CertaNest dashboard for the hero.
  *
  * This is intentionally static and decorative — it shows where the product is
  * going without implying any real data or completed backend functionality.
@@ -47,7 +47,7 @@ export function AppPreview() {
           <span className="size-2.5 rounded-full bg-brand-amber/50" />
           <span className="size-2.5 rounded-full bg-brand-success/50" />
           <span className="ml-3 text-xs text-muted-foreground">
-            app.duenest.com/dashboard
+            app.certanest.com/dashboard
           </span>
         </div>
 

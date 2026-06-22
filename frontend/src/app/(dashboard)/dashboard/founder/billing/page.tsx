@@ -28,8 +28,8 @@ const MODES: { id: ReceiptMode; label: string; hint: string }[] = [
   },
   {
     id: "email_pdf",
-    label: "Email + DueNest PDF",
-    hint: "Branded email with a DueNest-generated PDF receipt attached.",
+    label: "Email + CertaNest PDF",
+    hint: "Branded email with a CertaNest-generated PDF receipt attached.",
   },
   {
     id: "email_only",
@@ -164,7 +164,7 @@ export default function FounderBillingPage() {
           Subscription receipts
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Send DueNest-branded receipt emails when a subscription payment
+          Send CertaNest-branded receipt emails when a subscription payment
           succeeds. Choose the format and send yourself a sample to preview it.
         </p>
       </div>
@@ -259,7 +259,7 @@ export default function FounderBillingPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-xs text-muted-foreground">
-            Printed on the receipt for compliance. Leave blank to show DueNest
+            Printed on the receipt for compliance. Leave blank to show CertaNest
             branding only.
           </p>
           <div className="space-y-1.5">
@@ -268,7 +268,7 @@ export default function FounderBillingPage() {
               id="legal-name"
               value={settings.business_legal_name}
               onChange={(e) => patch({ business_legal_name: e.target.value })}
-              placeholder="e.g. DueNest Ltd"
+              placeholder="e.g. CertaNest Ltd"
             />
           </div>
           <div className="space-y-1.5">
@@ -296,7 +296,7 @@ export default function FounderBillingPage() {
                 type="email"
                 value={settings.support_email}
                 onChange={(e) => patch({ support_email: e.target.value })}
-                placeholder="support@duenest.app"
+                placeholder="support@certanest.com"
               />
             </div>
           </div>

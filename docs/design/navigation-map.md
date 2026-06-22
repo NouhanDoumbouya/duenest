@@ -1,4 +1,4 @@
-# DueNest — Navigation Map
+# CertaNest — Navigation Map
 
 > Source of truth: `frontend/src/lib/navigation.ts` (tested by `navigation.test.ts`).
 > This map documents the **implemented** structure and the brand-vocabulary drift that

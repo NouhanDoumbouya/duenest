@@ -91,7 +91,7 @@ class Command(BaseCommand):
                 continue
 
             ok = send_branded_email(
-                subject="Your DueNest weekly briefing",
+                subject="Your CertaNest weekly briefing",
                 template="ai_digest",
                 context={
                     "summary": result.get("summary", ""),

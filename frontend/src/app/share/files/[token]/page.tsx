@@ -348,7 +348,7 @@ export default function SharedFilePage() {
 function WatermarkOverlay({ metadata }: { metadata: PublicSharedFileMetadata }) {
   const stamp = new Date().toLocaleString();
   const line = [
-    "Shared via DueNest",
+    "Shared via CertaNest",
     metadata.watermark_text,
     `ID ${metadata.short_id}`,
     stamp,
@@ -429,7 +429,7 @@ function SharedFileViewer({
         onContextMenu={(event) => event.preventDefault()}
       >
         <p className="mb-3 text-sm text-muted-foreground">
-          This was shared securely through DueNest. Access may expire or be
+          This was shared securely through CertaNest. Access may expire or be
           revoked by the owner.
         </p>
         {!metadata.download_allowed && (

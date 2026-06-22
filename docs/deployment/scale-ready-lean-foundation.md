@@ -2,11 +2,11 @@
 
 > **Status: scale-ready lean foundation implemented.**
 >
-> DueNest is architected like a serious SaaS but can be *operated* like a
+> CertaNest is architected like a serious SaaS but can be *operated* like a
 > disciplined early-stage project. The same codebase runs in two modes, switched
 > entirely by environment variables — no code changes to scale up.
 >
-> **This does NOT mean DueNest can serve 10,000 concurrent users today.** It
+> **This does NOT mean CertaNest can serve 10,000 concurrent users today.** It
 > means the seams are in place (cache, queues, scheduler, paginated lists,
 > indexes, bounded OCR, async-ready email, analytics rollups) so you can start
 > cheap and scale by upgrading services and adding replicas/workers — not by

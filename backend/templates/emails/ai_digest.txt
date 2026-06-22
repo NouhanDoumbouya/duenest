@@ -10,7 +10,7 @@
 {% endfor %}
 Open your briefing: {{ action_url }}
 
-This summary is generated from your own documents' dates and statuses. DueNest
+This summary is generated from your own documents' dates and statuses. CertaNest
 emails never include document contents, access codes, share tokens, raw OCR
 text, private notes, or files.{% endblock %}
 {% block footer %}Manage notification preferences: {{ preferences_url }}{% endblock %}

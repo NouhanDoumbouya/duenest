@@ -5,7 +5,7 @@
 
 ## Scope
 
-When a user selects an owned File Inbox file, DueNest proposes a one-line summary,
+When a user selects an owned File Inbox file, CertaNest proposes a one-line summary,
 suggested metadata fields (reused from extraction), and **confirm-gated** next actions
 (create document / set reminder / add to pack / draft). The endpoint performs **no writes**;
 the user confirms any action in its own flow.

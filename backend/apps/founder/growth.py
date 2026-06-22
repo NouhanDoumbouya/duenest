@@ -85,7 +85,7 @@ def build_utm_url(
     """
     parsed = urlparse((base_url or "").strip())
     if parsed.scheme not in _ALLOWED_SCHEMES or not parsed.netloc:
-        raise ValueError("Enter a valid http(s) URL, e.g. https://duenest.com/.")
+        raise ValueError("Enter a valid http(s) URL, e.g. https://certanest.com/.")
 
     source = normalize_utm_value(source)
     medium = normalize_utm_value(medium)

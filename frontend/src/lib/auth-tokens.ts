@@ -1,13 +1,13 @@
 // Client-side auth-token store for the CROSS-ORIGIN deployment.
 //
-// DueNest is designed for HttpOnly-cookie auth when the frontend and backend
+// CertaNest is designed for HttpOnly-cookie auth when the frontend and backend
 // share an origin (the Next dev/proxy setup: NEXT_PUBLIC_API_BASE_URL=/api/v1).
 // In that mode JavaScript never touches the tokens — the cookie store carries
 // them — and this module stays inert.
 //
 // When the frontend (e.g. Vercel) and backend (e.g. Railway) are on DIFFERENT
 // origins, the browser will not expose the backend's HttpOnly cookies to the
-// frontend page, so cookie auth cannot work. In that case DueNest authenticates
+// frontend page, so cookie auth cannot work. In that case CertaNest authenticates
 // with the access token returned by /auth/login/ via an `Authorization: Bearer`
 // header, and this module persists the access/refresh pair.
 //

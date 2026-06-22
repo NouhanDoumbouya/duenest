@@ -1,4 +1,4 @@
-# DueNest backend — production image.
+# CertaNest backend — production image.
 #
 # System packages: tesseract-ocr + poppler-utils are required by the OCR /
 # document-intelligence features (pytesseract + pdf2image); libpq5 for psycopg.

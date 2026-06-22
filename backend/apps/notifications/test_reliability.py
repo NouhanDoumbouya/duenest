@@ -33,7 +33,7 @@ def make_pdf(name="passport.pdf"):
 @override_settings(
     MEDIA_ROOT=_TEMP_MEDIA,
     EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
-    DEFAULT_FROM_EMAIL="DueNest <noreply@example.com>",
+    DEFAULT_FROM_EMAIL="CertaNest <noreply@example.com>",
     DUENEST_APP_BASE_URL="http://localhost:3000",
 )
 class NotificationReliabilityTests(APITestCase):

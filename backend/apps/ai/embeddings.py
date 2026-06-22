@@ -1,7 +1,7 @@
 """
 Embeddings layer for content-level retrieval (RAG) — KEY-GATED, built dark.
 
-Anthropic has no first-party embeddings model, so DueNest pairs Claude with a
+Anthropic has no first-party embeddings model, so CertaNest pairs Claude with a
 dedicated embeddings provider (Voyage AI by default). This is a *separate* key
 from ``ANTHROPIC_API_KEY``:
 

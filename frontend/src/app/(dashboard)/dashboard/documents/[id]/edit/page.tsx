@@ -113,7 +113,7 @@ export default function EditDocumentPage() {
 
           <SectionCard
             title="Document metadata"
-            description="Keep the facts and dates current so DueNest can calculate status accurately."
+            description="Keep the facts and dates current so CertaNest can calculate status accurately."
           >
             {doc === null ? (
               <div className="space-y-5" aria-busy="true">

@@ -1,6 +1,6 @@
 # Railway Backend Staging Deployment
 
-How to deploy the DueNest **backend** (Django/DRF) to Railway for **private
+How to deploy the CertaNest **backend** (Django/DRF) to Railway for **private
 staging**, connected to Railway PostgreSQL, ready for the Vercel frontend to
 call. The frontend stays on Vercel; only the backend deploys here.
 
@@ -13,7 +13,7 @@ call. The frontend stays on Vercel; only the backend deploys here.
 
 ## 0. Builder + start command
 
-DueNest deploys via the **Dockerfile** at `backend/Dockerfile` (Python 3.12-slim;
+CertaNest deploys via the **Dockerfile** at `backend/Dockerfile` (Python 3.12-slim;
 it installs `tesseract-ocr` + `poppler-utils` for OCR and `libpq5` for Postgres —
 Nixpacks would not install these). `backend/railway.json` pins the Docker builder
 and the health check path. **Do not** switch to Nixpacks.
@@ -56,7 +56,7 @@ that is guaranteed to run through a shell, and after testing.) Do not include
 
 ## 2. Set the service Root Directory to `backend`
 
-This is the most important setting — DueNest is a monorepo and only the backend
+This is the most important setting — CertaNest is a monorepo and only the backend
 deploys here.
 
 1. Service → **Settings** → **Source / Root Directory** → set to `backend`.
@@ -299,7 +299,7 @@ tokens.
 > **Security trade-off.** Bearer tokens in `localStorage` are readable by
 > JavaScript (XSS exposure), which is why this is gated to the cross-origin
 > deployment only. The most secure long-term setup is a **same-site deployment**
-> (`app.duenest.com` + `api.duenest.com`, `AUTH_COOKIE_DOMAIN=.duenest.com`),
+> (`app.certanest.com` + `api.certanest.com`, `AUTH_COOKIE_DOMAIN=.certanest.com`),
 > which keeps tokens in HttpOnly cookies. `DJANGO_COOKIE_SAMESITE=None` is still
 > useful (it lets the backend set usable cookies), but the SPA no longer depends
 > on them cross-origin.

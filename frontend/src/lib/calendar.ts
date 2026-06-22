@@ -1,4 +1,4 @@
-// API helpers for DueNest Calendar V1.
+// API helpers for CertaNest Calendar V1.
 
 import { API_BASE_URL, apiFetch } from "./api";
 import { getAccessToken } from "./auth";

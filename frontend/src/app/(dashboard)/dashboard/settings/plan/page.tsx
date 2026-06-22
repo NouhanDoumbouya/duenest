@@ -1,7 +1,7 @@
 import { PlanUsageCard } from "@/components/dashboard/plan-usage-card";
 
 export const metadata = {
-  title: "Plan & usage · DueNest",
+  title: "Plan & usage · CertaNest",
 };
 
 export default function PlanSettingsPage() {

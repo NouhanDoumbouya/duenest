@@ -9,7 +9,7 @@ Covers the token-based public upload flows: personal **Document Requests**
   only — never the owner's/organization's vault or other requests.
 - **Unguessable tokens.** Public identifiers are random, URL-safe, and reveal no internal
   IDs.
-- **Account-free for the recipient.** Uploading does not require a DueNest account.
+- **Account-free for the recipient.** Uploading does not require a CertaNest account.
 
 ## Controls (verified)
 

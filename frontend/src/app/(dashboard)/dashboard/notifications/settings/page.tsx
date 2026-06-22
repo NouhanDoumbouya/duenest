@@ -34,7 +34,7 @@ const TOGGLES: Array<{ key: ToggleKey; label: string; helper: string }> = [
   {
     key: "in_app_enabled",
     label: "In-app notifications",
-    helper: "Show reminders and alerts inside DueNest.",
+    helper: "Show reminders and alerts inside CertaNest.",
   },
   {
     key: "email_enabled",
@@ -169,7 +169,7 @@ export default function NotificationSettingsPage() {
       <PageHeader
         eyebrow="Settings"
         title="Notification settings"
-        description="Choose how DueNest should surface reminders for documents, renewals, shared access, and account safety."
+        description="Choose how CertaNest should surface reminders for documents, renewals, shared access, and account safety."
         actions={
           <Link
             href="/dashboard/notifications"
@@ -197,7 +197,7 @@ export default function NotificationSettingsPage() {
 
       <SectionCard
         title="Delivery and reminder categories"
-        description="Security-sensitive emails stay summary-only and link back to authenticated DueNest pages."
+        description="Security-sensitive emails stay summary-only and link back to authenticated CertaNest pages."
       >
         {prefs === null ? (
           <div className="grid gap-3 md:grid-cols-2">
@@ -296,7 +296,7 @@ export default function NotificationSettingsPage() {
             <Bell className="size-4" />
           </span>
           <p className="text-sm leading-relaxed text-muted-foreground">
-            DueNest email reminders use safe summaries only. They do not include
+            CertaNest email reminders use safe summaries only. They do not include
             document contents, files, access codes, share tokens, emergency
             tokens, raw OCR text, private notes, or encryption keys.
           </p>

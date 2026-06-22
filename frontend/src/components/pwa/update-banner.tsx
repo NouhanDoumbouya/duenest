@@ -30,7 +30,7 @@ export function UpdateBanner({
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium">A new version is ready</p>
           <p className="truncate text-xs text-muted-foreground">
-            Refresh to get the latest DueNest.
+            Refresh to get the latest CertaNest.
           </p>
         </div>
         <button

@@ -602,7 +602,7 @@ class PublicModeTests(QuickShareBaseTest):
 
 
 class ReceiveCodeTests(QuickShareBaseTest):
-    """The 'Receive code' flow: a recipient types the DueNest code to find a share."""
+    """The 'Receive code' flow: a recipient types the CertaNest code to find a share."""
 
     URL = "/api/v1/quick-share/receive/"
 
@@ -1057,7 +1057,7 @@ class AccessLimitTests(QuickShareBaseTest):
 
 class VerifiedSharesTests(QuickShareBaseTest):
     """
-    Tamper-evident, DueNest-signed shares. The public /verify endpoint proves
+    Tamper-evident, CertaNest-signed shares. The public /verify endpoint proves
     provenance + integrity (signature valid + current files match the signed
     hashes) — never document bytes.
     """

@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Run DueNest database migrations ONCE (not part of the web startup).
+# Run CertaNest database migrations ONCE (not part of the web startup).
 #
 # Intended for a Railway one-off command / console, the CLI (`railway run`), or a
 # dedicated release step — never the web process CMD. Reads configuration from

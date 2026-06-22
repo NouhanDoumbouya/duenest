@@ -1,12 +1,12 @@
 # Quick Share 2.0
 
-Quick Share is DueNest's premium way to hand someone selected documents — like a
+Quick Share is CertaNest's premium way to hand someone selected documents — like a
 secure pass — without exposing the rest of your vault.
 
 ## Modes (all implemented)
 
 1. **Secure Link** — the session's random token is the shareable URL/claim path.
-2. **DueNest Code** — a short, human-typable code (`dn_code`, e.g. `DN-4KQ7-PXMR`)
+2. **CertaNest Code** — a short, human-typable code (`dn_code`, e.g. `DN-4KQ7-PXMR`)
    the recipient enters on the Receive page; resolved server-side to the share.
 3. **QR Share** — a QR encoding the claim path **only** (never file IDs or storage
    paths).
@@ -19,8 +19,8 @@ secure pass — without exposing the rest of your vault.
 
 ### Nearby Share is intentionally NOT included
 
-There is **no Nearby Share** in DueNest, by design. QR already solves in-person
-sharing, the DueNest code solves account-to-account claiming, and secure links
+There is **no Nearby Share** in CertaNest, by design. QR already solves in-person
+sharing, the CertaNest code solves account-to-account claiming, and secure links
 solve remote sharing. A "Nearby Share" that only re-wrapped QR/code would be
 misleading. A real one (WebRTC/BLE/NFC/OS share-sheet) is a future roadmap item
 only and must be properly built, secured, and tested before shipping. See
@@ -31,14 +31,14 @@ only and must be properly built, secured, and tested before shipping. See
 A four-step wizard: **Select → Method → Protection → Review → Create**.
 - Select what to share: files, a document's files, or a bundle (with a selected
   items summary and a sensitive-item warning).
-- Choose a method (Secure Link / DueNest Code / QR) — all resolve to one real
+- Choose a method (Secure Link / CertaNest Code / QR) — all resolve to one real
   session; the choice only sets which delivery the result screen leads with.
 - Protection: basic (expiry, view-only / allow download) and advanced (access
   code, one-time, max claims, sender approval, watermark, save-to-vault).
 - Review, then create. The result screen shows the link/code/QR, item summary,
   permission chips, expiry countdown, revoke button, and activity log.
 
-## DueNest Code
+## CertaNest Code
 
 - A unique, high-entropy, human-typable code generated **independently of the
   secret token** (reading it aloud never weakens the token).

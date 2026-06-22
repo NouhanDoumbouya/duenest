@@ -1,4 +1,4 @@
-# DueNest — 396 Tiny Product Features Ledger
+# CertaNest — 396 Tiny Product Features Ledger
 
 > A long-term design/product backlog of 396 small, document-readiness-aligned
 > improvements. Every item supports the core promise: **Important documents, ready when
@@ -91,7 +91,7 @@
 | TF-001 | Landing | Hero headline "Important documents, ready when life asks." | Passes 10-second test | Instant understanding | P0 | XS | partially implemented | Verify exact wording on `(marketing)/page.tsx` |
 | TF-002 | Landing | Subheadline naming scan/organize/prepare/track/share | Explains the verbs | Knows what it does | P0 | XS | partially implemented | |
 | TF-003 | Landing | Primary CTA "Start with your first document" | Low-commitment first step | Easy entry | P0 | XS | partially implemented | |
-| TF-004 | Landing | Secondary CTA "See how DueNest works" | Serves researchers | Choice without pressure | P1 | XS | partially implemented | |
+| TF-004 | Landing | Secondary CTA "See how CertaNest works" | Serves researchers | Choice without pressure | P1 | XS | partially implemented | |
 | TF-005 | Landing | Trust line "Private until shared" under hero | Trust before signup | Feels safe | P0 | XS | deferred | |
 | TF-006 | Landing | Workflow strip Scan→Organize→Prepare→Track→Share | Shows the loop | Mental model | P0 | S | partially implemented | |
 | TF-007 | Landing | Hero visual: Vault→Deadline→Pack→SafeSend→AI flow | Shows it's connected | Sees the product | P1 | M | partially implemented | |
@@ -163,7 +163,7 @@
 | TF-058 | Dashboard | Emergency pack status card | Preparedness | Peace of mind | P2 | S | deferred | |
 | TF-059 | Dashboard | Each card has explicit next action | One obvious step | Frictionless | P0 | S | deferred | |
 | TF-060 | Dashboard | Urgency via amber, never fear/red-everywhere | Calm | Less anxiety | P1 | XS | deferred | |
-| TF-061 | First-login | "Welcome to DueNest. Start with one important document." | Reduces overwhelm | Easy start | P0 | S | partially implemented | `readiness-setup` exists |
+| TF-061 | First-login | "Welcome to CertaNest. Start with one important document." | Reduces overwhelm | Easy start | P0 | S | partially implemented | `readiness-setup` exists |
 | TF-062 | First-login | Primary quick actions (Scan/Upload/Create pack/Add deadline) | Fast value | Activation | P0 | S | partially implemented | |
 | TF-063 | Dashboard | Remove any subscription/finance/spending widgets | On-brand | No confusion | P0 | S | deferred | Check `subscriptions` route |
 | TF-064 | Dashboard | "Last organized today" reassuring micro-line | Calm | Reassurance | P3 | XS | deferred | |

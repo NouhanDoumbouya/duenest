@@ -1,5 +1,5 @@
 /*
- * DueNest scanner service worker.
+ * CertaNest scanner service worker.
  *
  * Deliberately conservative for a privacy-sensitive app:
  *   - Caches ONLY the heavy, immutable OpenCV.js library (so it loads once).

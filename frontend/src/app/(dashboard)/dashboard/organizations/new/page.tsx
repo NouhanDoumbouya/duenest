@@ -104,7 +104,7 @@ export default function NewOrganizationPage() {
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 required
-                placeholder="DueNest Student Association"
+                placeholder="CertaNest Student Association"
               />
             </div>
 
@@ -155,7 +155,7 @@ export default function NewOrganizationPage() {
                 id="description"
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
-                placeholder="What this team manages in DueNest."
+                placeholder="What this team manages in CertaNest."
                 rows={4}
               />
             </div>

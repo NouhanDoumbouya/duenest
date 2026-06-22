@@ -47,7 +47,7 @@ def detail(pk):
 
 class SubscriptionBaseTest(APITestCase):
     def setUp(self):
-        # Subscription Radar is deprecated and disabled by default (DueNest is a
+        # Subscription Radar is deprecated and disabled by default (CertaNest is a
         # life-document readiness platform, not a finance tracker). The engine is
         # retained so a founder can re-enable it to inspect legacy data — these
         # tests prove it still works when the flag is turned back on.

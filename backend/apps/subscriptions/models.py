@@ -3,7 +3,7 @@ Models for the Subscription / Recurring Renewal Tracker.
 
 This feature lets a user track *their own* recurring payments and renewals
 (streaming, software, domains, hosting, insurance, telecom, gym, memberships,
-etc.). It is **not** DueNest SaaS billing — there is no Stripe, no payment
+etc.). It is **not** CertaNest SaaS billing — there is no Stripe, no payment
 checkout, and no bank/card integration here.
 
 Privacy rules baked into the schema:

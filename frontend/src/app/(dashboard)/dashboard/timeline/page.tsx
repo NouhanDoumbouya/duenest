@@ -453,7 +453,7 @@ function eventWhy(event: TimelineEvent): string {
     case "document_renewal":
       return "Renewal dates give you a head start so a document never lapses before you act.";
     case "reminder":
-      return "You asked DueNest to surface this reminder so the next step is not forgotten.";
+      return "You asked CertaNest to surface this reminder so the next step is not forgotten.";
     case "checklist_item_due":
       return "This checklist task has a due date and may block readiness if it slips.";
     case "bundle_target_date":

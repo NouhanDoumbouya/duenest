@@ -307,7 +307,7 @@ export default function VaultPage() {
           <EmptyState
             icon={FileText}
             title="Start with the documents you can't afford to lose"
-            description="Add your passport, ID, visa, insurance, certificate, or any document you need to keep safe. DueNest tracks expiry dates, flags what needs attention, and keeps everything private."
+            description="Add your passport, ID, visa, insurance, certificate, or any document you need to keep safe. CertaNest tracks expiry dates, flags what needs attention, and keeps everything private."
             action={
               <Link
                 href="/dashboard/documents/new"
@@ -410,7 +410,7 @@ export default function VaultPage() {
                   <CalmEmpty
                     icon={ShieldCheck}
                     title="Nothing needs attention"
-                    description="All documents have the important details DueNest needs."
+                    description="All documents have the important details CertaNest needs."
                   />
                 ) : (
                   <ul className="space-y-2.5">

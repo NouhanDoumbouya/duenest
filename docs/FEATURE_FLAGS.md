@@ -148,7 +148,7 @@ foreground/background color pickers, live scan-reliability warnings, named style
 presets, quiet-zone control, saved default style, client-side logo upload, and
 SVG export on the SafeSend link screen. UI-only: the QR still encodes only the
 tokenized SafeSend URL and follows the same access/expiry/revoke rules. The
-existing color presets and DueNest badge are unchanged when the flag is off.
+existing color presets and CertaNest badge are unchanged when the flag is off.
 
 The **AI** keys seed `founder_only`: `ai_features` (master gate),
 `ai_document_extraction`, `ai_document_qa`, and `ai_document_drafting`. These

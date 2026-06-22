@@ -1,5 +1,5 @@
 """
-Plan and usage-limit definitions for DueNest.
+Plan and usage-limit definitions for CertaNest.
 
 This is a deliberately small internal foundation: there is **no real payment
 integration**. A user simply has a ``plan`` (``free`` or ``pro_placeholder``)

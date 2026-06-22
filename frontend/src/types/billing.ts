@@ -1,4 +1,4 @@
-// Types for the DueNest billing layer (/api/v1/billing/* + founder/billing/*).
+// Types for the CertaNest billing layer (/api/v1/billing/* + founder/billing/*).
 
 export type BillingInterval = "month" | "year";
 

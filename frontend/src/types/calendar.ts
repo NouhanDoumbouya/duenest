@@ -1,4 +1,4 @@
-// Types for DueNest Calendar V1.
+// Types for CertaNest Calendar V1.
 
 export type CalendarEventType =
   | "document_expiry"

@@ -28,7 +28,7 @@ genuine net-new vertical slice.
 | 8. **Signature Audit Trail** | signer, hashes, audit events | ❌ **GAP.** No `DocumentSignatureRecord`/`PreparedDocument` model. (The only "signature" code is webhook/manifest verification — unrelated.) |
 | 9. Application Pack Templates | generic templates → create pack | ✅ **Exists.** `apps/documents/pack_templates.py`, `PackTemplatesView` at `document-bundles/pack-templates/`, checklist-template models. |
 | 10. Pricing / Plan Gate | plans, feature gates, not-configured | ✅ **Exists & mature.** `apps/billing`: `Plan`, `PlanEntitlement`, `UserSubscription`, `entitlements.py`, `ManualAccessGrant`, `FeatureUsageCounter`, Stripe webhook (`test_webhook_security.py`). `apps/features` flags. |
-| 11. DueNest Portals | org request/collect/review | ✅ **Exists.** `apps/organizations`: `Organization`, `OrganizationMembership`, `DocumentCollectionCampaign`, `DocumentRequest`, `OrganizationRequestTemplate`, etc. |
+| 11. CertaNest Portals | org request/collect/review | ✅ **Exists.** `apps/organizations`: `Organization`, `OrganizationMembership`, `DocumentCollectionCampaign`, `DocumentRequest`, `OrganizationRequestTemplate`, etc. |
 
 ## Core document/storage model (reuse — do not duplicate)
 

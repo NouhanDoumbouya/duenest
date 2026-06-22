@@ -1,7 +1,7 @@
 """
-Cookie-based JWT authentication for DueNest.
+Cookie-based JWT authentication for CertaNest.
 
-DueNest authenticates with SimpleJWT. For beta we move the tokens out of
+CertaNest authenticates with SimpleJWT. For beta we move the tokens out of
 JavaScript-readable storage into **HttpOnly cookies**, while keeping the existing
 ``Authorization: Bearer`` header path working for backward compatibility and for
 server-to-server / test clients.
@@ -15,7 +15,7 @@ Security model:
   where the tokens are carried and adds cookie set/clear helpers.
 
 Same-site deployment is assumed (frontend + backend on one registrable domain,
-e.g. app./api.duenest.com with AUTH_COOKIE_DOMAIN=.duenest.com; dev: both on
+e.g. app./api.certanest.com with AUTH_COOKIE_DOMAIN=.certanest.com; dev: both on
 localhost). Cross-site cookies require SameSite=None + Secure + CORS credentials
 (see docs/AUTH.md).
 """

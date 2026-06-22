@@ -1,7 +1,7 @@
 """
 Thin, honest wrapper around the Anthropic (Claude) API.
 
-This is the single entry point every AI-powered feature in DueNest calls. It
+This is the single entry point every AI-powered feature in CertaNest calls. It
 exists so that:
 
   * AI is **key-gated** in one place — callers never have to check

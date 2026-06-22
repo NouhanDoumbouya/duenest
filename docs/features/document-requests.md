@@ -6,7 +6,7 @@
 
 ## Scope
 
-A DueNest user requests a missing document from someone via a secure public upload
+A CertaNest user requests a missing document from someone via a secure public upload
 link, tracks it, reviews the upload, and accepts / requests changes / revokes.
 
 ## What it does not claim

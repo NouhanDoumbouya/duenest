@@ -1,4 +1,4 @@
-# DueNest System Architecture
+# CertaNest System Architecture
 
 **Version:** v0.1  
 **Status:** Planning  
@@ -14,7 +14,7 @@
 
 ## 1. Architecture Summary
 
-DueNest will be built as a **SaaS-ready modular monolith** using a modern full-stack architecture.
+CertaNest will be built as a **SaaS-ready modular monolith** using a modern full-stack architecture.
 
 The system will use:
 
@@ -34,7 +34,7 @@ The first version will avoid microservices because the product is still in early
 
 ## 2. Architectural Goals
 
-DueNest architecture is designed around the following goals:
+CertaNest architecture is designed around the following goals:
 
 | Goal | Description |
 | --- | --- |
@@ -85,7 +85,7 @@ Files are stored outside the database. PostgreSQL stores file metadata, ownershi
 
 ### 4.1 Modular Monolith Instead of Microservices
 
-DueNest will start as a **modular monolith**.
+CertaNest will start as a **modular monolith**.
 
 This means the backend runs as one Django application, but the codebase is separated into clear domain modules:
 
@@ -110,7 +110,7 @@ Microservices are not appropriate for v0.1 because:
 - Most domain operations are still tightly connected.
 - PostgreSQL relational integrity is valuable at this stage.
 
-Microservices may be considered later only if DueNest reaches clear scaling or organizational pressure, such as:
+Microservices may be considered later only if CertaNest reaches clear scaling or organizational pressure, such as:
 
 - heavy AI extraction workload
 - high-volume document ingestion
@@ -145,7 +145,7 @@ they can reuse hardened sharing rules safely.
 
 ### 4.2 Django REST Framework for the Backend
 
-Django REST Framework is selected because DueNest requires:
+Django REST Framework is selected because CertaNest requires:
 
 - authentication
 - secure user-owned data
@@ -158,13 +158,13 @@ Django REST Framework is selected because DueNest requires:
 - mature security defaults
 - fast development speed
 
-DueNest is a document-heavy, workflow-driven SaaS product. Django provides a strong foundation for this type of system.
+CertaNest is a document-heavy, workflow-driven SaaS product. Django provides a strong foundation for this type of system.
 
 ---
 
 ### 4.3 Next.js for the Frontend
 
-Next.js is selected because DueNest needs:
+Next.js is selected because CertaNest needs:
 
 - a polished SaaS landing page
 - responsive dashboard
@@ -181,7 +181,7 @@ The product will start as a web app because document vaults, dashboards, applica
 
 ### 4.4 PostgreSQL as the Primary Database
 
-PostgreSQL is selected because DueNest requires structured relational data:
+PostgreSQL is selected because CertaNest requires structured relational data:
 
 - users
 - documents
@@ -199,7 +199,7 @@ PostgreSQL provides relational integrity, indexing, transactions, constraints, a
 
 ### 4.5 Celery + Redis for Background Jobs
 
-DueNest will need background jobs for:
+CertaNest will need background jobs for:
 
 - reminder scheduling
 - notification processing
@@ -215,7 +215,7 @@ Celery is a mature Python background job system, and Redis is a lightweight brok
 
 ## 5. Repository Architecture
 
-DueNest will use a monorepo structure.
+CertaNest will use a monorepo structure.
 
 ```txt
 duenest/
@@ -376,7 +376,7 @@ apps/documents/
 
 ### Why Use Services and Selectors?
 
-For simple CRUD endpoints, DRF views and serializers may be enough. However, DueNest will eventually include workflows such as reminders, AI extraction, application pack exports, secure sharing, file lifecycle management, and audit logs.
+For simple CRUD endpoints, DRF views and serializers may be enough. However, CertaNest will eventually include workflows such as reminders, AI extraction, application pack exports, secure sharing, file lifecycle management, and audit logs.
 
 Using `services.py` and `selectors.py` helps keep complex business logic out of views and serializers.
 
@@ -532,7 +532,7 @@ APIs should be:
 
 ## 13. Authentication Architecture
 
-DueNest will use token-based authentication for the API.
+CertaNest will use token-based authentication for the API.
 
 Initial approach:
 
@@ -608,7 +608,7 @@ Role-based access control should not be implemented in v0.1 unless necessary.
 
 ## 15. Data Architecture
 
-DueNest will use PostgreSQL as the source of truth for structured data.
+CertaNest will use PostgreSQL as the source of truth for structured data.
 
 Core entities:
 
@@ -710,7 +710,7 @@ Uploaded documents should be:
 
 ## 17. Background Job Architecture
 
-DueNest does not currently ship Celery/Redis. Scheduled reminder delivery uses
+CertaNest does not currently ship Celery/Redis. Scheduled reminder delivery uses
 the Django management command foundation below, which can be run by cron or a
 platform scheduler:
 
@@ -723,7 +723,7 @@ The command creates missing notification records, sends email when enabled and
 configured, records in-app delivery, and uses stable `dedupe_key` values so
 repeated runs are idempotent.
 
-DueNest may later use Celery workers for asynchronous tasks.
+CertaNest may later use Celery workers for asynchronous tasks.
 
 ```mermaid
 flowchart LR
@@ -840,7 +840,7 @@ All AI surfaces are **assistive** — the UI labels AI output and the user confi
 
 ## 20. Security Architecture
 
-DueNest may eventually handle sensitive documents such as passports, visas, certificates, insurance policies, contracts, and IDs.
+CertaNest may eventually handle sensitive documents such as passports, visas, certificates, insurance policies, contracts, and IDs.
 
 Security must be treated as a core architecture concern.
 
@@ -1046,7 +1046,7 @@ v0.1 does not require complex performance engineering, but the architecture shou
 
 ## 27. Scalability Strategy
 
-DueNest should scale in stages.
+CertaNest should scale in stages.
 
 ### Stage 1: Local MVP
 
@@ -1106,7 +1106,7 @@ These may be considered later only if the product need becomes clear.
 
 ## 29. Engineering Principles
 
-DueNest should be built with the following engineering principles:
+CertaNest should be built with the following engineering principles:
 
 - Build useful core workflows before advanced automation.
 - Keep architecture simple but not careless.
@@ -1235,7 +1235,7 @@ justifies extraction.
 
 ## 30. Future Evolution Path
 
-The architecture should allow DueNest to evolve without a rewrite.
+The architecture should allow CertaNest to evolve without a rewrite.
 
 | Future Need | Possible Evolution |
 | --- | --- |
@@ -1270,7 +1270,7 @@ The architecture is acceptable for v0.1 if:
 
 ## 32. Summary
 
-DueNest will start as a modular monolith because that is the most practical and professional architecture for an early-stage SaaS product.
+CertaNest will start as a modular monolith because that is the most practical and professional architecture for an early-stage SaaS product.
 
 The system is designed to be:
 
@@ -1332,7 +1332,7 @@ before creating the user account.
 
 ## 35. Anatomy of Sharing
 
-DueNest grew three overlapping ways to share documents: Quick Share
+CertaNest grew three overlapping ways to share documents: Quick Share
 (`apps/quick_share` — `QuickShareSession`), the single-file share link
 (`DocumentFileShareLink`, app `documents`), and Share Rooms (`ShareRoom`, app
 `documents`). All three reused `generate_share_token` and the same permission /
@@ -1361,7 +1361,7 @@ approval), so the other two fold into it rather than the reverse:
 Ed25519-signed manifest of its files' SHA-256 hashes (`apps/quick_share/verification.py`),
 and a public **`/verify/<token>`** page recomputes the served files' hashes,
 compares them to the manifest, and checks the signature. It proves **provenance +
-integrity** ("these exact files are an unaltered copy shared from a DueNest
+integrity** ("these exact files are an unaltered copy shared from a CertaNest
 account"), not the document's real-world authenticity — UI copy says so
 explicitly. The private signing key is server-only (`SHARE_SIGNING_PRIVATE_KEY`);
 only the public key is published (`/api/v1/verify/key/`), so independent/offline
@@ -1375,7 +1375,7 @@ logged-in responder fulfils the checklist from their own vault. Crucially there 
 responder with a pre-accepted `QuickShareClaim` for the requester, so it lands in
 the requester's existing "Shared with me" with a notification. Founder-flagged
 (`share_requests`); the public respond page is open so non-founder responders can
-use it. v1 is DueNest-user-to-DueNest-user; anonymous responders / non-account
+use it. v1 is CertaNest-user-to-CertaNest-user; anonymous responders / non-account
 requesters layer on later because the delivery path is already the engine.
 
 **Minimal-disclosure shares (differentiator).** Share only what's needed: from a

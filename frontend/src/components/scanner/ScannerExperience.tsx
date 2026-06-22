@@ -1393,7 +1393,7 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
       <header className="flex items-center justify-between gap-3 border-b border-white/10 bg-slate-950/80 px-4 py-3 backdrop-blur-md">
         <div className="flex items-center gap-2 text-sm font-medium">
           <ShieldCheck className="size-4 text-teal-300" aria-hidden="true" />
-          <span>DueNest Scanner</span>
+          <span>CertaNest Scanner</span>
         </div>
         <div className="flex items-center gap-2">
           {!online && (
@@ -2555,7 +2555,7 @@ function IdleScreen(props: {
       <div>
         <h1 className="text-xl font-semibold">Scan a document</h1>
         <p className="mt-2 text-sm text-slate-400">
-          Point your camera at any document — DueNest cleans it up and saves a
+          Point your camera at any document — CertaNest cleans it up and saves a
           clean PDF to your File Inbox.
         </p>
         <p className="mt-3 inline-flex items-center gap-1.5 text-xs text-slate-500">

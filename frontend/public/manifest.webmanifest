@@ -1,7 +1,7 @@
 {
-  "name": "DueNest",
-  "short_name": "DueNest",
-  "description": "Organize important documents, track renewals, and share securely — one calm, secure place for life admin.",
+  "name": "CertaNest",
+  "short_name": "CertaNest",
+  "description": "Keep important documents, deadlines, renewals, subscriptions, and reusable application packs organized and ready whenever life asks.",
   "id": "/dashboard",
   "start_url": "/dashboard",
   "scope": "/",
@@ -84,7 +84,7 @@
       "sizes": "1920x1200",
       "type": "image/png",
       "form_factor": "wide",
-      "label": "Your DueNest life-admin dashboard"
+      "label": "Your CertaNest life-admin dashboard"
     }
   ]
 }

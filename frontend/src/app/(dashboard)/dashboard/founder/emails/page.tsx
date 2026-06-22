@@ -168,7 +168,7 @@ export default function FounderEmailsPage() {
       <FounderPageHeader
         eyebrow="Emails"
         title="Transactional emails"
-        description="Edit the subject and message of each email, preview it, send yourself a test, or turn one off. Each card shows what triggers the email. Buttons, links, codes, and DueNest branding stay intact — leave a field blank to use the default."
+        description="Edit the subject and message of each email, preview it, send yourself a test, or turn one off. Each card shows what triggers the email. Buttons, links, codes, and CertaNest branding stay intact — leave a field blank to use the default."
       />
 
       {error && (

@@ -10,7 +10,7 @@
   --font-sans: var(--font-sans);
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-heading);
-  /* DueNest brand accents, usable as text-brand-teal, bg-brand-amber, etc. */
+  /* CertaNest brand accents, usable as text-brand-teal, bg-brand-amber, etc. */
   --color-brand-navy: var(--brand-navy);
   --color-brand-teal: var(--brand-teal);
   --color-brand-amber: var(--brand-amber);
@@ -61,48 +61,48 @@
 }
 
 :root {
-  /* DueNest brand palette (from brand/colors/duenest_brand_tokens.json). */
-  --brand-navy: #0b1220; /* Midnight Navy */
-  --brand-teal: #14b8a6; /* Nest Teal */
-  --brand-amber: #f59e0b; /* Due Amber */
-  --brand-mint: #ccfbf1; /* Soft Mint */
-  --brand-success: #22c55e; /* Success Green */
+  /* CertaNest brand palette (see brand/certanest/colors.md). */
+  --brand-navy: #0b1220; /* Primary Ink */
+  --brand-teal: #0f766e; /* Certa Teal */
+  --brand-amber: #d6a85a; /* Premium Gold (subtle accent) */
+  --brand-mint: #ccfbf1; /* Soft Mint (teal tint) */
+  --brand-success: #10b981; /* Secure Emerald */
 
-  /* Soft, cool neutral app surface — not harsh pure white. Cards stay white
-     so they lift off the background and create calm, premium depth. */
-  --background: #f7f8fb;
-  --foreground: #0b1220; /* Midnight Navy */
+  /* Warm Ivory app surface — calm, premium, never harsh pure white. Cards stay
+     white so they lift off the background and create depth. */
+  --background: #f8f6f1; /* Warm Ivory */
+  --foreground: #0b1220; /* Primary Ink */
   --card: #ffffff;
   --card-foreground: #0b1220;
   --popover: #ffffff;
   --popover-foreground: #0b1220;
-  --primary: #2563eb; /* Trust Blue */
-  --primary-foreground: #f8fafc; /* Cloud White */
-  --secondary: #eef1f7;
+  --primary: #0f766e; /* Certa Teal */
+  --primary-foreground: #ffffff;
+  --secondary: #efe7da; /* Soft Sand (muted warm surface) */
   --secondary-foreground: #0b1220;
-  --muted: #eef1f7;
-  --muted-foreground: #586a85; /* refined slate */
-  --accent: #ccfbf1; /* Soft Mint */
-  --accent-foreground: #0f766e; /* deep teal for contrast on mint */
-  --destructive: #ef4444; /* Risk Red */
-  --border: #e6eaf2; /* softer cool line */
-  --input: #e6eaf2;
-  --ring: #2563eb; /* Trust Blue */
-  --chart-1: #2563eb;
-  --chart-2: #14b8a6;
-  --chart-3: #f59e0b;
-  --chart-4: #22c55e;
-  --chart-5: #586a85;
+  --muted: #efe7da; /* Soft Sand */
+  --muted-foreground: #64748b; /* Slate Text */
+  --accent: #d7ede9; /* soft teal tint */
+  --accent-foreground: #0f766e; /* Certa Teal for contrast on the tint */
+  --destructive: #dc2626; /* Danger Red */
+  --border: #e2e8f0; /* Border Mist */
+  --input: #e2e8f0;
+  --ring: #0f766e; /* Certa Teal */
+  --chart-1: #0f766e;
+  --chart-2: #10b981;
+  --chart-3: #d6a85a;
+  --chart-4: #64748b;
+  --chart-5: #0b1220;
   --radius: 0.75rem; /* brand "md" radius (12px) */
-  /* Crisp white sidebar reads as a distinct command surface on the soft bg. */
+  /* Crisp white sidebar reads as a distinct command surface on the warm bg. */
   --sidebar: #ffffff;
   --sidebar-foreground: #0b1220;
-  --sidebar-primary: #2563eb;
-  --sidebar-primary-foreground: #f8fafc;
-  --sidebar-accent: #ccfbf1;
+  --sidebar-primary: #0f766e;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #d7ede9;
   --sidebar-accent-foreground: #0f766e;
-  --sidebar-border: #e6eaf2;
-  --sidebar-ring: #2563eb;
+  --sidebar-border: #e2e8f0;
+  --sidebar-ring: #0f766e;
 }
 
 .dark {
@@ -368,7 +368,7 @@
   }
 
   /* --- Motion: living hero card "scan" -------------------------------------
-     A soft highlight sweeps down a card to suggest DueNest continuously
+     A soft highlight sweeps down a card to suggest CertaNest continuously
      checking each item. Clipped by the card's own overflow-hidden. */
   .live-scan {
     position: absolute;

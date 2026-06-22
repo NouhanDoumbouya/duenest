@@ -1,6 +1,6 @@
 # Transactional Email
 
-DueNest sends transactional email through Django's email backend. The **same**
+CertaNest sends transactional email through Django's email backend. The **same**
 provider configuration powers all transactional email — not just reminders:
 
 - **Invite** and **waitlist confirmation** (founder / private-beta flow)
@@ -21,7 +21,7 @@ Local development defaults to the Django console backend:
 
 ```env
 EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
-DEFAULT_FROM_EMAIL=DueNest <noreply@localhost>
+DEFAULT_FROM_EMAIL=CertaNest <noreply@localhost>
 DUENEST_APP_BASE_URL=http://localhost:3000
 ```
 
@@ -44,8 +44,8 @@ or another provider:
 
 ```env
 EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
-DEFAULT_FROM_EMAIL=DueNest <reminders@example.com>
-SERVER_EMAIL=DueNest <server@example.com>
+DEFAULT_FROM_EMAIL=CertaNest <reminders@example.com>
+SERVER_EMAIL=CertaNest <server@example.com>
 EMAIL_HOST=smtp.example.com
 EMAIL_PORT=587
 EMAIL_HOST_USER=
@@ -92,7 +92,7 @@ Reminder emails must never include:
 - private notes;
 - payment credentials or full payment details.
 
-Emails should link users back to authenticated DueNest pages through
+Emails should link users back to authenticated CertaNest pages through
 `DUENEST_APP_BASE_URL`.
 
 ## Email log & suppression
@@ -123,7 +123,7 @@ dependency — by setting:
 ```env
 EMAIL_PROVIDER=resend
 RESEND_API_KEY=re_...            # used as the SMTP password
-DEFAULT_FROM_EMAIL=DueNest <noreply@yourdomain.com>
+DEFAULT_FROM_EMAIL=CertaNest <noreply@yourdomain.com>
 ```
 
 **Domain authentication is mandatory for inbox placement.** In the Resend

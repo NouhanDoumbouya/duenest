@@ -67,7 +67,7 @@ export function PlanComparisonTable() {
       </h2>
       <div className="mt-8 overflow-x-auto">
         <table className="w-full border-collapse text-sm">
-          <caption className="sr-only">Feature comparison across DueNest plans</caption>
+          <caption className="sr-only">Feature comparison across CertaNest plans</caption>
           <thead>
             <tr className="border-b border-border">
               <th scope="col" className="py-3 pr-4 text-left font-medium">

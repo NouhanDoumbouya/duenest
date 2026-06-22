@@ -305,7 +305,7 @@ export function DocumentForm({
           </select>
           <p className="text-xs text-muted-foreground">
             Where this is in your process — separate from the expiry status
-            DueNest calculates.
+            CertaNest calculates.
           </p>
         </Field>
       </FormSection>
@@ -361,7 +361,7 @@ export function DocumentForm({
 
       <FormSection
         title="Important dates"
-        description="DueNest uses these to flag what needs attention. Leave blank if a date doesn’t apply."
+        description="CertaNest uses these to flag what needs attention. Leave blank if a date doesn’t apply."
       >
         <div className="grid gap-5 sm:grid-cols-3">
           <Field id="issue_date" label="Issue date" error={fieldErrors.issue_date}>
@@ -415,7 +415,7 @@ export function DocumentForm({
             onChange={(e) => update("last_safe_action_override", e.target.value)}
           />
           <p className="text-xs text-muted-foreground">
-            The last date you can still act safely. Leave blank to let DueNest
+            The last date you can still act safely. Leave blank to let CertaNest
             estimate it from your renewal or expiry date.
           </p>
         </Field>

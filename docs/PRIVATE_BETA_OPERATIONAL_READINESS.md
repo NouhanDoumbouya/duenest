@@ -1,6 +1,6 @@
 # Private Beta Operational Readiness
 
-Practical checklists for taking DueNest from "runs locally" to "runs reliably in
+Practical checklists for taking CertaNest from "runs locally" to "runs reliably in
 staging/production for a private beta". This focuses on **operational** wiring —
 email delivery, the reminder scheduler, Redis, Sentry, and an end-to-end manual
 test loop. It does not add product features.
@@ -31,15 +31,15 @@ configured, `EMAIL_CONFIGURED` is `False` and delivery is recorded as
 [email_config.py](../backend/apps/notifications/email_config.py)).
 
 ### Required environment variables
-DueNest is provider-neutral over SMTP (no extra Python deps). Pick one provider.
+CertaNest is provider-neutral over SMTP (no extra Python deps). Pick one provider.
 
 **Common (always set):**
 
 | Variable | Example | Notes |
 |---|---|---|
 | `EMAIL_PROVIDER` | `resend` | `console` (dev), `smtp`, or `resend`/`postmark`/`sendgrid`/`mailgun`/`ses` |
-| `DEFAULT_FROM_EMAIL` | `DueNest <noreply@yourdomain.com>` | Must be a verified sender/domain at the provider |
-| `SERVER_EMAIL` | `DueNest <server@yourdomain.com>` | Used for error mail |
+| `DEFAULT_FROM_EMAIL` | `CertaNest <noreply@yourdomain.com>` | Must be a verified sender/domain at the provider |
+| `SERVER_EMAIL` | `CertaNest <server@yourdomain.com>` | Used for error mail |
 | `SUPPORT_EMAIL` | `support@yourdomain.com` | Shown in UI/trust pages |
 | `FRONTEND_APP_URL` | `https://app.yourdomain.com` | Builds the links inside emails (verify/reset). **Must be correct or links break.** |
 
@@ -58,7 +58,7 @@ DueNest is provider-neutral over SMTP (no extra Python deps). Pick one provider.
 1. Create a Resend account and **verify your sending domain** (add the DNS records).
 2. Create an API key.
 3. In the backend host (Railway) set: `EMAIL_PROVIDER=resend`,
-   `RESEND_API_KEY=...`, `DEFAULT_FROM_EMAIL=DueNest <noreply@yourdomain.com>`,
+   `RESEND_API_KEY=...`, `DEFAULT_FROM_EMAIL=CertaNest <noreply@yourdomain.com>`,
    `FRONTEND_APP_URL=https://app.yourdomain.com`.
 4. Redeploy/restart so settings reload.
 
@@ -72,7 +72,7 @@ DueNest is provider-neutral over SMTP (no extra Python deps). Pick one provider.
   Expect `...smtp.EmailBackend True` (not `console.EmailBackend`).
 - Send a one-off test:
   ```bash
-  python manage.py shell -c "from django.core.mail import send_mail; from django.conf import settings; send_mail('DueNest test','It works.',settings.DEFAULT_FROM_EMAIL,['you@example.com'])"
+  python manage.py shell -c "from django.core.mail import send_mail; from django.conf import settings; send_mail('CertaNest test','It works.',settings.DEFAULT_FROM_EMAIL,['you@example.com'])"
   ```
   A real provider delivers to the inbox; console mode just prints it.
 
@@ -206,7 +206,7 @@ How to safely verify Sentry receives an error in staging:
 1. Set `SENTRY_DSN` + `APP_ENV=staging` and redeploy.
 2. Trigger a harmless, deliberate error from a backend shell:
    ```bash
-   python manage.py shell -c "import sentry_sdk; sentry_sdk.capture_message('DueNest staging sentry test')"
+   python manage.py shell -c "import sentry_sdk; sentry_sdk.capture_message('CertaNest staging sentry test')"
    ```
    (or `division_by_zero = 1/0` inside the shell to test exception capture).
 3. Confirm the event appears in the Sentry project for the `staging` environment.

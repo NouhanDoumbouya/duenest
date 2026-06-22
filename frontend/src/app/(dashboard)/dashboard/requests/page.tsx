@@ -133,7 +133,7 @@ export default function ShareRequestsPage() {
       <PageHeader
         eyebrow="Sharing"
         title="Document requests"
-        description="Ask someone for the exact documents you need. They fill your checklist from their DueNest vault in a few taps — no email back-and-forth."
+        description="Ask someone for the exact documents you need. They fill your checklist from their CertaNest vault in a few taps — no email back-and-forth."
       />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">

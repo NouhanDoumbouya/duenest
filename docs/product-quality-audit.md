@@ -22,7 +22,7 @@ Founder Console V1 readiness.
 
 ## Current Limitations
 
-- Camera scan support depends on the browser and device. DueNest now gives the
+- Camera scan support depends on the browser and device. CertaNest now gives the
   browser the right image capture hint, but it does not perform edge detection,
   multi-page scan merging, image cleanup, or automatic production OCR.
 - Bundle exports are metadata-only. They intentionally do not include raw

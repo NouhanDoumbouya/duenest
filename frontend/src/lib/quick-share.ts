@@ -94,7 +94,7 @@ export function denyQuickShareClaim(
   );
 }
 
-// ---- Receive by DueNest code -----------------------------------------------
+// ---- Receive by CertaNest code -----------------------------------------------
 
 export interface ReceiveCodeResult {
   ok: boolean;
@@ -104,7 +104,7 @@ export interface ReceiveCodeResult {
 }
 
 /**
- * Resolve a typed DueNest code to its share. On success the backend returns the
+ * Resolve a typed CertaNest code to its share. On success the backend returns the
  * session token + claim path so the caller can hand off to the normal, fully
  * guarded claim flow. Errors surface as ApiError with a friendly `detail`.
  */

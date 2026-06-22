@@ -1,4 +1,4 @@
-# DueNest Security Plan
+# CertaNest Security Plan
 
 **Version:** v0.1  
 **Status:** Planning  
@@ -10,11 +10,11 @@
 
 ## 1. Security Plan Summary
 
-DueNest is designed to manage sensitive user information such as passports, visas, certificates, contracts, insurance documents, IDs, invoices, receipts, and renewal records.
+CertaNest is designed to manage sensitive user information such as passports, visas, certificates, contracts, insurance documents, IDs, invoices, receipts, and renewal records.
 
 Because of this, security must be treated as a core product requirement, not an optional technical improvement.
 
-The first version of DueNest must be designed around the following principle:
+The first version of CertaNest must be designed around the following principle:
 
 > A user must only be able to access their own data, and sensitive documents must never be publicly exposed by default.
 
@@ -38,7 +38,7 @@ This security plan defines the rules, risks, controls, and implementation expect
 
 ## 3. Security Principles
 
-DueNest should follow these principles throughout development.
+CertaNest should follow these principles throughout development.
 
 | Principle | Meaning |
 | --- | --- |
@@ -138,13 +138,13 @@ flowchart LR
     Control7 --> Future["Future sharing module"]
 ```
 
-This diagram maps the major DueNest security risks to the controls that reduce them.
+This diagram maps the major CertaNest security risks to the controls that reduce them.
 
 ---
 
 ## 7. Data Classification
 
-DueNest data should be treated according to sensitivity.
+CertaNest data should be treated according to sensitivity.
 
 | Data Type | Sensitivity | Examples | Protection Level |
 | --- | --- | --- | --- |
@@ -180,7 +180,7 @@ DueNest data should be treated according to sensitivity.
 
 ## 9. Authentication Security
 
-DueNest will use JWT-based authentication for API access.
+CertaNest will use JWT-based authentication for API access.
 
 ### v0.1 Authentication Requirements
 
@@ -224,7 +224,7 @@ The backend should enforce reasonable password validation:
 
 ## 10. Authorization and Ownership Rules
 
-Authorization is one of the most important security areas in DueNest.
+Authorization is one of the most important security areas in CertaNest.
 
 Every user-owned resource must be filtered by `request.user`.
 
@@ -335,7 +335,7 @@ The shipped `Document` API (`apps.documents`) follows these rules concretely:
 
 ## 11. File Upload Security
 
-DueNest handles document uploads, so file upload security is critical.
+CertaNest handles document uploads, so file upload security is critical.
 
 ### Allowed File Types for v0.1
 
@@ -544,7 +544,7 @@ coverage/
 
 ## 14. CORS and CSRF Strategy
 
-DueNest uses a separate Next.js frontend and Django REST API.
+CertaNest uses a separate Next.js frontend and Django REST API.
 
 ### CORS Rules
 
@@ -732,14 +732,14 @@ email is considered production-ready.
 - Email reminders must never attach files or include full document/file
   contents, decrypted previews, public access tokens, access codes, payment
   credentials, raw OCR text, or private notes.
-- Email reminders should drive users back to authenticated DueNest pages.
+- Email reminders should drive users back to authenticated CertaNest pages.
 - Delivery logs may include notification id, user id, notification type,
   delivery status, safe error category, and timestamp only.
 
 Example safe reminder:
 
 ```txt
-Your passport document is expiring soon. Please review it in DueNest.
+Your passport document is expiring soon. Please review it in CertaNest.
 ```
 
 Avoid including highly sensitive details in email bodies unless a future,
@@ -829,7 +829,7 @@ Before every commit:
 
 ## 23. Production Readiness Security Checklist
 
-Before any production deployment, DueNest must have:
+Before any production deployment, CertaNest must have:
 
 - [ ] `DEBUG=False`
 - [ ] strong `DJANGO_SECRET_KEY`
@@ -1088,7 +1088,7 @@ These can be added later as the product matures.
 
 ## 29. Summary
 
-DueNest security must be taken seriously from the beginning because the product may handle sensitive personal and professional documents.
+CertaNest security must be taken seriously from the beginning because the product may handle sensitive personal and professional documents.
 
 The first version should focus on:
 
@@ -1103,7 +1103,7 @@ The first version should focus on:
 
 The long-term security strategy should evolve toward secure sharing, audit logs, stronger authentication, encrypted storage, and privacy controls.
 
-The goal is not to overengineer security in v0.1, but to build the foundation correctly so DueNest can grow into a trustworthy SaaS product.
+The goal is not to overengineer security in v0.1, but to build the foundation correctly so CertaNest can grow into a trustworthy SaaS product.
 
 ---
 
@@ -1181,7 +1181,7 @@ cannot unlock another.
 
 ### Screenshot deterrence (not prevention)
 
-DueNest discourages screenshots with dynamic watermarking, view-only controls,
+CertaNest discourages screenshots with dynamic watermarking, view-only controls,
 optional privacy-screen blur on tab blur, access limits, and activity logging.
 **Browsers cannot fully prevent OS-level screenshots** — the product never
 claims otherwise. View-only download blocking is enforced server-side. The
@@ -1194,7 +1194,7 @@ exposed publicly.
 Calendar access is authenticated and owner-scoped: a user only ever sees their
 own events. Aggregation excludes other users' data, share tokens, access codes,
 internal file paths, and founder/operational data. The one-way `.ics` export
-uses safe `DueNest: ...` titles only and omits tokens, codes, paths, and sensitive
+uses safe `CertaNest: ...` titles only and omits tokens, codes, paths, and sensitive
 numbers. There is no Google/Outlook or two-way external calendar sync.
 
 ## Subscription Tracker V1
@@ -1320,5 +1320,5 @@ and organization-collection QR surfaces are deferred to later iterations.
   never document bytes**; no access code is required (the token already grants the
   recipient the share).
 * Verification asserts **provenance + integrity only** (an unaltered copy shared
-  from a DueNest account), never the document's real-world authenticity; the UI
+  from a CertaNest account), never the document's real-world authenticity; the UI
   states this explicitly to avoid over-claiming.

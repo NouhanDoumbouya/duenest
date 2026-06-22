@@ -446,7 +446,7 @@ def _check_access_code(session, request, *, log=True):
 
 class QuickShareReceiveCodeView(APIView):
     """
-    Resolve a typed DueNest code to its share (the "Receive code" flow).
+    Resolve a typed CertaNest code to its share (the "Receive code" flow).
 
     The recipient enters the short code the sender gave them; on success we hand
     back the session token + claim path so the normal, fully-guarded claim flow
@@ -464,7 +464,7 @@ class QuickShareReceiveCodeView(APIView):
         if not code:
             return Response(
                 {
-                    "detail": "Enter the DueNest code from the sender, e.g. DN-4KQ7-PXMR.",
+                    "detail": "Enter the CertaNest code from the sender, e.g. DN-4KQ7-PXMR.",
                     "state": "invalid",
                 },
                 status=status.HTTP_400_BAD_REQUEST,
@@ -893,7 +893,7 @@ class ShareVerifyKeyView(APIView):
 class PublicShareVerifyView(APIView):
     """
     Verify a share by token: recompute the served files' hashes, compare to the
-    DueNest-signed manifest, and check the signature. Returns metadata + per-file
+    CertaNest-signed manifest, and check the signature. Returns metadata + per-file
     match booleans only — never document bytes, and no access code required (the
     token already grants the recipient the share).
     """

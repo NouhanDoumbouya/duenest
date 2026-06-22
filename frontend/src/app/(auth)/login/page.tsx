@@ -77,7 +77,7 @@ function LoginForm() {
       <CardHeader className="items-center text-center">
         <CardTitle className="text-2xl">Welcome back</CardTitle>
         <CardDescription className="text-[0.95rem]">
-          Sign in to your DueNest workspace
+          Sign in to your CertaNest workspace
         </CardDescription>
       </CardHeader>
 
@@ -159,7 +159,7 @@ function LoginForm() {
         </form>
 
         <p className="text-center text-sm text-muted-foreground">
-          New to DueNest?{" "}
+          New to CertaNest?{" "}
           <Link
             href="/waitlist"
             className="font-medium text-primary hover:underline"

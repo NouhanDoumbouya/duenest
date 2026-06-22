@@ -1,12 +1,12 @@
 """
-Verifiable Shares — tamper-evident, DueNest-signed share manifests.
+Verifiable Shares — tamper-evident, CertaNest-signed share manifests.
 
 A verified Quick Share carries an Ed25519-signed manifest listing each shared
 file's SHA-256. The public verify page recomputes the hashes from the currently
 served files and checks the signature, proving PROVENANCE + INTEGRITY: these exact
-files were shared by this DueNest account at this time and have not been altered.
+files were shared by this CertaNest account at this time and have not been altered.
 
-It does NOT assert real-world document authenticity (DueNest cannot know whether a
+It does NOT assert real-world document authenticity (CertaNest cannot know whether a
 passport is genuine). The private key is server-only; only the public key is ever
 exposed, so verification can become independent/offline later without rework.
 """
@@ -143,7 +143,7 @@ def verify_session(session) -> dict:
     if not session.verified or not manifest or not signature_b64:
         return {"verified": False, "status": "not_verified", "files": []}
 
-    # 1. Was the manifest signed by DueNest?
+    # 1. Was the manifest signed by CertaNest?
     try:
         _load_signing_key().public_key().verify(
             base64.b64decode(signature_b64), canonical_bytes(manifest)

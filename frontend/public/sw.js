@@ -1,7 +1,7 @@
 /*
- * DueNest unified service worker (PWA Lite Foundation).
+ * CertaNest unified service worker (PWA Lite Foundation).
  *
- * SECURITY-FIRST CACHING. DueNest stores passports, visas, IDs, insurance,
+ * SECURITY-FIRST CACHING. CertaNest stores passports, visas, IDs, insurance,
  * financial and emergency documents, so this worker is deliberately conservative:
  *
  *   NEVER cached:
@@ -215,11 +215,11 @@ self.addEventListener("push", (event) => {
   } catch {
     data = {};
   }
-  const title = typeof data.title === "string" && data.title ? data.title : "DueNest";
+  const title = typeof data.title === "string" && data.title ? data.title : "CertaNest";
   const body =
     typeof data.body === "string" && data.body
       ? data.body
-      : "You have a new update in DueNest.";
+      : "You have a new update in CertaNest.";
   const url = typeof data.url === "string" && data.url.startsWith("/") ? data.url : "/dashboard/notifications";
   event.waitUntil(
     self.registration.showNotification(title, {

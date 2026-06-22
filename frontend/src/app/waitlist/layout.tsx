@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Join the waitlist",
   description:
-    "Request private-beta access to DueNest — a calm, secure command center for important documents, renewals, applications, and secure sharing.",
+    "Request private-beta access to CertaNest — a calm, secure command center for important documents, renewals, applications, and secure sharing.",
   alternates: { canonical: "/waitlist" },
 };
 

@@ -61,7 +61,7 @@ export function UseCasePage({ useCase }: { useCase: UseCase }) {
             </p>
           </div>
           <div className="rounded-2xl border border-primary/20 bg-primary/5 p-6">
-            <h2 className="text-lg font-semibold">How DueNest helps</h2>
+            <h2 className="text-lg font-semibold">How CertaNest helps</h2>
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
               {useCase.solution}
             </p>

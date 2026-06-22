@@ -1016,7 +1016,7 @@ function PlanningRail({
             <div>
               <p className="text-sm font-medium">Safe summaries only</p>
               <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                DueNest keeps this planning view private to you and omits share
+                CertaNest keeps this planning view private to you and omits share
                 tokens, access codes, and internal file paths.
               </p>
             </div>
@@ -1098,7 +1098,7 @@ function EventDrawer({
 
         <div className="mt-5 rounded-xl border border-border bg-muted/25 p-4">
           <p className="text-sm leading-relaxed text-muted-foreground">
-            {event.description || "DueNest added this item so you can plan ahead."}
+            {event.description || "CertaNest added this item so you can plan ahead."}
           </p>
         </div>
 

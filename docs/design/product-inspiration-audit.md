@@ -1,11 +1,11 @@
-# DueNest — Product Inspiration Audit
+# CertaNest — Product Inspiration Audit
 
 > Purpose: extract concrete UI/UX patterns from best-in-class products and map
-> each one to a specific DueNest screen or flow. This is a **decision document**,
+> each one to a specific CertaNest screen or flow. This is a **decision document**,
 > not a moodboard. Every entry ends with an implementation recommendation tied to
 > a real file in this repo.
 >
-> Grounding: DueNest already ships a mature design system — see
+> Grounding: CertaNest already ships a mature design system — see
 > [`design-system.md`](./design-system.md), tokens + motion in
 > `frontend/src/app/globals.css`, primitives in `frontend/src/components/ui/*`,
 > and the navigation model in `frontend/src/lib/navigation.ts`. This audit builds
@@ -14,9 +14,9 @@
 ## How to read each entry
 
 - **Does well** — the durable strength worth learning from.
-- **Adapt** — the specific pattern DueNest should adopt.
+- **Adapt** — the specific pattern CertaNest should adopt.
 - **Avoid** — what NOT to copy (brand, scope, or vibe mismatch).
-- **Affected DueNest surfaces** — exact routes/components.
+- **Affected CertaNest surfaces** — exact routes/components.
 - **Recommendation** — concrete, file-level next step.
 
 ---
@@ -67,7 +67,7 @@
 
 - Source: https://stripe.com
 - **Does well:** landing clarity, section rhythm, outcome-based copy, trust early.
-- **Adapt:** DueNest's landing already follows this arc (`app/(marketing)/page.tsx`:
+- **Adapt:** CertaNest's landing already follows this arc (`app/(marketing)/page.tsx`:
   Hero → TrustBar → Pain → HowItWorks → ... → FAQ → FinalCTA). Keep it; tighten
   section count so the 10-second test passes before the fold.
 - **Avoid:** copying Stripe gradients literally; over-long landing.
@@ -195,7 +195,7 @@
    (tokens, motion, status map, typed text utilities) are in place.
 2. **The biggest wins are flow-level, not pixel-level:** the smart file picker,
    progressive SafeSend, pack readiness, and consistent empty/loading/error states.
-3. **Honesty copy is a feature.** DueNest already says the hard-but-true things
+3. **Honesty copy is a feature.** CertaNest already says the hard-but-true things
    (no AI guesswork, not a legal e-signature, templates are generic). Keep and
    mirror that copy at every point of action.
 </content>

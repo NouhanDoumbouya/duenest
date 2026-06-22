@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 
 const FAQ: { q: string; a: string }[] = [
   {
-    q: "Can I use DueNest for free?",
+    q: "Can I use CertaNest for free?",
     a: "Yes. The Free plan covers the basics — documents, reminders, basic Life Radar, and Emergency Access — with generous limits.",
   },
   {
@@ -78,8 +78,8 @@ export default function PricingPage() {
         </section>
 
         <p className="mx-auto mt-12 max-w-2xl text-center text-xs text-muted-foreground">
-          DueNest helps you organize and prepare important documents; this
-          pricing is for DueNest&apos;s own plans. Taxes may apply at checkout
+          CertaNest helps you organize and prepare important documents; this
+          pricing is for CertaNest&apos;s own plans. Taxes may apply at checkout
           depending on your region.
         </p>
       </main>

@@ -54,7 +54,7 @@ export default function NewDocumentPage() {
         <CardHeader>
           <CardTitle className="text-xl">Add a document</CardTitle>
           <CardDescription>
-            Store the details and key dates so DueNest can track renewals for
+            Store the details and key dates so CertaNest can track renewals for
             you — and attach the file now if you have it. Only the title is
             required.
           </CardDescription>

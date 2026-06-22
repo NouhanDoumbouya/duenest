@@ -1,4 +1,4 @@
-# DueNest Database Design
+# CertaNest Database Design
 
 **Version:** v0.1  
 **Status:** Planning  
@@ -11,7 +11,7 @@
 
 ## 1. Database Design Summary
 
-DueNest will use **PostgreSQL** as the primary database because the product depends on structured, relational, user-owned data.
+CertaNest will use **PostgreSQL** as the primary database because the product depends on structured, relational, user-owned data.
 
 The database will store:
 
@@ -47,7 +47,7 @@ The database will **not** store actual document file contents directly. Uploaded
 
 | Entity | Purpose |
 | --- | --- |
-| `User` | Represents an authenticated DueNest user |
+| `User` | Represents an authenticated CertaNest user |
 | `Document` | Stores metadata for uploaded documents |
 | `Renewal` | Tracks subscriptions, contracts, warranties, domains, licenses, and recurring obligations |
 | `Reminder` | Stores upcoming reminder events linked to documents or renewals |
@@ -258,9 +258,9 @@ Reason:
 
 ### Purpose
 
-Represents a registered user of DueNest.
+Represents a registered user of CertaNest.
 
-DueNest should use a custom user model from the beginning because changing the user model later in Django can be difficult.
+CertaNest should use a custom user model from the beginning because changing the user model later in Django can be difficult.
 
 ### Model: `User`
 
@@ -1144,7 +1144,7 @@ Document.objects.get(id=document_id, user=request.user)
 
 ## 19. Deletion Strategy
 
-Deletion must be handled carefully because DueNest may store sensitive documents.
+Deletion must be handled carefully because CertaNest may store sensitive documents.
 
 ### v0.1 Deletion Approach
 
@@ -1291,7 +1291,7 @@ Document files should be represented by metadata records.
 
 ### Why Store Metadata Separately?
 
-This allows DueNest to:
+This allows CertaNest to:
 
 - display files without loading them
 - validate file ownership
@@ -1351,7 +1351,7 @@ Application pack export may produce ZIP files.
 
 ## 27. Security Considerations
 
-DueNest may handle sensitive data, so database design must support security.
+CertaNest may handle sensitive data, so database design must support security.
 
 ### Security Requirements
 
@@ -1399,7 +1399,7 @@ Changing the user model later is difficult in Django.
 
 ## 29. Future Database Evolution
 
-DueNest may later add:
+CertaNest may later add:
 
 - workspace tables
 - workspace member roles
@@ -1827,7 +1827,7 @@ The v0.1 database design is acceptable if:
 
 ## 32. Summary
 
-The DueNest database is designed to support a secure, SaaS-ready life admin platform.
+The CertaNest database is designed to support a secure, SaaS-ready life admin platform.
 
 The first version should prioritize:
 
@@ -1959,7 +1959,7 @@ existing "Shared with me". The request stays open to collect multiple responses.
 
 ### Calendar
 
-DueNest Calendar V1 adds **no new table** — events are aggregated on demand from
+CertaNest Calendar V1 adds **no new table** — events are aggregated on demand from
 existing models (documents, reminders, bundles, appointments, proofs, share
 links, rooms, emergency packs). Existing date columns (`expiry_date`,
 `renewal_date`, bundle `target_date`, share/room `expires_at`, etc.) back the

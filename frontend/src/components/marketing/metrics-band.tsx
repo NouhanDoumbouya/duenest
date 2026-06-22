@@ -41,7 +41,7 @@ const METRICS: {
 export function MetricsBand() {
   return (
     <section
-      aria-label="DueNest by the numbers"
+      aria-label="CertaNest by the numbers"
       className="border-b border-border bg-background"
     >
       <div className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 lg:py-14">

@@ -7,10 +7,11 @@ import { ImageResponse } from "next/og";
 export const OG_SIZE = { width: 1200, height: 630 };
 export const OG_CONTENT_TYPE = "image/png";
 
-// DueNest brand colors (see brand/colors/duenest_brand_tokens.json).
-const NAVY = "#0B1220";
-const TEAL = "#14B8A6";
-const CLOUD = "#F8FAFC";
+// CertaNest brand colors (see brand/certanest/colors.md).
+const NAVY = "#0B1220"; /* Primary Ink */
+const TEAL = "#5EEAD4"; /* Certa Teal tint (reads on ink) */
+const EMERALD = "#10B981"; /* Secure Emerald */
+const CLOUD = "#F8F6F1"; /* Warm Ivory */
 const SLATE = "#94A3B8";
 
 export function brandOgImage({
@@ -43,10 +44,22 @@ export function brandOgImage({
               borderRadius: 14,
               background: TEAL,
               display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
             }}
-          />
-          <div style={{ fontSize: 34, fontWeight: 700, color: CLOUD }}>
-            DueNest
+          >
+            <div
+              style={{
+                width: 18,
+                height: 18,
+                borderRadius: 6,
+                background: EMERALD,
+                display: "flex",
+              }}
+            />
+          </div>
+          <div style={{ fontSize: 34, fontWeight: 700, color: CLOUD, display: "flex" }}>
+            CertaNest
           </div>
         </div>
 
@@ -74,7 +87,7 @@ export function brandOgImage({
 
         {/* Footer tagline */}
         <div style={{ fontSize: 27, color: SLATE }}>
-          Where important documents become ready.
+          Your life-admin, securely organized.
         </div>
       </div>
     ),

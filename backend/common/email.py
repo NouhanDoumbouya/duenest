@@ -1,7 +1,7 @@
 """Shared branded transactional email sender.
 
 Renders the matching ``emails/<template>.html`` + ``.txt`` (both extend
-``emails/base.html`` / ``base.txt`` for consistent DueNest branding) and sends a
+``emails/base.html`` / ``base.txt`` for consistent CertaNest branding) and sends a
 multipart email. Subject is injected into the template context so the layout's
 ``<title>``/preheader stay in sync.
 

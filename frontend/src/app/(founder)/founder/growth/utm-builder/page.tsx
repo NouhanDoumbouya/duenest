@@ -17,7 +17,7 @@ import {
 
 export default function UtmBuilderPage() {
   const [form, setForm] = useState({
-    base_url: "https://duenest.com/",
+    base_url: "https://certanest.com/",
     source: "",
     medium: "",
     campaign: "",
@@ -71,7 +71,7 @@ export default function UtmBuilderPage() {
             <CardTitle className="text-base">Build a link</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Field id="base_url" label="Base URL" value={form.base_url} onChange={set("base_url")} placeholder="https://duenest.com/" />
+            <Field id="base_url" label="Base URL" value={form.base_url} onChange={set("base_url")} placeholder="https://certanest.com/" />
             <Field id="source" label="Source" value={form.source} onChange={set("source")} placeholder="facebook" list="utm-sources" required />
             <datalist id="utm-sources">
               {UTM_SOURCE_SUGGESTIONS.map((s) => <option key={s} value={s} />)}

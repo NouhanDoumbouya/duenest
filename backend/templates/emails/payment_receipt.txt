@@ -22,4 +22,4 @@ Manage your subscription:
 {% endif %}{% if business_address %}{{ business_address }}
 {% endif %}{% if tax_id %}Tax ID: {{ tax_id }}
 {% endif %}{% if support_email %}Questions? {{ support_email }}
-{% endif %}This is a receipt for your DueNest subscription. Keep it for your records.
+{% endif %}This is a receipt for your CertaNest subscription. Keep it for your records.

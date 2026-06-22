@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Verify your email",
-  description: "Confirm your DueNest email address.",
+  description: "Confirm your CertaNest email address.",
   alternates: { canonical: "/verify-email" },
   robots: { index: false, follow: false },
 };

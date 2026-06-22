@@ -377,7 +377,7 @@ export default function QuickShareClaimPage() {
             <Centered
               icon={<LogIn className="size-6" />}
               title="Sign in to open this share"
-              message="The sender shared these files with your DueNest account. Sign in to view them — you'll come right back here."
+              message="The sender shared these files with your CertaNest account. Sign in to view them — you'll come right back here."
               action={
                 <Link
                   href={`/login?next=${encodeURIComponent(`/quick-share/${token}`)}`}
@@ -468,7 +468,7 @@ export default function QuickShareClaimPage() {
                       className="inline-flex items-center gap-1 rounded-full border border-brand-success/30 bg-brand-success/10 px-2.5 py-1 text-xs font-medium text-brand-success transition-colors hover:bg-brand-success/15"
                     >
                       <BadgeCheck className="size-3.5" />
-                      Verified by DueNest
+                      Verified by CertaNest
                     </Link>
                   )}
                 </div>
@@ -635,7 +635,7 @@ export default function QuickShareClaimPage() {
         <footer className="mt-auto border-t border-border pt-4 pb-2 text-center">
           <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
             <ShieldCheck className="size-3.5 text-brand-success" />
-            Shared securely through DueNest. Access is controlled by the sender.
+            Shared securely through CertaNest. Access is controlled by the sender.
           </p>
         </footer>
       </div>

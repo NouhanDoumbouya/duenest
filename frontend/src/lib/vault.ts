@@ -137,7 +137,7 @@ export function getDocumentRiskReason(doc: DocumentRecord): string {
   if (doc.is_expired) return "This document may no longer be accepted.";
   if (doc.missing_file) return "This record exists, but no file is attached yet.";
   if (doc.missing_expiry_date)
-    return "No expiry date set, so DueNest can't protect you.";
+    return "No expiry date set, so CertaNest can't protect you.";
   if (doc.is_expiring_soon || doc.is_renewal_due)
     return "Renewal preparation may take time.";
   return doc.status_reason || "This document needs a quick review.";

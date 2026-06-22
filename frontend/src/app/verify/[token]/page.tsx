@@ -50,7 +50,7 @@ export default function VerifySharePage() {
     <main className="flex min-h-dvh flex-col items-center bg-muted/40 px-4 py-10">
       <div className="mb-6 flex items-center gap-2">
         <LogoMark size="sm" />
-        <span className="font-heading text-lg font-semibold">DueNest</span>
+        <span className="font-heading text-lg font-semibold">CertaNest</span>
       </div>
 
       <div className="w-full max-w-lg">
@@ -73,8 +73,8 @@ export default function VerifySharePage() {
         ) : null}
 
         <p className="mt-6 px-2 text-center text-xs leading-relaxed text-muted-foreground">
-          DueNest verification confirms a file is an unaltered copy shared from a
-          DueNest account. It does <strong>not</strong> certify the document&apos;s
+          CertaNest verification confirms a file is an unaltered copy shared from a
+          CertaNest account. It does <strong>not</strong> certify the document&apos;s
           real-world authenticity (for example, whether an ID is genuine).
         </p>
       </div>
@@ -91,7 +91,7 @@ function ResultView({ result }: { result: ShareVerification }) {
         title="Authentic & unaltered"
         message={
           result.sender
-            ? `DueNest confirms these files were shared by ${result.sender}${
+            ? `CertaNest confirms these files were shared by ${result.sender}${
                 result.issued_at
                   ? ` on ${new Date(result.issued_at).toLocaleDateString(undefined, {
                       year: "numeric",
@@ -100,7 +100,7 @@ function ResultView({ result }: { result: ShareVerification }) {
                     })}`
                   : ""
               } and have not been altered since.`
-            : "DueNest confirms these files have not been altered since they were shared."
+            : "CertaNest confirms these files have not been altered since they were shared."
         }
         files={result.files}
       />
@@ -124,7 +124,7 @@ function ResultView({ result }: { result: ShareVerification }) {
       tone="danger"
       icon={<ShieldAlert className="size-6" />}
       title="This share has changed"
-      message="One or more files no longer match what DueNest originally signed. Treat the contents with caution and ask the sender to re-share."
+      message="One or more files no longer match what CertaNest originally signed. Treat the contents with caution and ask the sender to re-share."
       files={result.files}
     />
   );

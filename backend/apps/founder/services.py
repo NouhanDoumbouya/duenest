@@ -1744,7 +1744,7 @@ def build_country_activity(range_key: str | None = None) -> dict:
         "countries": country_rows,
         "privacy_note": (
             "Country activity is aggregated from approximate product-event "
-            "metadata and waitlist country fields. DueNest does not use GPS, "
+            "metadata and waitlist country fields. CertaNest does not use GPS, "
             "street-level location, or raw IP addresses in this founder view."
         ),
     }

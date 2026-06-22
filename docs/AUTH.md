@@ -1,6 +1,6 @@
-# DueNest Authentication & Sessions
+# CertaNest Authentication & Sessions
 
-DueNest uses Django + DRF + SimpleJWT. For beta, auth tokens are carried in
+CertaNest uses Django + DRF + SimpleJWT. For beta, auth tokens are carried in
 **HttpOnly cookies** (not JavaScript-readable storage), with CSRF protection on
 the cookie path and server-side route protection in the Next.js frontend.
 
@@ -71,16 +71,16 @@ Frontend and backend share a site so cookies are visible to both:
   `DJANGO_DEV_EXTRA_ORIGINS` so Django trusts it for CSRF on writes.
   (Without the proxy you'd hit a `/dashboard → /login` loop, because cookies set
   on the backend host aren't visible to the frontend's `proxy.ts`.)
-- Prod: e.g. `app.duenest.com` (frontend) + `api.duenest.com` (backend) with
-  `AUTH_COOKIE_DOMAIN=.duenest.com`. SameSite=Lax, Secure.
+- Prod: e.g. `app.certanest.com` (frontend) + `api.certanest.com` (backend) with
+  `AUTH_COOKIE_DOMAIN=.certanest.com`. SameSite=Lax, Secure.
 
 Required prod env:
 ```
-DJANGO_ALLOWED_HOSTS=api.duenest.com
-DJANGO_CORS_ALLOWED_ORIGINS=https://app.duenest.com
-DJANGO_CSRF_TRUSTED_ORIGINS=https://app.duenest.com,https://api.duenest.com
+DJANGO_ALLOWED_HOSTS=api.certanest.com
+DJANGO_CORS_ALLOWED_ORIGINS=https://app.certanest.com
+DJANGO_CSRF_TRUSTED_ORIGINS=https://app.certanest.com,https://api.certanest.com
 DJANGO_CORS_ALLOW_CREDENTIALS=True
-AUTH_COOKIE_DOMAIN=.duenest.com
+AUTH_COOKIE_DOMAIN=.certanest.com
 # (AUTH_COOKIE_SECURE / CSRF_COOKIE_SECURE are auto-forced True in production)
 ```
 

@@ -24,7 +24,7 @@ def _sender_display(user) -> str:
     if full:
         return full
     email = getattr(user, "email", "") or ""
-    return email.split("@")[0] if email else "A DueNest user"
+    return email.split("@")[0] if email else "A CertaNest user"
 
 
 def _initials(name: str) -> str:
@@ -93,7 +93,7 @@ class QuickShareCreateSerializer(serializers.Serializer):
     require_sender_approval = serializers.BooleanField(default=False)
     watermark_enabled = serializers.BooleanField(default=True)
     privacy_screen_enabled = serializers.BooleanField(default=False)
-    # Tamper-evident, DueNest-signed share (feature-flagged; enforced in the view).
+    # Tamper-evident, CertaNest-signed share (feature-flagged; enforced in the view).
     verified = serializers.BooleanField(default=False)
     # File ids to attach on creation (owner-owned; validated in the view).
     file_ids = serializers.ListField(
@@ -251,7 +251,7 @@ class QuickShareSessionSerializer(serializers.ModelSerializer):
         return f"/quick-share/{obj.token}"
 
     def get_fallback_code(self, obj):
-        # Back-compat alias for ``dn_code``: the real, resolvable DueNest code a
+        # Back-compat alias for ``dn_code``: the real, resolvable CertaNest code a
         # recipient types on the "Receive code" page. Independent of the secret
         # token (never derived from it).
         return obj.dn_code

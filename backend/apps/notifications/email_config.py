@@ -1,7 +1,7 @@
 """
-Provider-neutral email configuration for DueNest.
+Provider-neutral email configuration for CertaNest.
 
-Operators choose a provider with ``EMAIL_PROVIDER`` and DueNest maps it to
+Operators choose a provider with ``EMAIL_PROVIDER`` and CertaNest maps it to
 Django's email settings. Development works with no credentials (``console``).
 For real delivery, ``smtp`` plus the well-known providers (Resend, Postmark,
 SendGrid, Mailgun, SES) are supported over SMTP — no extra Python dependencies

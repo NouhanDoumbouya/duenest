@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="280" height="96" viewBox="0 0 280 96" fill="none" role="img" aria-label="CertaNest">
+  <title>CertaNest — Secure Nest horizontal lockup (dark background)</title>
+  <rect width="280" height="96" rx="20" fill="#0B1220"/>
+  <g transform="translate(16,16)">
+    <path d="M9 27 C9 47 55 47 55 27" stroke="#5EEAD4" stroke-width="4.5" stroke-linecap="round"/>
+    <path d="M18 29 C18 41 46 41 46 29" stroke="#5EEAD4" stroke-width="4.5" stroke-linecap="round" opacity="0.45"/>
+    <path d="M25 28 L30.5 34 L42 19" stroke="#10B981" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="90" y="57" font-family="Manrope, Inter, system-ui, sans-serif" font-size="30" font-weight="700" letter-spacing="-0.6">
+    <tspan fill="#F8F6F1">Certa</tspan><tspan fill="#5EEAD4">Nest</tspan>
+  </text>
+</svg>

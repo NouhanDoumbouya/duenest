@@ -1,9 +1,9 @@
 """
-DueNest's own SaaS billing layer (plans, subscriptions, promo codes, billing
+CertaNest's own SaaS billing layer (plans, subscriptions, promo codes, billing
 events, invoices, manual grants).
 
 This is distinct from ``apps.subscriptions`` — that app tracks a *user's own*
-recurring payments (Netflix, Spotify, …). This app monetizes DueNest itself.
+recurring payments (Netflix, Spotify, …). This app monetizes CertaNest itself.
 
 Money is stored as integer minor units (cents/sen) to avoid float rounding.
 ``User.plan`` (free / pro_placeholder) stays the denormalized "effective tier"
@@ -17,7 +17,7 @@ from django.utils import timezone
 
 
 class Plan(models.Model):
-    """A purchasable (or free) DueNest plan. Prices are integer minor units."""
+    """A purchasable (or free) CertaNest plan. Prices are integer minor units."""
 
     class Tier(models.TextChoices):
         FREE = "free", "Free"
@@ -106,7 +106,7 @@ class CustomerBillingProfile(models.Model):
 
 
 class UserSubscription(models.Model):
-    """A user's (or organization's) DueNest subscription state."""
+    """A user's (or organization's) CertaNest subscription state."""
 
     class Status(models.TextChoices):
         FREE = "free", "Free"
@@ -475,7 +475,7 @@ class FeatureUsageCounter(models.Model):
 
 
 class ReceiptSettings(models.Model):
-    """Founder-configurable branded receipt emails for DueNest subscriptions.
+    """Founder-configurable branded receipt emails for CertaNest subscriptions.
 
     A single row (pk=1) holds the active configuration; ``load()`` returns it,
     creating defaults on first use, so callers never deal with absence. Disabled
@@ -484,7 +484,7 @@ class ReceiptSettings(models.Model):
 
     class Mode(models.TextChoices):
         EMAIL_LINK = "email_link", "Branded email + provider invoice link"
-        EMAIL_PDF = "email_pdf", "Branded email + DueNest PDF attachment"
+        EMAIL_PDF = "email_pdf", "Branded email + CertaNest PDF attachment"
         EMAIL_ONLY = "email_only", "Branded email only"
 
     enabled = models.BooleanField(default=False)

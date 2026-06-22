@@ -13,7 +13,7 @@ from apps.core.security.encryption import (
 
 class User(AbstractUser):
     """
-    Custom user model for DueNest.
+    Custom user model for CertaNest.
 
     Starts from Django's AbstractUser (so username/password auth keeps working)
     and adds a few fields needed to support third-party (Google) sign-in.
@@ -41,7 +41,7 @@ class User(AbstractUser):
     # User-uploaded profile picture, stored as a small, re-encoded base64 data
     # URL (max ~256px, JPEG/PNG). Kept in-row rather than object storage so it
     # serves uniformly in both cookie and Bearer deployments without exposing a
-    # storage URL — consistent with DueNest never delivering files via public
+    # storage URL — consistent with CertaNest never delivering files via public
     # storage links. Re-encoding through Pillow strips EXIF and guarantees a
     # clean raster image (no SVG/script payloads).
     avatar_image = models.TextField(blank=True, default="")
@@ -154,7 +154,7 @@ class UserProfileDetails(models.Model):
     forms later.
 
     The whole record is stored as a single AES-256-GCM ciphertext blob
-    (AAD-bound via ``apps.core.security.encryption``), so DueNest never holds
+    (AAD-bound via ``apps.core.security.encryption``), so CertaNest never holds
     these PII values in plaintext at rest. It is returned only to the owner and
     is never shared. Cleared with the account (``on_delete=CASCADE``).
     """

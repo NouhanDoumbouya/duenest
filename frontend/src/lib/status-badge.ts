@@ -1,5 +1,5 @@
 /**
- * Canonical document-status vocabulary for DueNest.
+ * Canonical document-status vocabulary for CertaNest.
  *
  * One source of truth that maps every lifecycle status to a calm visual "tone"
  * and a default human label, so status badges stop drifting in colour and

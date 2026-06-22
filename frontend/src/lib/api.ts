@@ -1,4 +1,4 @@
-// Minimal fetch wrapper for talking to the DueNest backend.
+// Minimal fetch wrapper for talking to the CertaNest backend.
 //
 // Auth model: tokens live in HttpOnly cookies set by the backend. The browser
 // sends them automatically, so every request uses `credentials: "include"`.

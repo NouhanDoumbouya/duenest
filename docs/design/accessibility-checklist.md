@@ -1,4 +1,4 @@
-# DueNest — Accessibility Checklist
+# CertaNest — Accessibility Checklist
 
 > Baseline already exists (focus-visible rings, semantic nav, `aria-current`,
 > `aria-expanded`/`aria-controls`, reduced-motion). This is the completeness checklist.

@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 /**
- * End-to-end tests for the DueNest frontend.
+ * End-to-end tests for the CertaNest frontend.
  *
  * These drive the real app in a browser, so they need a running stack:
  *   - the Next.js frontend (same-origin proxy mode), and

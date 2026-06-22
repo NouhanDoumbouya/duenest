@@ -150,7 +150,7 @@ class Command(BaseCommand):
                     sub.user,
                     "billing_trial_ending",
                     "Your trial is ending soon",
-                    "Your DueNest Pro trial ends soon. Add a payment method to "
+                    "Your CertaNest Pro trial ends soon. Add a payment method to "
                     "keep Pro features without interruption.",
                     severity="warning",
                     suffix=sub.trial_end.strftime("%Y%m%d"),

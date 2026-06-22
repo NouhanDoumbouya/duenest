@@ -8,7 +8,7 @@ import { Eyebrow } from "@/components/marketing/section";
 export type LegalSection = { title: string; body: string | string[] };
 
 /**
- * Shared shell for DueNest's public legal/trust drafts. Renders a consistent
+ * Shared shell for CertaNest's public legal/trust drafts. Renders a consistent
  * header, a visible "beta draft — review before launch" banner, the section
  * list, and the shared footer. Body entries may be a string or a list of
  * paragraphs/bullets.

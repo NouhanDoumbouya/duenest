@@ -1,6 +1,6 @@
-# DueNest Frontend
+# CertaNest Frontend
 
-The web client for **DueNest** — a secure workspace for documents, deadlines,
+The web client for **CertaNest** — a secure workspace for documents, deadlines,
 renewals, subscriptions, and application packs.
 
 Built with **Next.js (App Router) + TypeScript + Tailwind CSS + shadcn/ui**.
@@ -11,7 +11,7 @@ Built with **Next.js (App Router) + TypeScript + Tailwind CSS + shadcn/ui**.
 - TypeScript
 - Tailwind CSS v4
 - shadcn/ui components (`@base-ui` based "base-nova" style)
-- DueNest brand palette + Inter / Sora fonts
+- CertaNest brand palette + Inter / Manrope fonts
 
 ## Getting started
 
@@ -31,7 +31,7 @@ The backend (Django REST API) is expected at the URL in
 
 | Variable                   | Description                     | Example                        |
 | -------------------------- | ------------------------------- | ------------------------------ |
-| `NEXT_PUBLIC_API_BASE_URL` | Base URL of the DueNest backend | `http://127.0.0.1:8000/api/v1` |
+| `NEXT_PUBLIC_API_BASE_URL` | Base URL of the CertaNest backend | `http://127.0.0.1:8000/api/v1` |
 
 `.env.local` is git-ignored. Only `.env.local.example` is committed.
 
@@ -60,7 +60,7 @@ src/
 │   ├── terms/page.tsx                         # public beta terms draft
 │   ├── share/files/[token]/page.tsx          # Public shared-file viewer
 │   ├── layout.tsx                            # Root layout + fonts + metadata
-│   └── globals.css                          # Tailwind + DueNest theme tokens
+│   └── globals.css                          # Tailwind + CertaNest theme tokens
 ├── components/
 │   ├── layout/                              # logo, site-header, dashboard-shell
 │   ├── marketing/                           # app-preview, feature-card
@@ -250,7 +250,7 @@ The Subscription / Recurring Renewal Tracker lives under:
 - `/dashboard/subscriptions/[id]` — detail workspace (Overview / Payments / Reminders / Activity + planning rail)
 - `/dashboard/subscriptions/[id]/edit` — edit
 
-It tracks the user's *own* recurring payments (this is not DueNest billing).
+It tracks the user's *own* recurring payments (this is not CertaNest billing).
 Renewals, cancellation deadlines, and trial endings also surface in Calendar,
 Timeline, Attention, and the dashboard "Upcoming renewals" widget. API client:
 `src/lib/subscriptions.ts`; types: `src/types/subscriptions.ts`.

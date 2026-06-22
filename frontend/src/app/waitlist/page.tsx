@@ -86,10 +86,10 @@ export default function WaitlistPage() {
                 Private beta access
               </span>
               <h1 className="mt-5 max-w-2xl font-heading text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
-                Join the DueNest private beta waitlist
+                Join the CertaNest private beta waitlist
               </h1>
               <p className="mt-5 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-                DueNest is opening carefully to people managing visas,
+                CertaNest is opening carefully to people managing visas,
                 scholarships, renewals, applications, and family documents. Tell
                 us what you are organizing so the beta stays focused.
               </p>
@@ -214,7 +214,7 @@ export default function WaitlistPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="referral_source">How did you hear about DueNest?</Label>
+                      <Label htmlFor="referral_source">How did you hear about CertaNest?</Label>
                       <Input
                         id="referral_source"
                         value={referralSource}

@@ -1,4 +1,4 @@
-# DueNest Product Blueprint
+# CertaNest Product Blueprint
 
 **Version:** v0.1  
 **Status:** Planning  
@@ -10,11 +10,11 @@
 
 ## 1. Product Summary
 
-**DueNest** is an AI-powered life admin platform that helps users organize important documents, track deadlines, manage renewals, receive reminders, and generate reusable application document packs.
+**CertaNest** is an AI-powered life admin platform that helps users organize important documents, track deadlines, manage renewals, receive reminders, and generate reusable application document packs.
 
 The platform is designed for people who often manage important documents and deadlines across different places such as emails, cloud drives, laptops, WhatsApp chats, screenshots, paper folders, and memory.
 
-DueNest helps users answer one important question:
+CertaNest helps users answer one important question:
 
 > What important document, deadline, renewal, or application requirement am I about to miss?
 
@@ -22,12 +22,12 @@ DueNest helps users answer one important question:
 
 ## 1.5 Documents-First Strategy
 
-> **Refocus (2026-06-21):** DueNest is now a **private life-document readiness
+> **Refocus (2026-06-21):** CertaNest is now a **private life-document readiness
 > platform**, not a subscription/finance tracker. The legacy Subscription Radar
 > is deprecated (see `docs/roadmap.md` §0); recurring renewals live under
 > **Deadlines & Renewals**. Older "subscriptions" references below are historical.
 
-DueNest is now sequenced as a **documents-first product**. The long-term vision
+CertaNest is now sequenced as a **documents-first product**. The long-term vision
 (below) is unchanged, but the path to it starts by making **one module** —
 the Documents module — strong enough to stand alone as a paid product.
 
@@ -51,9 +51,9 @@ countries.
 
 ## 2. Product Vision
 
-The long-term vision of DueNest is to become an **AI-powered life admin operating system** for individuals, students, professionals, immigrants, freelancers, families, and small teams.
+The long-term vision of CertaNest is to become an **AI-powered life admin operating system** for individuals, students, professionals, immigrants, freelancers, families, and small teams.
 
-DueNest should not only store documents. It should help users stay prepared, avoid missed deadlines, reduce stress, save time, and prevent financial or administrative losses.
+CertaNest should not only store documents. It should help users stay prepared, avoid missed deadlines, reduce stress, save time, and prevent financial or administrative losses.
 
 ---
 
@@ -77,7 +77,7 @@ For students, professionals, immigrants, and small teams, missing one important 
 
 ## 4. Proposed Solution
 
-DueNest provides one secure workspace where users can:
+CertaNest provides one secure workspace where users can:
 
 - Upload and organize essential documents
 - Track expiry dates and renewal dates
@@ -137,11 +137,11 @@ Small teams may need to manage business licenses, contracts, vendor renewals, so
 
 ### Use Case 1: Track an Expiring Document
 
-A user uploads a passport, visa, insurance policy, certificate, or license and adds an expiry date. DueNest shows the document status and reminds the user before it expires.
+A user uploads a passport, visa, insurance policy, certificate, or license and adds an expiry date. CertaNest shows the document status and reminds the user before it expires.
 
 ### Use Case 2: Manage a Subscription Renewal
 
-A user adds a subscription or recurring payment such as software, hosting, domain, insurance, or membership. DueNest tracks the renewal date and cost.
+A user adds a subscription or recurring payment such as software, hosting, domain, insurance, or membership. CertaNest tracks the renewal date and cost.
 
 ### Use Case 3: Prepare an Application Pack
 
@@ -157,7 +157,7 @@ A user receives reminders before important dates so they can prepare, renew, can
 
 ### Use Case 6: AI-Assisted Extraction
 
-In a later version, the user uploads a document and DueNest automatically detects the document type, expiry date, provider, amount, renewal date, and suggested action.
+In a later version, the user uploads a document and CertaNest automatically detects the document type, expiry date, provider, amount, renewal date, and suggested action.
 
 ---
 
@@ -254,8 +254,8 @@ Focus: production deployment, polished landing page, demo account, CI/CD, tests,
 2. User opens the Document Vault.
 3. User uploads a document.
 4. User adds title, category, document type, issue date, expiry date, and notes.
-5. DueNest stores the document and metadata.
-6. DueNest calculates the document status.
+5. CertaNest stores the document and metadata.
+6. CertaNest calculates the document status.
 7. The document appears in the vault and dashboard if relevant.
 
 ### 11.2 Renewal Tracking Workflow
@@ -263,8 +263,8 @@ Focus: production deployment, polished landing page, demo account, CI/CD, tests,
 1. User opens the Renewal Tracker.
 2. User creates a renewal item.
 3. User enters provider, amount, currency, renewal date, frequency, category, and notes.
-4. DueNest stores the renewal.
-5. DueNest displays upcoming renewals and cost summaries.
+4. CertaNest stores the renewal.
+5. CertaNest displays upcoming renewals and cost summaries.
 
 ### 11.3 Application Pack Workflow
 
@@ -272,13 +272,13 @@ Focus: production deployment, polished landing page, demo account, CI/CD, tests,
 2. User creates a new pack.
 3. User selects a purpose such as scholarship, job, visa, internship, university, or grant.
 4. User selects documents from the vault.
-5. DueNest saves the pack.
+5. CertaNest saves the pack.
 6. User can view, edit, or export the pack.
 
 ### 11.4 Reminder Workflow
 
 1. User adds expiry or renewal information.
-2. DueNest creates or suggests reminder dates.
+2. CertaNest creates or suggests reminder dates.
 3. Reminder appears in the dashboard.
 4. Later versions send email or push notifications before the deadline.
 
@@ -318,8 +318,8 @@ Focus: production deployment, polished landing page, demo account, CI/CD, tests,
 
 ### AI Automation
 
-- As a user, I want DueNest to detect document type automatically so that I do not manually fill everything.
-- As a user, I want DueNest to extract expiry dates automatically so that I save time.
+- As a user, I want CertaNest to detect document type automatically so that I do not manually fill everything.
+- As a user, I want CertaNest to extract expiry dates automatically so that I save time.
 - As a user, I want to confirm AI results so that wrong extracted data does not affect my deadlines.
 
 ---
@@ -439,11 +439,11 @@ v0.1 can be considered complete when:
 
 ### Decision 1: Web App First
 
-DueNest will start as a responsive web app because the first version requires dashboards, tables, uploads, document management, and settings.
+CertaNest will start as a responsive web app because the first version requires dashboards, tables, uploads, document management, and settings.
 
 ### Decision 2: PWA Second
 
-After the web app works, DueNest can become a Progressive Web App for installable mobile-like access and faster deadline checking.
+After the web app works, CertaNest can become a Progressive Web App for installable mobile-like access and faster deadline checking.
 
 ### Decision 3: Native Mobile Later
 
@@ -451,11 +451,11 @@ A native mobile app should be considered only after the web app and PWA are vali
 
 ### Decision 4: Django REST Framework Backend
 
-Django REST Framework is selected because DueNest requires authentication, database models, file uploads, admin features, security, background jobs, and structured APIs.
+Django REST Framework is selected because CertaNest requires authentication, database models, file uploads, admin features, security, background jobs, and structured APIs.
 
 ### Decision 5: Modular Monolith
 
-DueNest will start as a modular monolith. Microservices are not needed at the beginning.
+CertaNest will start as a modular monolith. Microservices are not needed at the beginning.
 
 ### Decision 6: AI Comes After Core Product
 
@@ -465,7 +465,7 @@ AI will be added after the manual product is working. This avoids building autom
 
 ## 18. Future Advanced Features
 
-These features can make DueNest much stronger later:
+These features can make CertaNest much stronger later:
 
 - AI document extraction
 - OCR for scanned documents
@@ -507,7 +507,7 @@ The first technical goal is not AI. The first goal is to build a stable, secure,
 
 ## 20. Summary
 
-DueNest is a serious full-stack SaaS project designed to solve real document, deadline, renewal, and application preparation problems.
+CertaNest is a serious full-stack SaaS project designed to solve real document, deadline, renewal, and application preparation problems.
 
 The product should be built in stages:
 

@@ -1,4 +1,4 @@
-// Auth helpers for the DueNest frontend.
+// Auth helpers for the CertaNest frontend.
 //
 // Tokens are stored in HttpOnly cookies set by the backend — JavaScript never
 // reads or writes access/refresh tokens. Auth state is derived from `/users/me/`
@@ -74,7 +74,7 @@ export async function register(payload: RegisterRequest): Promise<User> {
 }
 
 /**
- * Exchange a verified Google ID token for a DueNest session (cookies set by the
+ * Exchange a verified Google ID token for a CertaNest session (cookies set by the
  * backend). Not yet called from the UI — Google buttons stay disabled until the
  * Identity client is configured; we never fake a Google login.
  */

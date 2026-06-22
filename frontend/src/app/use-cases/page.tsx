@@ -11,7 +11,7 @@ import { USE_CASES } from "@/lib/use-cases";
 export const metadata: Metadata = {
   title: "Use cases",
   description:
-    "How students, visa and scholarship applicants, job seekers, families, agencies, and schools use DueNest to get important documents ready.",
+    "How students, visa and scholarship applicants, job seekers, families, agencies, and schools use CertaNest to get important documents ready.",
   alternates: { canonical: "/use-cases" },
 };
 
@@ -26,7 +26,7 @@ export default function UseCasesIndexPage() {
             Get important documents ready — whatever you&apos;re preparing for
           </h1>
           <p className="mt-4 text-lg leading-relaxed text-pretty text-muted-foreground">
-            DueNest helps you organize, prepare, track, generate, and safely share
+            CertaNest helps you organize, prepare, track, generate, and safely share
             important documents before deadlines, applications, renewals, and
             emergencies.
           </p>

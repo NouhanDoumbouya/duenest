@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="700" viewBox="0 0 1000 700" fill="none" role="img" aria-label="CertaNest final logo — background review">
+  <title>CertaNest — official logo, background review board</title>
+
+  <!-- Header -->
+  <rect width="1000" height="60" fill="#FFFFFF"/>
+  <rect y="59" width="1000" height="1" fill="#E2E8F0"/>
+  <text x="24" y="37" font-family="Manrope, Inter, system-ui, sans-serif" font-size="18" font-weight="700" letter-spacing="-0.3" fill="#0B1220">CertaNest — official logo · background review</text>
+  <text x="976" y="37" text-anchor="end" font-family="'Geist Mono','JetBrains Mono',ui-monospace,monospace" font-size="12" fill="#64748B">Secure Nest Mark · final</text>
+
+  <!-- Panel A: Warm Ivory -->
+  <rect x="0" y="60" width="500" height="320" fill="#F8F6F1"/>
+  <rect x="0.5" y="60.5" width="499" height="319" fill="none" stroke="#E2E8F0" stroke-width="1"/>
+  <g transform="translate(48,188)">
+    <path d="M12 18 C12 38 15 45 32 45 C49 45 52 38 52 18" stroke="#0F766E" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M18 21 C18 35 21 39 32 39 C43 39 46 35 46 21" stroke="#0F766E" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
+    <path d="M25.8 28.3 L30 33 L39.4 20.8" stroke="#10B981" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="118" y="229" font-family="Manrope, Inter, system-ui, sans-serif" font-size="30" font-weight="700" letter-spacing="-0.6"><tspan fill="#0B1220">Certa</tspan><tspan fill="#0F766E">Nest</tspan></text>
+  <text x="48" y="348" font-family="'Geist Mono','JetBrains Mono',ui-monospace,monospace" font-size="12" fill="#64748B">Warm Ivory · #F8F6F1</text>
+
+  <!-- Panel B: White -->
+  <rect x="500" y="60" width="500" height="320" fill="#FFFFFF"/>
+  <rect x="500.5" y="60.5" width="499" height="319" fill="none" stroke="#E2E8F0" stroke-width="1"/>
+  <g transform="translate(548,188)">
+    <path d="M12 18 C12 38 15 45 32 45 C49 45 52 38 52 18" stroke="#0F766E" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M18 21 C18 35 21 39 32 39 C43 39 46 35 46 21" stroke="#0F766E" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
+    <path d="M25.8 28.3 L30 33 L39.4 20.8" stroke="#10B981" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="618" y="229" font-family="Manrope, Inter, system-ui, sans-serif" font-size="30" font-weight="700" letter-spacing="-0.6"><tspan fill="#0B1220">Certa</tspan><tspan fill="#0F766E">Nest</tspan></text>
+  <text x="548" y="348" font-family="'Geist Mono','JetBrains Mono',ui-monospace,monospace" font-size="12" fill="#64748B">White · #FFFFFF</text>
+
+  <!-- Panel C: Primary Ink -->
+  <rect x="0" y="380" width="500" height="320" fill="#0B1220"/>
+  <g transform="translate(48,508)">
+    <path d="M12 18 C12 38 15 45 32 45 C49 45 52 38 52 18" stroke="#5EEAD4" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M18 21 C18 35 21 39 32 39 C43 39 46 35 46 21" stroke="#5EEAD4" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.45"/>
+    <path d="M25.8 28.3 L30 33 L39.4 20.8" stroke="#10B981" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="118" y="549" font-family="Manrope, Inter, system-ui, sans-serif" font-size="30" font-weight="700" letter-spacing="-0.6"><tspan fill="#F8F6F1">Certa</tspan><tspan fill="#5EEAD4">Nest</tspan></text>
+  <text x="48" y="668" font-family="'Geist Mono','JetBrains Mono',ui-monospace,monospace" font-size="12" fill="#94A3B8">Primary Ink · #0B1220</text>
+
+  <!-- Panel D: Certa Teal -->
+  <rect x="500" y="380" width="500" height="320" fill="#0F766E"/>
+  <g transform="translate(548,508)">
+    <path d="M12 18 C12 38 15 45 32 45 C49 45 52 38 52 18" stroke="#F8F6F1" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M18 21 C18 35 21 39 32 39 C43 39 46 35 46 21" stroke="#F8F6F1" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
+    <path d="M25.8 28.3 L30 33 L39.4 20.8" stroke="#0B1220" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="618" y="549" font-family="Manrope, Inter, system-ui, sans-serif" font-size="30" font-weight="700" letter-spacing="-0.6" fill="#F8F6F1">CertaNest</text>
+  <text x="548" y="668" font-family="'Geist Mono','JetBrains Mono',ui-monospace,monospace" font-size="12" fill="#CFEDE9">Certa Teal · #0F766E</text>
+</svg>

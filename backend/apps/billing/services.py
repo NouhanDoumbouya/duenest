@@ -452,7 +452,7 @@ def _mark_subscription_canceled(obj, record):
             sub.user,
             "billing_canceled",
             "Your plan was canceled",
-            "Your DueNest plan has been canceled. Your documents are safe — "
+            "Your CertaNest plan has been canceled. Your documents are safe — "
             "resubscribe anytime to unlock Pro again.",
             severity="warning",
             suffix=str(sub.id),

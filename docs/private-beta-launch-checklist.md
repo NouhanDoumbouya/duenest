@@ -1,4 +1,4 @@
-# DueNest Private Beta Launch Checklist
+# CertaNest Private Beta Launch Checklist
 
 **Status:** Draft  
 **Scope:** Documents-first private beta readiness  

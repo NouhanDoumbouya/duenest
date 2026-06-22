@@ -30,7 +30,7 @@ def future():
 
 
 def make_file(document, user):
-    content = b"%PDF-1.4\n% DueNest test file\n"
+    content = b"%PDF-1.4\n% CertaNest test file\n"
     return DocumentFile.objects.create(
         document=document,
         uploaded_by=user,

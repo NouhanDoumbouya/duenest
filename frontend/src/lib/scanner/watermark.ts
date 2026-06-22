@@ -13,7 +13,7 @@
  */
 
 export const WATERMARK_PRESETS = [
-  "Shared via DueNest",
+  "Shared via CertaNest",
   "For application use only",
   "For review only",
   "For submission only",

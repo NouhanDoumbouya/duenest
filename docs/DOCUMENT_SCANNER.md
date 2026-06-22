@@ -5,7 +5,7 @@ edges, refine corners, flatten perspective, apply a non-destructive filter,
 build a PDF, and upload to the existing encrypted vault — with an
 offline-resilient queue.
 
-It is a **Next.js feature** (the DueNest frontend is a Next.js SPA, not Django
+It is a **Next.js feature** (the CertaNest frontend is a Next.js SPA, not Django
 templates) that reuses the **existing encrypted `DocumentFile` pipeline** rather
 than introducing a parallel storage path.
 

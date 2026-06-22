@@ -25,7 +25,7 @@ from django.conf import settings
 from django.core.cache import cache
 
 # Namespace segment used by every key built here, on top of the backend-level
-# KEY_PREFIX. Keeps DueNest keys grouped and greppable.
+# KEY_PREFIX. Keeps CertaNest keys grouped and greppable.
 _NS = "dn"
 
 

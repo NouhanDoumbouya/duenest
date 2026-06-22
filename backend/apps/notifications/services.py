@@ -250,7 +250,7 @@ def _email_copy(notification: Notification) -> tuple[str, str]:
     }:
         return (
             "Reminder: a document needs your attention",
-            "DueNest noticed that one of your documents needs attention.",
+            "CertaNest noticed that one of your documents needs attention.",
         )
     if kind in {
         Notification.Type.SUBSCRIPTION_RENEWAL,
@@ -279,16 +279,16 @@ def _email_copy(notification: Notification) -> tuple[str, str]:
     if kind.startswith("emergency_"):
         return (
             "Reminder: review emergency access",
-            "DueNest recommends reviewing your emergency access setup or an upcoming expiry.",
+            "CertaNest recommends reviewing your emergency access setup or an upcoming expiry.",
         )
     if kind in {Notification.Type.SECURITY_ALERT, Notification.Type.FAILED_LOGIN_WARNING}:
         return (
-            "Security alert from DueNest",
-            "DueNest recorded a security-related account event. Open DueNest to review it.",
+            "Security alert from CertaNest",
+            "CertaNest recorded a security-related account event. Open CertaNest to review it.",
         )
     return (
-        "Reminder from DueNest",
-        "DueNest found something that may need your attention.",
+        "Reminder from CertaNest",
+        "CertaNest found something that may need your attention.",
     )
 
 
@@ -530,7 +530,7 @@ def _document_candidates(user, today: date, tzinfo: ZoneInfo):
                 user=user,
                 notification_type=Notification.Type.DOCUMENT_MISSING_FILE,
                 title=f"{doc.title} needs a file attached",
-                message="Add a file so DueNest can keep the document record complete.",
+                message="Add a file so CertaNest can keep the document record complete.",
                 severity=Notification.Severity.INFO,
                 source_type="document",
                 source_id=doc.id,

@@ -1,4 +1,4 @@
-# DueNest — Component Audit
+# CertaNest — Component Audit
 
 > Inventory of `frontend/src/components/ui/*` plus feature-folder components, with a
 > plan to promote ad-hoc patterns into documented, reusable primitives. Built on the

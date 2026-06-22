@@ -1,9 +1,9 @@
-// Shared auth-related types for the DueNest frontend.
+// Shared auth-related types for the CertaNest frontend.
 
 /** Billing/plan placeholder — drives internal usage limits, no real payments. */
 export type UserPlan = "free" | "pro_placeholder";
 
-/** A DueNest user as returned by GET /api/v1/users/me/. */
+/** A CertaNest user as returned by GET /api/v1/users/me/. */
 export interface User {
   id: number;
   username: string;
