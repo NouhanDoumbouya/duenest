@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -297,6 +297,23 @@ export default function CalendarPage() {
   const [exporting, setExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
 
+  // Summary cards act as shortcuts: apply the matching filter (or the Upcoming
+  // view for "this week") and scroll to the agenda, instead of only jumping.
+  const selectMetric = useCallback(
+    (kind: "overdue" | "this-week" | "documents" | "reminders") => {
+      if (kind === "this-week") {
+        setView("upcoming");
+        setFilter("all");
+      } else {
+        setFilter(kind);
+      }
+      document
+        .getElementById("calendar-agenda")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    },
+    [],
+  );
+
   const range = useMemo(() => calendarRange(monthCursor), [monthCursor]);
 
   useEffect(() => {
@@ -409,7 +426,8 @@ export default function CalendarPage() {
       {metrics ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <CalendarMetric
-            href="#calendar-agenda"
+            onSelect={() => selectMetric("overdue")}
+            active={filter === "overdue"}
             icon={ShieldAlert}
             label="Overdue"
             value={metrics.overdue}
@@ -418,7 +436,7 @@ export default function CalendarPage() {
             prominent={metrics.overdue > 0}
           />
           <CalendarMetric
-            href="#calendar-agenda"
+            onSelect={() => selectMetric("this-week")}
             icon={Clock3}
             label="This week"
             value={metrics.thisWeek}
@@ -430,7 +448,8 @@ export default function CalendarPage() {
             tone={metrics.thisWeek > 0 ? "warn" : "secure"}
           />
           <CalendarMetric
-            href="#calendar-agenda"
+            onSelect={() => selectMetric("documents")}
+            active={filter === "documents"}
             icon={FileText}
             label="Document dates"
             value={metrics.documents}
@@ -438,7 +457,8 @@ export default function CalendarPage() {
             tone="secure"
           />
           <CalendarMetric
-            href="#calendar-agenda"
+            onSelect={() => selectMetric("reminders")}
+            active={filter === "reminders"}
             icon={BellRing}
             label="Reminders"
             value={metrics.reminders}
@@ -519,7 +539,8 @@ export default function CalendarPage() {
 }
 
 function CalendarMetric({
-  href,
+  onSelect,
+  active = false,
   icon: Icon,
   label,
   value,
@@ -527,7 +548,10 @@ function CalendarMetric({
   tone,
   prominent = false,
 }: {
-  href: string;
+  /** Apply this card's matching filter/view and scroll to the agenda. */
+  onSelect: () => void;
+  /** Whether this card's filter is the one currently applied. */
+  active?: boolean;
   icon: LucideIcon;
   label: string;
   value: number;
@@ -546,19 +570,24 @@ function CalendarMetric({
             ? "border-primary/20 bg-primary/[0.035]"
             : "border-border bg-card";
   return (
-    <Link
-      href={href}
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={active}
       className={cn(
-        "group rounded-xl border p-4 shadow-card transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-elevated focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transform-none motion-reduce:transition-none",
+        "group w-full rounded-xl border p-4 text-left shadow-card transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-elevated focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transform-none motion-reduce:transition-none",
         toneClass,
         prominent && "ring-1 ring-destructive/20",
+        active && "ring-2 ring-primary/40",
       )}
     >
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-sm text-muted-foreground">{label}</p>
           <p className="mt-3 flex flex-wrap items-baseline gap-1.5">
-            <span className="text-2xl font-semibold leading-none">{value}</span>
+            <span className="text-2xl font-semibold leading-none tabular-nums">
+              {value}
+            </span>
             <span className="text-sm font-medium text-muted-foreground">· {hint}</span>
           </p>
         </div>
@@ -566,7 +595,7 @@ function CalendarMetric({
           <Icon className="size-4" />
         </span>
       </div>
-    </Link>
+    </button>
   );
 }
 
