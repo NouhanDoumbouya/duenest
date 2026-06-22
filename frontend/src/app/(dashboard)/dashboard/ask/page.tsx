@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Fragment,
   useEffect,
   useRef,
   useState,
@@ -12,9 +13,10 @@ import {
   FileText,
   Info,
   Loader2,
-  Search,
+  Send,
   Sparkles,
   TriangleAlert,
+  X,
 } from "lucide-react";
 
 import { AiActivationCard } from "@/components/ai/ai-activation-card";
@@ -34,18 +36,27 @@ const EXAMPLES = [
   "Where is my birth certificate stored?",
 ];
 
+/** One exchange in the thread: the question, plus its answer (or error) once it
+ *  resolves. `result === null && error === null` means still in flight. */
+interface Turn {
+  id: number;
+  question: string;
+  result: AskResult | null;
+  error: string | null;
+}
+
 export default function AskDocumentsPage() {
+  const [turns, setTurns] = useState<Turn[]>([]);
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<AskResult | null>(null);
-  const [asked, setAsked] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [notEnabled, setNotEnabled] = useState(false);
   const [scope, setScope] = useState<{ id: number; title: string } | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const endRef = useRef<HTMLDivElement>(null);
+  const nextId = useRef(0);
 
   // A contextual "Ask AI about this" deep-link (e.g. from a document) can
-  // pre-seed the question via ?q= and scope the answer to a single document via
+  // pre-seed the question via ?q= and scope answers to one document via
   // ?document=<id>&scope=<title>. We pre-fill and focus, but never auto-submit —
   // the user stays in control of what they actually ask.
   useEffect(() => {
@@ -63,24 +74,35 @@ export default function AskDocumentsPage() {
     }
   }, []);
 
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [turns, loading]);
+
   async function ask(q: string) {
     const trimmed = q.trim();
     if (!trimmed || loading) return;
+    const id = nextId.current++;
+    setTurns((prev) => [
+      ...prev,
+      { id, question: trimmed, result: null, error: null },
+    ]);
+    setQuestion("");
     setLoading(true);
-    setError(null);
-    setResult(null);
-    setAsked(trimmed);
     try {
       const res = await askDocuments(trimmed, scope?.id);
-      setResult(res);
+      setTurns((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, result: res } : t)),
+      );
     } catch (err) {
       if (err instanceof ApiError && err.status === 503) {
         setNotEnabled(true);
       } else {
-        setError(
+        const message =
           err instanceof ApiError
             ? err.message
-            : "Something went wrong. Please try again.",
+            : "Something went wrong. Please try again.";
+        setTurns((prev) =>
+          prev.map((t) => (t.id === id ? { ...t, error: message } : t)),
         );
       }
     } finally {
@@ -94,7 +116,6 @@ export default function AskDocumentsPage() {
   }
 
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
-    // Cmd/Ctrl+Enter submits, matching common chat affordances.
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
       e.preventDefault();
       void ask(question);
@@ -123,239 +144,227 @@ export default function AskDocumentsPage() {
   }
 
   return (
-    <PageContainer width="narrow">
-      <PageHeader
-        eyebrow="Assistant"
-        title="Ask your documents"
-        description="Ask a question in plain language and get an answer drawn from your own documents — with links to the ones it used."
-      />
+    <div className="mx-auto flex h-[calc(100dvh-11rem)] min-h-[24rem] w-full max-w-3xl flex-col md:h-[calc(100dvh-7rem)] lg:h-[calc(100dvh-9rem)]">
+      {/* Slim header — a conversation with your documents, not a titled page. */}
+      <div className="flex shrink-0 items-center gap-3 border-b border-border pb-3">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand-navy text-brand-teal">
+          <Sparkles className="size-4" />
+        </span>
+        <div className="min-w-0">
+          <p className="font-heading text-sm font-semibold">
+            Ask your documents
+          </p>
+          <p className="truncate text-xs text-muted-foreground">
+            Plain-language answers, with links to the documents they came from
+          </p>
+        </div>
+      </div>
 
-      <AiActivationCard />
+      <div className="shrink-0 [&:empty]:hidden [&>*]:mt-3">
+        <AiActivationCard />
+      </div>
 
-      <Card>
-        <CardContent className="space-y-4">
-          {scope && (
-            <div className="flex items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-sm">
-              <span className="inline-flex min-w-0 items-center gap-2">
-                <FileText className="size-4 shrink-0 text-primary" aria-hidden />
-                <span className="truncate text-muted-foreground">
-                  Answering based on{" "}
-                  <span className="font-medium text-foreground">
-                    {scope.title}
-                  </span>
-                </span>
-              </span>
-              <button
-                type="button"
-                onClick={() => setScope(null)}
-                className="shrink-0 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-              >
-                Ask all documents
-              </button>
-            </div>
-          )}
-          <form onSubmit={handleSubmit} className="space-y-3">
-            <Textarea
-              ref={textareaRef}
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              onKeyDown={handleKeyDown}
-              rows={3}
-              placeholder="e.g. When does my passport expire?"
-              aria-label="Your question"
-              disabled={loading}
-            />
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-xs text-muted-foreground">
-                Press{" "}
-                <kbd className="rounded border bg-muted px-1 py-0.5 text-[0.7rem]">
-                  ⌘/Ctrl
-                </kbd>{" "}
-                +{" "}
-                <kbd className="rounded border bg-muted px-1 py-0.5 text-[0.7rem]">
-                  Enter
-                </kbd>{" "}
-                to ask
+      {/* Scrolling conversation */}
+      <div className="flex-1 space-y-4 overflow-y-auto py-4">
+        {turns.length === 0 && !loading ? (
+          <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
+            <span className="flex size-12 items-center justify-center rounded-2xl bg-accent text-accent-foreground">
+              <Sparkles className="size-6" />
+            </span>
+            <div>
+              <p className="font-heading text-base font-semibold">
+                Ask anything about your documents
               </p>
-              <Button type="submit" disabled={!question.trim() || loading}>
-                {loading ? (
-                  <>
-                    <Loader2 className="animate-spin" /> Asking…
-                  </>
-                ) : (
-                  <>
-                    <Search /> Ask
-                  </>
-                )}
-              </Button>
-            </div>
-          </form>
-
-          {!result && !loading && !scope && (
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-muted-foreground">
-                Try asking
+              <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+                Get answers drawn from your own records — every answer links to
+                the documents it used.
               </p>
-              <div className="flex flex-wrap gap-2">
-                {EXAMPLES.map((example) => (
-                  <button
-                    key={example}
-                    type="button"
-                    onClick={() => {
-                      setQuestion(example);
-                      void ask(example);
-                    }}
-                    className="rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                  >
-                    {example}
-                  </button>
-                ))}
+            </div>
+            <div className="flex flex-wrap justify-center gap-2">
+              {EXAMPLES.map((example) => (
+                <button
+                  key={example}
+                  type="button"
+                  onClick={() => void ask(example)}
+                  className="rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  {example}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          turns.map((turn) => (
+            <Fragment key={turn.id}>
+              {/* User question */}
+              <div className="flex justify-end">
+                <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-primary px-4 py-2.5 text-sm whitespace-pre-wrap text-primary-foreground">
+                  {turn.question}
+                </div>
               </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
-      {loading && (
-        <Card>
-          <CardContent className="flex items-center gap-3 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" />
-            Searching your documents…
-          </CardContent>
-        </Card>
-      )}
+              {/* Assistant answer / pending / error */}
+              {turn.result ? (
+                <AnswerBubble result={turn.result} />
+              ) : turn.error ? (
+                <AssistantRow>
+                  <div className="inline-flex items-start gap-2 rounded-2xl rounded-tl-sm border border-destructive/30 bg-destructive/10 px-4 py-2.5 text-sm text-destructive">
+                    <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+                    <span>{turn.error}</span>
+                  </div>
+                </AssistantRow>
+              ) : (
+                <AssistantRow>
+                  <div className="inline-flex items-center gap-2 rounded-2xl rounded-tl-sm border border-border bg-card px-4 py-2.5 text-sm text-muted-foreground">
+                    <Loader2 className="size-4 animate-spin" /> Searching your
+                    documents…
+                  </div>
+                </AssistantRow>
+              )}
+            </Fragment>
+          ))
+        )}
+        <div ref={endRef} />
+      </div>
 
-      {error && (
-        <Card>
-          <CardContent className="flex items-start gap-3 text-sm">
-            <TriangleAlert className="mt-0.5 size-4 shrink-0 text-destructive" />
-            <span>{error}</span>
-          </CardContent>
-        </Card>
-      )}
+      {/* Docked composer */}
+      <form
+        onSubmit={handleSubmit}
+        className="shrink-0 space-y-2 border-t border-border pt-3"
+      >
+        {scope && (
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-sm">
+            <span className="inline-flex min-w-0 items-center gap-2">
+              <FileText className="size-4 shrink-0 text-primary" aria-hidden />
+              <span className="truncate text-muted-foreground">
+                Answering based on{" "}
+                <span className="font-medium text-foreground">{scope.title}</span>
+              </span>
+            </span>
+            <button
+              type="button"
+              onClick={() => setScope(null)}
+              className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <X className="size-3.5" />
+              Ask all documents
+            </button>
+          </div>
+        )}
 
-      {result && !loading && (
-        <AnswerCard result={result} question={asked} />
-      )}
-
-      {result?.available && (
-        <p className="flex items-start gap-2 px-1 text-xs text-muted-foreground">
-          <Info className="mt-0.5 size-3.5 shrink-0" />
-          Answers are AI-generated from your own documents. Double-check anything
-          important before relying on it.
+        <div className="flex items-end gap-2 rounded-2xl border border-border bg-card p-2 shadow-card">
+          <Textarea
+            ref={textareaRef}
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            onKeyDown={handleKeyDown}
+            rows={1}
+            placeholder="Ask about your documents…"
+            aria-label="Your question"
+            disabled={loading}
+            className="min-h-9 resize-none border-0 shadow-none focus-visible:ring-0"
+          />
+          <Button
+            type="submit"
+            size="icon"
+            aria-label="Ask"
+            disabled={!question.trim() || loading}
+          >
+            {loading ? <Loader2 className="animate-spin" /> : <Send />}
+          </Button>
+        </div>
+        <p className="px-1 text-[0.7rem] text-muted-foreground">
+          Answers are AI-generated from your own documents and may be imperfect —
+          double-check anything important.
         </p>
-      )}
-    </PageContainer>
+      </form>
+    </div>
   );
 }
 
-function AnswerCard({
-  result,
-  question,
-}: {
-  result: AskResult;
-  question: string;
-}) {
+/** Assistant message row: avatar + content, matching the Chat surface. */
+function AssistantRow({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-2.5">
+      <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-brand-navy text-brand-teal">
+        <Sparkles className="size-3.5" />
+      </span>
+      <div className="min-w-0 flex-1 space-y-2">{children}</div>
+    </div>
+  );
+}
+
+function AnswerBubble({ result }: { result: AskResult }) {
+  // Unavailable answers (no documents, not configured, generic) read as a calm
+  // assistant message rather than a separate page-level card.
   if (!result.available) {
     if (result.reason === "no_documents") {
       return (
-        <Card>
-          <CardContent>
-            <EmptyState
-              icon={FileText}
-              title="No documents to search yet"
-              description="Add a few documents to your vault and then ask again — answers come from your own records."
-              action={
-                <Link
-                  href="/dashboard/documents"
-                  className={buttonVariants({ variant: "outline", size: "sm" })}
-                >
-                  Go to documents
-                </Link>
-              }
-            />
-          </CardContent>
-        </Card>
+        <AssistantRow>
+          <div className="rounded-2xl rounded-tl-sm border border-border bg-card px-4 py-3 text-sm">
+            <p>Add a few documents to your vault, then ask again — answers come
+              from your own records.</p>
+            <Link
+              href="/dashboard/documents"
+              className={`${buttonVariants({ variant: "outline", size: "sm" })} mt-3`}
+            >
+              <FileText className="size-4" /> Go to documents
+            </Link>
+          </div>
+        </AssistantRow>
       );
     }
-    if (result.reason === "not_configured") {
-      return (
-        <Card>
-          <CardContent>
-            <EmptyState
-              icon={Sparkles}
-              title="Assistant isn't set up yet"
-              description="The AI assistant isn't fully configured on this account yet. Please try again later."
-            />
-          </CardContent>
-        </Card>
-      );
-    }
+    const message =
+      result.reason === "not_configured"
+        ? "The assistant isn't fully set up on this account yet. Please try again later."
+        : "The assistant couldn't answer that just now. Please try again.";
     return (
-      <Card>
-        <CardContent className="flex items-start gap-3 text-sm">
-          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-destructive" />
-          <span>
-            The assistant couldn&apos;t answer that just now. Please try again.
-          </span>
-        </CardContent>
-      </Card>
+      <AssistantRow>
+        <div className="inline-block rounded-2xl rounded-tl-sm border border-border bg-card px-4 py-2.5 text-sm text-muted-foreground">
+          {message}
+        </div>
+      </AssistantRow>
     );
   }
 
   return (
-    <Card>
-      <CardContent className="space-y-4">
-        <div className="space-y-1">
-          <p className="text-xs font-medium text-muted-foreground">You asked</p>
-          <p className="text-sm font-medium text-foreground">{question}</p>
+    <AssistantRow>
+      <div className="inline-block max-w-full rounded-2xl rounded-tl-sm border border-border bg-card px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap">
+        {result.answer || "No answer was returned."}
+      </div>
+
+      {!result.answered && (
+        <p className="flex items-start gap-2 rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
+          <Info className="mt-0.5 size-3.5 shrink-0" />
+          This wasn&apos;t found in your documents — try rephrasing, or add the
+          document it should come from.
+        </p>
+      )}
+
+      {result.citations.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-muted-foreground">
+            Based on
+          </span>
+          {result.citations.map((c) => (
+            <Link
+              key={c.document_id}
+              href={`/dashboard/documents/${c.document_id}`}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-muted"
+            >
+              <FileText className="size-3.5" />
+              {c.title}
+            </Link>
+          ))}
         </div>
+      )}
 
-        {result.answer ? (
-          <p className="text-sm leading-relaxed whitespace-pre-wrap">
-            {result.answer}
-          </p>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            No answer was returned.
-          </p>
-        )}
-
-        {!result.answered && (
-          <p className="flex items-start gap-2 rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
-            <Info className="mt-0.5 size-3.5 shrink-0" />
-            This wasn&apos;t found in your documents — try rephrasing, or add the
-            document it should come from.
-          </p>
-        )}
-
-        {result.citations.length > 0 && (
-          <div className="space-y-2 border-t border-border pt-4">
-            <p className="text-xs font-medium text-muted-foreground">
-              Based on
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {result.citations.map((c) => (
-                <Link
-                  key={c.document_id}
-                  href={`/dashboard/documents/${c.document_id}`}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-muted"
-                >
-                  <FileText className="size-3.5" />
-                  {c.title}
-                </Link>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {result.document_count > 0 && (
-          <p className="text-xs text-muted-foreground">
-            Searched {result.document_count} document
-            {result.document_count === 1 ? "" : "s"}.
-          </p>
-        )}
-      </CardContent>
-    </Card>
+      {result.document_count > 0 && (
+        <p className="px-1 text-[0.7rem] text-muted-foreground">
+          Searched {result.document_count} document
+          {result.document_count === 1 ? "" : "s"}.
+        </p>
+      )}
+    </AssistantRow>
   );
 }
