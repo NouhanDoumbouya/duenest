@@ -312,9 +312,23 @@ RESEND_WEBHOOK_SECRET = config("RESEND_WEBHOOK_SECRET", default="")
 
 # Public URLs. FRONTEND_APP_URL is the canonical name; DUENEST_APP_BASE_URL is
 # kept as a backward-compatible alias (used in existing email link building).
-DUENEST_APP_BASE_URL = config(
+# FRONTEND_URL is also accepted because it's the key the production deploy
+# (Railway) already sets and the one CORS/CSRF origins are derived from, so the
+# same value drives transactional email links (e.g. the password reset link).
+# First non-empty wins; falls back to localhost for local development.
+def _first_env(*keys, default=""):
+    for key in keys:
+        value = config(key, default="").strip()
+        if value:
+            return value
+    return default
+
+
+DUENEST_APP_BASE_URL = _first_env(
     "FRONTEND_APP_URL",
-    default=config("DUENEST_APP_BASE_URL", default="http://localhost:3000"),
+    "FRONTEND_URL",
+    "DUENEST_APP_BASE_URL",
+    default="http://localhost:3000",
 )
 FRONTEND_APP_URL = DUENEST_APP_BASE_URL
 BACKEND_PUBLIC_URL = config("BACKEND_PUBLIC_URL", default="http://localhost:8000")
