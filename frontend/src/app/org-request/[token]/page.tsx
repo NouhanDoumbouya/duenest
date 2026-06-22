@@ -167,6 +167,11 @@ export default function OrganizationRequestPage({
                           setFile(event.target.files?.[0] ?? null)
                         }
                       />
+                      <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                        <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-brand-success" />
+                        Encrypted on upload. Only {request.organization_name} can
+                        see what you send.
+                      </p>
                     </div>
 
                     <div className="space-y-2">

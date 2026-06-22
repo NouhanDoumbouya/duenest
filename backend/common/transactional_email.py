@@ -182,6 +182,33 @@ TRANSACTIONAL_EMAILS: dict[str, TransactionalEmail] = {
         ),
         category="lifecycle",
     ),
+    # ---- Organization document collection (sent to external recipients) -------
+    "org_document_request_invite": TransactionalEmail(
+        key="org_document_request_invite",
+        name="Document request — invite",
+        trigger="Sent to a recipient when an organization creates a document request addressed to their email.",
+        template="document_request",
+        subject="You've been asked to provide documents",
+        body=(
+            "An organization is requesting documents from you through DueNest. "
+            "Use the secure link below to upload them — no account needed. The "
+            "link expires for your security."
+        ),
+        category="transactional",
+    ),
+    "org_document_request_reminder": TransactionalEmail(
+        key="org_document_request_reminder",
+        name="Document request — reminder",
+        trigger="Sent when an organization admin sends a reminder for an open document request.",
+        template="document_request",
+        subject="Reminder: documents are still needed",
+        body=(
+            "This is a friendly reminder that an organization is still waiting on "
+            "documents from you. Use the secure link below to upload them — no "
+            "account needed."
+        ),
+        category="transactional",
+    ),
 }
 
 

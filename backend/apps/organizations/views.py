@@ -83,6 +83,7 @@ from .services import (
     parse_bulk_emails,
     require_membership,
     require_role,
+    send_document_request_email,
 )
 
 
@@ -563,6 +564,9 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         request_obj = serializer.save(organization=organization, requested_by=request.user)
         ensure_public_upload_token(request_obj)
+        # Email the recipient their secure upload link (best-effort; non-blocking).
+        if request_obj.recipient_email:
+            send_document_request_email(request_obj)
         log_activity(
             organization,
             "document_request_created",
@@ -756,16 +760,21 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         organization = self.get_organization(pk)
         require_role(request.user, organization, ADMIN_ROLES)
         request_obj = get_object_or_404(DocumentRequest, pk=request_id, organization=organization)
+        # Ensure a live link exists, then email the reminder (best-effort).
+        ensure_public_upload_token(request_obj)
+        sent = send_document_request_email(request_obj, reminder=True)
         request_obj.last_reminded_at = timezone.now()
         request_obj.save(update_fields=["last_reminded_at", "updated_at"])
         log_activity(
             organization,
             "request_reminded",
-            f"Reminder logged for {request_obj.title}",
+            f"Reminder sent for {request_obj.title}"
+            if sent
+            else f"Reminder recorded for {request_obj.title} (no recipient email)",
             actor=request.user,
             target_type="document_request",
             target_id=request_obj.id,
-            metadata={"email_delivery": "deferred"},
+            metadata={"email_delivery": "sent" if sent else "no_recipient"},
         )
         return Response(DocumentRequestSerializer(request_obj).data)
 

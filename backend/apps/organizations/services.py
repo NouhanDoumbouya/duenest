@@ -1,10 +1,16 @@
+import logging
 import re
 from datetime import timedelta
 
+from django.conf import settings
 from django.db.models import Count, Q
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.exceptions import APIException, PermissionDenied
+
+from common.transactional_email import send_transactional_email
+
+logger = logging.getLogger(__name__)
 
 from .models import (
     CampaignTargetMember,
@@ -565,3 +571,52 @@ def ensure_public_upload_token(request_obj: DocumentRequest) -> DocumentRequest:
         update_fields=["public_upload_token", "public_upload_expires_at", "updated_at"]
     )
     return request_obj
+
+
+def public_upload_url(request_obj: DocumentRequest) -> str:
+    """The recipient-facing upload page for a request's public token."""
+    base = getattr(
+        settings, "DUENEST_APP_BASE_URL", "http://localhost:3000"
+    ).rstrip("/")
+    return f"{base}/org-request/{request_obj.public_upload_token}"
+
+
+def send_document_request_email(
+    request_obj: DocumentRequest, *, reminder: bool = False
+) -> bool:
+    """Email the recipient their secure upload link (invite or reminder).
+
+    Best-effort: returns True only if an email was actually sent, and never
+    raises into the originating action (request create / remind). Requires a
+    recipient email and an active public upload token.
+    """
+    recipient = (request_obj.recipient_email or "").strip()
+    if not recipient or not request_obj.public_upload_active:
+        return False
+
+    org_name = request_obj.organization.name
+    detail_bits = [f"Requested by {org_name}: {request_obj.title}"]
+    if request_obj.deadline:
+        detail_bits.append(f"Due by {request_obj.deadline:%d %b %Y}")
+
+    key = (
+        "org_document_request_reminder"
+        if reminder
+        else "org_document_request_invite"
+    )
+    try:
+        return send_transactional_email(
+            key,
+            context={
+                "action_url": public_upload_url(request_obj),
+                "action_label": "Upload documents",
+                "detail_line": " · ".join(detail_bits),
+                "org_name": org_name,
+            },
+            to=recipient,
+        )
+    except Exception:  # noqa: BLE001 — a request email must never break the action
+        logger.exception(
+            "Failed to send document-request email for request %s", request_obj.id
+        )
+        return False
