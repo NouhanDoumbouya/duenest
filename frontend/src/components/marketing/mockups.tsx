@@ -58,6 +58,12 @@ export function BrowserFrame({
   );
 }
 
+/**
+ * A realistic phone shell — titanium-style rim, a Dynamic Island, and side
+ * buttons — wrapping any screen content. Pure tokens/markup (no images), so it
+ * stays crisp at any size and ships zero bundle weight. Width is controlled via
+ * `className`; the screen height follows its children.
+ */
 export function PhoneFrame({
   children,
   className,
@@ -66,13 +72,34 @@ export function PhoneFrame({
   className?: string;
 }) {
   return (
-    <div
-      className={cn(
-        "rounded-[2rem] border-[6px] border-foreground/90 bg-foreground/90 shadow-floating",
-        className,
-      )}
-    >
-      <div className="overflow-hidden rounded-[1.5rem] bg-card">{children}</div>
+    <div className={cn("relative mx-auto w-[270px]", className)}>
+      {/* Side buttons (volume pair + power), offset just past the rim. */}
+      <span
+        aria-hidden
+        className="absolute -left-[2px] top-[96px] h-7 w-[3px] rounded-l-sm bg-foreground/70"
+      />
+      <span
+        aria-hidden
+        className="absolute -left-[2px] top-[138px] h-12 w-[3px] rounded-l-sm bg-foreground/70"
+      />
+      <span
+        aria-hidden
+        className="absolute -right-[2px] top-[120px] h-16 w-[3px] rounded-r-sm bg-foreground/70"
+      />
+
+      {/* Outer rim → inner bezel → screen. */}
+      <div className="rounded-[2.75rem] bg-gradient-to-b from-foreground/85 to-foreground p-[3px] shadow-floating ring-1 ring-black/10">
+        <div className="rounded-[2.6rem] bg-foreground p-[9px]">
+          <div className="relative overflow-hidden rounded-[2rem] bg-background">
+            {/* Dynamic Island */}
+            <div
+              aria-hidden
+              className="absolute left-1/2 top-2.5 z-20 h-[26px] w-[88px] -translate-x-1/2 rounded-full bg-foreground"
+            />
+            {children}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
