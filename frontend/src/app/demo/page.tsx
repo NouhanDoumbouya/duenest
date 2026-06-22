@@ -3,6 +3,7 @@ import { CalendarClock, FileText, ShieldCheck } from "lucide-react";
 
 import { SiteHeader } from "@/components/layout/site-header";
 import { AppPreview } from "@/components/marketing/app-preview";
+import { Eyebrow } from "@/components/marketing/section";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -32,7 +33,7 @@ export default function DemoPage() {
       <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 lg:py-16">
         <div className="grid gap-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
           <div>
-            <p className="text-sm font-semibold text-primary">Demo</p>
+            <Eyebrow>Demo</Eyebrow>
             <h1 className="mt-3 text-4xl font-semibold tracking-tight">
               Preview DueNest with fake document data
             </h1>

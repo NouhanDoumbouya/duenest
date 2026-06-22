@@ -3,6 +3,7 @@ import { ArrowRight, Check, ShieldCheck } from "lucide-react";
 
 import { SiteHeader } from "@/components/layout/site-header";
 import { SiteFooter } from "@/components/layout/site-footer";
+import { Eyebrow } from "@/components/marketing/section";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { UseCase } from "@/lib/use-cases";
@@ -24,7 +25,7 @@ export function UseCasePage({ useCase }: { useCase: UseCase }) {
       <main className="mx-auto w-full max-w-5xl px-4 py-14 sm:px-6 lg:py-20">
         {/* Hero */}
         <div className="max-w-2xl">
-          <p className="text-sm font-semibold text-primary">{useCase.eyebrow}</p>
+          <Eyebrow>{useCase.eyebrow}</Eyebrow>
           <h1 className="mt-3 text-4xl font-semibold tracking-tight text-balance">
             {useCase.title}
           </h1>

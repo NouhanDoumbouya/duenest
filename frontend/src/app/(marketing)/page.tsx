@@ -26,9 +26,12 @@ import {
 import { SiteHeader } from "@/components/layout/site-header";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { AttributionCapture } from "@/components/marketing/attribution-capture";
-import { SectionHeader } from "@/components/marketing/section";
+import { Eyebrow, SectionHeader } from "@/components/marketing/section";
 import { ScrollReveal } from "@/components/marketing/scroll-reveal";
 import { SystemFlow } from "@/components/marketing/system-flow";
+import { MetricsBand } from "@/components/marketing/metrics-band";
+import { CoverageStrip } from "@/components/marketing/coverage-strip";
+import { PersonaSplit } from "@/components/marketing/persona-split";
 import { FeatureCard, type Feature } from "@/components/marketing/feature-card";
 import {
   EmergencyMockup,
@@ -166,11 +169,13 @@ export default function LandingPage() {
       <main id="main-content" tabIndex={-1} className="flex-1">
         <Hero />
         <TrustBar />
+        <MetricsBand />
         <Pain />
         <HowItWorks />
         <Connected />
         <LifeRadar />
         <Toolkit />
+        <CoverageStrip />
         <Emergency />
         {AI_ENABLED && <AiAssist />}
         <Security />
@@ -195,7 +200,7 @@ function Hero() {
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 -top-40 -z-10 h-[480px] [background:radial-gradient(45%_60%_at_72%_0%,rgba(37,99,235,0.10),transparent_70%),radial-gradient(38%_50%_at_14%_8%,rgba(20,184,166,0.10),transparent_70%)]"
+        className="pointer-events-none absolute inset-x-0 -top-40 -z-10 h-[560px] [background:radial-gradient(48%_62%_at_72%_-4%,rgba(37,99,235,0.16),transparent_70%),radial-gradient(40%_52%_at_12%_6%,rgba(20,184,166,0.14),transparent_70%),radial-gradient(30%_40%_at_50%_30%,rgba(204,251,241,0.18),transparent_75%)]"
       />
       <div className="mx-auto grid w-full max-w-6xl items-center gap-14 px-4 py-20 sm:px-6 lg:grid-cols-[1.04fr_1fr] lg:py-28">
         <div className="content-fade-in flex flex-col items-start text-left">
@@ -204,7 +209,7 @@ function Hero() {
             A calmer home for important documents
           </span>
 
-          <h1 className="mt-6 font-heading text-[2.6rem] leading-[1.04] font-semibold tracking-tight text-balance sm:text-6xl">
+          <h1 className="mt-6 font-heading text-[2.7rem] leading-[1.02] font-semibold tracking-tight text-balance sm:text-6xl lg:text-[4rem]">
             Important documents, ready when life asks.
           </h1>
 
@@ -597,7 +602,7 @@ function ProductSection({
         <ScrollReveal
           className={cn("max-w-lg", reverse && "lg:order-2 lg:justify-self-end")}
         >
-          <p className="text-sm font-semibold text-primary">{eyebrow}</p>
+          <Eyebrow>{eyebrow}</Eyebrow>
           <h2 className="mt-2 font-heading text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
             {title}
           </h2>
@@ -916,7 +921,7 @@ function Security() {
     >
       <div className="mx-auto grid w-full max-w-6xl items-center gap-12 px-4 py-20 sm:px-6 lg:grid-cols-2 lg:gap-16 lg:py-24">
         <ScrollReveal className="max-w-lg">
-          <p className="text-sm font-semibold text-primary">Trust &amp; security</p>
+          <Eyebrow>Trust &amp; security</Eyebrow>
           <h2 className="mt-2 font-heading text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
             Built for sensitive life documents.
           </h2>
@@ -1161,9 +1166,13 @@ function UseCases() {
           <SectionHeader
             eyebrow="Use cases"
             title="Built for the people juggling important documents."
+            description="Whether you're keeping your own documents ready or collecting them from others, DueNest works from both sides."
           />
         </ScrollReveal>
-        <div className="mt-12 grid gap-px overflow-hidden rounded-2xl border border-border bg-border sm:grid-cols-2 lg:grid-cols-3">
+        <ScrollReveal delay={80} className="mt-12">
+          <PersonaSplit />
+        </ScrollReveal>
+        <div className="mt-5 grid gap-px overflow-hidden rounded-2xl border border-border bg-border sm:grid-cols-2 lg:grid-cols-3">
           {cases.map((c, i) => (
             <ScrollReveal
               key={c.title}
@@ -1224,7 +1233,7 @@ function Faq() {
         >
           {FAQ_ITEMS.map((item) => (
             <details key={item.q} className="group">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-sm font-medium transition-colors hover:bg-muted/40 group-open:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
                 {item.q}
                 <Plus
                   className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-45"
@@ -1253,7 +1262,7 @@ function Faq() {
 function FinalCta() {
   return (
     <section className="px-4 py-20 sm:px-6 lg:py-24">
-      <ScrollReveal className="relative mx-auto block w-full max-w-6xl overflow-hidden rounded-3xl bg-brand-navy px-6 py-16 text-center text-white shadow-floating sm:px-12">
+      <ScrollReveal className="relative mx-auto block w-full max-w-6xl overflow-hidden rounded-3xl bg-brand-navy px-6 py-16 text-center text-white shadow-floating ring-1 ring-white/10 sm:px-12">
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 [background:radial-gradient(50%_60%_at_50%_0%,rgba(20,184,166,0.28),transparent_60%),radial-gradient(45%_55%_at_100%_100%,rgba(37,99,235,0.38),transparent_60%)]"

@@ -3,6 +3,7 @@ import { ShieldAlert } from "lucide-react";
 
 import { SiteHeader } from "@/components/layout/site-header";
 import { SiteFooter } from "@/components/layout/site-footer";
+import { Eyebrow } from "@/components/marketing/section";
 
 export type LegalSection = { title: string; body: string | string[] };
 
@@ -31,7 +32,7 @@ export function LegalShell({
     <>
       <SiteHeader />
       <main className="mx-auto w-full max-w-4xl px-4 py-14 sm:px-6 lg:py-20">
-        <p className="text-sm font-semibold text-primary">{eyebrow}</p>
+        <Eyebrow>{eyebrow}</Eyebrow>
         <h1 className="mt-3 text-4xl font-semibold tracking-tight text-balance">
           {title}
         </h1>

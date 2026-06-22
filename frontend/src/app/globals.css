@@ -473,6 +473,55 @@
     }
   }
 
+  /* --- Motion: readiness ring draws in on load (pure CSS, no client JS) ----
+     The arc animates from empty to its target offset. `--ring-circ` is the full
+     circumference; `--ring-offset` the final dash offset for the target percent. */
+  .readiness-ring-arc {
+    stroke-dashoffset: var(--ring-offset);
+    animation: duenest-ring-draw 1100ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  @keyframes duenest-ring-draw {
+    from {
+      stroke-dashoffset: var(--ring-circ);
+    }
+    to {
+      stroke-dashoffset: var(--ring-offset);
+    }
+  }
+
+  /* --- Motion: coverage marquee (seamless, document-type strip) ------------
+     The track holds the chips twice; translating it -50% loops seamlessly.
+     Edges are masked so chips fade in/out rather than pop at the viewport edge. */
+  .marquee {
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent,
+      black 8%,
+      black 92%,
+      transparent
+    );
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      black 8%,
+      black 92%,
+      transparent
+    );
+  }
+  .marquee-track {
+    display: flex;
+    width: max-content;
+    animation: duenest-marquee 38s linear infinite;
+  }
+  .marquee:hover .marquee-track {
+    animation-play-state: paused;
+  }
+  @keyframes duenest-marquee {
+    to {
+      transform: translateX(-50%);
+    }
+  }
+
   /* --- Motion: a sheen that sweeps a primary CTA on hover ------------------ */
   .cta-sheen {
     position: relative;
@@ -562,5 +611,13 @@
   }
   .cta-sheen::after {
     display: none;
+  }
+  /* Show the ring at its final value with no draw-in. */
+  .readiness-ring-arc {
+    animation: none;
+  }
+  /* Freeze the coverage marquee in place. */
+  .marquee-track {
+    animation: none;
   }
 }

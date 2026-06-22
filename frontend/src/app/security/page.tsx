@@ -12,6 +12,7 @@ import {
 
 import { SiteHeader } from "@/components/layout/site-header";
 import { SiteFooter } from "@/components/layout/site-footer";
+import { Eyebrow } from "@/components/marketing/section";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -84,9 +85,7 @@ export default function SecurityPage() {
       <SiteHeader />
       <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-5xl px-4 py-14 sm:px-6 lg:py-20">
         <div className="max-w-2xl">
-          <p className="text-sm font-semibold text-primary">
-            Trust &amp; Security
-          </p>
+          <Eyebrow>Trust &amp; Security</Eyebrow>
           <h1 className="mt-3 text-4xl font-semibold tracking-tight text-balance">
             Built for sensitive life-admin
           </h1>

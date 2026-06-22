@@ -6,8 +6,7 @@ import {
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
-
-import { cn } from "@/lib/utils";
+import type { CSSProperties } from "react";
 
 /**
  * The hero "product story" visual: a single composed moment that says
@@ -29,7 +28,10 @@ export function HeroReadinessComposite() {
   return (
     <div className="relative mx-auto w-full max-w-md">
       {/* Primary readiness card -------------------------------------------- */}
-      <div className="rounded-3xl border border-border bg-card p-5 shadow-floating sm:p-6">
+      <div className="relative overflow-hidden rounded-3xl border border-border bg-card p-5 shadow-floating sm:p-6">
+        {/* "Always watching" — a soft highlight sweeps the card as if DueNest is
+            continuously checking each item. Pure CSS, paused under reduced motion. */}
+        <span aria-hidden className="live-scan" />
         <div className="flex items-center justify-between">
           <div>
             <p className="text-card-title font-heading font-semibold">
@@ -117,7 +119,9 @@ function ReadinessRing({ percent }: { percent: number }) {
   const value = Math.max(0, Math.min(100, percent));
   const radius = 22;
   const circumference = 2 * Math.PI * radius;
-  const dash = (value / 100) * circumference;
+  // Final dash offset for the target percent — the arc draws from empty
+  // (offset = full circumference) to this value via the CSS keyframe.
+  const offset = circumference * (1 - value / 100);
 
   return (
     <div className="relative flex size-14 shrink-0 items-center justify-center">
@@ -137,10 +141,14 @@ function ReadinessRing({ percent }: { percent: number }) {
           fill="none"
           strokeWidth="5"
           strokeLinecap="round"
-          strokeDasharray={`${dash} ${circumference}`}
-          className={cn(
-            "stroke-brand-success transition-[stroke-dasharray] duration-700",
-          )}
+          strokeDasharray={circumference}
+          className="readiness-ring-arc stroke-brand-success"
+          style={
+            {
+              "--ring-circ": circumference,
+              "--ring-offset": offset,
+            } as CSSProperties
+          }
         />
       </svg>
       <span className="absolute text-sm font-semibold tabular-nums">

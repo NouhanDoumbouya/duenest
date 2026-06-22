@@ -1,6 +1,31 @@
 import { cn } from "@/lib/utils";
 
 /**
+ * The shared section label ("eyebrow"): a small, uppercase, letter-spaced cue in
+ * the brand primary, sitting above a section title. Centralized so every section
+ * — centered headers and the two-column product/security blocks alike — reads
+ * with the same editorial rhythm. Server component — no client JS.
+ */
+export function Eyebrow({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <p
+      className={cn(
+        "text-xs font-semibold uppercase tracking-[0.12em] text-primary",
+        className,
+      )}
+    >
+      {children}
+    </p>
+  );
+}
+
+/**
  * A consistent section heading for the marketing page: a small colored eyebrow,
  * a confident title, and an optional one-line description. Server component —
  * no client JS.
@@ -26,9 +51,7 @@ export function SectionHeader({
         className,
       )}
     >
-      {eyebrow && (
-        <p className="text-sm font-semibold text-primary">{eyebrow}</p>
-      )}
+      {eyebrow && <Eyebrow>{eyebrow}</Eyebrow>}
       <h2 className="mt-2 font-heading text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
         {title}
       </h2>

@@ -4,6 +4,7 @@ import { ArrowRight } from "lucide-react";
 
 import { SiteHeader } from "@/components/layout/site-header";
 import { SiteFooter } from "@/components/layout/site-footer";
+import { Eyebrow } from "@/components/marketing/section";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { USE_CASES } from "@/lib/use-cases";
 
@@ -20,7 +21,7 @@ export default function UseCasesIndexPage() {
       <SiteHeader />
       <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-5xl px-4 py-14 sm:px-6 lg:py-20">
         <div className="max-w-2xl">
-          <p className="text-sm font-semibold text-primary">Use cases</p>
+          <Eyebrow>Use cases</Eyebrow>
           <h1 className="mt-3 text-4xl font-semibold tracking-tight text-balance">
             Get important documents ready — whatever you&apos;re preparing for
           </h1>

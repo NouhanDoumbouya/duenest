@@ -10,6 +10,7 @@ import {
 
 import { SiteHeader } from "@/components/layout/site-header";
 import { SiteFooter } from "@/components/layout/site-footer";
+import { Eyebrow } from "@/components/marketing/section";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -52,7 +53,7 @@ export default function ContactPage() {
     <>
       <SiteHeader />
       <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-4xl px-4 py-14 sm:px-6 lg:py-20">
-        <p className="text-sm font-semibold text-primary">Contact</p>
+        <Eyebrow>Contact</Eyebrow>
         <h1 className="mt-3 text-4xl font-semibold tracking-tight text-balance">
           Contact &amp; support
         </h1>

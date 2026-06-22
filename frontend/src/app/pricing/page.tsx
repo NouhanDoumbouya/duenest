@@ -4,6 +4,7 @@ import { SiteHeader } from "@/components/layout/site-header";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { PricingPlans } from "@/components/billing/pricing-plans";
 import { PlanComparisonTable } from "@/components/billing/plan-comparison-table";
+import { Eyebrow } from "@/components/marketing/section";
 
 export const metadata: Metadata = {
   title: "Pricing",
@@ -45,7 +46,7 @@ export default function PricingPage() {
       <SiteHeader />
       <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-6xl px-4 py-14 sm:px-6 lg:py-20">
         <div className="mx-auto max-w-2xl text-center">
-          <p className="text-sm font-semibold text-primary">Pricing</p>
+          <Eyebrow>Pricing</Eyebrow>
           <h1 className="mt-3 text-4xl font-semibold tracking-tight text-balance">
             Choose how ready you want to be.
           </h1>
