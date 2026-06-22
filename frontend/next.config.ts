@@ -28,9 +28,14 @@ const SECURITY_HEADERS = [
     value:
       "camera=(self), microphone=(self), geolocation=(self), payment=(), usb=(), bluetooth=()",
   },
+  // Reporting API endpoint group that the report-only CSP reports to (modern
+  // browsers). Legacy browsers use the `report-uri` directive below instead.
+  // Both target /monitoring/csp-report (a side-effect-free logging sink).
+  { key: "Reporting-Endpoints", value: 'csp-endpoint="/monitoring/csp-report"' },
   // Report-Only (NON-blocking): a starter Content-Security-Policy so violations
-  // surface in the console without breaking anything. To ENFORCE it later, Next's
-  // bootstrap inline scripts need a nonce (middleware) instead of 'unsafe-inline'.
+  // are collected (via report-to/report-uri → /monitoring/csp-report) without
+  // breaking anything. To ENFORCE it later, Next's bootstrap inline scripts need
+  // a nonce (middleware) instead of 'unsafe-inline'.
   {
     key: "Content-Security-Policy-Report-Only",
     value: [
@@ -47,6 +52,8 @@ const SECURITY_HEADERS = [
       "frame-src 'self' blob:",
       "worker-src 'self' blob:",
       "manifest-src 'self'",
+      "report-to csp-endpoint",
+      "report-uri /monitoring/csp-report",
     ].join("; "),
   },
 ];
