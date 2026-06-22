@@ -226,6 +226,18 @@ export interface DocumentRequest {
   updated_at: string;
 }
 
+export interface OrganizationRequestTemplate {
+  id: number;
+  organization: number | null;
+  name: string;
+  description: string;
+  category: string;
+  required_file_type: string;
+  is_system: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface CampaignRequirement {
   id: number;
   campaign: number;

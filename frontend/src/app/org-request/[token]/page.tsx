@@ -140,6 +140,22 @@ export default function OrganizationRequestPage({
                           {request.description}
                         </p>
                       )}
+                      {(request.required_file_type || request.deadline) && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {request.required_file_type && (
+                            <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground">
+                              <FileUp className="size-3.5" />
+                              Accepted: {request.required_file_type}
+                            </span>
+                          )}
+                          {request.deadline && (
+                            <span className="inline-flex items-center gap-1.5 rounded-full border border-brand-amber/30 bg-brand-amber/10 px-2.5 py-1 text-xs text-brand-amber">
+                              Due by{" "}
+                              {new Date(request.deadline).toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     <div className="space-y-2">

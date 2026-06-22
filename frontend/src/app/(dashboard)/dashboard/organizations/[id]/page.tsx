@@ -63,6 +63,7 @@ import {
   getOrganizationRequests,
   getOrganizationSecureRooms,
   getOrganizationSummary,
+  listOrganizationRequestTemplates,
   rejectOrganizationRequest,
   submitOrganizationRequest,
   uploadOrganizationDocumentFile,
@@ -78,6 +79,7 @@ import type {
   OrganizationDocument,
   OrganizationInvite,
   OrganizationMembership,
+  OrganizationRequestTemplate,
   OrganizationRole,
   OrganizationSecureRoom,
   OrganizationSummary,
@@ -551,12 +553,39 @@ function RequestsTab({
   onError: (message: string | null) => void;
 }) {
   const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [requiredType, setRequiredType] = useState("");
   const [assignedTo, setAssignedTo] = useState("");
   const [recipientEmail, setRecipientEmail] = useState("");
   const [deadline, setDeadline] = useState("");
   const [submitRequestId, setSubmitRequestId] = useState("");
   const [submitFile, setSubmitFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
+  const [templates, setTemplates] = useState<OrganizationRequestTemplate[]>([]);
+  const [templateId, setTemplateId] = useState("");
+
+  // Reusable + system templates make recurring requests one click to set up.
+  useEffect(() => {
+    if (!canManage) return;
+    let active = true;
+    listOrganizationRequestTemplates(state.organization.id)
+      .then((result) => active && setTemplates(result))
+      .catch(() => {
+        /* templates are optional — the form still works without them */
+      });
+    return () => {
+      active = false;
+    };
+  }, [canManage, state.organization.id]);
+
+  function applyTemplate(id: string) {
+    setTemplateId(id);
+    const template = templates.find((t) => String(t.id) === id);
+    if (!template) return;
+    setTitle(template.name);
+    setDescription(template.description);
+    setRequiredType(template.required_file_type);
+  }
 
   async function createRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -565,14 +594,19 @@ function RequestsTab({
     try {
       await createOrganizationRequest(state.organization.id, {
         title,
+        description,
+        required_file_type: requiredType,
         assigned_to_member: assignedTo ? Number(assignedTo) : null,
         recipient_email: recipientEmail,
         deadline: deadline || null,
       });
       setTitle("");
+      setDescription("");
+      setRequiredType("");
       setAssignedTo("");
       setRecipientEmail("");
       setDeadline("");
+      setTemplateId("");
       await onRefresh("Document request created.");
     } catch (err) {
       onError(err instanceof ApiError ? err.message : "Unable to create request.");
@@ -636,12 +670,44 @@ function RequestsTab({
         {canManage && (
           <SectionCard title="Create request">
             <form className="space-y-4" onSubmit={createRequest}>
+              {templates.length > 0 && (
+                <Field label="Start from a template">
+                  <select
+                    value={templateId}
+                    onChange={(event) => applyTemplate(event.target.value)}
+                    className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                  >
+                    <option value="">No template</option>
+                    {templates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name}
+                        {template.is_system ? " (suggested)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              )}
               <Field label="Title">
                 <Input
                   value={title}
                   onChange={(event) => setTitle(event.target.value)}
                   required
                   placeholder="Upload passport copy"
+                />
+              </Field>
+              <Field label="Description">
+                <Textarea
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                  rows={2}
+                  placeholder="What exactly do you need, and any rules (e.g. PDF, both sides)?"
+                />
+              </Field>
+              <Field label="Required file type">
+                <Input
+                  value={requiredType}
+                  onChange={(event) => setRequiredType(event.target.value)}
+                  placeholder="e.g. PDF, image"
                 />
               </Field>
               <div className="grid gap-4 sm:grid-cols-2">

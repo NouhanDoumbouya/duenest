@@ -12,6 +12,7 @@ import type {
   OrganizationInvite,
   OrganizationInviteDetail,
   OrganizationMembership,
+  OrganizationRequestTemplate,
   OrganizationRole,
   OrganizationSecureRoom,
   OrganizationSummary,
@@ -223,6 +224,16 @@ export function createOrganizationRequest(
     body: payload,
     auth: true,
   });
+}
+
+/** Reusable + system request templates available to this organization. */
+export function listOrganizationRequestTemplates(
+  id: number,
+): Promise<OrganizationRequestTemplate[]> {
+  return apiFetch<OrganizationRequestTemplate[]>(
+    `/organizations/${id}/request-templates/`,
+    { auth: true },
+  );
 }
 
 export function submitOrganizationRequest(
