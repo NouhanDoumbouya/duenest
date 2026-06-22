@@ -15,6 +15,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ApiError } from "@/lib/api";
+import { getProfileDetails } from "@/lib/auth";
+import type { ProfileDetails } from "@/types/auth";
 import {
   getDocumentFileDownloadBlob,
   getInboxFileDownloadBlob,
@@ -35,6 +37,25 @@ import type {
 } from "@/types/fill-sign";
 
 type Tool = "text" | "date" | "signature" | null;
+
+// Saved-profile fields offered as quick "insert" chips, in display order.
+const PROFILE_FIELD_LABELS: Record<keyof ProfileDetails, string> = {
+  legal_name: "Legal name",
+  preferred_name: "Preferred name",
+  date_of_birth: "Date of birth",
+  nationality: "Nationality",
+  phone: "Phone",
+  address_street: "Street",
+  address_city: "City",
+  address_region: "Region",
+  address_postal_code: "Postal code",
+  address_country: "Country",
+  passport_number: "Passport no.",
+  national_id: "National ID",
+};
+const PROFILE_FIELD_ORDER = Object.keys(
+  PROFILE_FIELD_LABELS,
+) as (keyof ProfileDetails)[];
 
 interface Mark extends FillSignAnnotation {
   id: string;
@@ -164,6 +185,33 @@ export function FillSignDialog({
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [result, setResult] = useState<PreparedDocument | null>(null);
+  // Saved profile details → quick "insert from profile" chips. The chosen value
+  // is staged in `pendingText` and used by the next placed text mark.
+  const [profileDetails, setProfileDetails] = useState<ProfileDetails | null>(
+    null,
+  );
+  const [pendingText, setPendingText] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    getProfileDetails()
+      .then((d) => active && setProfileDetails(d))
+      .catch(() => {
+        /* details are optional — chips just won't show */
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const profileChips = profileDetails
+    ? PROFILE_FIELD_ORDER.flatMap((key) => {
+        const value = (profileDetails[key] ?? "").trim();
+        return value
+          ? [{ key, label: PROFILE_FIELD_LABELS[key], value }]
+          : [];
+      })
+    : [];
 
   useEffect(() => {
     let active = true;
@@ -210,13 +258,17 @@ export function FillSignDialog({
         { id: uid(), page: pageIndex, x, y, type: "signature", image: signature, width: 0.24, height: 0.09 },
       ]);
     } else {
-      const value = tool === "date" ? new Date().toLocaleDateString() : "Text";
+      const value =
+        tool === "date"
+          ? new Date().toLocaleDateString()
+          : (pendingText ?? "Text");
       setMarks((m) => [
         ...m,
         { id: uid(), page: pageIndex, x, y, type: tool, value, font_size: 14 },
       ]);
     }
     setTool(null);
+    setPendingText(null);
   }
 
   async function submit() {
@@ -337,6 +389,35 @@ export function FillSignDialog({
                 </span>
               )}
             </div>
+
+            {/* Insert from profile: pick a saved value, then click the page to
+                place it as text. Only saved (non-empty) fields appear. */}
+            {profileChips.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Insert from profile:
+                </span>
+                {profileChips.map((chip) => (
+                  <button
+                    key={chip.key}
+                    type="button"
+                    title={chip.value}
+                    onClick={() => {
+                      setTool("text");
+                      setPendingText(chip.value);
+                    }}
+                    className={cn(
+                      "rounded-full border px-2.5 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+                      pendingText === chip.value
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border text-muted-foreground hover:bg-muted hover:text-foreground",
+                    )}
+                  >
+                    {chip.label}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {tool === "signature" &&
               !signature &&
