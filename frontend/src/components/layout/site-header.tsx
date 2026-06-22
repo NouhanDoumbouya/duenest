@@ -6,6 +6,7 @@ import { ArrowRight, Menu, X } from "lucide-react";
 
 import { Logo } from "@/components/layout/logo";
 import { buttonVariants } from "@/components/ui/button";
+import { PRIMARY_CTA } from "@/lib/cta";
 import { cn } from "@/lib/utils";
 
 // Anchors are absolute ("/#…") so they also work from sub-pages (e.g. /security),
@@ -13,7 +14,6 @@ import { cn } from "@/lib/utils";
 const navLinks = [
   { label: "Product", href: "/#product" },
   { label: "Life Radar", href: "/#life-radar" },
-  { label: "Features", href: "/#capabilities" },
   { label: "Security", href: "/security" },
   { label: "Use cases", href: "/#use-cases" },
   { label: "Pricing", href: "/pricing" },
@@ -74,10 +74,10 @@ export function SiteHeader() {
             Sign in
           </Link>
           <Link
-            href="/waitlist"
+            href={PRIMARY_CTA.href}
             className={cn(buttonVariants({ size: "lg" }), "shadow-sm")}
           >
-            Join the beta
+            {PRIMARY_CTA.label}
             <ArrowRight className="size-4" />
           </Link>
           <button

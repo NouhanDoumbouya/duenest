@@ -13,6 +13,7 @@
   /* CertaNest brand accents, usable as text-brand-teal, bg-brand-amber, etc. */
   --color-brand-navy: var(--brand-navy);
   --color-brand-teal: var(--brand-teal);
+  --color-brand-teal-bright: var(--brand-teal-bright);
   --color-brand-amber: var(--brand-amber);
   --color-brand-mint: var(--brand-mint);
   --color-brand-success: var(--brand-success);
@@ -64,6 +65,7 @@
   /* CertaNest brand palette (see brand/certanest/colors.md). */
   --brand-navy: #0b1220; /* Primary Ink */
   --brand-teal: #0f766e; /* Certa Teal */
+  --brand-teal-bright: #5eead4; /* Certa Teal tint — for teal on Ink/dark surfaces */
   --brand-amber: #d6a85a; /* Premium Gold (subtle accent) */
   --brand-mint: #ccfbf1; /* Soft Mint (teal tint) */
   --brand-success: #10b981; /* Secure Emerald */

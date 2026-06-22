@@ -4,9 +4,8 @@ import {
   ArrowRight,
   Ban,
   BellRing,
-  Building2,
   Check,
-  DoorClosed,
+  CreditCard,
   Eye,
   Folder,
   KeyRound,
@@ -18,7 +17,6 @@ import {
   ScanLine,
   Search,
   ShieldCheck,
-  Sparkles,
   Timer,
   X,
 } from "lucide-react";
@@ -28,45 +26,31 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { AttributionCapture } from "@/components/marketing/attribution-capture";
 import { Eyebrow, SectionHeader } from "@/components/marketing/section";
 import { ScrollReveal } from "@/components/marketing/scroll-reveal";
-import { SystemFlow } from "@/components/marketing/system-flow";
-import { MetricsBand } from "@/components/marketing/metrics-band";
-import { CoverageStrip } from "@/components/marketing/coverage-strip";
 import { PersonaSplit } from "@/components/marketing/persona-split";
-import { FeatureCard, type Feature } from "@/components/marketing/feature-card";
-import {
-  EmergencyMockup,
-  LifeRadarMockup,
-} from "@/components/marketing/mockups";
+import { LifeRadarMockup } from "@/components/marketing/mockups";
 import { HeroReadinessComposite } from "@/components/marketing/hero-composite";
 import { LiveCountdown } from "@/components/marketing/live-countdown";
 import { buttonVariants } from "@/components/ui/button";
+import { PRIMARY_CTA, PRIVATE_BETA } from "@/lib/cta";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
-  title: { absolute: "CertaNest — Important Documents, Ready When Life Asks" },
+  title: {
+    absolute: "CertaNest — Life Documents, Deadlines & Proof, Ready When Life Asks",
+  },
   description:
-    "CertaNest helps you scan, organize, prepare, track, generate, and safely share important documents before deadlines, applications, renewals, and emergencies. Private by default. Join the beta.",
+    "CertaNest is a secure life-admin platform that keeps important documents, deadlines, renewals, subscriptions, reusable application packs, trusted sharing, and emergency access organized and ready whenever life asks. Private by default. Free during the private beta.",
   alternates: { canonical: "/" },
 };
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://certanest.com";
 
-// Private-beta vs public-launch messaging. Defaults to beta (waitlist-gated) so
-// nothing changes until launch; set NEXT_PUBLIC_PRIVATE_BETA_ENABLED=false at
-// build time to flip the hero/CTAs to the public "14-day free trial" flow.
-// Build-time (not the runtime API) keeps this page fully static + resilient.
-const PRIVATE_BETA =
-  (process.env.NEXT_PUBLIC_PRIVATE_BETA_ENABLED ?? "true").toLowerCase() !==
-  "false";
-
-// CTA shared by the hero and final call-to-action.
-const PRIMARY_CTA = PRIVATE_BETA
-  ? { href: "/waitlist", label: "Join the beta" }
-  : { href: "/register", label: "Start organizing" };
+// PRIMARY_CTA + PRIVATE_BETA come from @/lib/cta so the navbar, footer, and page
+// never drift: "Start organizing" routes to the waitlist during the private
+// beta and to registration at launch (NEXT_PUBLIC_PRIVATE_BETA_ENABLED=false).
 
 // AI marketing is gated on its OWN flag (default off), independent of the
-// beta/launch flag, so the AI story can be turned on the moment AI features are
-// actually available to users — set NEXT_PUBLIC_AI_ENABLED=true at build time.
+// beta/launch flag, so the AI FAQ only appears once AI features are live.
 const AI_ENABLED =
   (process.env.NEXT_PUBLIC_AI_ENABLED ?? "false").toLowerCase() === "true";
 
@@ -75,7 +59,7 @@ const AI_ENABLED =
 const FAQ_ITEMS: { q: string; a: string }[] = [
   {
     q: "Is CertaNest free?",
-    a: "CertaNest is free during its private beta. Paid Pro and Organization plans are previewed on the pricing page, but pricing isn't final yet.",
+    a: "Yes, free during the private beta. Paid plans are previewed on the pricing page, but pricing isn't final — we'll be clear before anything changes.",
   },
   {
     q: "Is my data private?",
@@ -87,43 +71,37 @@ const FAQ_ITEMS: { q: string; a: string }[] = [
   },
   {
     q: "Can I export or delete my data?",
-    a: "Anytime. You can request a full export of your documents, and manage or permanently delete your data from Data & privacy in your settings.",
+    a: "Anytime. Request a full export of your documents, or permanently delete everything from Data & privacy in your settings.",
   },
   {
-    q: "How does sharing work?",
-    a: "You send access — a QR, a secure link, or a code — not the original file. Require an access code, set an expiry, watermark the preview, and revoke access whenever you want.",
+    q: "How does secure sharing work?",
+    a: "You send access — a QR, a secure link, or a code — not the original file. Require a code, set an expiry, watermark the preview, and revoke access whenever you want.",
   },
   {
     q: "Why not just use Google Drive?",
-    a: "Drive stores files; CertaNest makes them ready. It adds deadline and renewal tracking, application packs with checklists, secure shares that expire and can be revoked, and emergency access — built around documents, not just storage.",
+    a: "Drive stores files; CertaNest makes them ready. It adds deadline and renewal tracking, application packs with checklists, shares that expire and can be revoked, and emergency access — built around documents, not just storage.",
   },
   {
-    q: "Why not Adobe Scan or a plain scanner app?",
-    a: "Scanning is one step. CertaNest takes the scan into a Vault, organizes it, tracks its expiry, adds it to application packs, and lets you share it safely — the whole readiness workflow, not just a clean PDF.",
+    q: "Why not use only a scanner app?",
+    a: "Scanning is one step. CertaNest takes the scan into a vault, tracks its expiry, adds it to application packs, and lets you share it safely — the whole readiness workflow, not just a clean PDF.",
   },
   {
-    q: "Are the application pack templates official?",
-    a: "No. Templates are generic and fully editable starting points. Requirements vary, so always verify with the official institution or source.",
-  },
-  {
-    q: "Is signing in CertaNest legally binding?",
-    a: "CertaNest helps you prepare a signed copy with a signature image, date, and initials. It is not a legal e-signature service — legal acceptance depends on the recipient and jurisdiction.",
+    q: "Are application pack templates official?",
+    a: "No. Templates are generic, fully editable starting points. Requirements vary, so always verify with the official institution or source.",
   },
   {
     q: "How do reminders work?",
-    a: "CertaNest tracks expiry dates and renewal rules, surfaces what needs attention first, and shows it on a calendar and timeline. Rule-based checks — no AI guesswork.",
+    a: "CertaNest tracks expiry dates and renewal rules and surfaces what needs attention first, on a calendar and timeline. Rule-based checks — no AI guesswork.",
   },
   {
     q: "What happens after the beta?",
     a: "We'll email you before anything changes. Organizing and tracking your documents is built to stay useful, and we'll be clear about any plan limits ahead of time.",
   },
-  // AI FAQ appears only when AI is enabled (its own flag), since the AI
-  // features are gated until then. Reconciles with the "no AI guesswork" stance.
   ...(AI_ENABLED
     ? [
         {
           q: "Does CertaNest use AI?",
-          a: "Optionally, and only to assist you. AI can read your own documents to extract details and answer questions you ask — always as suggestions you confirm, never auto-saved. Your reminders and deadline checks stay rule-based, so nothing important is left to a guess. AI only ever sees your own documents; it is never used to train models or sold.",
+          a: "Optionally, and only to assist you. AI can read your own documents to extract details and answer questions you ask — always as suggestions you confirm, never auto-saved. Reminders and deadline checks stay rule-based. AI only ever sees your own documents; it is never sold or used to train models.",
         },
       ]
     : []),
@@ -136,7 +114,7 @@ const STRUCTURED_DATA = {
       "@type": "Organization",
       name: "CertaNest",
       url: SITE_URL,
-      logo: `${SITE_URL}/og.png`,
+      logo: `${SITE_URL}/icons/icon-512.png`,
     },
     {
       "@type": "SoftwareApplication",
@@ -169,18 +147,13 @@ export default function LandingPage() {
       <main id="main-content" tabIndex={-1} className="flex-1">
         <Hero />
         <TrustBar />
-        <MetricsBand />
-        <Pain />
+        <Problem />
         <HowItWorks />
-        <Connected />
         <LifeRadar />
-        <Toolkit />
-        <CoverageStrip />
-        <Emergency />
-        {AI_ENABLED && <AiAssist />}
+        <CoreSystem />
         <Security />
-        <Principles />
         <UseCases />
+        <Beta />
         <Faq />
         <FinalCta />
       </main>
@@ -198,9 +171,10 @@ function Hero() {
         aria-hidden
         className="bg-grid mask-fade-b pointer-events-none absolute inset-0 -z-10 opacity-50"
       />
+      {/* Calm, restrained brand glow — Certa Teal + Secure Emerald, no neon. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 -top-40 -z-10 h-[560px] [background:radial-gradient(48%_62%_at_72%_-4%,rgba(15,118,110,0.16),transparent_70%),radial-gradient(40%_52%_at_12%_6%,rgba(16,185,129,0.12),transparent_70%),radial-gradient(30%_40%_at_50%_30%,rgba(215,237,233,0.20),transparent_75%)]"
+        className="pointer-events-none absolute inset-x-0 -top-40 -z-10 h-[560px] [background:radial-gradient(48%_62%_at_72%_-4%,rgba(15,118,110,0.16),transparent_70%),radial-gradient(40%_52%_at_12%_6%,rgba(16,185,129,0.12),transparent_70%),radial-gradient(30%_40%_at_50%_30%,rgba(215,237,233,0.22),transparent_75%)]"
       />
       <div className="mx-auto grid w-full max-w-6xl items-center gap-14 px-4 py-20 sm:px-6 lg:grid-cols-[1.04fr_1fr] lg:py-28">
         <div className="content-fade-in flex flex-col items-start text-left">
@@ -219,13 +193,12 @@ function Hero() {
             access securely.
           </p>
 
-          {/* The whole product in four verbs — so a first-time visitor
-              understands what CertaNest does at a glance (the 10-second test). */}
+          {/* The whole product in four verbs — the 10-second understanding test. */}
           <ul className="mt-6 flex flex-wrap gap-x-5 gap-y-2">
             {[
-              { icon: ScanLine, label: "Scan" },
+              { icon: ScanLine, label: "Add" },
               { icon: Folder, label: "Organize" },
-              { icon: BellRing, label: "Track" },
+              { icon: Radar, label: "Watch" },
               { icon: ShieldCheck, label: "Share" },
             ].map(({ icon: Icon, label }) => (
               <li
@@ -260,11 +233,15 @@ function Hero() {
             </Link>
           </div>
 
-          <p className="mt-6 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-            <ShieldCheck className="size-4 text-brand-success" />
-            <span>Private until shared</span>
+          <p className="mt-5 text-sm font-medium text-foreground/80">
+            Private until you share it.
+          </p>
+          <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+            <span>Free during private beta</span>
             <span className="text-border">·</span>
-            <span>Revoke anytime</span>
+            <span>No credit card</span>
+            <span className="text-border">·</span>
+            <span>Export anytime</span>
           </p>
         </div>
 
@@ -282,7 +259,7 @@ function Hero() {
   );
 }
 
-// ---- Trust bar (verifiable facts, high in the page) ------------------------
+// ---- Trust strip (verifiable facts, high in the page) ----------------------
 
 function TrustBar() {
   const facts = [
@@ -292,7 +269,10 @@ function TrustBar() {
     { icon: Radar, label: "Rule-based — no AI guesswork" },
   ];
   return (
-    <section aria-label="How CertaNest protects your documents" className="border-y border-border bg-card/50">
+    <section
+      aria-label="How CertaNest protects your documents"
+      className="border-y border-border bg-card/50"
+    >
       <div className="mx-auto flex w-full max-w-6xl flex-col items-center gap-4 px-4 py-5 sm:px-6 lg:flex-row lg:justify-between lg:py-4">
         <ul className="grid w-full grid-cols-2 gap-x-6 gap-y-3 sm:flex sm:flex-wrap sm:items-center sm:justify-center sm:gap-x-7 lg:justify-start">
           {facts.map((f) => {
@@ -320,102 +300,17 @@ function TrustBar() {
   );
 }
 
-// ---- How it works (3 steps) ------------------------------------------------
+// ---- Problem (before / after) ----------------------------------------------
 
-function HowItWorks() {
-  const steps = [
-    {
-      icon: ScanLine,
-      title: "Add it once",
-      body: "Scan or upload a document — CertaNest captures the key dates and details for you.",
-    },
-    {
-      icon: Radar,
-      title: "CertaNest watches",
-      body: "Rule-based checks track every expiry, renewal, and deadline quietly in the background.",
-    },
-    {
-      icon: ShieldCheck,
-      title: "You stay ready",
-      body: "Get a heads-up before anything's due, share securely, and keep emergency access prepared.",
-    },
-  ];
-  return (
-    <section id="how-it-works" className="scroll-mt-20">
-      <div className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:py-24">
-        <ScrollReveal>
-          <SectionHeader
-            eyebrow="How it works"
-            title="Three steps to never being caught off guard."
-            description="No setup marathon. Add what matters once, and CertaNest keeps it ready for the moment you need it."
-          />
-        </ScrollReveal>
-        <div className="mt-12 grid gap-5 sm:grid-cols-3">
-          {steps.map((step, i) => {
-            const Icon = step.icon;
-            return (
-              <ScrollReveal
-                key={step.title}
-                delay={i * 90}
-                className="flex h-full flex-col gap-4 rounded-2xl border border-border bg-card p-6 shadow-card"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="flex size-11 items-center justify-center rounded-xl bg-brand-navy text-brand-teal">
-                    <Icon className="size-5" />
-                  </span>
-                  <span className="font-heading text-2xl font-semibold tabular-nums text-muted-foreground/30">
-                    {i + 1}
-                  </span>
-                </div>
-                <div>
-                  <h3 className="font-heading text-lg font-semibold">
-                    {step.title}
-                  </h3>
-                  <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                    {step.body}
-                  </p>
-                </div>
-              </ScrollReveal>
-            );
-          })}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ---- How it connects -------------------------------------------------------
-
-function Connected() {
-  return (
-    <section className="border-y border-border bg-card/50">
-      <div className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 lg:py-20">
-        <ScrollReveal>
-          <SectionHeader
-            eyebrow="One connected system"
-            title="Not five apps. One place that keeps you ready."
-            description="Add a document once. CertaNest tracks it, shares it on your terms, and keeps it ready for the moment you need it."
-          />
-        </ScrollReveal>
-        <ScrollReveal delay={80} className="mt-12">
-          <SystemFlow />
-        </ScrollReveal>
-      </div>
-    </section>
-  );
-}
-
-// ---- Pain ------------------------------------------------------------------
-
-function Pain() {
+function Problem() {
   const before = [
-    "Files scattered across WhatsApp, email, Drive, and your gallery",
-    "No idea what expires or renews soon",
-    "Scrambling to assemble documents for an application",
-    "Shared files are impossible to take back",
+    "Passports, visas, certificates, and insurance spread across Drive, email, WhatsApp, and your gallery",
+    "Expiry and renewal dates that are easy to forget",
+    "Applications that turn into a last-minute document hunt",
+    "Shared files you can't take back",
   ];
   const after = [
-    "Important documents in one organized place",
+    "Every important document in one organized place",
     "Deadlines and renewals visible at a glance",
     "Application packs ready before the deadline",
     "Secure sharing you can revoke anytime",
@@ -426,8 +321,8 @@ function Pain() {
         <ScrollReveal>
           <SectionHeader
             eyebrow="The problem"
-            title="Life admin gets messy fast."
-            description="Important documents are usually remembered only when something goes wrong. CertaNest brings them into one calm place — before a deadline becomes an emergency."
+            title="Life admin gets messy exactly when you need it most."
+            description="Important proof is usually remembered only when something goes wrong. CertaNest gives every item a place, a status, and a next action — before a deadline becomes an emergency."
           />
         </ScrollReveal>
         <div className="mx-auto mt-12 grid max-w-4xl gap-5 md:grid-cols-2">
@@ -436,7 +331,7 @@ function Pain() {
               <span className="flex size-6 items-center justify-center rounded-full bg-destructive/10 text-destructive">
                 <X className="size-3.5" />
               </span>
-              Without CertaNest
+              Scattered &amp; reactive
             </p>
             <ul className="mt-4 space-y-3">
               {before.map((p) => (
@@ -458,7 +353,7 @@ function Pain() {
               <span className="flex size-6 items-center justify-center rounded-full bg-brand-success/15 text-brand-success">
                 <Check className="size-3.5" />
               </span>
-              With CertaNest
+              Organized &amp; ready
             </p>
             <ul className="mt-4 space-y-3">
               {after.map((p) => (
@@ -475,32 +370,103 @@ function Pain() {
   );
 }
 
-// ---- Life Radar (showpiece) ------------------------------------------------
+// ---- How it works (4 steps) ------------------------------------------------
+
+function HowItWorks() {
+  const steps = [
+    {
+      icon: ScanLine,
+      title: "Add",
+      body: "Scan, upload, or save important documents and details — CertaNest captures the key dates for you.",
+    },
+    {
+      icon: Folder,
+      title: "Organize",
+      body: "Keep files, subscriptions, renewals, and application packs structured around real life.",
+    },
+    {
+      icon: Radar,
+      title: "Watch",
+      body: "Life Radar tracks what needs attention before it becomes urgent.",
+    },
+    {
+      icon: ShieldCheck,
+      title: "Share",
+      body: "Send selected access securely, prepare emergency access, and revoke whenever you need.",
+    },
+  ];
+  return (
+    <section id="how-it-works" className="scroll-mt-20 border-y border-border bg-card/50">
+      <div className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:py-24">
+        <ScrollReveal>
+          <SectionHeader
+            eyebrow="How it works"
+            title="One calm system keeps life documents ready."
+            description="No setup marathon. Add what matters once, and CertaNest keeps it organized, watched, and ready for the moment you need it."
+          />
+        </ScrollReveal>
+        <ol className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          {steps.map((step, i) => {
+            const Icon = step.icon;
+            return (
+              <ScrollReveal
+                key={step.title}
+                as="li"
+                delay={i * 80}
+                className="flex h-full flex-col gap-4 rounded-2xl border border-border bg-card p-6 shadow-card"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="flex size-11 items-center justify-center rounded-xl bg-brand-navy text-brand-teal-bright">
+                    <Icon className="size-5" />
+                  </span>
+                  <span className="font-heading text-2xl font-semibold tabular-nums text-muted-foreground/30">
+                    {i + 1}
+                  </span>
+                </div>
+                <div>
+                  <h3 className="font-heading text-lg font-semibold">
+                    {step.title}
+                  </h3>
+                  <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+                    {step.body}
+                  </p>
+                </div>
+              </ScrollReveal>
+            );
+          })}
+        </ol>
+      </div>
+    </section>
+  );
+}
+
+// ---- Life Radar (signature section) ----------------------------------------
 
 function LifeRadar() {
   const watches = [
     "Documents",
-    "Renewals",
     "Deadlines",
-    "Shares",
+    "Renewals",
+    "Subscriptions",
     "Application Packs",
+    "Secure shares",
     "Emergency setup",
   ];
   const points = [
     {
       icon: Search,
       title: "Fix first",
-      body: "The one thing that needs you today rises to the top — not buried in a list.",
+      body: "The one thing that needs you today rises to the top — never buried in a folder or a list.",
     },
     {
       icon: Radar,
       title: "Always watching",
-      body: "Rule-based checks run quietly in the background. No AI guesswork, no noise.",
+      body: "Rule-based checks run quietly across documents, renewals, deadlines, shares, packs, and emergency setup. No AI guesswork, no noise.",
     },
     {
       icon: ShieldCheck,
       title: "A calm week stays calm",
-      body: "“Nothing urgent. CertaNest will keep watching.” Peace of mind, by default.",
+      body: "“Nothing urgent. CertaNest will keep watching.” This is not storage — it's readiness.",
     },
   ];
   return (
@@ -509,8 +475,8 @@ function LifeRadar() {
         <ScrollReveal>
           <SectionHeader
             eyebrow="Life Radar"
-            title="Know what needs attention before it becomes a problem."
-            description="Life Radar watches your documents, renewals, deadlines, shares, application packs, and emergency setup — then tells you what to fix first."
+            title="See what needs attention before it becomes urgent."
+            description="Instead of burying you in folders, Life Radar surfaces the next thing to fix across everything important — then tells you when there's nothing to worry about."
           />
         </ScrollReveal>
         <div className="mt-14 grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
@@ -520,7 +486,7 @@ function LifeRadar() {
               className="pointer-events-none absolute -inset-6 -z-10 rounded-[2rem] bg-gradient-to-tr from-brand-teal/10 via-primary/10 to-transparent blur-2xl"
             />
             {/* Signature motion: an "always watching" radar sweep behind the
-                dashboard, peeking past its edges. */}
+                dashboard, peeking past its edges (paused under reduced motion). */}
             <div
               aria-hidden
               className="radar-sweep pointer-events-none absolute -inset-[14%] -z-10 opacity-70"
@@ -533,7 +499,7 @@ function LifeRadar() {
                 const Icon = p.icon;
                 return (
                   <li key={p.title} className="flex gap-4">
-                    <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-navy text-brand-teal">
+                    <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-navy text-brand-teal-bright">
                       <Icon className="size-5" />
                     </span>
                     <div>
@@ -570,146 +536,42 @@ function LifeRadar() {
   );
 }
 
-// ---- Reusable light product section ----------------------------------------
+// ---- Core product system (6 connected pillars) -----------------------------
 
-function ProductSection({
-  id,
-  eyebrow,
-  title,
-  description,
-  bullets,
-  visual,
-  reverse,
-  tone = "default",
-}: {
+type SystemPillar = {
   id: string;
-  eyebrow: string;
-  title: string;
-  description: string;
-  bullets: string[];
-  visual: React.ReactNode;
-  reverse?: boolean;
-  tone?: "default" | "muted";
-}) {
-  return (
-    <section
-      id={id}
-      className={cn(
-        "scroll-mt-20",
-        tone === "muted" && "border-y border-border bg-card/60",
-      )}
-    >
-      <div className="mx-auto grid w-full max-w-6xl items-center gap-10 px-4 py-20 sm:px-6 lg:grid-cols-2 lg:gap-16 lg:py-24">
-        <ScrollReveal
-          className={cn("max-w-lg", reverse && "lg:order-2 lg:justify-self-end")}
-        >
-          <Eyebrow>{eyebrow}</Eyebrow>
-          <h2 className="mt-2 font-heading text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
-            {title}
-          </h2>
-          <p className="mt-4 text-pretty text-muted-foreground">{description}</p>
-          <ul className="mt-6 space-y-2.5">
-            {bullets.map((b) => (
-              <li key={b} className="flex items-start gap-3 text-sm">
-                <ShieldCheck className="mt-0.5 size-4 shrink-0 text-brand-success" />
-                <span className="text-muted-foreground">{b}</span>
-              </li>
-            ))}
-          </ul>
-        </ScrollReveal>
-        <ScrollReveal delay={120} className={cn(reverse && "lg:order-1")}>
-          {visual}
-        </ScrollReveal>
-      </div>
-    </section>
-  );
-}
-
-// ---- Emergency (dark spotlight) --------------------------------------------
-
-function Emergency() {
-  const bullets = [
-    "Guided setup with a readiness score — you always know what's left",
-    "Choose how access opens: owner approval, a delayed unlock, or instant with a code",
-    "A locked emergency QR and printable wallet card — scanning starts a request, not an instant unlock",
-    "Trusted contacts, optional location (off by default), and a full activity log",
-    "Revoke, regenerate, or disable access at any time",
-  ];
-  return (
-    <section id="emergency" className="scroll-mt-20 bg-brand-navy text-white">
-      <div className="relative mx-auto w-full max-w-6xl overflow-hidden px-4 py-20 sm:px-6 lg:py-24">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 -z-0 [background:radial-gradient(40%_60%_at_85%_0%,rgba(20,184,166,0.16),transparent_70%),radial-gradient(40%_50%_at_0%_100%,rgba(37,99,235,0.20),transparent_70%)]"
-        />
-        <div className="relative grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
-          <ScrollReveal className="max-w-lg">
-            <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-medium text-brand-mint">
-              <LifeBuoy className="size-3.5" />
-              Emergency Protocol
-            </span>
-            <h2 className="mt-5 font-heading text-3xl font-semibold tracking-tight text-balance text-white sm:text-4xl">
-              Prepare emergency access before it&apos;s needed.
-            </h2>
-            <p className="mt-4 text-pretty text-white/70">
-              If something happens, trusted people can request access to selected
-              documents — without ever seeing your full vault. You choose how
-              access opens, keep a printable card ready, and stay in control with
-              a full activity log.
-            </p>
-            <ul className="mt-6 space-y-2.5">
-              {bullets.map((b) => (
-                <li key={b} className="flex items-start gap-3 text-sm text-white/80">
-                  <ShieldCheck className="mt-0.5 size-4 shrink-0 text-brand-teal" />
-                  <span>{b}</span>
-                </li>
-              ))}
-            </ul>
-          </ScrollReveal>
-          <ScrollReveal delay={120}>
-            <EmergencyMockup />
-          </ScrollReveal>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ---- Toolkit (consolidated product showcase) -------------------------------
-
-/** One pillar of the product, shown as a compact card with a few proof points.
- *  Carries the section's former anchor id so existing deep-links still land. */
-function Pillar({
-  id,
-  icon: Icon,
-  title,
-  description,
-  bullets,
-}: {
-  id?: string;
   icon: typeof Folder;
   title: string;
   description: string;
   bullets: string[];
-}) {
+  badge?: string;
+};
+
+function SystemCard({ pillar }: { pillar: SystemPillar }) {
+  const Icon = pillar.icon;
   return (
     <div
-      id={id}
-      className="flex h-full flex-col gap-3 rounded-2xl border border-border bg-card p-6 shadow-card scroll-mt-20"
+      id={pillar.id}
+      className="surface-hover flex h-full flex-col gap-3 rounded-2xl border border-border bg-card p-6 shadow-card scroll-mt-24"
     >
-      <div className="flex items-center gap-3">
-        <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-brand-navy text-brand-teal">
+      <div className="flex items-center justify-between gap-3">
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-brand-navy text-brand-teal-bright">
           <Icon className="size-5" />
         </span>
-        <h3 className="font-heading text-lg font-semibold">{title}</h3>
+        {pillar.badge && (
+          <span className="inline-flex items-center rounded-full border border-brand-amber/40 bg-brand-amber/10 px-2.5 py-0.5 text-[11px] font-semibold text-brand-amber">
+            {pillar.badge}
+          </span>
+        )}
       </div>
+      <h3 className="font-heading text-lg font-semibold">{pillar.title}</h3>
       <p className="text-sm leading-relaxed text-muted-foreground">
-        {description}
+        {pillar.description}
       </p>
       <ul className="mt-auto space-y-2 pt-1">
-        {bullets.map((b) => (
+        {pillar.bullets.map((b) => (
           <li key={b} className="flex items-start gap-2.5 text-sm">
-            <ShieldCheck className="mt-0.5 size-4 shrink-0 text-brand-success" />
+            <Check className="mt-0.5 size-4 shrink-0 text-brand-success" />
             <span className="text-muted-foreground">{b}</span>
           </li>
         ))}
@@ -718,38 +580,26 @@ function Pillar({
   );
 }
 
-function Toolkit() {
-  const pillars = [
+function CoreSystem() {
+  const pillars: SystemPillar[] = [
     {
       id: "vault",
       icon: Folder,
       title: "Vault",
       description:
-        "Every document gets a status, a place, and a next action — not just a filename in a folder.",
+        "Every document gets a place, a status, and a next action — not just a filename in a folder.",
       bullets: [
         "Status at a glance: Safe, Expiring, Expired, Shared",
-        "Drop a file in File Inbox now, organize it later",
+        "Drop into File Inbox now, organize later",
         "Trash and recovery, so nothing is lost by accident",
-      ],
-    },
-    {
-      id: "safesend",
-      icon: ShieldCheck,
-      title: "SafeSend sharing",
-      description:
-        "Send a QR, a secure link, or a code — never the original file. Your vault is never exposed.",
-      bullets: [
-        "View-only, access codes, expiry, and watermarking",
-        "See a recipient preview before you send",
-        "Revoke access anytime, with a full activity log",
       ],
     },
     {
       id: "deadlines-renewals",
       icon: BellRing,
-      title: "Deadlines & renewals",
+      title: "Deadlines & Renewals",
       description:
-        "Track passport and visa expiries, ID renewals, insurance, and application deadlines — before they pass.",
+        "Track passport and visa expiries, ID renewals, insurance, and application deadlines before they pass.",
       bullets: [
         "Reminders 7, 30, 60, or 90 days before",
         "Recurring reminders for anything that returns",
@@ -757,71 +607,70 @@ function Toolkit() {
       ],
     },
     {
+      id: "subscriptions",
+      icon: CreditCard,
+      title: "Subscriptions",
+      description:
+        "Keep recurring subscriptions and memberships visible before they quietly renew.",
+      bullets: [
+        "Renewal dates and payment reminders",
+        "Notes for what to review or cancel",
+        "Surfaced by Life Radar alongside your documents",
+      ],
+      badge: "Beta",
+    },
+    {
       id: "packs",
       icon: Package,
-      title: "Application packs",
+      title: "Application Packs",
       description:
-        "Group the right documents into a pack with a readiness score — for visas, scholarships, jobs, and renewals.",
+        "Prepare reusable packs for visas, scholarships, jobs, school submissions, and renewals.",
       bullets: [
         "Required vs optional checklist",
         "A readiness score and what's still missing",
         "Export or share safely when complete",
       ],
     },
-  ];
-
-  const tools: Feature[] = [
     {
-      icon: ScanLine,
-      title: "Scan with your camera",
+      id: "safesend",
+      icon: ShieldCheck,
+      title: "SafeSend",
       description:
-        "Capture a document, auto-detect the edges, and save a clean, shareable PDF straight into your vault.",
+        "Share selected documents without exposing your full vault — send a link, QR, or code, never the file.",
+      bullets: [
+        "View-only access, codes, expiry, and watermarking",
+        "See the recipient preview before you send",
+        "Revoke anytime, with a full activity log",
+      ],
     },
     {
-      icon: Sparkles,
-      title: "Details filled in for you",
+      id: "emergency",
+      icon: LifeBuoy,
+      title: "Emergency Access",
       description:
-        "CertaNest reads key fields and dates from a file, then asks you to confirm before saving — you stay in control.",
-    },
-    {
-      icon: DoorClosed,
-      title: "Secure rooms",
-      description:
-        "Open a private, access-controlled room to share a set of documents — and close it the moment you're done.",
-      badge: "Beta",
-    },
-    {
-      icon: Building2,
-      title: "Shared workspaces",
-      description:
-        "Bring family or a small team into a shared space to keep important documents organized together.",
+        "Prepare selected documents for trusted people before they're ever needed — and stay in control.",
+      bullets: [
+        "Trusted contacts, selected documents only",
+        "Owner approval, a delayed unlock, or instant with a code",
+        "Revoke or disable anytime, with an activity log",
+      ],
       badge: "Beta",
     },
   ];
-
   return (
     <section id="capabilities" className="scroll-mt-20">
       <div className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:py-24">
         <ScrollReveal>
           <SectionHeader
             eyebrow="One connected system"
-            title="Everything your documents need, in one place."
-            description="Store, prepare, track, and share — each piece works with the others, so a document you add once stays ready for whatever life asks."
+            title="Everything important stays connected."
+            description="Not five apps — one place where a document you add once stays organized, tracked, shareable, and ready. Beta features are labelled honestly."
           />
         </ScrollReveal>
-
-        <div className="mt-12 grid gap-5 lg:grid-cols-2">
+        <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {pillars.map((p, i) => (
-            <ScrollReveal key={p.title} delay={(i % 2) * 80}>
-              <Pillar {...p} />
-            </ScrollReveal>
-          ))}
-        </div>
-
-        <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {tools.map((feature, i) => (
-            <ScrollReveal key={feature.title} delay={(i % 4) * 70}>
-              <FeatureCard feature={feature} />
+            <ScrollReveal key={p.id} delay={(i % 3) * 80}>
+              <SystemCard pillar={p} />
             </ScrollReveal>
           ))}
         </div>
@@ -830,67 +679,7 @@ function Toolkit() {
   );
 }
 
-// ---- AI assist (launch-gated) ----------------------------------------------
-
-function AiAssist() {
-  return (
-    <ProductSection
-      id="ai"
-      tone="muted"
-      reverse
-      eyebrow="AI assist"
-      title="AI that assists — never decides."
-      description="Optional AI reads your own documents to save you typing and answer the questions you ask. It only ever suggests — you confirm before anything is saved, and your reminders stay rule-based, not guessed."
-      bullets={[
-        "Extract key fields and dates from a scan or upload — you review before saving",
-        "Ask your documents: “When does my visa expire?” — answers cite the source file",
-        "Owner-scoped and private: AI only sees your own documents, never sold or used to train",
-        "Nothing auto-fills or auto-sends — AI proposes, you decide",
-      ]}
-      visual={<AiAssistVisual />}
-    />
-  );
-}
-
-function AiAssistVisual() {
-  const rows = [
-    { label: "Document", value: "Passport" },
-    { label: "Expiry date", value: "14 Mar 2027" },
-    { label: "Number", value: "A1234567" },
-  ];
-  return (
-    <div className="mx-auto max-w-md rounded-2xl border border-border bg-card p-5 shadow-card">
-      <div className="flex items-center gap-2 text-sm font-medium">
-        <Sparkles className="size-4 text-primary" />
-        AI suggestion · you confirm
-      </div>
-      <div className="mt-4 space-y-2">
-        {rows.map((row) => (
-          <div
-            key={row.label}
-            className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2 text-sm"
-          >
-            <span className="text-muted-foreground">{row.label}</span>
-            <span className="font-medium">{row.value}</span>
-          </div>
-        ))}
-      </div>
-      <div className="mt-4 flex flex-wrap gap-2">
-        <span className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground">
-          <Check className="size-4" /> Confirm &amp; save
-        </span>
-        <span className="inline-flex items-center rounded-lg border border-border px-3 py-1.5 text-sm">
-          Edit
-        </span>
-      </div>
-      <p className="mt-3 text-xs text-muted-foreground">
-        Suggestions only — nothing is saved until you confirm.
-      </p>
-    </div>
-  );
-}
-
-// ---- Security --------------------------------------------------------------
+// ---- Trust & security ------------------------------------------------------
 
 function Security() {
   const statements = [
@@ -901,8 +690,8 @@ function Security() {
     },
     {
       icon: ShieldCheck,
-      title: "Share selected access, not your vault",
-      body: "A share exposes only the items you pick. Everything else stays private.",
+      title: "Selected access, not your whole vault",
+      body: "A share or emergency unlock exposes only the items you pick. Everything else stays private.",
     },
     {
       icon: Timer,
@@ -912,7 +701,7 @@ function Security() {
     {
       icon: Ban,
       title: "Revoke anytime",
-      body: "Close access instantly. Revoked and expired links are blocked server-side.",
+      body: "Close access instantly. Revoked and expired links are blocked server-side, not just hidden.",
     },
   ];
   return (
@@ -924,12 +713,14 @@ function Security() {
         <ScrollReveal className="max-w-lg">
           <Eyebrow>Trust &amp; security</Eyebrow>
           <h2 className="mt-2 font-heading text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
-            Built for sensitive life documents.
+            Built for sensitive proof.
           </h2>
           <p className="mt-4 text-pretty text-muted-foreground">
-            CertaNest is designed around controlled access. You choose what to
-            share, how long it lasts, and when to revoke it. We&apos;re honest
-            about what we can and can&apos;t guarantee.
+            CertaNest handles personal documents, so it&apos;s designed around
+            controlled access. You choose what to share, how long it lasts, and
+            when to revoke it — and we&apos;re honest about what we can and
+            can&apos;t guarantee. No sensitive document contents are ever sent in
+            email.
           </p>
           <ul className="mt-6 space-y-4">
             {statements.map((s) => {
@@ -941,7 +732,9 @@ function Security() {
                   </span>
                   <div>
                     <p className="text-sm font-semibold">{s.title}</p>
-                    <p className="mt-0.5 text-sm text-muted-foreground">{s.body}</p>
+                    <p className="mt-0.5 text-sm text-muted-foreground">
+                      {s.body}
+                    </p>
                   </div>
                 </li>
               );
@@ -951,7 +744,7 @@ function Security() {
             href="/security"
             className="mt-7 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
           >
-            Read the trust &amp; security page
+            Read trust &amp; security
             <ArrowRight className="size-4" aria-hidden />
           </Link>
         </ScrollReveal>
@@ -1044,81 +837,6 @@ function ControlledAccessCard() {
   );
 }
 
-// ---- Principles (how we build) ---------------------------------------------
-
-function Principles() {
-  const principles = [
-    {
-      icon: Lock,
-      title: "Security-first, not an afterthought",
-      body: "Files are encrypted at rest, and every share, code, and expiry is enforced on the server — not just hidden in the interface. Revoked and expired access is blocked at the source.",
-    },
-    {
-      icon: Eye,
-      title: "Privacy is the default",
-      body: "Nothing is shared until you choose to, a share exposes only the items you pick, and we never sell your data. Export or permanently delete everything, anytime.",
-    },
-    {
-      icon: Radar,
-      title: "Honest by design",
-      body: "Reminders are rule-based — real expiry dates and renewal rules, no AI guesswork. When CertaNest reads a file, it asks you to confirm before saving. We're clear about what we can and can't guarantee.",
-    },
-    {
-      icon: Sparkles,
-      title: "Built to be relied on",
-      body: "CertaNest is built like software you trust with what matters: considered, fast, accessible, and steadily improved with the people using it. Details get the care your documents deserve.",
-    },
-  ];
-  return (
-    <section id="principles" className="scroll-mt-20">
-      <div className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:py-24">
-        <ScrollReveal>
-          <SectionHeader
-            eyebrow="How we build"
-            title="The standards behind your documents."
-            description="CertaNest holds sensitive, sometimes irreplaceable paperwork. We build it the way that responsibility demands — and we're transparent about how."
-          />
-        </ScrollReveal>
-        <div className="mt-12 grid gap-5 sm:grid-cols-2">
-          {principles.map((p, i) => {
-            const Icon = p.icon;
-            return (
-              <ScrollReveal
-                key={p.title}
-                delay={(i % 2) * 90}
-                className="flex h-full gap-4 rounded-2xl border border-border bg-card p-6 shadow-card"
-              >
-                <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-brand-navy text-brand-teal">
-                  <Icon className="size-5" />
-                </span>
-                <div>
-                  <h3 className="font-heading text-lg font-semibold">
-                    {p.title}
-                  </h3>
-                  <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                    {p.body}
-                  </p>
-                </div>
-              </ScrollReveal>
-            );
-          })}
-        </div>
-        <ScrollReveal
-          delay={120}
-          className="mx-auto mt-8 max-w-2xl text-center text-sm leading-relaxed text-muted-foreground"
-        >
-          <p>
-            Built by a small, independent team that treats your documents the way
-            we&apos;d want ours treated — with care, restraint, and a bias for
-            keeping you in control.{" "}
-            <span className="font-medium text-foreground">— The CertaNest team</span>
-          </p>
-        </ScrollReveal>
-      </div>
-    </section>
-  );
-}
-
 // ---- Use cases -------------------------------------------------------------
 
 function UseCases() {
@@ -1126,37 +844,37 @@ function UseCases() {
     {
       title: "International students",
       description:
-        "Track passport, visa, insurance, and student letters — and share them with schools or sponsors.",
+        "Track passports, visas, student letters, insurance, and sponsorship documents — and share them with schools or sponsors.",
       href: "/use-cases/students",
     },
     {
       title: "Visa applicants",
       description:
-        "Prepare visa documents, track passport and visa expiry, and share safely.",
+        "Prepare a complete visa pack, track passport and visa expiry, and share selected documents safely.",
       href: "/use-cases/visa-documents",
     },
     {
       title: "Scholarship applicants",
       description:
-        "Prepare document packs and avoid missing application requirements at the last minute.",
+        "Keep transcripts, certificates, letters, and essays ready before submission week.",
       href: "/use-cases/scholarship-applications",
     },
     {
       title: "Job applicants",
       description:
-        "Build a job pack with CV and cover-letter drafts, certificates, and deadlines.",
+        "Build a reusable job pack with CVs, certificates, portfolios, references, and deadlines.",
       href: "/use-cases/job-applications",
     },
     {
       title: "Families",
       description:
-        "Keep important documents organized and prepare emergency access for the people you trust.",
+        "Keep IDs, certificates, insurance, and property papers ready — with emergency access for the people you trust.",
       href: "/use-cases/families",
     },
     {
       title: "Agencies & schools",
       description:
-        "Request, review, and track document submissions from applicants and students.",
+        "Request documents, review submissions, and see what's still missing — without chasing email attachments.",
       href: "/use-cases/agencies-schools",
     },
   ];
@@ -1166,7 +884,7 @@ function UseCases() {
         <ScrollReveal>
           <SectionHeader
             eyebrow="Use cases"
-            title="Built for the people juggling important documents."
+            title="Built for people who can't afford to lose track of proof."
             description="Whether you're keeping your own documents ready or collecting them from others, CertaNest works from both sides."
           />
         </ScrollReveal>
@@ -1184,7 +902,10 @@ function UseCases() {
                 <Link href={c.href} className="group flex h-full flex-col gap-2">
                   <h3 className="flex items-center gap-1.5 font-heading text-base font-semibold">
                     {c.title}
-                    <ArrowRight className="size-3.5 opacity-0 transition-opacity group-hover:opacity-100" aria-hidden />
+                    <ArrowRight
+                      className="size-3.5 opacity-0 transition-opacity group-hover:opacity-100"
+                      aria-hidden
+                    />
                   </h3>
                   <p className="text-sm leading-relaxed text-muted-foreground">
                     {c.description}
@@ -1192,7 +913,9 @@ function UseCases() {
                 </Link>
               ) : (
                 <div className="flex h-full flex-col gap-2">
-                  <h3 className="font-heading text-base font-semibold">{c.title}</h3>
+                  <h3 className="font-heading text-base font-semibold">
+                    {c.title}
+                  </h3>
                   <p className="text-sm leading-relaxed text-muted-foreground">
                     {c.description}
                   </p>
@@ -1215,17 +938,75 @@ function UseCases() {
   );
 }
 
+// ---- Private beta ----------------------------------------------------------
+
+function Beta() {
+  const points = [
+    "Free during the private beta",
+    "No credit card",
+    "Gradual rollout",
+    "Export anytime",
+  ];
+  return (
+    <section id="pricing-preview" className="scroll-mt-20 border-y border-border bg-card/50">
+      <div className="mx-auto w-full max-w-3xl px-4 py-20 text-center sm:px-6 lg:py-24">
+        <ScrollReveal>
+          <Eyebrow className="justify-center">Private beta</Eyebrow>
+          <h2 className="mt-2 font-heading text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
+            Start organizing before the next deadline.
+          </h2>
+          <p className="mx-auto mt-4 max-w-xl text-pretty text-muted-foreground">
+            CertaNest is currently in private beta. Early users can organize
+            documents, track renewals and subscriptions, prepare application
+            packs, and test secure sharing while the product is shaped with real
+            feedback.
+          </p>
+          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <Link
+              href={PRIMARY_CTA.href}
+              className={cn(
+                buttonVariants({ size: "lg" }),
+                "cta-sheen h-12 px-7 text-base",
+              )}
+            >
+              {PRIMARY_CTA.label}
+              <ArrowRight className="size-4" aria-hidden />
+            </Link>
+            <Link
+              href="/pricing"
+              className={cn(
+                buttonVariants({ variant: "outline", size: "lg" }),
+                "h-12 px-7 text-base",
+              )}
+            >
+              See pricing preview
+            </Link>
+          </div>
+          <div className="mt-7 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
+            {points.map((p) => (
+              <span key={p} className="inline-flex items-center gap-1.5">
+                <Check className="size-4 text-brand-success" />
+                {p}
+              </span>
+            ))}
+          </div>
+        </ScrollReveal>
+      </div>
+    </section>
+  );
+}
+
 // ---- FAQ -------------------------------------------------------------------
 
 function Faq() {
   return (
-    <section id="faq" className="scroll-mt-20 border-t border-border bg-card/50">
+    <section id="faq" className="scroll-mt-20">
       <div className="mx-auto w-full max-w-3xl px-4 py-20 sm:px-6 lg:py-24">
         <ScrollReveal>
           <SectionHeader
             eyebrow="Questions & answers"
             title="Everything you might be wondering."
-            description="Straight answers on privacy, pricing, sharing, and what happens during the beta."
+            description="Straight answers on privacy, sharing, and what happens during the beta."
           />
         </ScrollReveal>
         <ScrollReveal
@@ -1248,9 +1029,9 @@ function Faq() {
           ))}
         </ScrollReveal>
         <p className="mx-auto mt-8 max-w-xl text-center text-sm leading-relaxed text-muted-foreground">
-          A note on the beta: CertaNest is still being shaped with early users. You
-          can export or delete your data anytime, and we&apos;ll always be clear
-          about what changes before it does.{" "}
+          A note on the beta: CertaNest is still being shaped with early users.
+          You can export or delete your data anytime, and we&apos;ll always be
+          clear about what changes before it does.{" "}
           <span className="font-medium text-foreground">— The CertaNest team</span>
         </p>
       </div>
@@ -1264,17 +1045,18 @@ function FinalCta() {
   return (
     <section className="px-4 py-20 sm:px-6 lg:py-24">
       <ScrollReveal className="relative mx-auto block w-full max-w-6xl overflow-hidden rounded-3xl bg-brand-navy px-6 py-16 text-center text-white shadow-floating ring-1 ring-white/10 sm:px-12">
+        {/* Restrained brand glow — Certa Teal tint + Secure Emerald. */}
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 [background:radial-gradient(50%_60%_at_50%_0%,rgba(20,184,166,0.28),transparent_60%),radial-gradient(45%_55%_at_100%_100%,rgba(37,99,235,0.38),transparent_60%)]"
+          className="pointer-events-none absolute inset-0 [background:radial-gradient(50%_60%_at_50%_0%,rgba(94,234,212,0.18),transparent_60%),radial-gradient(45%_55%_at_100%_100%,rgba(16,185,129,0.22),transparent_60%)]"
         />
         <div className="relative mx-auto flex max-w-2xl flex-col items-center gap-6">
           <h2 className="font-heading text-3xl font-semibold tracking-tight text-balance text-white sm:text-4xl">
-            Start getting ready before things are due.
+            Be ready before life asks.
           </h2>
           <p className="text-pretty text-white/70">
-            Organize your first document, track your next renewal, and share
-            securely when life asks for proof.
+            Organize your first document, track your next renewal, and prepare
+            secure sharing before the deadline arrives.
           </p>
           <div className="flex flex-col gap-3 sm:flex-row">
             <Link
@@ -1297,28 +1079,13 @@ function FinalCta() {
               See how it works
             </Link>
           </div>
-          <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm text-white/75">
-            {(PRIVATE_BETA
-              ? [
-                  "Free during the private beta",
-                  "No credit card",
-                  "Private by default — export anytime",
-                ]
-              : [
-                  "14-day free trial",
-                  "No credit card required",
-                  "Private by default — export anytime",
-                ]
-            ).map((item) => (
-              <span key={item} className="inline-flex items-center gap-1.5">
-                <Check className="size-4 text-brand-teal" />
-                {item}
-              </span>
-            ))}
-          </div>
+          <p className="text-sm font-medium text-white/80">
+            Private until you share it.
+          </p>
           {PRIVATE_BETA && (
             <p className="text-xs text-white/50">
-              Private beta · rolls out gradually to selected users.
+              Free during the private beta · rolls out gradually to selected
+              users.
             </p>
           )}
         </div>

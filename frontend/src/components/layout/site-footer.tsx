@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { Logo } from "@/components/layout/logo";
+import { PRIMARY_CTA } from "@/lib/cta";
 
 type FooterLink = { label: string; href: string };
 
@@ -10,9 +11,11 @@ const columns: { heading: string; links: FooterLink[] }[] = [
     links: [
       { label: "Life Radar", href: "/#life-radar" },
       { label: "Vault", href: "/#vault" },
-      { label: "SafeSend", href: "/#safesend" },
-      { label: "Emergency Protocol", href: "/#emergency" },
       { label: "Deadlines & Renewals", href: "/#deadlines-renewals" },
+      { label: "Subscriptions", href: "/#subscriptions" },
+      { label: "Application Packs", href: "/#packs" },
+      { label: "SafeSend", href: "/#safesend" },
+      { label: "Emergency Access", href: "/#emergency" },
       { label: "Pricing", href: "/pricing" },
     ],
   },
@@ -39,7 +42,7 @@ const columns: { heading: string; links: FooterLink[] }[] = [
   {
     heading: "Get started",
     links: [
-      { label: "Join the waitlist", href: "/waitlist" },
+      { label: PRIMARY_CTA.label, href: PRIMARY_CTA.href },
       { label: "Sign in", href: "/login" },
     ],
   },
@@ -54,8 +57,8 @@ export function SiteFooter() {
           <div className="space-y-3">
             <Logo />
             <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">
-              A calm, secure command center for your important documents,
-              renewals, applications, and secure sharing.
+              Your life-admin, securely organized — important documents,
+              deadlines, renewals, and trusted sharing in one calm place.
             </p>
           </div>
 
@@ -82,8 +85,8 @@ export function SiteFooter() {
 
         <div className="mt-10 flex flex-col gap-3 border-t border-border pt-6 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <p>
-            © {new Date().getFullYear()} CertaNest. Documents, deadlines, and
-            renewals in one calm place.
+            © {new Date().getFullYear()} CertaNest. Life documents, deadlines,
+            and proof — ready when life asks.
           </p>
           <p>Private beta · Legal pages are drafts under review.</p>
         </div>
