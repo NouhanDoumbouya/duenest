@@ -178,6 +178,10 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
   const [pages, setPages] = useState<ScanPage[]>([]);
   const [adjust, setAdjust] = useState<Adjustments>(NEUTRAL_ADJUST);
   const [adjustOpen, setAdjustOpen] = useState(false);
+  // The whole edit suite (filters, adjust, rotate, crop, text, copy tools) is
+  // collapsed by default so the review screen is just "preview → Save" for the
+  // hurried user. Power users open it on demand.
+  const [editOpen, setEditOpen] = useState(false);
   const [saveOptionsOpen, setSaveOptionsOpen] = useState(false);
   const [exportQuality, setExportQuality] = useState<"standard" | "hd">("standard");
   // Human-readable progress shown during multi-step work (PDF build → upload).
@@ -1468,14 +1472,21 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
 
         {phase === "cropping" && frozenCanvas && quad && (
           <div className="flex h-full flex-col">
-            {/* Extra horizontal/bottom room so the corner handles, which extend
-                ~22px beyond the image edges, never sit clipped or hidden behind
-                the action bar — especially the bottom corners on a tall scan. */}
-            <div className="flex-1 overflow-auto px-6 pt-4 pb-12">
-              <p className="mb-3 text-center text-sm text-slate-300">
+            {/* Bounded, non-scrolling area: CropEditor fits the whole scan
+                (and all four corners) inside this space — no scrolling to reach
+                the bottom corners on a tall scan. `min-h-0` lets the editor box
+                actually shrink within the flex column. */}
+            <div className="flex min-h-0 flex-1 flex-col px-4 pt-4 pb-2">
+              <p className="mb-3 shrink-0 text-center text-sm text-slate-300">
                 Drag the corners to match the document edges.
               </p>
-              <CropEditor source={frozenCanvas} quad={quad} onQuadChange={setQuad} />
+              <div className="min-h-0 flex-1">
+                <CropEditor
+                  source={frozenCanvas}
+                  quad={quad}
+                  onQuadChange={setQuad}
+                />
+              </div>
             </div>
             <div className="space-y-3 border-t border-white/10 bg-slate-950/80 p-4 backdrop-blur-md">
               {/* Edge-detection escape hatches: subtle links, never competing
@@ -1550,7 +1561,40 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
                   <Check className="size-3.5" aria-hidden="true" /> Looks clear — ready to save
                 </p>
               )}
-              {featureEnabled("scan_modes") && (
+              {/* One quiet "Edit" gate. The scan-and-go path is preview → Save;
+                  filters, adjust, rotate, crop, text, and copy tools all live
+                  behind this, so a hurried user is never confronted with the
+                  toolbox. A dot signals when an edit has been applied. */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (editOpen) {
+                    setAdjustOpen(false);
+                    setOcrOpen(false);
+                    setMoreOpen(false);
+                  }
+                  setEditOpen((v) => !v);
+                }}
+                aria-expanded={editOpen}
+                className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-white/5 px-3 py-2 text-xs font-medium text-slate-300 hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:outline-none"
+              >
+                <Wand2 className="size-3.5" aria-hidden="true" />
+                Edit
+                {(filterId !== DEFAULT_FILTER ||
+                  !isNeutralAdjust(adjust) ||
+                  ocr !== null ||
+                  scanMode !== null) && (
+                  <span className="size-1.5 rounded-full bg-teal-300" aria-hidden="true" />
+                )}
+                <ChevronDown
+                  className={cn(
+                    "size-3.5 transition-transform",
+                    editOpen && "rotate-180",
+                  )}
+                  aria-hidden="true"
+                />
+              </button>
+              {editOpen && featureEnabled("scan_modes") && (
                 <div className="space-y-1">
                   <div
                     className="-mx-1 flex items-center gap-2 overflow-x-auto px-1 pb-1"
@@ -1594,7 +1638,7 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
                   )}
                 </div>
               )}
-              {pdfSize != null && (
+              {editOpen && pdfSize != null && (
                 <p className="text-center text-xs text-slate-400">PDF size: {formatBytes(pdfSize)}</p>
               )}
               {/* Multi-page strip: reorder/delete committed pages → one PDF. */}
@@ -1680,6 +1724,7 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
                   row (like a camera editor), so the screen reads as
                   "preview → dock → Save" instead of a scrolling stack. Each
                   edit stays non-destructive (re-derived from the base). */}
+              {editOpen && (
               <div
                 className="-mx-1 flex items-stretch justify-center gap-1 overflow-x-auto px-1"
                 role="toolbar"
@@ -1731,6 +1776,7 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
                   />
                 )}
               </div>
+              )}
               {/* Name & quality — one quiet trigger; first-time users can skip
                   it and just tap Save. */}
               <button
@@ -1748,7 +1794,7 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
                   aria-hidden="true"
                 />
               </button>
-              {adjustOpen && (
+              {editOpen && adjustOpen && (
                 <div className="space-y-3 rounded-lg bg-white/5 p-3">
                   <AdjustSlider
                     label="Brightness"
@@ -1789,7 +1835,7 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
                   </div>
                 </div>
               )}
-              {featureEnabled("scan_ocr") && ocrOpen && (
+              {editOpen && featureEnabled("scan_ocr") && ocrOpen && (
                 <div className="space-y-2 rounded-lg bg-white/5 p-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-medium text-slate-200">
@@ -1945,7 +1991,8 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
               {/* Advanced copy tools, also reachable here in review — not only
                   after save. Founder-gated, so normal users never see them.
                   Each produces a NEW file and never alters the page you save. */}
-              {featureEnabled("scanner_advanced_tools") &&
+              {editOpen &&
+                featureEnabled("scanner_advanced_tools") &&
                 (featureEnabled("scan_safe_copy") ||
                   featureEnabled("scan_redaction")) && (
                   <div className="flex flex-wrap items-center justify-center gap-2 border-t border-white/10 pt-3">

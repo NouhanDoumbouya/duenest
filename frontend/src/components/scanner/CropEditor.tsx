@@ -24,6 +24,7 @@ interface CropEditorProps {
  */
 export function CropEditor({ source, quad, onQuadChange }: CropEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const imageBoxRef = useRef<HTMLDivElement>(null);
   const imageCanvasRef = useRef<HTMLCanvasElement>(null);
   const magnifierRef = useRef<HTMLCanvasElement>(null);
   const [scale, setScale] = useState(1);
@@ -39,16 +40,39 @@ export function CropEditor({ source, quad, onQuadChange }: CropEditorProps) {
   const measure = useCallback(() => {
     const el = containerRef.current;
     if (!el) return;
-    const w = el.clientWidth;
-    const h = w / aspect;
+    // Reserve room so the 44px corner handles never clip at the edges.
+    const margin = 26;
+    const availW = el.clientWidth - margin * 2;
+    const availH = el.clientHeight - margin * 2;
+    if (availW <= 0 || availH <= 0) return;
+    // Contain-fit: size the image to fit BOTH the available width and height,
+    // so the whole document — and all four corners — stays visible at once.
+    // (Width-only sizing made tall scans overflow, hiding the bottom corners.)
+    let w = availW;
+    let h = w / aspect;
+    if (h > availH) {
+      h = availH;
+      w = h * aspect;
+    }
     setScale(w / source.width);
     setDisplaySize({ w, h });
   }, [aspect, source.width]);
 
   useLayoutEffect(() => {
     measure();
+    const el = containerRef.current;
+    // Re-fit whenever the available area changes (rotation, layout settling,
+    // on-screen keyboard) — not just on window resize.
+    let observer: ResizeObserver | null = null;
+    if (el && typeof ResizeObserver !== "undefined") {
+      observer = new ResizeObserver(() => measure());
+      observer.observe(el);
+    }
     window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
   }, [measure]);
 
   // Paint the frozen frame into the display canvas whenever the size changes.
@@ -100,7 +124,7 @@ export function CropEditor({ source, quad, onQuadChange }: CropEditorProps) {
 
   const updateCorner = useCallback(
     (index: number, clientX: number, clientY: number) => {
-      const el = containerRef.current;
+      const el = imageBoxRef.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
       let sx = (clientX - rect.left) / scale;
@@ -145,9 +169,16 @@ export function CropEditor({ source, quad, onQuadChange }: CropEditorProps) {
   return (
     <div
       ref={containerRef}
-      className="relative w-full touch-none select-none"
-      style={{ height: displaySize.h || undefined }}
+      className="relative flex h-full w-full items-center justify-center touch-none select-none"
     >
+      <div
+        ref={imageBoxRef}
+        className="relative"
+        style={{
+          width: displaySize.w || undefined,
+          height: displaySize.h || undefined,
+        }}
+      >
       <canvas ref={imageCanvasRef} className="block w-full rounded-xl" />
 
       {displaySize.w > 0 && (
@@ -234,6 +265,7 @@ export function CropEditor({ source, quad, onQuadChange }: CropEditorProps) {
           }}
         />
       )}
+      </div>
     </div>
   );
 }
