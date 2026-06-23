@@ -17,7 +17,7 @@ def health_check(request):
     return Response(
         {
             "status": "ok",
-            "service": "duenest-backend",
+            "service": "certanest-backend",
             "version": "v0.1",
         }
     )
