@@ -6,6 +6,7 @@ import { ArrowRight, Check } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { getPlans, formatMoney, annualSavingsPercent } from "@/lib/billing";
+import { PRIVATE_BETA } from "@/lib/cta";
 import { cn } from "@/lib/utils";
 import type { BillingInterval, BillingPlan } from "@/types/billing";
 
@@ -116,9 +117,15 @@ function planHighlights(plan: BillingPlan): string[] {
 }
 
 function planCta(plan: BillingPlan): { label: string; href: string } {
-  if (plan.tier === "free") return { label: "Start free", href: "/register" };
+  // Organization is always a sales/contact funnel.
   if (plan.tier === "organization")
     return { label: "Join organization pilot", href: "/contact" };
+  // During the private beta there's no open registration or paid trial, so every
+  // self-serve plan funnels to the waitlist — consistent with the rest of the
+  // site (see lib/cta). At launch (NEXT_PUBLIC_PRIVATE_BETA_ENABLED=false) the
+  // real Start free / trial flows below take over.
+  if (PRIVATE_BETA) return { label: "Join the waitlist", href: "/waitlist" };
+  if (plan.tier === "free") return { label: "Start free", href: "/register" };
   const label =
     plan.trial_days > 0
       ? `Start ${plan.trial_days}-day free trial`
@@ -239,7 +246,7 @@ export function PricingPlans() {
                         ? `Billed yearly${savings ? ` · save ${savings}%` : ""}`
                         : "Billed monthly"}
                     </p>
-                    {plan.trial_days > 0 && (
+                    {plan.trial_days > 0 && !PRIVATE_BETA && (
                       <p className="mt-1 text-xs font-medium text-brand-success">
                         {plan.trial_days}-day free trial · no card required
                       </p>
