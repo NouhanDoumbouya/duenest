@@ -18,11 +18,29 @@ export type AiReason =
   | "empty_instructions"
   | "empty_goal"
   | "empty_message"
+  | "budget"
+  | "consent_required"
   | "error";
 
 export interface DocumentCitation {
   document_id: number;
   title: string;
+}
+
+/** Backend chunk-retrieval modes. Mapped to friendly copy by `retrievalModeLabel`. */
+export type RetrievalMode =
+  | "chunk_vector"
+  | "chunk_lexical"
+  | "document_fallback"
+  | "no_context";
+
+/** One supporting excerpt behind a grounded answer (chunk-level RAG). */
+export interface AnswerSource {
+  document_id: number;
+  document_title: string;
+  chunk_index: number;
+  page_number: number | null;
+  excerpt: string;
 }
 
 export interface AskResult {
@@ -32,6 +50,26 @@ export interface AskResult {
   answered: boolean;
   citations: DocumentCitation[];
   document_count: number;
+  /** Chunk-level RAG fields (optional — older backends omit them). */
+  sources?: AnswerSource[];
+  retrieval_mode?: RetrievalMode;
+  indexed?: boolean;
+}
+
+/** Friendly, non-technical label for where an answer came from. */
+export function retrievalModeLabel(mode: RetrievalMode | undefined): string | null {
+  switch (mode) {
+    case "chunk_vector":
+      return "Answered from document content";
+    case "chunk_lexical":
+      return "Answered from document content search";
+    case "document_fallback":
+      return "Answered from document details";
+    case "no_context":
+      return "Not enough information found";
+    default:
+      return null;
+  }
 }
 
 /**
@@ -240,10 +278,69 @@ export function getFileIntake(fileId: number): Promise<IntakeResult> {
   return apiFetch<IntakeResult>(`/files/${fileId}/intake/`, { method: "POST" });
 }
 
+// --- Chunk-level RAG: index a document's content so it can be asked about ---
+
+/** How embeddings resolved for an index attempt. `unavailable`/`failed` still
+ *  index by content search (lexical) — they are not error states. */
+export type IndexEmbeddingsState = "ready" | "unavailable" | "failed";
+
+export type IndexStatusCode =
+  | "indexed"
+  | "unchanged"
+  | "no_text"
+  | "forbidden"
+  | "consent_required";
+
+/** Result of indexing a document for AI (no Anthropic call is made here). */
+export interface IndexResult {
+  status: IndexStatusCode;
+  chunks_created: number;
+  embeddings: IndexEmbeddingsState;
+  embedded: boolean;
+  /** Present only when the endpoint gates on consent. */
+  available?: boolean;
+  reason?: AiReason;
+}
+
+/** Whether a document is prepared for content Q&A. */
+export interface AiIndexStatus {
+  indexed: boolean;
+  chunk_count: number;
+  embedded: boolean;
+  embeddings_configured: boolean;
+}
+
+/** Read whether a document is indexed for AI content Q&A. */
+export function getIndexStatus(documentId: number): Promise<AiIndexStatus> {
+  return apiFetch<AiIndexStatus>(`/documents/${documentId}/ai/index-status/`);
+}
+
+/**
+ * Prepare a document's extracted text for content Q&A. This never calls the AI
+ * model — it only chunks already-extracted text (and embeds it when configured).
+ * Pass `force` to re-index unchanged text.
+ */
+export function indexDocument(
+  documentId: number,
+  force = false,
+): Promise<IndexResult> {
+  return apiFetch<IndexResult>(`/documents/${documentId}/ai/index/`, {
+    method: "POST",
+    body: force ? { force: true } : {},
+  });
+}
+
 export interface AiDisclosure {
   provider: string;
   used_for_training: boolean;
   summary: string;
+}
+
+/** Per-user AI usage snapshot (own numbers only — never global spend). */
+export interface AiUsageSummary {
+  daily_tokens_used: number;
+  daily_token_cap: number;
+  paused: boolean;
 }
 
 export interface AiPreferences {
@@ -251,6 +348,7 @@ export interface AiPreferences {
   redact_sensitive: boolean;
   ai_available?: boolean;
   disclosure?: AiDisclosure;
+  usage?: AiUsageSummary;
 }
 
 /** The current user's AI consent + privacy settings (with the data stance). */

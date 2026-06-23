@@ -27,6 +27,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import { AiIndexStatusCard } from "@/components/ai/ai-index-status-card";
 import { ConfidencePill } from "@/components/documents/confidence-indicator";
 import { DocumentStatusBadge } from "@/components/documents/status-badge";
 import { DocumentSummaryGrid } from "@/components/documents/document-summary-grid";
@@ -118,11 +119,18 @@ function WorkspaceSkeleton() {
   );
 }
 
-function WorkspaceSidePanel({ doc }: { doc: DocumentRecord }) {
+function WorkspaceSidePanel({
+  doc,
+  askEnabled,
+}: {
+  doc: DocumentRecord;
+  askEnabled: boolean;
+}) {
   const hasReminder = reminderIsActive(doc);
 
   return (
     <aside className="space-y-4 lg:sticky lg:top-6">
+      {askEnabled && <AiIndexStatusCard documentId={doc.id} />}
       <Card size="sm">
         <CardHeader>
           <CardTitle>Workspace health</CardTitle>
@@ -514,7 +522,7 @@ export default function DocumentWorkspacePage() {
 
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
             <div className="min-w-0">{renderTab()}</div>
-            <WorkspaceSidePanel doc={doc} />
+            <WorkspaceSidePanel doc={doc} askEnabled={askEnabled} />
           </div>
         </>
       )}

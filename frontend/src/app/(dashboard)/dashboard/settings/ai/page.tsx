@@ -1,7 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Lock, ShieldCheck, Sparkles, TriangleAlert } from "lucide-react";
+import {
+  Gauge,
+  Loader2,
+  Lock,
+  PauseCircle,
+  ShieldCheck,
+  Sparkles,
+  TriangleAlert,
+} from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { PageContainer } from "@/components/ui/page-container";
@@ -111,6 +119,10 @@ export default function AiSettingsPage() {
             onChange={(v) => update({ redact_sensitive: v }, "redact_sensitive")}
           />
 
+          {prefs.usage && prefs.usage.daily_token_cap > 0 && (
+            <UsageCard usage={prefs.usage} />
+          )}
+
           {error && (
             <p className="flex items-start gap-2 px-1 text-sm text-destructive">
               <TriangleAlert className="mt-0.5 size-4 shrink-0" />
@@ -127,6 +139,54 @@ export default function AiSettingsPage() {
         </Card>
       )}
     </PageContainer>
+  );
+}
+
+function UsageCard({
+  usage,
+}: {
+  usage: NonNullable<AiPreferences["usage"]>;
+}) {
+  const used = Math.max(0, usage.daily_tokens_used);
+  const cap = Math.max(1, usage.daily_token_cap);
+  const pct = Math.min(100, Math.round((used / cap) * 100));
+  return (
+    <Card>
+      <CardContent className="space-y-3">
+        <div className="flex items-start gap-3">
+          <Gauge className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
+          <div className="min-w-0 flex-1">
+            <p className="font-medium">Today&apos;s AI usage</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Today: {used.toLocaleString()} / {cap.toLocaleString()} used
+            </p>
+          </div>
+        </div>
+        <div
+          className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+          role="progressbar"
+          aria-valuenow={pct}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label="Daily AI usage"
+        >
+          <div
+            className={cn(
+              "h-full rounded-full transition-all",
+              usage.paused ? "bg-brand-amber" : "bg-primary",
+            )}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        {usage.paused && (
+          <p className="flex items-start gap-2 text-sm text-brand-amber">
+            <PauseCircle className="mt-0.5 size-4 shrink-0" />
+            AI is paused for today to protect usage limits. It resumes
+            automatically.
+          </p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
