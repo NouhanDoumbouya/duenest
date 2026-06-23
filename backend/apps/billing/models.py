@@ -572,3 +572,38 @@ class BillingEmailSettings(models.Model):
     def load(cls) -> "BillingEmailSettings":
         obj, _ = cls.objects.get_or_create(pk=1)
         return obj
+
+
+class BillingEmailLog(models.Model):
+    """Idempotency guard + lightweight audit for branded billing emails.
+
+    A unique ``(email_key, dedupe_key)`` stops the *same logical* billing email
+    from being sent twice — e.g. when Stripe retries a webhook, or fires both
+    ``invoice.paid`` and ``invoice.payment_succeeded`` for one payment. Stores
+    only routing keys: no email body, Stripe payload, card details, or secrets.
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="billing_email_logs",
+    )
+    email_key = models.CharField(max_length=64)
+    # Stable identifier for the logical email (e.g. a Stripe invoice or
+    # subscription id) — NOT the raw event id, so paid/payment_succeeded dedupe.
+    dedupe_key = models.CharField(max_length=180)
+    sent_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["email_key", "dedupe_key"],
+                name="uniq_billing_email_dedupe",
+            )
+        ]
+        ordering = ["-sent_at"]
+
+    def __str__(self):
+        return f"{self.email_key}:{self.dedupe_key}"

@@ -83,6 +83,7 @@ def send_branded_email(
     attachments: list[tuple[str, bytes, str]] | None = None,
     headers: dict | None = None,
     fail_silently: bool = True,
+    from_email: str | None = None,
 ) -> bool:
     """Render and send a branded HTML+text email.
 
@@ -131,7 +132,7 @@ def send_branded_email(
         message = EmailMultiAlternatives(
             subject=subject,
             body=text_body,
-            from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
+            from_email=from_email or getattr(settings, "DEFAULT_FROM_EMAIL", None),
             to=recipients,
             headers=final_headers or None,
         )

@@ -182,6 +182,43 @@ TRANSACTIONAL_EMAILS: dict[str, TransactionalEmail] = {
         ),
         category="lifecycle",
     ),
+    "billing_subscription_activated": TransactionalEmail(
+        key="billing_subscription_activated",
+        name="Subscription activated / trial started",
+        trigger="Sent after checkout completes and a Pro subscription is active.",
+        template="billing_lifecycle",
+        subject="Welcome to CertaNest Pro",
+        body=(
+            "Your CertaNest Pro plan is active. Your documents, renewals, and "
+            "deadlines now have the full Pro experience — manage your plan any time "
+            "from billing settings."
+        ),
+        category="transactional",
+    ),
+    "billing_payment_succeeded": TransactionalEmail(
+        key="billing_payment_succeeded",
+        name="Payment received",
+        trigger="Sent when a subscription payment succeeds.",
+        template="billing_lifecycle",
+        subject="Your CertaNest payment was received",
+        body=(
+            "Thanks — your CertaNest payment went through and your Pro plan stays "
+            "active. Your itemised tax invoice is available from Stripe."
+        ),
+        category="transactional",
+    ),
+    "billing_payment_action_required": TransactionalEmail(
+        key="billing_payment_action_required",
+        name="Payment confirmation required",
+        trigger="Sent when a payment needs extra authentication (e.g. 3-D Secure).",
+        template="billing_lifecycle",
+        subject="Action needed: confirm your CertaNest payment",
+        body=(
+            "Your bank needs you to confirm your latest CertaNest payment before it "
+            "can complete. Open billing to finish confirming and keep Pro active."
+        ),
+        category="transactional",
+    ),
     # ---- Organization document collection (sent to external recipients) -------
     "org_document_request_invite": TransactionalEmail(
         key="org_document_request_invite",
@@ -232,12 +269,15 @@ def resolve_transactional_email(key: str):
     return enabled, subject, body, definition
 
 
-def send_transactional_email(key: str, *, context: dict, to) -> bool:
+def send_transactional_email(
+    key: str, *, context: dict, to, from_email: str | None = None
+) -> bool:
     """Send a founder-configurable transactional email by key.
 
     Applies the console subject/body override + enabled toggle, injects the
     (editable) body as ``email_body`` into the branded template, and sends. A
-    disabled email is skipped (returns False).
+    disabled email is skipped (returns False). ``from_email`` overrides the
+    sender (e.g. a dedicated billing sender); unset falls back to DEFAULT_FROM_EMAIL.
     """
     if key not in TRANSACTIONAL_EMAILS:
         raise KeyError(f"Unknown transactional email key: {key}")
@@ -250,6 +290,7 @@ def send_transactional_email(key: str, *, context: dict, to) -> bool:
         template=definition.template,
         context={"email_body": body, **context},
         to=to,
+        from_email=from_email,
         email_type=key,
         category=definition.category,
     )

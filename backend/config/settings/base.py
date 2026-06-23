@@ -281,6 +281,10 @@ EMAIL_TIMEOUT = config("EMAIL_TIMEOUT", default=10, cast=int)
 DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="CertaNest <noreply@localhost>")
 SERVER_EMAIL = config("SERVER_EMAIL", default=DEFAULT_FROM_EMAIL)
 SUPPORT_EMAIL = config("SUPPORT_EMAIL", default="support@certanest.com")
+# Optional dedicated sender for branded billing emails (trial/payment/cancel
+# notifications). Falls back to DEFAULT_FROM_EMAIL when unset. Stripe's own
+# receipts/invoices are unaffected — these are CertaNest product notifications.
+BILLING_FROM_EMAIL = config("BILLING_FROM_EMAIL", default="")
 
 # ---------------------------------------------------------------------------
 # AI (Claude / document intelligence) — KEY-GATED, built dark by default.
