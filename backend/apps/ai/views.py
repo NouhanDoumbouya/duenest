@@ -27,10 +27,15 @@ class AiPreferenceView(APIView):
     def get(self, request):
         from django.conf import settings
 
+        from .metering import usage_summary
+
         pref = get_ai_preference(request.user)
         data = AiPreferenceSerializer(pref).data
         data["ai_available"] = bool(getattr(settings, "AI_CONFIGURED", False))
         data["disclosure"] = AI_DISCLOSURE
+        # Safe per-user usage only (own daily tokens + own cap + paused flag).
+        # Never global spend — that's founder-console territory (see TODO in docs).
+        data["usage"] = usage_summary(request.user)
         return Response(data)
 
     def put(self, request):

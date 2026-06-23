@@ -121,6 +121,8 @@ def build_briefing(user) -> dict:
         system=_SYSTEM,
         output_schema=_SCHEMA,
         max_tokens=_MAX_TOKENS,
+        user=user,
+        feature="briefing",
     )
     if not result.ok or not isinstance(result.data, dict):
         return {**base, "reason": "error", "attention_count": len(candidates)}

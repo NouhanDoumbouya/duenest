@@ -130,6 +130,8 @@ def suggest_intake(user, file) -> dict:
         system=_SYSTEM,
         output_schema=_SCHEMA,
         max_tokens=_MAX_TOKENS,
+        user=user,
+        feature="smart_intake",
     )
     if not result.ok or not isinstance(result.data, dict):
         return {**base, "reason": "error", "suggested_fields": fields}

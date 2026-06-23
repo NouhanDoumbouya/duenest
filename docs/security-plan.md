@@ -698,6 +698,43 @@ AI results should be stored separately in `AIExtractionResult`.
 
 AI results should not overwrite user-confirmed data unless the user approves it.
 
+### Implemented: AI usage metering and budget guard (cost control)
+
+Every AI provider call goes through a single chokepoint (`apps.ai.client.generate`),
+which is now metered and capped so a small Anthropic credit cannot be drained by a
+misconfiguration, a runaway loop, or abuse.
+
+- **Key stays backend-only.** `ANTHROPIC_API_KEY` is read from server settings and
+  never returned in any API response or log. Provider errors are logged without the
+  exception detail to avoid any chance of leaking the key.
+- **Usage metering.** Each call attempt writes one `apps.ai.AiUsage` row recording
+  only safe accounting metadata: feature name, provider, model, input/output/total
+  tokens, an estimated cost, status (`success` / `error` / `blocked`), a machine
+  reason code, and an optional safe provider request id. **No raw prompts, document
+  text, model responses, API keys, share/access codes, or payment data are stored.**
+- **Budget guard.** Before any paid call the guard checks three conservative caps —
+  per-user daily tokens (`AI_DAILY_TOKEN_CAP_USER`), global daily tokens
+  (`AI_DAILY_TOKEN_CAP_GLOBAL`), and global monthly estimated cost
+  (`AI_MONTHLY_COST_LIMIT_USD`). Over a cap, the call is **not** sent to Anthropic; a
+  `blocked` usage row is recorded and the user sees a graceful "AI is paused for
+  today to protect usage limits" message (internal limits are never revealed).
+- **Fail-closed.** If the usage tables can't be read during a budget check, the call
+  is blocked rather than allowed to spend unmetered.
+- **Non-fatal metering.** A metering write failure is logged and swallowed — it never
+  breaks the AI action it measures (same philosophy as transactional email).
+- **Low-cost model for testing.** On a small balance, set `AI_MODEL` to the lowest-cost
+  Haiku-class model in the Anthropic console rather than Opus.
+
+Per-user usage (own daily tokens, own cap, paused flag) is exposed on the existing
+`GET /api/v1/ai/preferences/` response. Global spend is never exposed to normal users.
+
+> TODO (founder console): aggregate cross-user AI spend/usage views for the admin
+> console once it has a clean place for them.
+
+> Note: RAG retrieval remains the current document-level architecture (keyword +
+> optional Voyage embeddings); chunk-level RAG over full document content is a
+> separate future branch and is intentionally **not** part of this change.
+
 ---
 
 ## 19. Reminder and Notification Security

@@ -236,6 +236,8 @@ def answer_question(
         system=_SYSTEM,
         output_schema=_ANSWER_SCHEMA,
         max_tokens=_MAX_TOKENS,
+        user=user,
+        feature="document_qa",
     )
     if not result.ok or not isinstance(result.data, dict):
         return {**base, "reason": "error", "document_count": len(context)}

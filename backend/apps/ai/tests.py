@@ -9,13 +9,21 @@ Two paths are covered, mirroring the email config/sender split:
 
 from __future__ import annotations
 
+from decimal import Decimal
 from types import SimpleNamespace
 from unittest import mock
 
-from django.test import SimpleTestCase, override_settings
+from django.contrib.auth import get_user_model
+from django.test import SimpleTestCase, TestCase, override_settings
 
 from apps.ai import client as ai_client
-from apps.ai.config import DEFAULT_MAX_TOKENS, DEFAULT_MODEL, resolve_ai_settings
+from apps.ai.config import (
+    DEFAULT_MAX_TOKENS,
+    DEFAULT_MODEL,
+    estimate_cost_usd,
+    resolve_ai_settings,
+)
+from apps.ai.models import AiUsage
 
 
 def _get_from(values: dict):
@@ -91,6 +99,10 @@ class ResolveAiSettingsTests(SimpleTestCase):
     ANTHROPIC_API_KEY="sk-test",
     AI_MODEL="claude-opus-4-8",
     AI_MAX_TOKENS=4096,
+    # This class tests the provider wrapper only — keep metering/guard off so it
+    # stays DB-free (SimpleTestCase). Cost control is covered in MeteringTests.
+    AI_USAGE_METERING_ENABLED=False,
+    AI_BUDGET_GUARD_ENABLED=False,
 )
 class GenerateConfiguredTests(SimpleTestCase):
     def test_successful_text_generation(self):
@@ -171,3 +183,177 @@ class GenerateNotConfiguredTests(SimpleTestCase):
     @override_settings(AI_CONFIGURED=False)
     def test_ai_available_reflects_setting(self):
         self.assertFalse(ai_client.ai_available())
+
+
+class EstimateCostTests(SimpleTestCase):
+    """The offline pricing estimator (no DB, no network)."""
+
+    def test_known_model_estimates_from_tokens(self):
+        # opus: $15/Mtok in, $75/Mtok out -> 10*15e-6 + 5*75e-6
+        cost = estimate_cost_usd("claude-opus-4-8", 10, 5)
+        self.assertEqual(cost, Decimal("0.000525"))
+
+    def test_unknown_model_is_zero(self):
+        self.assertEqual(estimate_cost_usd("mystery-model-9", 1000, 1000), Decimal("0"))
+
+    def test_haiku_is_cheaper_than_opus(self):
+        self.assertLess(
+            estimate_cost_usd("claude-haiku-4-5", 1000, 1000),
+            estimate_cost_usd("claude-opus-4-8", 1000, 1000),
+        )
+
+
+@override_settings(
+    AI_CONFIGURED=True,
+    ANTHROPIC_API_KEY="sk-secret-should-never-leak",
+    AI_MODEL="claude-opus-4-8",
+    AI_MAX_TOKENS=4096,
+    AI_USAGE_METERING_ENABLED=True,
+    AI_BUDGET_GUARD_ENABLED=True,
+    # Generous caps by default; per-test overrides exercise each cap.
+    AI_DAILY_TOKEN_CAP_USER=1_000_000,
+    AI_DAILY_TOKEN_CAP_GLOBAL=1_000_000,
+    AI_MONTHLY_COST_LIMIT_USD=Decimal("1000"),
+)
+class MeteringAndBudgetTests(TestCase):
+    """Usage metering + budget guard at the provider chokepoint (DB-backed)."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="meter", email="meter@example.com", password="StrongPass123!DN"
+        )
+
+    def _run(self, *, response=None, raise_on_create=None, **kwargs):
+        if response is None and raise_on_create is None:
+            response = _fake_response(text="hi")
+        module, create = _fake_anthropic(response, raise_on_create=raise_on_create)
+        with mock.patch.object(ai_client, "_load_anthropic", return_value=module):
+            result = ai_client.generate(
+                prompt="x", user=self.user, feature="document_qa", **kwargs
+            )
+        return result, create
+
+    # 1 + 2 + 3: success writes exactly one row with tokens + estimated cost.
+    def test_success_records_one_usage_row(self):
+        result, _ = self._run(response=_fake_response(text="hi"))
+        self.assertTrue(result.ok)
+        rows = AiUsage.objects.all()
+        self.assertEqual(rows.count(), 1)
+        row = rows.first()
+        self.assertEqual(row.status, "success")
+        self.assertEqual(row.feature, "document_qa")
+        self.assertEqual(row.user, self.user)
+        self.assertEqual(row.input_tokens, 10)
+        self.assertEqual(row.output_tokens, 5)
+        self.assertEqual(row.total_tokens, 15)
+        self.assertEqual(row.estimated_cost_usd, Decimal("0.000525"))
+
+    # 4: unknown model records zero cost but still records the tokens.
+    def test_unknown_model_records_tokens_zero_cost(self):
+        resp = _fake_response(text="hi", model="mystery-model-9")
+        result, _ = self._run(response=resp)
+        self.assertTrue(result.ok)
+        row = AiUsage.objects.get()
+        self.assertEqual(row.total_tokens, 15)
+        self.assertEqual(row.estimated_cost_usd, Decimal("0"))
+
+    # 5: over the per-user daily token cap blocks and never calls Anthropic.
+    @override_settings(AI_DAILY_TOKEN_CAP_USER=10)
+    def test_over_user_daily_cap_blocks(self):
+        AiUsage.objects.create(
+            user=self.user, feature="document_qa", status="success", total_tokens=50
+        )
+        result, create = self._run()
+        create.assert_not_called()
+        self.assertFalse(result.ok)
+        self.assertEqual(result.reason, "budget")
+        blocked = AiUsage.objects.filter(status="blocked")
+        self.assertEqual(blocked.count(), 1)
+        self.assertEqual(blocked.first().reason, "budget")
+        self.assertEqual(blocked.first().metadata.get("cap"), "user_daily")
+
+    # 6: over the global daily token cap blocks (even a different user).
+    @override_settings(AI_DAILY_TOKEN_CAP_GLOBAL=10)
+    def test_over_global_daily_cap_blocks(self):
+        other = get_user_model().objects.create_user(
+            username="other", email="o@example.com", password="StrongPass123!DN"
+        )
+        AiUsage.objects.create(
+            user=other, feature="document_qa", status="success", total_tokens=50
+        )
+        result, create = self._run()
+        create.assert_not_called()
+        self.assertEqual(result.reason, "budget")
+        self.assertEqual(
+            AiUsage.objects.filter(status="blocked").first().metadata.get("cap"),
+            "global_daily",
+        )
+
+    # 7: over the monthly estimated-cost cap blocks.
+    @override_settings(AI_MONTHLY_COST_LIMIT_USD=Decimal("0.0001"))
+    def test_over_monthly_cost_cap_blocks(self):
+        AiUsage.objects.create(
+            user=self.user,
+            feature="document_qa",
+            status="success",
+            total_tokens=10,
+            estimated_cost_usd=Decimal("0.01"),
+        )
+        result, create = self._run()
+        create.assert_not_called()
+        self.assertEqual(result.reason, "budget")
+        self.assertEqual(
+            AiUsage.objects.filter(status="blocked").first().metadata.get("cap"),
+            "monthly_cost",
+        )
+
+    # 8: blocked attempts are recorded with status=blocked, reason=budget, 0 tokens.
+    @override_settings(AI_DAILY_TOKEN_CAP_USER=0)
+    def test_blocked_row_shape(self):
+        result, create = self._run()
+        create.assert_not_called()
+        row = AiUsage.objects.get()
+        self.assertEqual(row.status, "blocked")
+        self.assertEqual(row.reason, "budget")
+        self.assertEqual(row.total_tokens, 0)
+        self.assertEqual(row.estimated_cost_usd, Decimal("0"))
+
+    # 9: a provider error is handled safely, records an error row, leaks no key.
+    def test_provider_error_is_safe_and_recorded(self):
+        boom = RuntimeError("upstream failed with key sk-secret-should-never-leak")
+        result, _ = self._run(raise_on_create=boom)
+        self.assertFalse(result.ok)
+        self.assertEqual(result.reason, "error")
+        row = AiUsage.objects.get()
+        self.assertEqual(row.status, "error")
+        self.assertEqual(row.reason, "provider_error")
+        # No secret stored anywhere on the row.
+        blob = f"{row.reason}{row.model}{row.metadata}"
+        self.assertNotIn("sk-secret", blob)
+
+    # 10: a metering write failure must NOT break generate().
+    def test_metering_write_failure_does_not_break_generate(self):
+        module, create = _fake_anthropic(_fake_response(text="hi"))
+        with mock.patch.object(ai_client, "_load_anthropic", return_value=module):
+            with mock.patch.object(
+                AiUsage.objects, "create", side_effect=RuntimeError("db down")
+            ):
+                result = ai_client.generate(
+                    prompt="x", user=self.user, feature="document_qa"
+                )
+        self.assertTrue(result.ok)
+        self.assertEqual(result.text, "hi")
+        # Nothing persisted, but the call still succeeded.
+        self.assertEqual(AiUsage.objects.count(), 0)
+
+    # Budget check that fails to read the DB must fail closed (block, not spend).
+    def test_budget_check_failure_fails_closed(self):
+        from apps.ai import metering
+
+        with mock.patch.object(
+            metering, "check_budget", return_value="budget"
+        ):
+            result, create = self._run()
+        create.assert_not_called()
+        self.assertFalse(result.ok)
+        self.assertEqual(result.reason, "budget")
