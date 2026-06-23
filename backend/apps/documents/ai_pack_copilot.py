@@ -148,6 +148,8 @@ def analyze(user, *, goal: str, deadline=None) -> dict:
         system=_SYSTEM,
         output_schema=_SCHEMA,
         max_tokens=_MAX_TOKENS,
+        user=user,
+        feature="pack_copilot",
     )
     if not result.ok or not isinstance(result.data, dict):
         return {**base, "reason": "error", "document_count": len(context)}

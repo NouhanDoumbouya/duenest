@@ -154,7 +154,12 @@ def assess_share_readiness(bundle, *, user) -> dict | None:
         + _build_context(bundle, readiness)
     )
     result = generate(
-        prompt=prompt, system=_SYSTEM, output_schema=_SCHEMA, max_tokens=_MAX_TOKENS
+        prompt=prompt,
+        system=_SYSTEM,
+        output_schema=_SCHEMA,
+        max_tokens=_MAX_TOKENS,
+        user=user,
+        feature="readiness",
     )
     if not result.ok or not isinstance(result.data, dict):
         return None

@@ -118,6 +118,8 @@ def suggest_fields(raw_text: str, *, user) -> dict | None:
         system=_SYSTEM,
         output_schema=_SCHEMA,
         max_tokens=_MAX_TOKENS,
+        user=user,
+        feature="field_extraction",
     )
     if not result.ok or not isinstance(result.data, dict):
         return None

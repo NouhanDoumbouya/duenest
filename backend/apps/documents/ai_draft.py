@@ -132,6 +132,8 @@ def draft(
         system=_SYSTEM,
         output_schema=_SCHEMA,
         max_tokens=_MAX_TOKENS,
+        user=user,
+        feature="document_draft",
     )
     if not result.ok or not isinstance(result.data, dict):
         return {**base, "reason": "error", "used_document_ids": used_ids}

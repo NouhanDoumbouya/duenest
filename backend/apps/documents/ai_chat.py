@@ -116,6 +116,8 @@ def chat(user, *, message: str, history=None) -> dict:
         system=_SYSTEM,
         output_schema=_SCHEMA,
         max_tokens=_MAX_TOKENS,
+        user=user,
+        feature="document_chat",
     )
     if not result.ok or not isinstance(result.data, dict):
         return {**base, "reason": "error"}

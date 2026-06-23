@@ -300,6 +300,16 @@ AI_MODEL = _ai["AI_MODEL"]
 AI_MAX_TOKENS = _ai["AI_MAX_TOKENS"]
 AI_CONFIGURED = _ai["AI_CONFIGURED"]
 
+# Cost controls — usage metering + budget guard (apps/ai/metering.py). Caps are
+# conservative by default so a small Anthropic credit can't be drained; raise per
+# deployment once spend is trusted. Set AI_MODEL to a low-cost Haiku-class model
+# in production while testing on a small balance.
+AI_DAILY_TOKEN_CAP_USER = _ai["AI_DAILY_TOKEN_CAP_USER"]
+AI_DAILY_TOKEN_CAP_GLOBAL = _ai["AI_DAILY_TOKEN_CAP_GLOBAL"]
+AI_MONTHLY_COST_LIMIT_USD = _ai["AI_MONTHLY_COST_LIMIT_USD"]
+AI_USAGE_METERING_ENABLED = _ai["AI_USAGE_METERING_ENABLED"]
+AI_BUDGET_GUARD_ENABLED = _ai["AI_BUDGET_GUARD_ENABLED"]
+
 # Embeddings (content-level RAG retrieval) — separate optional key (Voyage AI).
 # With no VOYAGE_API_KEY, EMBEDDINGS_CONFIGURED is False and retrieval stays
 # lexical (keyword) — see apps/ai/embeddings.py and apps/documents/ai_qa.py.

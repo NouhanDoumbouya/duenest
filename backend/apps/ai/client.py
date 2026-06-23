@@ -28,6 +28,12 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
+# Shown to users (and as AIResult.text) when a budget cap pauses AI. Generic on
+# purpose — it never reveals the internal token/cost limits.
+BUDGET_PAUSED_MESSAGE = (
+    "AI is paused for today to protect usage limits. Please try again later."
+)
+
 
 @dataclass
 class AIResult:
@@ -36,7 +42,8 @@ class AIResult:
     ok: bool
     text: str = ""
     data: Any = None  # parsed JSON when an output_schema was requested
-    reason: str = ""  # "ok" | "not_configured" | "sdk_missing" | "refusal" | "error"
+    # "ok" | "not_configured" | "sdk_missing" | "refusal" | "error" | "budget"
+    reason: str = ""
     model: str = ""
     usage: dict = field(default_factory=dict)
 
@@ -60,6 +67,8 @@ def generate(
     max_tokens: int | None = None,
     model: str | None = None,
     output_schema: dict | None = None,
+    user=None,
+    feature: str = "unknown",
 ) -> AIResult:
     """
     Run one Claude completion and return an :class:`AIResult`.
@@ -72,15 +81,38 @@ def generate(
         output_schema: When given, constrains the response to this JSON Schema
             (structured outputs) and populates ``AIResult.data`` with the parsed
             object.
+        user: The user the call is made on behalf of (for budget + metering).
+            ``None`` for system calls (e.g. scheduled digests).
+        feature: Short internal feature name for metering (e.g. ``document_qa``).
 
-    The call never raises for an expected failure (no key, no SDK, refusal,
-    transport error) — inspect ``result.ok`` / ``result.reason`` instead.
+    Cost control runs here at the single chokepoint: the budget guard can pause
+    the call before any spend, and every attempt is metered via
+    ``apps.ai.metering``. The call never raises for an expected failure (no key,
+    no SDK, budget cap, refusal, transport error) — inspect ``result.ok`` /
+    ``result.reason`` instead.
     """
     model = model or getattr(settings, "AI_MODEL", "claude-opus-4-8")
     max_tokens = max_tokens or getattr(settings, "AI_MAX_TOKENS", 4096)
 
     if not ai_available():
         return AIResult(ok=False, reason="not_configured", model=model)
+
+    # Budget guard — before any paid call. Fails closed (see metering).
+    from .metering import check_budget, record_usage
+
+    cap = check_budget(user)
+    if cap:
+        record_usage(
+            user=user,
+            feature=feature,
+            model=model,
+            status="blocked",
+            reason="budget",
+            metadata={"cap": cap},
+        )
+        return AIResult(
+            ok=False, reason="budget", model=model, text=BUDGET_PAUSED_MESSAGE
+        )
 
     try:
         anthropic = _load_anthropic()
@@ -104,13 +136,36 @@ def generate(
 
         response = client.messages.create(**kwargs)
     except Exception:  # noqa: BLE001 - an AI call must never break its caller
-        logger.warning("AI call failed", exc_info=True)
+        # Log without the exception detail to avoid any chance of leaking the key.
+        logger.warning("AI call failed for feature=%s", feature)
+        record_usage(
+            user=user, feature=feature, model=model, status="error",
+            reason="provider_error",
+        )
         return AIResult(ok=False, reason="error", model=model)
 
     usage = _usage_dict(getattr(response, "usage", None))
+    in_tok = int(usage.get("input_tokens") or 0)
+    out_tok = int(usage.get("output_tokens") or 0)
     resp_model = getattr(response, "model", model) or model
+    request_id = str(getattr(response, "id", "") or "")
+
+    def _meter(status: str, reason: str) -> None:
+        # Tokens were consumed once the provider responded — always record them
+        # so refusals and bad-output still count against the budget.
+        record_usage(
+            user=user,
+            feature=feature,
+            model=resp_model,
+            input_tokens=in_tok,
+            output_tokens=out_tok,
+            status=status,
+            reason=reason,
+            provider_request_id=request_id,
+        )
 
     if getattr(response, "stop_reason", None) == "refusal":
+        _meter("success", "refusal")
         return AIResult(ok=False, reason="refusal", model=resp_model, usage=usage)
 
     text = _extract_text(response)
@@ -121,10 +176,12 @@ def generate(
             data = json.loads(text)
         except json.JSONDecodeError:
             logger.warning("AI returned non-JSON output despite an output schema")
+            _meter("success", "bad_output")
             return AIResult(
                 ok=False, text=text, reason="error", model=resp_model, usage=usage
             )
 
+    _meter("success", "ok")
     return AIResult(
         ok=True, text=text, data=data, reason="ok", model=resp_model, usage=usage
     )
