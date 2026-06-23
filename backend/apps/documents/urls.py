@@ -82,6 +82,8 @@ from .views import (
     DocumentDraftView,
     DocumentProofRecordListView,
     DocumentQAView,
+    DocumentAIIndexView,
+    DocumentAIIndexStatusView,
     PackCopilotView,
     PackCopilotCreateBundleView,
     FileInboxAttachDocumentView,
@@ -357,6 +359,17 @@ urlpatterns = [
         "documents/ask/",
         DocumentQAView.as_view(),
         name="document-ask",
+    ),
+    # ---- AI: chunk-level RAG indexing (manual; opt-in, key+flag gated) ----
+    path(
+        "documents/<int:pk>/ai/index/",
+        DocumentAIIndexView.as_view(),
+        name="document-ai-index",
+    ),
+    path(
+        "documents/<int:pk>/ai/index-status/",
+        DocumentAIIndexStatusView.as_view(),
+        name="document-ai-index-status",
     ),
     # ---- AI: drafting assistant (letters/emails; opt-in, key+flag gated) ----
     path(

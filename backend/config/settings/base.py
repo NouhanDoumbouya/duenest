@@ -319,6 +319,25 @@ VOYAGE_API_KEY = _embeddings["VOYAGE_API_KEY"]
 EMBEDDINGS_MODEL = _embeddings["EMBEDDINGS_MODEL"]
 EMBEDDINGS_CONFIGURED = _embeddings["EMBEDDINGS_CONFIGURED"]
 
+# Chunk-level RAG (document body content) — apps/documents/ai_chunking.py,
+# ai_indexing.py, ai_qa.py. Indexing is MANUAL only: auto-index on upload stays
+# off by default so we never index the whole production vault unintentionally.
+# Embeddings are optional (Voyage); without them chunks fall back to lexical.
+AI_RAG_ENABLED = config("AI_RAG_ENABLED", default=True, cast=bool)
+AI_RAG_CHUNK_SIZE = config("AI_RAG_CHUNK_SIZE", default=1200, cast=int)
+AI_RAG_CHUNK_OVERLAP = config("AI_RAG_CHUNK_OVERLAP", default=150, cast=int)
+AI_RAG_MAX_CHUNKS_PER_DOCUMENT = config(
+    "AI_RAG_MAX_CHUNKS_PER_DOCUMENT", default=40, cast=int
+)
+AI_RAG_MAX_CHARS_PER_DOCUMENT = config(
+    "AI_RAG_MAX_CHARS_PER_DOCUMENT", default=60000, cast=int
+)
+AI_RAG_TOP_K = config("AI_RAG_TOP_K", default=5, cast=int)
+AI_RAG_MAX_CONTEXT_CHARS = config("AI_RAG_MAX_CONTEXT_CHARS", default=10000, cast=int)
+AI_RAG_AUTO_INDEX_ON_UPLOAD = config(
+    "AI_RAG_AUTO_INDEX_ON_UPLOAD", default=False, cast=bool
+)
+
 # Resend delivery webhook (bounce/complaint/delivered/opened). Svix-signed; the
 # secret (``whsec_...``) is verified before any event is applied. Empty disables
 # the endpoint (503) so a misconfigured deploy can't accept unsigned events.
@@ -454,6 +473,8 @@ REST_FRAMEWORK = {
         "ai_chat": _throttle_rate("30/min"),
         # AI smart intake (per authenticated user) — bounds model cost.
         "ai_intake": _throttle_rate("15/min"),
+        # AI chunk-level RAG indexing (per authenticated user) — bounds embed cost.
+        "ai_index": _throttle_rate("10/min"),
     },
 }
 

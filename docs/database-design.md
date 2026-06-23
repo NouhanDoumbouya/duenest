@@ -1582,6 +1582,25 @@ branch. Every user-owned model is scoped to its owner and follows the existing
   applying fields requires explicit owner confirmation and only writes the
   chosen, known document fields.
 
+### DocumentChunk — *Implemented*
+- **Purpose:** a slice of a document's extracted **body text** for chunk-level
+  RAG, so AI Q&A can answer about document *content*, not just metadata. Built
+  from `DocumentExtraction.raw_text` (with notes/key-fields fallback) by the
+  manual indexing service (`apps.documents.ai_indexing`).
+- **Key fields:** `owner`, `document`, `chunk_index`, `text`, `text_hash`,
+  `source_title`, `page_number` (nullable), `section_label`, `token_estimate`
+  (char count), `embedding_vector` (nullable JSON float list — cosine in Python,
+  no pgvector), `embedding_model`, `embedding_created_at`, `status`
+  (`ready`/`embedding_failed`/`skipped`), timestamps.
+- **Relationships:** `owner → User`; `document → Document` (related_name
+  `ai_chunks`).
+- **Security:** owner-scoped; retrieval filters by `owner=user` as the boundary
+  (no cross-user retrieval). Holds extracted text + optional vector only — never
+  AI responses, raw file URLs, or secrets. Embeddings are optional; without a key
+  chunks remain retrievable by lexical scoring.
+- **Constraint:** unique `(document, chunk_index)`; indexed on `(owner, document)`,
+  `(owner, created_at)`, `(document, chunk_index)`, and `text_hash`.
+
 ### DocumentVersion — *Implemented*
 - **Purpose:** owner-owned point-in-time metadata snapshots for document history
   and metadata restore.

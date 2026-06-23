@@ -5627,6 +5627,74 @@ class DocumentQAView(APIView):
         return Response(result, status=status.HTTP_200_OK)
 
 
+class DocumentAIIndexView(APIView):
+    """
+    Index one owned document's extracted body text for chunk-level RAG.
+
+    POST ``/documents/{id}/ai/index/`` → chunks the document's
+    ``DocumentExtraction.raw_text`` (and safe fallbacks) into ``DocumentChunk``
+    rows, optionally embedding them when a Voyage key is configured. **Never
+    calls Anthropic** and sends no file binaries anywhere. Owner-scoped and gated
+    by the same flags + consent as Q&A. Returns a safe status (no document text).
+    """
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "ai_index"
+
+    def post(self, request, pk):
+        require_feature_enabled("ai_features", request.user)
+        require_feature_enabled("ai_document_qa", request.user)
+
+        from apps.ai.privacy import ai_consented
+
+        if not ai_consented(request.user):
+            return Response(
+                {"available": False, "reason": "consent_required"},
+                status=status.HTTP_200_OK,
+            )
+
+        document = get_object_or_404(
+            Document, pk=pk, owner=request.user, is_trashed=False
+        )
+        force = str(request.data.get("force", "")).lower() in {"1", "true", "yes"}
+
+        from .ai_indexing import index_document_for_rag
+
+        result = index_document_for_rag(document, owner=request.user, force=force)
+        _track_product_event(
+            request,
+            "document_ai_indexed",
+            object_type="document",
+            object_id=document.id,
+            metadata={
+                "status": result.get("status"),
+                "chunks_created": result.get("chunks_created"),
+                "embeddings": result.get("embeddings"),
+            },
+        )
+        return Response(result, status=status.HTTP_200_OK)
+
+
+class DocumentAIIndexStatusView(APIView):
+    """
+    GET ``/documents/{id}/ai/index-status/`` → whether an owned document is
+    indexed for chunk-level RAG (chunk count + embedded flag). Owner-scoped;
+    returns only safe counts, never document content.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        require_feature_enabled("ai_features", request.user)
+        document = get_object_or_404(
+            Document, pk=pk, owner=request.user, is_trashed=False
+        )
+        from .ai_indexing import get_index_status
+
+        return Response(get_index_status(document), status=status.HTTP_200_OK)
+
+
 class DocumentDraftView(APIView):
     """
     AI drafting assistant — write a letter/email from the owner's records.

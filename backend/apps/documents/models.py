@@ -2302,6 +2302,69 @@ class DocumentEmbedding(models.Model):
         return f"Embedding(doc={self.document_id})"
 
 
+class DocumentChunk(models.Model):
+    """A chunk of a document's extracted/OCR **body text** for chunk-level RAG.
+
+    Where ``DocumentEmbedding`` is one vector over a document's *metadata snippet*,
+    a ``DocumentChunk`` is a slice of the document's actual extracted content
+    (from ``DocumentExtraction.raw_text``) so the AI can answer about what a
+    document *says*, not just its key fields.
+
+    Stored owner-scoped. ``embedding_vector`` is an optional JSON float list
+    (same SQLite/Postgres-friendly strategy as ``DocumentEmbedding`` — cosine in
+    Python; no pgvector). When no embeddings key is configured the chunk is still
+    stored and retrievable by lexical scoring. This table holds **extracted text
+    only** — never AI responses, file URLs, or secrets.
+    """
+
+    class Status(models.TextChoices):
+        READY = "ready", "Ready"
+        EMBEDDING_FAILED = "embedding_failed", "Embedding failed"
+        SKIPPED = "skipped", "Skipped"
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="document_chunks",
+    )
+    document = models.ForeignKey(
+        Document, on_delete=models.CASCADE, related_name="ai_chunks"
+    )
+    chunk_index = models.PositiveIntegerField()
+    text = models.TextField()
+    text_hash = models.CharField(max_length=64, blank=True)
+    source_title = models.CharField(max_length=255, blank=True)
+    page_number = models.PositiveIntegerField(null=True, blank=True)
+    section_label = models.CharField(max_length=120, blank=True)
+    # Character count of the chunk — a cheap, deterministic size estimate.
+    token_estimate = models.PositiveIntegerField(default=0)
+    embedding_vector = models.JSONField(null=True, blank=True)
+    embedding_model = models.CharField(max_length=64, blank=True)
+    embedding_created_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.READY
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["document_id", "chunk_index"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["document", "chunk_index"], name="uniq_document_chunk_index"
+            )
+        ]
+        indexes = [
+            models.Index(fields=["owner", "document"]),
+            models.Index(fields=["owner", "created_at"]),
+            models.Index(fields=["document", "chunk_index"]),
+            models.Index(fields=["text_hash"]),
+        ]
+
+    def __str__(self):
+        return f"Chunk(doc={self.document_id}, #{self.chunk_index})"
+
+
 class PreparedDocument(models.Model):
     """
     A prepared (filled / signed) copy of a document file.

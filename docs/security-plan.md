@@ -731,9 +731,44 @@ Per-user usage (own daily tokens, own cap, paused flag) is exposed on the existi
 > TODO (founder console): aggregate cross-user AI spend/usage views for the admin
 > console once it has a clean place for them.
 
-> Note: RAG retrieval remains the current document-level architecture (keyword +
-> optional Voyage embeddings); chunk-level RAG over full document content is a
-> separate future branch and is intentionally **not** part of this change.
+### Implemented: chunk-level RAG v1 (answering over document content)
+
+CertaNest can answer questions about the actual **content** of a user's documents,
+not just their metadata, via chunk-level retrieval-augmented generation.
+
+- **Safe text source only.** Chunks are built from text the app has *already*
+  extracted (`DocumentExtraction.raw_text`, with notes/key-fields as fallback).
+  `get_document_text_for_ai()` never reads raw file binaries and never sends a
+  file to any AI provider — only extracted text. No text → indexing is skipped.
+- **Manual indexing.** Indexing is explicit per document
+  (`POST /api/v1/documents/{id}/ai/index/`); `AI_RAG_AUTO_INDEX_ON_UPLOAD`
+  defaults **off** so the whole production vault is never auto-indexed. Reindex is
+  replace-on-change (no duplicate chunks). The index endpoint **never calls
+  Anthropic**; it may call Voyage embeddings only when a key is configured.
+- **Owner-scoped retrieval.** `DocumentChunk` is owner-scoped; retrieval filters
+  by `owner=user` as the security boundary — a user can never retrieve another
+  user's chunks. Retrieval prefers vector similarity when chunks are embedded and
+  falls back to lexical scoring; with no chunks it defers to the document-level
+  path so nothing regresses.
+- **Embeddings optional.** Without `VOYAGE_API_KEY`, chunks are still stored and
+  fully usable via lexical retrieval. Embedding failure degrades to lexical and
+  never crashes indexing.
+- **Grounded + honest answers.** Claude is instructed to answer only from the
+  provided excerpts and to reply "I could not find enough information in the
+  selected documents." when they're insufficient — no fabricated dates/IDs.
+- **Same gates + cost controls.** Q&A and indexing stay behind the `ai_features`
+  + `ai_document_qa` flags and per-user consent. Every Claude call still passes
+  through the metered, budget-guarded chokepoint (`feature="document_qa"`).
+  Context sent to Claude is bounded by `AI_RAG_TOP_K` and
+  `AI_RAG_MAX_CONTEXT_CHARS`.
+- **No content in logs.** `DocumentChunk` stores extracted text + optional
+  vector; `AiUsage` still stores only token/cost accounting — never prompts,
+  excerpts, responses, file URLs, or secrets. The Q&A `sources` returned to the
+  owner contain excerpts of their *own* documents and no signed URLs.
+
+> Scaling note: vectors are JSON float lists with cosine computed in Python
+> (per-owner vault sizes). **pgvector** remains the future option when corpus
+> size demands it; not part of v1.
 
 ---
 
