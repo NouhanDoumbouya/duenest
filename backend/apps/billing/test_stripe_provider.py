@@ -15,8 +15,12 @@ from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from .models import CustomerBillingProfile, Plan
+from stripe import Event
+
+from . import services
+from .models import BillingEvent, CustomerBillingProfile, Plan, UserSubscription
 from .providers import BillingError, StripeProvider
+from .services import _to_plain_dict
 
 User = get_user_model()
 
@@ -141,3 +145,92 @@ class StripeProviderTests(APITestCase):
         mock_construct.side_effect = Exception("bad signature")
         with self.assertRaises(BillingError):
             StripeProvider().verify_and_parse_webhook(b"{}", "t=1,v1=forged")
+
+
+@override_settings(**STRIPE_ENV)
+class StripeWebhookObjectTests(APITestCase):
+    """Stripe's SDK returns a StripeObject/Event (no `.get()`), which 500'd the
+    webhook. These exercise the normalization + the full handler with a real
+    StripeObject event, not just plain dicts."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="w", email="w@example.com", password="StrongPassword123!DN"
+        )
+        self.pro = Plan.objects.get(key="pro")
+
+    def test_to_plain_dict_normalizes_nested_stripe_object(self):
+        ev = Event.construct_from(
+            {
+                "id": "evt_n",
+                "type": "customer.subscription.updated",
+                "data": {
+                    "object": {
+                        "id": "sub_n",
+                        "status": "active",
+                        "items": {"data": [{"price": {"id": "price_n"}}]},
+                    }
+                },
+            },
+            "sk_test",
+        )
+        # The raw Event has no `.get()` — this is the exact prod failure.
+        self.assertFalse(hasattr(ev, "get"))
+        d = _to_plain_dict(ev)
+        self.assertIsInstance(d, dict)
+        self.assertEqual(d.get("id"), "evt_n")
+        obj = d["data"]["object"]
+        self.assertIsInstance(obj, dict)
+        self.assertEqual(obj.get("status"), "active")
+        # Deeply nested values are plain dicts too.
+        self.assertEqual(obj["items"]["data"][0]["price"].get("id"), "price_n")
+
+    def test_to_plain_dict_passes_plain_dict_through(self):
+        out = _to_plain_dict({"id": "x", "data": {"object": {"k": 1}}})
+        self.assertEqual(out["data"]["object"].get("k"), 1)
+
+    @patch("stripe.Webhook.construct_event")
+    def test_handle_webhook_accepts_stripe_object_event(self, mock_construct):
+        sub = UserSubscription.objects.create(
+            user=self.user,
+            plan=self.pro,
+            provider="stripe",
+            provider_subscription_id="sub_obj",
+            provider_customer_id="cus_obj",
+            status="active",
+        )
+        payload = {
+            "id": "evt_obj",
+            "type": "customer.subscription.updated",
+            "data": {
+                "object": {
+                    "object": "subscription",
+                    "id": "sub_obj",
+                    "customer": "cus_obj",
+                    "status": "past_due",
+                }
+            },
+        }
+        # Stripe verification returns a StripeObject/Event (no `.get()`).
+        mock_construct.return_value = Event.construct_from(payload, "sk_test")
+        result = services.handle_webhook(b'{"raw":true}', "t=1,v1=sig")
+        self.assertEqual(result["status"], "processed")  # not a 500 AttributeError
+        sub.refresh_from_db()
+        self.assertEqual(sub.status, "past_due")
+
+        # Idempotent: a duplicate StripeObject event (same id) is ignored.
+        mock_construct.return_value = Event.construct_from(payload, "sk_test")
+        dup = services.handle_webhook(b'{"raw":true}', "t=1,v1=sig")
+        self.assertEqual(dup["status"], "ignored")
+        self.assertEqual(
+            BillingEvent.objects.filter(provider_event_id="evt_obj").count(), 1
+        )
+
+    @patch("stripe.Webhook.construct_event")
+    def test_handle_webhook_unknown_stripe_object_event_no_crash(self, mock_construct):
+        mock_construct.return_value = Event.construct_from(
+            {"id": "evt_u", "type": "some.unknown.event", "data": {"object": {}}},
+            "sk_test",
+        )
+        result = services.handle_webhook(b"{}", "sig")
+        self.assertIn(result["status"], ("processed", "ignored"))

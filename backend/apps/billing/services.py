@@ -273,6 +273,30 @@ def _resolve_user_from_event(obj: dict):
     return None
 
 
+def _to_plain_dict(value):
+    """Recursively convert a Stripe SDK object (``StripeObject`` / ``Event``) into
+    plain Python dicts/lists so the rest of the handler can use normal ``.get()``
+    access.
+
+    Stripe's objects support attribute/index access but, in newer SDKs, do NOT
+    expose ``.get()`` (``AttributeError: get``), which is what 500'd the webhook.
+    ``to_dict()`` (or ``to_dict_recursive()`` on older SDKs) yields plain dicts.
+    Plain dicts — what the manual provider returns — pass straight through. No
+    payload is logged or inspected here.
+    """
+    to_dict_recursive = getattr(value, "to_dict_recursive", None)
+    if callable(to_dict_recursive):
+        return to_dict_recursive()
+    to_dict = getattr(value, "to_dict", None)
+    if callable(to_dict):
+        return {key: _to_plain_dict(val) for key, val in to_dict().items()}
+    if isinstance(value, dict):
+        return {key: _to_plain_dict(val) for key, val in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_to_plain_dict(item) for item in value]
+    return value
+
+
 def handle_webhook(payload: bytes, sig_header: str) -> dict:
     """
     Verify, dedupe, and apply a provider webhook event. Returns a small status
@@ -280,8 +304,12 @@ def handle_webhook(payload: bytes, sig_header: str) -> dict:
     """
     provider = get_provider()
     event = provider.verify_and_parse_webhook(payload, sig_header)
-    event_id = str(event.get("id"))
-    event_type = str(event.get("type"))
+    # Normalize Stripe SDK objects to plain dicts up front so every downstream
+    # `.get()` (here and in `_apply_event`'s `data.object`) works regardless of
+    # SDK version. Signature verification already happened in the provider.
+    event = _to_plain_dict(event)
+    event_id = str(event.get("id", ""))
+    event_type = str(event.get("type", ""))
     payload_hash = hashlib.sha256(payload).hexdigest()
 
     # Idempotency: a unique provider_event_id guards against double-processing.
