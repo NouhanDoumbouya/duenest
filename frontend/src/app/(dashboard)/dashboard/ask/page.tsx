@@ -10,9 +10,13 @@ import {
 } from "react";
 import Link from "next/link";
 import {
+  BookOpen,
+  ChevronDown,
   FileText,
   Info,
   Loader2,
+  PauseCircle,
+  Quote,
   Send,
   Sparkles,
   TriangleAlert,
@@ -20,6 +24,7 @@ import {
 } from "lucide-react";
 
 import { AiActivationCard } from "@/components/ai/ai-activation-card";
+import { AiIndexStatusCard } from "@/components/ai/ai-index-status-card";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -27,7 +32,12 @@ import { PageContainer } from "@/components/ui/page-container";
 import { PageHeader } from "@/components/ui/page-header";
 import { Textarea } from "@/components/ui/textarea";
 import { ApiError } from "@/lib/api";
-import { askDocuments, type AskResult } from "@/lib/ai";
+import {
+  askDocuments,
+  retrievalModeLabel,
+  type AnswerSource,
+  type AskResult,
+} from "@/lib/ai";
 
 const EXAMPLES = [
   "When does my passport expire?",
@@ -233,22 +243,28 @@ export default function AskDocumentsPage() {
         className="shrink-0 space-y-2 border-t border-border pt-3"
       >
         {scope && (
-          <div className="flex items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-sm">
-            <span className="inline-flex min-w-0 items-center gap-2">
-              <FileText className="size-4 shrink-0 text-primary" aria-hidden />
-              <span className="truncate text-muted-foreground">
-                Answering based on{" "}
-                <span className="font-medium text-foreground">{scope.title}</span>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-sm">
+              <span className="inline-flex min-w-0 items-center gap-2">
+                <FileText className="size-4 shrink-0 text-primary" aria-hidden />
+                <span className="truncate text-muted-foreground">
+                  Answering based on{" "}
+                  <span className="font-medium text-foreground">
+                    {scope.title}
+                  </span>
+                </span>
               </span>
-            </span>
-            <button
-              type="button"
-              onClick={() => setScope(null)}
-              className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <X className="size-3.5" />
-              Ask all documents
-            </button>
+              <button
+                type="button"
+                onClick={() => setScope(null)}
+                className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <X className="size-3.5" />
+                Ask all documents
+              </button>
+            </div>
+            {/* Let the user prepare this document for content Q&A inline. */}
+            <AiIndexStatusCard documentId={scope.id} compact />
           </div>
         )}
 
@@ -295,8 +311,7 @@ function AssistantRow({ children }: { children: React.ReactNode }) {
 }
 
 function AnswerBubble({ result }: { result: AskResult }) {
-  // Unavailable answers (no documents, not configured, generic) read as a calm
-  // assistant message rather than a separate page-level card.
+  // Unavailable answers read as a calm assistant message, never a raw error.
   if (!result.available) {
     if (result.reason === "no_documents") {
       return (
@@ -314,9 +329,37 @@ function AnswerBubble({ result }: { result: AskResult }) {
         </AssistantRow>
       );
     }
+    if (result.reason === "budget") {
+      return (
+        <AssistantRow>
+          <div className="inline-flex items-start gap-2 rounded-2xl rounded-tl-sm border border-brand-amber/30 bg-brand-amber/10 px-4 py-2.5 text-sm text-foreground">
+            <PauseCircle className="mt-0.5 size-4 shrink-0 text-brand-amber" />
+            <span>
+              AI is paused for today to protect usage limits. Please try again
+              later.
+            </span>
+          </div>
+        </AssistantRow>
+      );
+    }
+    if (result.reason === "consent_required") {
+      return (
+        <AssistantRow>
+          <div className="rounded-2xl rounded-tl-sm border border-border bg-card px-4 py-3 text-sm">
+            <p>Turn on AI in settings to use document intelligence.</p>
+            <Link
+              href="/dashboard/settings/ai"
+              className={`${buttonVariants({ variant: "outline", size: "sm" })} mt-3`}
+            >
+              <Sparkles className="size-4" /> AI settings
+            </Link>
+          </div>
+        </AssistantRow>
+      );
+    }
     const message =
       result.reason === "not_configured"
-        ? "The assistant isn't fully set up on this account yet. Please try again later."
+        ? "AI is not available right now."
         : "The assistant couldn't answer that just now. Please try again.";
     return (
       <AssistantRow>
@@ -327,36 +370,54 @@ function AnswerBubble({ result }: { result: AskResult }) {
     );
   }
 
+  const modeLabel = retrievalModeLabel(result.retrieval_mode);
+  const sources = result.sources ?? [];
+
   return (
     <AssistantRow>
       <div className="inline-block max-w-full rounded-2xl rounded-tl-sm border border-border bg-card px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap">
         {result.answer || "No answer was returned."}
       </div>
 
-      {!result.answered && (
-        <p className="flex items-start gap-2 rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
-          <Info className="mt-0.5 size-3.5 shrink-0" />
-          This wasn&apos;t found in your documents — try rephrasing, or add the
-          document it should come from.
+      {/* Subtle, non-technical note on where the answer came from. */}
+      {result.answered && modeLabel && result.retrieval_mode !== "no_context" && (
+        <p className="flex items-center gap-1.5 px-1 text-[0.7rem] text-muted-foreground">
+          <BookOpen className="size-3" aria-hidden />
+          {modeLabel}
         </p>
       )}
 
-      {result.citations.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-medium text-muted-foreground">
-            Based on
-          </span>
-          {result.citations.map((c) => (
-            <Link
-              key={c.document_id}
-              href={`/dashboard/documents/${c.document_id}`}
-              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-muted"
-            >
-              <FileText className="size-3.5" />
-              {c.title}
-            </Link>
-          ))}
-        </div>
+      {!result.answered && (
+        <p className="flex items-start gap-2 rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
+          <Info className="mt-0.5 size-3.5 shrink-0" />
+          I couldn&apos;t find enough information in
+          {result.document_count === 1 ? " the" : " your"} selected document
+          {result.document_count === 1 ? "" : "s"} — try rephrasing, or index the
+          document this should come from.
+        </p>
+      )}
+
+      {/* Source excerpts that support the answer (chunk-level RAG). */}
+      {sources.length > 0 ? (
+        <SourcesSection sources={sources} />
+      ) : (
+        result.citations.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-muted-foreground">
+              Based on
+            </span>
+            {result.citations.map((c) => (
+              <Link
+                key={c.document_id}
+                href={`/dashboard/documents/${c.document_id}`}
+                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-muted"
+              >
+                <FileText className="size-3.5" />
+                {c.title}
+              </Link>
+            ))}
+          </div>
+        )
       )}
 
       {result.document_count > 0 && (
@@ -366,5 +427,58 @@ function AnswerBubble({ result }: { result: AskResult }) {
         </p>
       )}
     </AssistantRow>
+  );
+}
+
+/** Collapsible "Sources" list of supporting excerpts. Lightweight; the first two
+ *  show immediately, the rest expand on demand so long answers stay calm. */
+function SourcesSection({ sources }: { sources: AnswerSource[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const visible = expanded ? sources : sources.slice(0, 2);
+  const hiddenCount = sources.length - visible.length;
+
+  return (
+    <div className="space-y-2">
+      <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        <Quote className="size-3.5" aria-hidden />
+        {sources.length === 1 ? "Source" : "Sources"}
+      </p>
+      <div className="space-y-2">
+        {visible.map((s, i) => (
+          <div
+            key={`${s.document_id}-${s.chunk_index}-${i}`}
+            className="rounded-lg border border-border bg-muted/30 px-3 py-2"
+          >
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <Link
+                href={`/dashboard/documents/${s.document_id}`}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground hover:underline"
+              >
+                <FileText className="size-3.5 text-primary" />
+                {s.document_title}
+              </Link>
+              <span className="text-[0.7rem] text-muted-foreground">
+                {s.page_number != null
+                  ? `Page ${s.page_number}`
+                  : `Section ${s.chunk_index + 1}`}
+              </span>
+            </div>
+            <p className="mt-1.5 line-clamp-3 text-xs leading-relaxed text-muted-foreground">
+              {s.excerpt}
+            </p>
+          </div>
+        ))}
+      </div>
+      {hiddenCount > 0 && (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+        >
+          <ChevronDown className="size-3.5" />
+          Show {hiddenCount} more source{hiddenCount === 1 ? "" : "s"}
+        </button>
+      )}
+    </div>
   );
 }
