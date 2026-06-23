@@ -63,6 +63,10 @@ s3transfer==0.10.4
 # lean/local installs.
 sentry-sdk==2.20.0
 sqlparse==0.5.5
+# stripe powers subscription billing (apps.billing StripeProvider). Imported
+# lazily and only used when BILLING_PROVIDER=stripe with the STRIPE_* keys set,
+# so lean/local installs run on the manual provider without it.
+stripe==15.2.1
 typing_extensions==4.15.0
 tzdata==2026.2
 urllib3==2.7.0

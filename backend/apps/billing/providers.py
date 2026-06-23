@@ -74,12 +74,29 @@ def validate_billing_configuration() -> None:
     raise BillingError(f"Unknown BILLING_PROVIDER: {name!r}.")
 
 
+# Maps a plan's (key, interval) to the STRIPE_PRICE_* setting holding its Stripe
+# price ID, so prices can be configured entirely from the environment (Railway)
+# with no DB edit. The per-plan DB value always takes precedence when set.
+_ENV_PRICE_SETTINGS = {
+    ("pro", "month"): "STRIPE_PRICE_PRO_MONTHLY",
+    ("pro", "year"): "STRIPE_PRICE_PRO_YEARLY",
+    ("organization", "month"): "STRIPE_PRICE_ORG_SEAT_MONTHLY",
+    ("organization", "year"): "STRIPE_PRICE_ORG_SEAT_YEARLY",
+    ("family", "month"): "STRIPE_PRICE_FAMILY_MONTHLY",
+    ("family", "year"): "STRIPE_PRICE_FAMILY_YEARLY",
+}
+
+
 def _price_id_for(plan, interval: str) -> str:
-    return (
+    db_value = (
         plan.yearly_provider_price_id
         if interval == "year"
         else plan.monthly_provider_price_id
     )
+    if db_value:
+        return db_value
+    setting_name = _ENV_PRICE_SETTINGS.get((plan.key, interval))
+    return getattr(settings, setting_name, "") if setting_name else ""
 
 
 # ---- Manual provider (offline dev/test) ------------------------------------
