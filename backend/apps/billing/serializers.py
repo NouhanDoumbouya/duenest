@@ -32,6 +32,9 @@ class PlanSerializer(serializers.ModelSerializer):
             "description",
             "tier",
             "is_public",
+            # is_active = self-serve purchasable. Coming-soon plans (Teams/Family)
+            # are public but inactive; the frontend uses this to hide checkout.
+            "is_active",
             "is_recommended",
             "currency",
             "monthly_price",

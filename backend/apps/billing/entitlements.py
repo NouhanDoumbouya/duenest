@@ -248,3 +248,107 @@ def increment_usage(user, feature_key: str, amount: int = 1) -> None:
     )
     if not created:
         FeatureUsageCounter.objects.filter(pk=row.pk).update(count=F("count") + amount)
+
+
+# ---- AI plan entitlements (constants prepared for backend/ai-plan-gating) ---
+#
+# These are PRODUCT entitlements (per-plan AI allowances). They sit ALONGSIDE the
+# infrastructure AI budget guard (settings.AI_DAILY_TOKEN_CAP_* /
+# AI_MONTHLY_COST_LIMIT_USD), never replacing it: the budget guard protects spend
+# globally; these cap what each plan can do. Seeded in migration 0010.
+
+AI_ACTIONS_PER_DAY = "ai_actions_per_day"
+AI_INDEXED_DOCUMENTS = "ai_indexed_documents"
+
+# Map a short AI feature name -> the per-plan boolean entitlement flag.
+_AI_FEATURE_FLAGS = {
+    "multi_document_qa": "multi_document_qa_enabled",
+    "document_drafting": "document_drafting_enabled",
+    "pack_copilot": "pack_copilot_enabled",
+    "readiness": "readiness_enabled",
+}
+
+
+def get_plan_limits(user) -> dict:
+    """A compact snapshot of the user's effective plan entitlements (UI/diagnostics)."""
+    return get_user_entitlements(user)
+
+
+def remaining_ai_actions_today(user):
+    """Remaining AI actions allowed on the user's plan today (None = unlimited)."""
+    return check_usage_limit(user, AI_ACTIONS_PER_DAY)["remaining"]
+
+
+def can_use_ai_feature(user, feature: str) -> bool:
+    """
+    Whether the user's plan allows an AI feature right now.
+
+    A named premium feature (``multi_document_qa`` / ``document_drafting`` /
+    ``pack_copilot`` / ``readiness``) checks the plan flag; any other value is
+    treated as a generic AI action and checked against the per-day plan cap.
+    Pairs with — never replaces — the infrastructure AI budget guard.
+    """
+    flag = _AI_FEATURE_FLAGS.get(feature)
+    if flag is not None:
+        return has_feature(user, flag)
+    return check_usage_limit(user, AI_ACTIONS_PER_DAY)["allowed"]
+
+
+def can_index_document_for_ai(user) -> bool:
+    """
+    Whether the user can index ANOTHER document for AI under their plan's
+    ``ai_indexed_documents`` cap (None = unlimited). Counts the distinct
+    documents that already have chunks for this user. Never hard-blocks on a
+    counting error — the gating branch refines enforcement.
+    """
+    limit = get_feature_limit(user, AI_INDEXED_DOCUMENTS)
+    if limit is None:
+        return True  # unlimited
+    if not limit:
+        return False  # feature disabled / zero allowance on this plan
+    try:
+        from apps.documents.models import DocumentChunk
+
+        indexed = (
+            DocumentChunk.objects.filter(owner=user)
+            .values("document_id")
+            .distinct()
+            .count()
+        )
+    except Exception:  # noqa: BLE001 — never block on a counting hiccup
+        return True
+    return indexed < limit
+
+
+# ---- Scanner plan rules ----------------------------------------------------
+#
+# The scanner stays mostly FREE (acquisition/trust). Free is bounded by vault
+# limits (documents/storage), NOT a scan count. Pro unlocks larger multi-page
+# scans, HD export, and advanced enhancement. Keys seeded in migration 0011.
+
+SCANNER_MAX_PAGES = "scanner_max_pages_per_pdf"
+SCANNER_HD_EXPORT = "scanner_hd_export"
+SCANNER_ADVANCED_ENHANCEMENT = "scanner_advanced_enhancement"
+
+
+def scanner_max_pages(user):
+    """
+    Max pages per scanned PDF for the user's plan, or ``None`` for unlimited.
+
+    Fails OPEN: a missing/disabled entitlement returns ``None`` (no gate) so a
+    config gap can never accidentally block scanning.
+    """
+    ent = _entitlement(user, SCANNER_MAX_PAGES)
+    if not ent or not ent["enabled"]:
+        return None
+    return ent["limit"]  # None = unlimited
+
+
+def can_use_scanner_hd(user) -> bool:
+    """Whether the user's plan includes HD PDF export from the scanner."""
+    return has_feature(user, SCANNER_HD_EXPORT)
+
+
+def can_use_scanner_advanced_enhancement(user) -> bool:
+    """Whether the user's plan includes advanced scanner enhancement."""
+    return has_feature(user, SCANNER_ADVANCED_ENHANCEMENT)

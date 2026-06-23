@@ -35,7 +35,8 @@ class BillingCoreTests(APITestCase):
         resp = self.client.get("/api/v1/billing/plans/")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         keys = {p["key"] for p in resp.data}
-        self.assertEqual(keys, {"free", "pro", "organization"})
+        # Free + Pro (purchasable) plus the coming-soon Teams/Family cards.
+        self.assertEqual(keys, {"free", "pro", "organization", "family"})
         # Provider price IDs are never exposed publicly.
         self.assertNotIn("monthly_provider_price_id", resp.data[0])
 
@@ -378,17 +379,28 @@ class BillingMeteredAndTrialTests(APITestCase):
         self.pro = Plan.objects.get(key="pro")
 
     def test_metered_feature_blocks_free_after_limit(self):
-        # Free scanner limit is 5/month.
-        res = entitlements.check_usage_limit(self.user, "scanner_scans_per_month")
+        # Free SafeSend (quick share) limit is 5/month — a still-metered feature.
+        res = entitlements.check_usage_limit(self.user, "quick_shares_per_month")
         self.assertTrue(res["allowed"])
         self.assertEqual(res["limit"], 5)
         for _ in range(5):
-            entitlements.increment_usage(self.user, "scanner_scans_per_month")
-        res = entitlements.check_usage_limit(self.user, "scanner_scans_per_month")
+            entitlements.increment_usage(self.user, "quick_shares_per_month")
+        res = entitlements.check_usage_limit(self.user, "quick_shares_per_month")
         self.assertFalse(res["allowed"])
         self.assertEqual(res["used"], 5)
         with self.assertRaises(entitlements.FeatureLimitExceeded):
-            entitlements.enforce_feature_usage(self.user, "scanner_scans_per_month")
+            entitlements.enforce_feature_usage(self.user, "quick_shares_per_month")
+
+    def test_scanner_is_unlimited_on_free(self):
+        # Product rule: the scanner is NOT capped by a monthly count on Free —
+        # it's bounded by vault limits instead. So the metered scan counter never
+        # blocks (basic scanning stays free).
+        for _ in range(20):
+            entitlements.increment_usage(self.user, "scanner_scans_per_month")
+        res = entitlements.check_usage_limit(self.user, "scanner_scans_per_month")
+        self.assertTrue(res["allowed"])
+        self.assertTrue(res["unlimited"])
+        entitlements.enforce_feature_usage(self.user, "scanner_scans_per_month")  # no raise
 
     def test_metered_feature_unlimited_for_pro(self):
         ManualAccessGrant.objects.create(

@@ -187,3 +187,55 @@ class ScannerHelperTests(APITestCase):
         self.assertTrue(name.endswith(".pdf"))
         self.assertNotIn("/", name)
         self.assertNotIn("..", name)
+
+
+class ScannerPlanLimitTests(APITestCase):
+    """Free is capped to a few pages per PDF; Pro is unlimited. Basic scanning
+    (single/few-page) stays free."""
+
+    def setUp(self):
+        self.url = reverse("upload_scanned_document")
+        self.free = User.objects.create_user(
+            username="freeuser", email="free@example.com", password="Pw!DueNest123"
+        )
+        self.pro = User.objects.create_user(
+            username="prouser", email="pro@example.com", password="Pw!DueNest123"
+        )
+        from apps.billing.models import Plan, UserSubscription
+
+        UserSubscription.objects.create(
+            user=self.pro,
+            plan=Plan.objects.get(key="pro"),
+            provider="manual",
+            status="active",
+            billing_interval="month",
+        )
+
+    def test_free_within_page_cap_succeeds(self):
+        self.client.force_authenticate(self.free)
+        resp = self.client.post(
+            self.url,
+            {"file": pdf_upload(data=make_pdf_bytes(pages=5))},
+            format="multipart",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.content)
+
+    def test_free_over_page_cap_is_blocked_with_upgrade_code(self):
+        self.client.force_authenticate(self.free)
+        resp = self.client.post(
+            self.url,
+            {"file": pdf_upload(data=make_pdf_bytes(pages=6))},
+            format="multipart",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(resp.json()["code"], "plan_limit_exceeded")
+        self.assertEqual(resp.json()["resource"], "scanner_max_pages_per_pdf")
+
+    def test_pro_over_free_cap_succeeds(self):
+        self.client.force_authenticate(self.pro)
+        resp = self.client.post(
+            self.url,
+            {"file": pdf_upload(data=make_pdf_bytes(pages=12))},
+            format="multipart",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.content)

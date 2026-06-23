@@ -26,9 +26,10 @@ const FALLBACK_PLANS: BillingPlan[] = [
   {
     key: "free",
     name: "Free",
-    description: "Everything you need to get organized and stay ready.",
+    description: "Start organizing your essential documents.",
     tier: "free",
     is_public: true,
+    is_active: true,
     is_recommended: false,
     currency: "usd",
     monthly_price: 0,
@@ -45,34 +46,58 @@ const FALLBACK_PLANS: BillingPlan[] = [
   {
     key: "pro",
     name: "Pro",
-    description: "Full power for documents, scanning, and secure sharing.",
+    description:
+      "For serious life-admin: documents, reminders, AI, sharing, and emergency readiness.",
     tier: "pro",
     is_public: true,
+    is_active: true,
     is_recommended: true,
     currency: "usd",
-    monthly_price: 599,
-    yearly_price: 5900,
+    monthly_price: 799,
+    yearly_price: 7900,
     trial_days: 14,
     sort_order: 1,
     entitlements: [],
     metadata: {},
   },
   {
-    key: "organization",
-    name: "Organization",
-    description: "Shared readiness for teams, with admin controls.",
-    tier: "organization",
+    key: "family",
+    name: "Family",
+    description: "Shared family vaults and emergency access — coming soon.",
+    tier: "family",
     is_public: true,
+    is_active: false,
     is_recommended: false,
     currency: "usd",
-    monthly_price: 900,
-    yearly_price: 9000,
+    monthly_price: null,
+    yearly_price: null,
+    trial_days: 0,
+    sort_order: 3,
+    entitlements: [],
+    metadata: { coming_soon: true, cta: "waitlist" },
+  },
+  {
+    key: "organization",
+    name: "Teams",
+    description: "For organizations and agencies — contact us later.",
+    tier: "organization",
+    is_public: true,
+    is_active: false,
+    is_recommended: false,
+    currency: "usd",
+    monthly_price: null,
+    yearly_price: null,
     trial_days: 0,
     sort_order: 2,
     entitlements: [],
-    metadata: { coming_soon: true },
+    metadata: { coming_soon: true, cta: "contact" },
   },
 ];
+
+/** Coming-soon plans are public but not self-serve purchasable. */
+function isComingSoon(plan: BillingPlan): boolean {
+  return plan.is_active === false || Boolean(plan.metadata?.coming_soon);
+}
 
 function entitlement(plan: BillingPlan, key: string) {
   return plan.entitlements.find((e) => e.feature_key === key);
@@ -91,7 +116,8 @@ function planHighlights(plan: BillingPlan): string[] {
     return [
       limitText(plan, "documents_limit", "documents"),
       `${entitlement(plan, "storage_mb")?.limit_value ?? 100}MB storage`,
-      limitText(plan, "scanner_scans_per_month", "scans / month"),
+      // Scanner stays free — bounded by vault limits, never a scan count.
+      "Scanner with basic filters — scan & save within your Free limits",
       "Basic Life Radar & Emergency Access",
       "Secure sharing with SafeSend",
     ].filter(Boolean);
@@ -100,11 +126,18 @@ function planHighlights(plan: BillingPlan): string[] {
     return [
       "Team workspace & member roles",
       "Shared readiness packs",
-      "Per-seat billing & admin controls",
+      "Admin controls & per-seat billing",
       "Everything in Pro for each member",
     ];
   }
-  // Pro / family
+  if (plan.tier === "family") {
+    return [
+      "Shared family vaults",
+      "Family emergency access",
+      "Everything in Pro, for your household",
+    ];
+  }
+  // Pro
   return [
     "Unlimited documents & high storage",
     "Full premium scanner & Smart Intake",
@@ -117,9 +150,12 @@ function planHighlights(plan: BillingPlan): string[] {
 }
 
 function planCta(plan: BillingPlan): { label: string; href: string } {
-  // Organization is always a sales/contact funnel.
-  if (plan.tier === "organization")
-    return { label: "Join organization pilot", href: "/contact" };
+  // Coming-soon plans are never purchasable — they funnel to waitlist/contact.
+  if (isComingSoon(plan)) {
+    if (plan.tier === "organization")
+      return { label: "Contact us", href: "/contact" };
+    return { label: "Join the waitlist", href: "/waitlist" };
+  }
   // During the private beta there's no open registration or paid trial, so every
   // self-serve plan funnels to the waitlist — consistent with the rest of the
   // site (see lib/cta). At launch (NEXT_PUBLIC_PRIVATE_BETA_ENABLED=false) the
@@ -195,11 +231,11 @@ export function PricingPlans() {
         </span>
       </div>
 
-      <div className="mt-10 grid gap-5 lg:grid-cols-3">
+      <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
         {plans.map((plan) => {
           const cta = planCta(plan);
           const isFree = plan.tier === "free";
-          const isOrg = plan.tier === "organization";
+          const comingSoon = isComingSoon(plan);
           const monthly = plan.monthly_price;
           const yearly = plan.yearly_price;
           const savings = annualSavingsPercent(monthly, yearly);
@@ -222,9 +258,9 @@ export function PricingPlans() {
                     Recommended
                   </span>
                 )}
-                {isOrg && Boolean(plan.metadata?.coming_soon) && (
+                {comingSoon && (
                   <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                    Pilot
+                    Coming soon
                   </span>
                 )}
               </div>
@@ -232,18 +268,22 @@ export function PricingPlans() {
 
               <div className="mt-5 min-h-14">
                 {isFree ? (
-                  <span className="text-3xl font-semibold">Free</span>
+                  <span className="text-3xl font-semibold">$0</span>
+                ) : comingSoon ? (
+                  <span className="text-2xl font-semibold text-muted-foreground">
+                    {plan.tier === "organization" ? "Contact us" : "Coming soon"}
+                  </span>
                 ) : (
                   <>
                     <span className="text-3xl font-semibold">
                       {formatMoney(perMonth ?? null, plan.currency)}
                     </span>
-                    <span className="text-sm text-muted-foreground">
-                      {isOrg ? " / seat / mo" : " / mo"}
-                    </span>
+                    <span className="text-sm text-muted-foreground"> / mo</span>
                     <p className="text-xs text-muted-foreground">
                       {interval === "year"
-                        ? `Billed yearly${savings ? ` · save ${savings}%` : ""}`
+                        ? `${formatMoney(yearly ?? null, plan.currency)} billed yearly${
+                            savings ? ` · save ${savings}%` : ""
+                          }`
                         : "Billed monthly"}
                     </p>
                     {plan.trial_days > 0 && !PRIVATE_BETA && (
