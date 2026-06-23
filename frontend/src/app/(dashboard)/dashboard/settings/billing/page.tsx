@@ -242,9 +242,13 @@ export default function BillingSettingsPage() {
                   </>
                 )}
               </div>
-              {status.test_mode && (
+              {/* Only the offline manual provider (local/dev) is "test mode" in a
+                  way users should see. Real Stripe billing — including Stripe's
+                  own sandbox — never shows this, so production never reads
+                  "test mode (manual)". */}
+              {status.test_mode && status.provider === "manual" && (
                 <p className="text-xs text-muted-foreground">
-                  Billing is in test mode ({status.provider}).
+                  Billing is in manual/dev mode — no real payment is taken.
                 </p>
               )}
             </CardContent>
