@@ -34,10 +34,102 @@ Free limits in the seeded entitlements mirror `apps.users.plans.PLAN_LIMITS`.
 
 ## Plans & pricing
 
-Seeded by migration `0002_seed_plans` (editable later via Django admin without
-code changes): **Free**, **Pro** ($5.99/mo, $59/yr), **Organization** (per-seat
-pilot). Prices are stored as integer minor units. Suggested regional/beta prices
-live in `Plan.metadata`. Provider price IDs come from env (`STRIPE_PRICE_*`).
+Seeded by `0002_seed_plans` and aligned to **launch pricing (USD)** by
+`0010_usd_pricing_and_ai_limits` (editable later via Django admin):
+
+| Plan | Price | Status |
+| --- | --- | --- |
+| **Free** | $0 | Active |
+| **Pro** | **$7.99/mo** (`799`) · **$79/yr** (`7900`) | Active / purchasable |
+| **Family** | — | **Coming soon** (public card, not purchasable) |
+| **Teams** (`organization`) | Contact us | **Coming soon** (public card, not purchasable) |
+
+Prices are integer minor units; currency is `usd`. Provider price IDs come from
+env (`STRIPE_PRICE_PRO_MONTHLY` / `STRIPE_PRICE_PRO_YEARLY`).
+
+**Coming-soon plans** are `is_public=True` (shown on the pricing page) but
+`is_active=False`. `services._get_purchasable_plan` enforces `is_active`, so
+Family/Teams can never be checked out until activated. The public `/billing/plans/`
+list returns all `is_public` plans; the frontend hides checkout for inactive ones.
+
+### Free vs Pro limits
+
+Non-AI resource limits are enforced via `apps.users.plans.PLAN_LIMITS` /
+`apps.documents.plan_usage` and mirrored as display entitlements. **Recommended
+product targets** (Free → Pro): documents 30 → 1,000; storage 500 MB → 10 GB;
+active reminders 10 → unlimited; application packs 1 → unlimited; scanner basic →
+full. Adjusting the enforced numeric limits to these targets (and hard storage-
+quota enforcement now that R2 is live) is the **`backend/storage-plan-limits`**
+follow-up — this branch keeps the current enforced limits stable.
+
+### AI plan limits (prepared, not yet enforced)
+
+`0010` seeds per-plan AI entitlements as constants for the **`backend/ai-plan-gating`**
+branch:
+
+| | Free | Pro |
+| --- | --- | --- |
+| `ai_actions_per_day` | 3/day | 30/day |
+| `ai_indexed_documents` | 3 | 300 |
+| Multi-doc Q&A / drafting / pack copilot / readiness | off | on |
+
+These are **product entitlements**. They sit alongside — and never replace — the
+**infrastructure AI budget guard** (`AI_DAILY_TOKEN_CAP_USER`,
+`AI_DAILY_TOKEN_CAP_GLOBAL`, `AI_MONTHLY_COST_LIMIT_USD`), which stays fully
+active. Helpers are ready: `entitlements.can_use_ai_feature(user, feature)`,
+`remaining_ai_actions_today(user)`, `can_index_document_for_ai(user)` — wired into
+endpoints in the gating branch.
+
+### Scanner plan rules
+
+The scanner stays **mostly free** — it's an acquisition/trust feature, and
+CertaNest is a life-admin system, not a paid scanner app. Free users **scan and
+save within their vault limits** (never "X scans/month"); Pro unlocks the serious
+document workflows.
+
+| Capability | Free | Pro |
+| --- | --- | --- |
+| Scanner (edge detect, crop, rotate) | Included | Full |
+| Basic filters (brightness/contrast/grayscale/B&W) | Included | Included |
+| Standard PDF export | Included | Included |
+| Multi-page scans | Up to 5 pages/PDF | Unlimited |
+| HD PDF export | Limited | Included |
+| Advanced enhancement (denoise/sharpen/magic/perspective) | Limited | Included |
+| OCR / searchable text | Limited by AI plan | Within AI limits |
+| AI extraction from scans | 3 AI actions/day | 30 AI actions/day |
+| Auto reminders from scans | Limited | Included (within AI limits) |
+
+Seeded by migration `0011_scanner_plan_limits`:
+
+- `scanner_scans_per_month` → **unlimited on Free** (was 5/month). Scans are
+  bounded by the vault file/document/storage limits instead.
+- `scanner_max_pages_per_pdf` → Free **5**, Pro unlimited. **Enforced now** in the
+  scanner upload view (`apps.documents.scanner`): a Free PDF over the cap returns
+  `403 plan_limit_exceeded` so the frontend upgrade paywall picks it up. Basic
+  single/few-page scanning is never blocked.
+- `scanner_hd_export`, `scanner_advanced_enhancement` → Pro-only **flags**.
+  Helpers exist (`entitlements.can_use_scanner_hd(user)`,
+  `can_use_scanner_advanced_enhancement(user)`, `scanner_max_pages(user)`).
+
+OCR / AI extraction / auto-reminders from scans are governed by the AI plan
+entitlements above (`ai_actions_per_day` / `ai_indexed_documents`) and the AI
+budget guard — they are not separately metered here.
+
+> **Follow-up: `scanner/plan-limits-enforcement`** — gate HD export + advanced
+> enhancement in the scanner UI (client-side capabilities) with gentle upgrade
+> copy. Defining the entitlements + page cap here keeps the scanner usable on
+> Free and avoids risky scanner refactoring in the pricing branch.
+
+### Stripe sandbox (USD) setup — live mode NOT enabled
+
+In the Stripe **test** dashboard create two recurring USD prices and paste their
+IDs into Railway (test keys only):
+
+- *CertaNest Pro Monthly* — $7.99 USD / month → `STRIPE_PRICE_PRO_MONTHLY`
+- *CertaNest Pro Annual* — $79 USD / year → `STRIPE_PRICE_PRO_YEARLY`
+
+Do **not** switch Stripe to live mode in this branch. Family/Teams need no price
+IDs (not purchasable).
 
 ## Entitlements & feature gating
 

@@ -15,6 +15,9 @@ export interface BillingPlan {
   description: string;
   tier: "free" | "pro" | "family" | "organization";
   is_public: boolean;
+  // Self-serve purchasable. Coming-soon plans (Teams/Family) are public but
+  // inactive — the UI hides checkout and shows a "coming soon" CTA instead.
+  is_active?: boolean;
   is_recommended: boolean;
   currency: string;
   monthly_price: number | null; // minor units

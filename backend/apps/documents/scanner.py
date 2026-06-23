@@ -121,22 +121,25 @@ def _read_head(uploaded, length: int = 8) -> bytes:
     return head or b""
 
 
-def validate_pdf_structure(data: bytes) -> None:
+def validate_pdf_structure(data: bytes) -> int | None:
     """
-    Confirm a PDF parses and has at least one page. Raises
-    :class:`ScanValidationError` otherwise. ``pypdf`` is optional: if it is not
-    installed we fall back to the magic-byte check already done in validation.
+    Confirm a PDF parses and has at least one page; return its page count (or
+    ``None`` when ``pypdf`` is unavailable). Raises :class:`ScanValidationError`
+    otherwise. ``pypdf`` is optional: if it is not installed we fall back to the
+    magic-byte check already done in validation.
     """
     if not data.startswith(_PDF_MAGIC):
         raise ScanValidationError("The file is not a valid PDF.")
     try:
         from pypdf import PdfReader  # type: ignore
     except Exception:  # noqa: BLE001 — optional dependency
-        return
+        return None
     try:
         reader = PdfReader(BytesIO(data))
-        if len(reader.pages) < 1:
+        page_count = len(reader.pages)
+        if page_count < 1:
             raise ScanValidationError("The PDF has no pages.")
+        return page_count
     except ScanValidationError:
         raise
     except Exception:  # noqa: BLE001 — malformed/encrypted structure
@@ -473,9 +476,28 @@ class UploadScannedDocumentView(APIView):
 
         if content_type == "application/pdf":
             try:
-                validate_pdf_structure(data)
+                page_count = validate_pdf_structure(data)
             except ScanValidationError as exc:
                 return json_error(exc.message, exc.status_code)
+            # Multi-page cap is a PRODUCT limit, not a scan-count cap: basic
+            # scanning stays free, but Free is bounded to a few pages per PDF
+            # while Pro is unlimited. Returns the shared plan_limit_exceeded
+            # shape so the frontend's upgrade paywall picks it up.
+            if page_count is not None:
+                max_pages = billing_entitlements.scanner_max_pages(request.user)
+                if max_pages is not None and page_count > max_pages:
+                    return Response(
+                        {
+                            "detail": (
+                                f"Free scans are up to {max_pages} pages per PDF. "
+                                "Upgrade to Pro for larger multi-page scans."
+                            ),
+                            "code": "plan_limit_exceeded",
+                            "resource": "scanner_max_pages_per_pdf",
+                            "limit": max_pages,
+                        },
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
             data = compress_pdf(data)
 
         instance = save_scanned_document(

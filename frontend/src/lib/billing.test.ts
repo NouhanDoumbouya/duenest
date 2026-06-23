@@ -27,6 +27,20 @@ describe("annualSavingsPercent", () => {
   });
 });
 
+describe("CertaNest launch pricing (USD)", () => {
+  it("renders Pro monthly and annual in USD", () => {
+    expect(formatMoney(799)).toBe("$7.99"); // $7.99 / mo
+    expect(formatMoney(7900)).toBe("$79"); // $79 / yr
+  });
+  it("annual ($79) saves vs 12x monthly ($7.99)", () => {
+    // $7.99 * 12 = $95.88; $79/yr => ~18% off
+    expect(annualSavingsPercent(799, 7900)).toBe(18);
+  });
+  it("Free renders as $0", () => {
+    expect(formatMoney(0)).toBe("$0");
+  });
+});
+
 describe("asArray", () => {
   it("passes through arrays", () => {
     expect(asArray([1, 2])).toEqual([1, 2]);

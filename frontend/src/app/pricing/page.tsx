@@ -36,8 +36,8 @@ const FAQ: { q: string; a: string }[] = [
     a: "Yes, you can change your billing cycle from the billing portal at any time.",
   },
   {
-    q: "Is Organization billing available?",
-    a: "Organization (per-seat) billing is in pilot. Reach out and we'll get your team set up.",
+    q: "Do you have Family or Teams plans?",
+    a: "Family (shared household vaults) and Teams (for organizations and agencies) are coming soon. Join the waitlist or contact us and we'll let you know when they're ready.",
   },
 ];
 

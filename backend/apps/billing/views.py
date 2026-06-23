@@ -103,8 +103,11 @@ class PlansView(generics.ListAPIView):
     pagination_class = None  # pricing is a small fixed list, return it plainly
 
     def get_queryset(self):
+        # Public = shown on pricing. Purchasability is a separate concern enforced
+        # server-side by services._get_purchasable_plan (is_active). This lets
+        # coming-soon plans (Teams/Family) appear as cards without being buyable.
         return (
-            Plan.objects.filter(is_active=True, is_public=True)
+            Plan.objects.filter(is_public=True)
             .prefetch_related("entitlements")
             .order_by("sort_order", "id")
         )
