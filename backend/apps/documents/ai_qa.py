@@ -32,6 +32,8 @@ from __future__ import annotations
 import logging
 import re
 
+from django.conf import settings
+
 from apps.ai.client import ai_available, generate
 from apps.ai.privacy import maybe_redact
 
@@ -193,44 +195,226 @@ def _semantic_rank(question: str, snippets: list[tuple]) -> list[tuple] | None:
     return [(doc, text) for _score, doc, text in scored]
 
 
-def answer_question(
+# --- Chunk-level RAG (document body content) -------------------------------
+#
+# Where the document-level path above grounds on each document's *metadata
+# snippet*, the chunk path grounds on slices of the actual extracted body text
+# (``DocumentChunk``). It is owner-scoped, prefers vector similarity when chunks
+# are embedded, falls back to lexical scoring, and — when a document has no
+# chunks at all — defers to the document-level path so nothing regresses.
+
+_CHUNK_ANSWER_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "answer": {"type": "string"},
+        "answered": {"type": "boolean"},
+        "cited_chunk_indexes": {"type": "array", "items": {"type": "integer"}},
+    },
+}
+
+_CHUNK_SYSTEM = (
+    "You answer the user's question using ONLY the numbered excerpts below, which "
+    "are slices of the user's own documents. Never use outside knowledge and never "
+    "guess or fabricate dates, names, ID numbers, or deadlines. If the excerpts do "
+    "not contain enough information, set 'answered' to false and reply exactly: 'I "
+    "could not find enough information in the selected documents.' When you do "
+    "answer, be concise, state any dates/deadlines clearly, and list the excerpt "
+    "numbers you used in 'cited_chunk_indexes'."
+)
+
+_NO_CONTEXT_MESSAGE = "I could not find enough information in the selected documents."
+
+
+def _rag_setting(name: str, default):
+    return getattr(settings, name, default)
+
+
+def _lexical_rank_chunks(question: str, chunks: list) -> list[tuple]:
+    """Order chunks by keyword overlap with the question (stable). -> [(score, chunk)]."""
+    terms = set(_WORD_RE.findall(question.lower()))
+    scored = []
+    for ch in chunks:
+        text = (ch.text or "").lower()
+        score = sum(1 for t in terms if t in text) if terms else 0
+        scored.append((float(score), ch))
+    scored.sort(key=lambda t: t[0], reverse=True)
+    return scored
+
+
+def _rank_chunks(question: str, chunks: list) -> tuple[str, list[tuple]]:
+    """Return ``(mode, [(score, chunk), ...])`` — vector when possible, else lexical."""
+    from apps.ai.embeddings import (
+        cosine_similarity,
+        embed_query,
+        embeddings_available,
+    )
+
+    has_vectors = any(getattr(c, "embedding_vector", None) for c in chunks)
+    if embeddings_available() and has_vectors:
+        query_vector = embed_query(question)
+        if query_vector:
+            scored = [
+                (
+                    cosine_similarity(query_vector, c.embedding_vector)
+                    if c.embedding_vector
+                    else -1.0,
+                    c,
+                )
+                for c in chunks
+            ]
+            scored.sort(key=lambda t: t[0], reverse=True)
+            return "chunk_vector", scored
+    return "chunk_lexical", _lexical_rank_chunks(question, chunks)
+
+
+def retrieve_chunk_context(
     user, question: str, *, document_id: int | None = None
 ) -> dict:
     """
-    Answer ``question`` grounded in ``user``'s documents.
+    Owner-scoped chunk retrieval. Returns ``{items, mode, indexed}``.
 
-    Always returns a dict; never raises. Shape::
-
-        {available, reason, answer, answered, citations, document_count}
-
-    ``available`` is False (with a ``reason``) when AI isn't configured, there
-    are no documents, or the model call failed.
+    ``items`` are the top chunks (capped by ``AI_RAG_TOP_K`` and
+    ``AI_RAG_MAX_CONTEXT_CHARS``), each ``{index, document_id, document_title,
+    chunk_index, page_number, excerpt, text, score}``. ``mode`` is
+    ``chunk_vector`` / ``chunk_lexical``; when the user has no chunks (for the
+    selected scope) it returns ``mode="document_fallback"`` with no items so the
+    caller defers to the document-level path. Never returns another user's chunks.
     """
-    question = (question or "").strip()[:_MAX_QUESTION_CHARS]
+    from .models import DocumentChunk
+
+    top_k = max(1, int(_rag_setting("AI_RAG_TOP_K", 5)))
+    max_ctx = max(1, int(_rag_setting("AI_RAG_MAX_CONTEXT_CHARS", 10000)))
+
+    qs = DocumentChunk.objects.filter(owner=user)  # owner scope = security boundary
+    if document_id is not None:
+        qs = qs.filter(document_id=document_id)
+    chunks = list(qs.select_related("document"))
+    if not chunks:
+        return {"items": [], "mode": "document_fallback", "indexed": False}
+
+    mode, ranked = _rank_chunks(question, chunks)
+
+    items: list[dict] = []
+    used = 0
+    for score, ch in ranked[:top_k]:
+        excerpt = (ch.text or "").strip()
+        if not excerpt:
+            continue
+        if used + len(excerpt) > max_ctx:
+            excerpt = excerpt[: max(0, max_ctx - used)].strip()
+        if not excerpt:
+            break
+        used += len(excerpt)
+        title = ch.source_title or getattr(ch.document, "title", "") or "Document"
+        items.append(
+            {
+                "index": len(items) + 1,
+                "document_id": ch.document_id,
+                "document_title": title,
+                "chunk_index": ch.chunk_index,
+                "page_number": ch.page_number,
+                "excerpt": excerpt,
+                "text": excerpt,
+                "score": round(float(score), 4),
+            }
+        )
+        if used >= max_ctx:
+            break
+
+    return {"items": items, "mode": mode, "indexed": True}
+
+
+def _answer_from_chunks(user, question: str, retrieval: dict) -> dict:
+    """Generate a chunk-grounded answer + source excerpts."""
+    items = retrieval["items"]
+    blocks = "\n\n".join(f"[{it['index']}] {it['excerpt']}" for it in items)
+    blocks = maybe_redact(user, blocks)
+    prompt = f"Question: {question}\n\n--- EXCERPTS FROM THE USER'S DOCUMENTS ---\n{blocks}"
+    result = generate(
+        prompt=prompt,
+        system=_CHUNK_SYSTEM,
+        output_schema=_CHUNK_ANSWER_SCHEMA,
+        max_tokens=_MAX_TOKENS,
+        user=user,
+        feature="document_qa",
+    )
     base = {
         "available": False,
         "answer": "",
         "answered": False,
         "citations": [],
+        "sources": [],
+        "retrieval_mode": retrieval["mode"],
+        "indexed": True,
+        "document_count": len({it["document_id"] for it in items}),
+    }
+    if not result.ok or not isinstance(result.data, dict):
+        # Budget pause / refusal / error — surface a safe reason, never raise.
+        return {**base, "reason": "budget" if result.reason == "budget" else "error"}
+
+    data = result.data
+    by_index = {it["index"]: it for it in items}
+    cited = data.get("cited_chunk_indexes") or []
+    chosen = [by_index[i] for i in cited if i in by_index] or items
+
+    sources, seen = [], set()
+    for it in chosen:
+        key = (it["document_id"], it["chunk_index"])
+        if key in seen:
+            continue
+        seen.add(key)
+        sources.append(
+            {
+                "document_id": it["document_id"],
+                "document_title": it["document_title"],
+                "chunk_index": it["chunk_index"],
+                "page_number": it["page_number"],
+                "excerpt": it["excerpt"][:300],
+            }
+        )
+
+    # Document-level citations kept for backward compatibility with the UI.
+    citations, seen_docs = [], set()
+    for it in chosen:
+        if it["document_id"] not in seen_docs:
+            seen_docs.add(it["document_id"])
+            citations.append(
+                {"document_id": it["document_id"], "title": it["document_title"]}
+            )
+
+    return {
+        "available": True,
+        "reason": "ok",
+        "answer": (data.get("answer") or "").strip(),
+        "answered": bool(data.get("answered")),
+        "citations": citations,
+        "sources": sources,
+        "retrieval_mode": retrieval["mode"],
+        "indexed": True,
+        "document_count": len({it["document_id"] for it in items}),
+    }
+
+
+def _answer_from_documents(user, question: str, *, document_id: int | None) -> dict:
+    """Document-level metadata RAG — the preserved fallback path."""
+    base = {
+        "available": False,
+        "answer": "",
+        "answered": False,
+        "citations": [],
+        "sources": [],
+        "retrieval_mode": "no_context",
+        "indexed": False,
         "document_count": 0,
     }
-    if not question:
-        return {**base, "reason": "empty_question"}
-    if not ai_available():
-        return {**base, "reason": "not_configured"}
-
     context = gather_context(user, question, document_id=document_id)
     if not context:
         return {**base, "reason": "no_documents"}
 
-    blocks = "\n\n".join(
-        f"[{c['index']}] {c['text']}" for c in context
-    )
+    blocks = "\n\n".join(f"[{c['index']}] {c['text']}" for c in context)
     blocks = maybe_redact(user, blocks)
-    prompt = (
-        f"Question: {question}\n\n"
-        f"--- THE USER'S DOCUMENTS ---\n{blocks}"
-    )
+    prompt = f"Question: {question}\n\n--- THE USER'S DOCUMENTS ---\n{blocks}"
     result = generate(
         prompt=prompt,
         system=_SYSTEM,
@@ -240,12 +424,17 @@ def answer_question(
         feature="document_qa",
     )
     if not result.ok or not isinstance(result.data, dict):
-        return {**base, "reason": "error", "document_count": len(context)}
+        reason = "budget" if result.reason == "budget" else "error"
+        return {
+            **base,
+            "reason": reason,
+            "retrieval_mode": "document_fallback",
+            "document_count": len(context),
+        }
 
     data = result.data
     by_index = {c["index"]: c for c in context}
-    citations = []
-    seen: set[int] = set()
+    citations, seen = [], set()
     for idx in data.get("cited_document_indexes") or []:
         c = by_index.get(idx)
         if c and c["document_id"] not in seen:
@@ -258,5 +447,46 @@ def answer_question(
         "answer": (data.get("answer") or "").strip(),
         "answered": bool(data.get("answered")),
         "citations": citations,
+        "sources": [],
+        "retrieval_mode": "document_fallback",
+        "indexed": False,
         "document_count": len(context),
     }
+
+
+def answer_question(
+    user, question: str, *, document_id: int | None = None
+) -> dict:
+    """
+    Answer ``question`` grounded in ``user``'s documents.
+
+    Prefers chunk-level retrieval over the document's extracted body text
+    (``DocumentChunk``); when the document(s) aren't indexed yet it falls back to
+    the document-level metadata path so behaviour never regresses. Always returns
+    a dict; never raises. Shape::
+
+        {available, reason, answer, answered, citations, sources,
+         retrieval_mode, indexed, document_count}
+    """
+    question = (question or "").strip()[:_MAX_QUESTION_CHARS]
+    base = {
+        "available": False,
+        "answer": "",
+        "answered": False,
+        "citations": [],
+        "sources": [],
+        "retrieval_mode": "no_context",
+        "indexed": False,
+        "document_count": 0,
+    }
+    if not question:
+        return {**base, "reason": "empty_question"}
+    if not ai_available():
+        return {**base, "reason": "not_configured"}
+
+    if bool(_rag_setting("AI_RAG_ENABLED", True)):
+        retrieval = retrieve_chunk_context(user, question, document_id=document_id)
+        if retrieval["items"]:
+            return _answer_from_chunks(user, question, retrieval)
+
+    return _answer_from_documents(user, question, document_id=document_id)

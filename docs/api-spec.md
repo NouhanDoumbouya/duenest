@@ -1879,15 +1879,61 @@ Response shape:
   "answer": "Your UK Passport expires on 1 January 2030.",
   "answered": true,
   "citations": [{ "document_id": 12, "title": "UK Passport" }],
+  "sources": [
+    {
+      "document_id": 12,
+      "document_title": "UK Passport",
+      "chunk_index": 3,
+      "page_number": null,
+      "excerpt": "…date of expiry 01 JAN 2030…"
+    }
+  ],
+  "retrieval_mode": "chunk_lexical",
+  "indexed": true,
   "document_count": 8
 }
 ```
 
 `reason` is one of `ok` / `not_configured` / `no_documents` / `empty_question` /
-`error`. `answered` is `false` when the answer wasn't found in the user's
-documents. Retrieval today grounds on each document's structured fields + notes
-(ranked by keyword overlap); the retrieval seam (`ai_qa.gather_context`) can be
-swapped for an embeddings/vector retriever later without changing this contract.
+`budget` / `error`. `answered` is `false` when the answer wasn't found.
+
+**Chunk-level RAG (v1).** When the relevant document(s) have been indexed (see
+13B.6a), retrieval grounds on slices of the document's extracted **body text**
+(`DocumentChunk`) and returns `sources` (excerpts with `chunk_index`/`page_number`)
+plus `retrieval_mode` (`chunk_vector` when embedded, else `chunk_lexical`). When a
+document has no chunks, it falls back to the document-level metadata path
+(`retrieval_mode: "document_fallback"`, `sources: []`, `indexed: false`) so
+behaviour never regresses. Context sent to Claude is bounded by `AI_RAG_TOP_K` and
+`AI_RAG_MAX_CONTEXT_CHARS`. Sources contain excerpts of the owner's own documents
+and **never** signed file URLs.
+
+---
+
+## 13B.6a AI: Index a document for chunk-level RAG
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/api/v1/documents/{id}/ai/index/` | Chunk a document's extracted body text for content Q&A |
+| `GET` | `/api/v1/documents/{id}/ai/index-status/` | Whether a document is indexed (chunk count + embedded flag) |
+
+Manual, explicit indexing (no automatic vault indexing). Same gates as Q&A
+(`ai_features` + `ai_document_qa` flags + AI consent); owner-scoped (`404` for a
+document the caller doesn't own). The index endpoint **never calls Anthropic**;
+it only chunks text the app already extracted (`DocumentExtraction.raw_text`, with
+notes/metadata fallback) and, **only if a Voyage embeddings key is configured**,
+embeds the chunks. No file binaries are sent to any AI provider. Rate limited via
+the `ai_index` throttle scope. Pass `{ "force": true }` to reindex unchanged text.
+
+Index response shape:
+
+```json
+{ "status": "indexed", "chunks_created": 6, "embeddings": "unavailable", "embedded": false }
+```
+
+`status` ∈ `indexed` / `unchanged` / `no_text` / `forbidden` /
+`consent_required`. `embeddings` ∈ `ready` / `unavailable` / `failed` (failure
+keeps chunks for lexical retrieval). Status endpoint returns
+`{ "indexed", "chunk_count", "embedded", "embeddings_configured" }`.
 
 ---
 
