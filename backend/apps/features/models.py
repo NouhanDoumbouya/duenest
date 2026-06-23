@@ -136,7 +136,12 @@ class FeatureFlag(models.Model):
 
     key = models.CharField(max_length=64, unique=True, db_index=True)
     name = models.CharField(max_length=120, blank=True)
-    description = models.CharField(max_length=255, blank=True)
+    # Admin-facing descriptive blurb seeded from FEATURE_DEFINITIONS. Some run
+    # past 255 chars, so this is a TextField (not a capped CharField) — otherwise
+    # PostgreSQL raises "value too long for type character varying(255)" during
+    # _seed_missing_flags. (SQLite doesn't enforce the cap, so it only surfaced
+    # on the production database.)
+    description = models.TextField(blank=True)
     visibility = models.CharField(
         max_length=20, choices=Visibility.choices, default=Visibility.ENABLED
     )
