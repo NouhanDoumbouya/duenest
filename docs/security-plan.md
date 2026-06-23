@@ -464,12 +464,24 @@ However:
 
 ### Production Storage
 
-Production should use private object storage such as:
+Production uses **private object storage** via provider-neutral `STORAGE_*`
+configuration (`config/storage.py`), mapped to the django-storages S3 backend.
+Any S3-compatible provider works; **Cloudflare R2** is the beta target:
 
-- AWS S3
-- Cloudflare R2
-- Supabase Storage
-- DigitalOcean Spaces
+- Bucket: `certanest-prod-documents`, **private** — public **r2.dev** access and
+  public custom domains stay **off**.
+- Credentials (`STORAGE_ACCESS_KEY_ID` / `STORAGE_SECRET_ACCESS_KEY`) are
+  backend-only (Railway env). They are never placed in the frontend / Vercel.
+- The S3 backend is configured private by default: no canned ACL is sent
+  (`STORAGE_PRIVATE=true`), and any URL it would generate is a short-lived signed
+  URL (`STORAGE_SIGNED_URLS=true`, 5-minute TTL) — never a public, permanent link.
+- **Files are app-encrypted (AES-256-GCM) before upload**, so object storage
+  holds only ciphertext. Delivery streams decrypted bytes through authenticated,
+  ownership-checked Django views — object-storage URLs are never used to serve
+  user files. Switching providers is a config change, not a code change.
+- Local-to-bucket migration uses `migrate_local_media_to_storage` (dry-run first;
+  never deletes local files). See `docs/DEPLOYMENT.md` for setup, verification,
+  the Railway checklist, and the rollback plan.
 
 ### Production File Access Rules
 

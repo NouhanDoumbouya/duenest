@@ -43,7 +43,7 @@ django-storages/boto3 internally. Any S3-compatible provider works.
 | --- | --- | --- |
 | `STORAGE_BACKEND` | `local` (default) or `s3` | `s3` |
 | `STORAGE_PROVIDER` | informational label only | `cloudflare_r2` |
-| `STORAGE_BUCKET_NAME` | bucket name | `duenest-prod` |
+| `STORAGE_BUCKET_NAME` | bucket name | `certanest-prod-documents` |
 | `STORAGE_ACCESS_KEY_ID` | access key | — |
 | `STORAGE_SECRET_ACCESS_KEY` | secret key | — |
 | `STORAGE_ENDPOINT_URL` | S3 endpoint (blank for AWS) | `https://<acct>.r2.cloudflarestorage.com` |
@@ -63,14 +63,16 @@ Internally these map to django-storages settings
 
 ### Cloudflare R2 (preferred for beta)
 
-1. Create an R2 bucket (e.g. `duenest-prod`). Keep it **private** (no public access).
-2. Create an R2 API token (Object Read & Write) → access key id + secret.
+1. Create an R2 bucket named **`certanest-prod-documents`**. Keep it **private**
+   — do **not** enable the public **r2.dev** URL or a public custom domain.
+2. Create an R2 API token (Object Read & Write, scoped to this bucket) → access
+   key id + secret. These are **backend-only** secrets (Railway), never Vercel.
 3. Find your account endpoint: `https://<account-id>.r2.cloudflarestorage.com`.
-4. Set:
+4. Set these on **Railway only** (never in the frontend / Vercel):
    ```
    STORAGE_BACKEND=s3
    STORAGE_PROVIDER=cloudflare_r2
-   STORAGE_BUCKET_NAME=duenest-prod
+   STORAGE_BUCKET_NAME=certanest-prod-documents
    STORAGE_ACCESS_KEY_ID=...
    STORAGE_SECRET_ACCESS_KEY=...
    STORAGE_ENDPOINT_URL=https://<account-id>.r2.cloudflarestorage.com
@@ -79,7 +81,57 @@ Internally these map to django-storages settings
    STORAGE_SIGNATURE_VERSION=s3v4
    STORAGE_PRIVATE=true
    ```
-5. Do **not** enable an R2 public bucket/custom domain for this bucket.
+5. Do **not** enable an R2 public bucket / r2.dev / custom domain for this bucket.
+   File delivery goes only through CertaNest's authenticated, ownership-checked
+   endpoints (which return decrypted bytes, never an object-storage URL).
+
+### Migrating existing local media to R2
+
+Files uploaded while on local disk must be copied into the bucket once after
+switching `STORAGE_BACKEND=s3`. The command copies app-encrypted ciphertext
+as-is, never deletes local files, and is safe to rerun:
+
+```
+# 1. Preview only — writes nothing:
+python manage.py migrate_local_media_to_storage --dry-run
+# 2. After the dry-run looks right, copy for real:
+python manage.py migrate_local_media_to_storage
+```
+
+It reports counts only (`copied`, `skipped(existing)`, `missing_on_disk`) and
+logs storage keys/sizes — never file contents. Already-present objects with a
+matching size are skipped, so reruns are cheap. Keep the local files until you've
+verified downloads from R2.
+
+### Verify upload/download
+
+1. Upload a small test document through the app.
+2. Confirm the object appears in the `certanest-prod-documents` bucket.
+3. Open the document's preview/download in the app — it should succeed
+   (authenticated, owner-checked, decrypted in memory).
+4. Confirm an **unauthenticated** request to the same download endpoint is
+   rejected (401/403) and that no object-storage URL is exposed in any response.
+
+### Railway R2 deployment checklist
+
+1. Add all `STORAGE_*` vars (section 2) to the Railway backend service.
+2. Deploy the backend.
+3. Run `python manage.py check` (and the storage tests) on the release.
+4. Upload a tiny test document; confirm it lands in `certanest-prod-documents`.
+5. Confirm preview/download works for the owner; confirm unauthorized access fails.
+6. If older local files exist, run the migration **dry-run**, then the real run.
+7. Spot-check a migrated file downloads correctly before removing local copies.
+
+### Rollback
+
+The backend is a configuration switch, so rollback is immediate and safe:
+
+- Set `STORAGE_BACKEND=local` (or unset it) and redeploy to fall back to local
+  filesystem storage.
+- **Keep the local media files** until R2 is fully verified — the migration
+  command never deletes them, so the local copies remain a complete fallback.
+- No data is lost either way: R2 holds copies, local disk keeps the originals
+  until you choose to clean them up.
 
 ### Railway bucket / AWS S3 / other S3-compatible (later)
 

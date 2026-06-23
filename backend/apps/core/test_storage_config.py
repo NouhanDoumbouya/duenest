@@ -64,6 +64,23 @@ class BuildStoragesS3Tests(SimpleTestCase):
         # default_acl is omitted entirely (None) so no canned ACL is sent.
         self.assertNotIn("default_acl", opts)
 
+    def test_private_is_the_default_when_unset(self):
+        # Safety: with STORAGE_PRIVATE unset, the bucket is treated as private
+        # (no canned ACL) — never accidentally public.
+        values = {
+            "STORAGE_BACKEND": "s3",
+            "STORAGE_BUCKET_NAME": "certanest-prod-documents",
+        }
+        opts = build_storages(make_get(values))["default"]["OPTIONS"]
+        self.assertNotIn("default_acl", opts)
+        self.assertTrue(opts["querystring_auth"])  # signed URLs on by default
+
+    def test_certanest_prod_bucket_name_passthrough(self):
+        opts = self._r2(STORAGE_BUCKET_NAME="certanest-prod-documents")["default"][
+            "OPTIONS"
+        ]
+        self.assertEqual(opts["bucket_name"], "certanest-prod-documents")
+
     def test_public_bucket_sets_public_read(self):
         opts = self._r2(STORAGE_PRIVATE="false")["default"]["OPTIONS"]
         self.assertEqual(opts["default_acl"], "public-read")
