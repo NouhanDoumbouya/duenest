@@ -142,6 +142,7 @@ uses the console backend and degrades gracefully (in-app notifications still wor
 | From name + address | Use | Env var |
 | --- | --- | --- |
 | `CertaNest <notifications@mail.certanest.com>` | Transactional / notifications | `DEFAULT_FROM_EMAIL` |
+| `CertaNest Billing <billing@mail.certanest.com>` | Branded billing notifications (trial/payment/cancel) | `BILLING_FROM_EMAIL` *(falls back to `DEFAULT_FROM_EMAIL`)* |
 | `CertaNest Security <security@mail.certanest.com>` | Security / sensitive | `SECURITY_FROM_EMAIL` *(if/when wired; today security mail uses `DEFAULT_FROM_EMAIL`)* |
 | `support@certanest.com` | Reply-to / support | `SUPPORT_EMAIL` |
 
@@ -154,6 +155,8 @@ RESEND_SENDING_DOMAIN=mail.certanest.com
 DEFAULT_FROM_EMAIL=CertaNest <notifications@mail.certanest.com>
 SERVER_EMAIL=CertaNest <notifications@mail.certanest.com>
 SUPPORT_EMAIL=support@certanest.com
+# Optional dedicated sender for branded billing notifications (else DEFAULT_FROM_EMAIL):
+BILLING_FROM_EMAIL=CertaNest Billing <billing@mail.certanest.com>
 # Optional, once the security sender is wired:
 # SECURITY_FROM_EMAIL=CertaNest Security <security@mail.certanest.com>
 # Verify inbound delivery/bounce webhooks:

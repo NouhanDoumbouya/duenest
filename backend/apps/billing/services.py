@@ -504,9 +504,21 @@ def _handle_checkout_completed(obj, record):
         profile.save(update_fields=["provider_customer_id"])
     # The follow-up subscription.created/updated event carries authoritative
     # state; here we just ensure a paid record exists if a subscription id came.
-    _upsert_subscription_from_event(
-        {**obj, "object": "checkout"}, record
-    ) if obj.get("subscription") else None
+    sub_id = obj.get("subscription")
+    if sub_id:
+        _upsert_subscription_from_event({**obj, "object": "checkout"}, record)
+    # Branded "welcome to Pro" email — once per checkout session (the lifecycle
+    # senders are best-effort and never raise into the webhook).
+    sub = (
+        UserSubscription.objects.filter(provider_subscription_id=sub_id).first()
+        if sub_id
+        else None
+    )
+    from .lifecycle_email import send_subscription_activated_email
+
+    send_subscription_activated_email(
+        user, sub, dedupe_key=str(obj.get("id") or sub_id or user.pk)
+    )
 
 
 def _handle_payment_failed(obj, record):
@@ -530,9 +542,18 @@ def _handle_payment_failed(obj, record):
             severity="urgent",
             suffix=sub.grace_period_until.strftime("%Y%m%d") if sub.grace_period_until else "",
         )
-        from .lifecycle_email import send_payment_failed_email
+        # invoice.payment_action_required needs the user to authenticate (3-D
+        # Secure), not a dunning notice — send the matching email per event type.
+        if record.event_type == "invoice.payment_action_required":
+            from .lifecycle_email import send_payment_action_required_email
 
-        send_payment_failed_email(user, sub)
+            send_payment_action_required_email(
+                user, sub, dedupe_key=str(obj.get("id") or "")
+            )
+        else:
+            from .lifecycle_email import send_payment_failed_email
+
+            send_payment_failed_email(user, sub)
 
 
 def _maybe_send_receipt(invoice) -> None:
@@ -579,3 +600,14 @@ def _record_invoice(obj, record, paid: bool):
     # Branded receipt (founder-gated, idempotent). Never break webhook handling.
     if paid:
         _maybe_send_receipt(invoice)
+        # Payment-received notification — once per invoice (dedupe on the invoice
+        # id covers invoice.paid AND invoice.payment_succeeded). Best-effort.
+        from .lifecycle_email import send_payment_succeeded_email
+
+        send_payment_succeeded_email(
+            user,
+            amount_minor=invoice.amount_paid or 0,
+            currency=invoice.currency or "usd",
+            invoice_url=invoice.hosted_invoice_url or "",
+            dedupe_key=str(invoice_id),
+        )
