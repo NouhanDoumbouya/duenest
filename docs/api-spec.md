@@ -5552,3 +5552,119 @@ storage URL. It counts against the owner's existing **file + storage** plan limi
 (enforced on `generate/`; over the limit returns `403 plan_limit_exceeded`). No
 separate plan resource was added. See `docs/BILLING.md` and `docs/security-plan.md`.
 
+## 37 — Audit Logs V1 (`audit-logs/`)
+
+A unified, **owner-scoped** audit log of security-relevant document and sharing
+events ("who uploaded/opened/downloaded this, who accepted a request, when was a
+room revoked"). **Append-only.** **Deterministic — no AI call, no AI credits, no
+R2, no file URLs.**
+
+All endpoints are authenticated and **owner-only**: each returns only the
+requesting user's own entries. Public actors (anonymous token visitors) can
+**never** read audit logs — there is no public route. A logged event always
+records *who* it happened to (the owner); public-route access is captured as an
+anonymous `public_link` actor. Best-effort logging: recording an event can never
+break the underlying user action (a logging failure is swallowed).
+
+### Endpoints
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/v1/audit-logs/` | List the owner's audit entries, newest first, paginated |
+| `GET` | `/api/v1/audit-logs/{id}/` | Retrieve one owner-scoped entry |
+| `GET` | `/api/v1/audit-logs/summary/` | Compact 30-day owner-scoped counts |
+
+### List filters
+
+`GET /audit-logs/` accepts (all optional, owner-scoped):
+
+| Parameter | Description |
+| --- | --- |
+| `category` | `document` / `file` / `document_request` / `sharing_room` / `protected_copy` / `application` / `pack` / `security` / `system` |
+| `event_type` | Exact event type (e.g. `sharing_room_revoked`) |
+| `severity` | `info` / `warning` / `critical` |
+| `object_type` | Model class name of the subject (e.g. `SharingRoom`) |
+| `object_id` | Subject id (string match) |
+| `date_from` / `date_to` | ISO datetime bounds on `created_at` |
+| `search` | Matches **safe labels only** (`object_label`, `related_object_label`, `event_type`) |
+
+Results are paginated with the standard envelope (`count`, `next`, `previous`,
+`results`).
+
+### Model — `AuditLogEntry`
+
+`AuditLogEntry` (`apps/documents/models.py`, migration
+`documents/0038_auditlogentry`) is a **new unified model**, distinct from the
+existing per-feature activity trails (`DocumentFileActivity`, `RoomActivity`,
+`DocumentActivity`, `QuickShareActivity`, `ProductEvent`), which are unchanged.
+
+Stored fields: `owner`; `actor_user` (nullable, `SET_NULL`); `actor_type`
+(`owner` / `authenticated_user` / `public_link` / `system`); `actor_label`;
+`event_type`; `category`; `severity`; `object_type` / `object_id` /
+`object_label`; `related_object_type` / `related_object_id` /
+`related_object_label`; `ip_hash`; `user_agent_hash`; `country_code`; `metadata`
+(JSON); `created_at`.
+
+### Safe response fields (serializer)
+
+The serializer returns **only** these read-only fields:
+
+```json
+{
+  "id": 42,
+  "event_type": "sharing_room_revoked",
+  "category": "sharing_room",
+  "severity": "warning",
+  "actor_type": "owner",
+  "actor_label": "",
+  "object_type": "SharingRoom",
+  "object_id": "7",
+  "object_label": "Scholarship pack room",
+  "related_object_type": "",
+  "related_object_id": "",
+  "related_object_label": "",
+  "country_code": "GN",
+  "metadata": { "status_from": "active", "status_to": "revoked" },
+  "created_at": "2026-06-24T10:30:00Z"
+}
+```
+
+**Not returned (ever):** the salted `ip_hash` / `user_agent_hash` (excluded from
+the serializer entirely), raw IP/user-agent, raw public tokens, share/access
+codes, private file URLs, storage keys, document contents, or extracted text.
+`metadata` is already sanitized at write time (only safe keys such as
+`status_from` / `status_to`, file name/title, request/room/pack/application
+titles, `due_date`, `result`, `reason_category` survive).
+
+### Summary
+
+```http
+GET /api/v1/audit-logs/summary/
+```
+
+```json
+{
+  "total_events_30d": 128,
+  "public_link_events_30d": 14,
+  "downloads_30d": 9,
+  "uploads_30d": 6,
+  "critical_events_30d": 0
+}
+```
+
+### Events integrated (V1)
+
+Document Requests (created, email_sent, opened, file_uploaded, accepted,
+rejected, needs_replacement, cancelled, saved-to-vault, requirement satisfied);
+Sharing Rooms (created, opened, file previewed, file downloaded, item
+added/removed, revoked, archived); Protected Copies (created, generated, failed,
+added_to_room, archived); Applications/Packs (application created, application
+status changed, pack created, pack requirement satisfied). Public-route events
+(opens/uploads/previews/downloads) are recorded with `actor_type` `public_link`.
+Read-only dashboard reads are **not** logged — only security-relevant
+access/change events are.
+
+The salted IP/UA hash setting (`AUDIT_LOG_HASH_SALT`), metadata sanitization, and
+the full privacy contract live in `docs/security-plan.md` and
+`docs/security/audit-logs.md`. The owner-only UI is `/dashboard/security/audit`.
+

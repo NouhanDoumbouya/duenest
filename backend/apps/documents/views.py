@@ -202,6 +202,30 @@ def _track_product_event(
         return
 
 
+def _audit(request, owner, event_type: str, category: str, *, public: bool = False, **kwargs):
+    """Best-effort owner-scoped audit event (never breaks the action).
+
+    For authenticated routes the actor is ``request.user``; pass ``public=True`` on
+    token-only public routes to record an anonymous public-link visitor.
+    """
+    try:
+        if public:
+            from .audit import record_public_link_event
+
+            record_public_link_event(owner, event_type, category, request=request, **kwargs)
+            return
+        from .audit import record_audit_event
+
+        actor = getattr(request, "user", None)
+        if actor is not None and not getattr(actor, "is_authenticated", False):
+            actor = None
+        record_audit_event(
+            owner, event_type, category, actor_user=actor, request=request, **kwargs
+        )
+    except Exception:  # noqa: BLE001 — audit must never break the caller
+        return
+
+
 def _compute_checksum(uploaded) -> str:
     """SHA-256 of the uploaded bytes; rewinds the stream so it can still save."""
     digest = hashlib.sha256()
@@ -2381,6 +2405,9 @@ class DocumentBundleListCreateView(_BundleScopedMixin, generics.ListCreateAPIVie
             object_id=bundle.id,
             metadata={"bundle_type": bundle.bundle_type},
         )
+        _audit(self.request, bundle.owner, "pack_created", "pack",
+               obj=bundle, object_label=bundle.title,
+               metadata={"room_type": bundle.bundle_type})
         log_document_activity(
             owner=self.request.user,
             action=DocumentActivity.Action.BUNDLE_CREATED,
@@ -3348,6 +3375,9 @@ class ApplicationListCreateView(_ApplicationScopedMixin, generics.ListCreateAPIV
                 "linked_pack": bool(application.linked_bundle_id),
             },
         )
+        _audit(request, application.owner, "application_created", "application",
+               obj=application, object_label=application.title,
+               metadata={"status": application.status})
         return Response(
             build_application_tracker_payload(application, request.user),
             status=status.HTTP_201_CREATED,
@@ -3372,12 +3402,17 @@ class ApplicationDetailView(_ApplicationScopedMixin, generics.RetrieveUpdateDest
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop("partial", False)
         instance = self.get_object()
+        previous_status = instance.status
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
         application = serializer.save()
 
         from .application_tracker import build_application_tracker_payload
 
+        if application.status != previous_status:
+            _audit(request, application.owner, "application_status_changed", "application",
+                   obj=application, object_label=application.title,
+                   metadata={"status_from": previous_status, "status_to": application.status})
         return Response(
             build_application_tracker_payload(application, request.user)
         )
@@ -3865,6 +3900,8 @@ class DocumentRequestListCreateView(_DocumentRequestScopedMixin, generics.ListCr
             object_type="document_request_link", object_id=req.id,
             metadata={"has_recipient_email": bool(req.recipient_email)},
         )
+        _audit(request, req.owner, "document_request_created", "document_request",
+               obj=req, metadata={"title": req.requested_document_title})
         return Response(
             DocumentRequestLinkSerializer(req, context={"request": request}).data,
             status=status.HTTP_201_CREATED,
@@ -3918,6 +3955,8 @@ class DocumentRequestSendView(_DocumentRequestActionView):
         from .document_requests_email import send_document_request_email
 
         ok = send_document_request_email(req)
+        if ok:
+            _audit(request, req.owner, "document_request_email_sent", "document_request", obj=req)
         return Response({"sent": bool(ok), "request": self._serialize(req, request)})
 
 
@@ -3926,6 +3965,8 @@ class DocumentRequestCancelView(_DocumentRequestActionView):
         from .document_requests import cancel_document_request
 
         req = cancel_document_request(self.get_request(request, pk))
+        _audit(request, req.owner, "document_request_cancelled", "document_request",
+               obj=req, severity="warning")
         return Response(self._serialize(req, request))
 
 
@@ -3946,6 +3987,11 @@ class DocumentRequestReviewView(_DocumentRequestActionView):
             object_type="document_request_link", object_id=req.id,
             metadata={"action": action},
         )
+        _event = {"accept": "document_request_accepted", "reject": "document_request_rejected",
+                  "needs_replacement": "document_request_needs_replacement"}.get(action)
+        if _event:
+            _audit(request, req.owner, _event, "document_request", obj=req,
+                   severity="warning" if action == "reject" else "info")
         return Response(self._serialize(req, request))
 
 
@@ -3957,6 +4003,7 @@ class DocumentRequestAcceptView(_DocumentRequestActionView):
             req = accept_document_request(self.get_request(request, pk))
         except DocumentRequestError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        _audit(request, req.owner, "document_request_accepted", "document_request", obj=req)
         return Response(self._serialize(req, request))
 
 
@@ -3969,6 +4016,8 @@ class DocumentRequestRejectView(_DocumentRequestActionView):
             req = reject_document_request(self.get_request(request, pk), reason)
         except DocumentRequestError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        _audit(request, req.owner, "document_request_rejected", "document_request",
+               obj=req, severity="warning", metadata={"reason_category": "owner_rejected"})
         return Response(self._serialize(req, request))
 
 
@@ -3981,6 +4030,7 @@ class DocumentRequestNeedsReplacementView(_DocumentRequestActionView):
             req = mark_needs_replacement(self.get_request(request, pk), reason)
         except DocumentRequestError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        _audit(request, req.owner, "document_request_needs_replacement", "document_request", obj=req)
         return Response(self._serialize(req, request))
 
 
@@ -3993,6 +4043,8 @@ class DocumentRequestSaveToVaultView(_DocumentRequestActionView):
         except DocumentRequestError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         req = self.get_request(request, pk)
+        _audit(request, req.owner, "document_saved_to_vault", "document",
+               obj=document, object_label=document.title)
         return Response(
             {"document_id": document.id, "request": self._serialize(req, request)},
             status=status.HTTP_200_OK,
@@ -4008,6 +4060,10 @@ class DocumentRequestAttachToPackView(_DocumentRequestActionView):
         except DocumentRequestError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         req = self.get_request(request, pk)
+        _audit(request, req.owner, "pack_requirement_satisfied", "pack",
+               obj=requirement.bundle, object_label=requirement.bundle.title,
+               related_object=requirement, related_object_label=requirement.title,
+               metadata={"title": requirement.title})
         return Response(
             {
                 "requirement_id": requirement.id,
@@ -4045,6 +4101,8 @@ class PublicDocumentRequestMetadataView(APIView):
             )
         if state == RESOLVE_OK:
             mark_document_request_opened(req)
+            _audit(request, req.owner, "document_request_opened", "document_request",
+                   public=True, obj=req, actor_label="Request recipient")
         payload = build_public_document_request_payload(req)
         payload["state"] = state
         return Response(payload, status=status.HTTP_200_OK)
@@ -4116,6 +4174,9 @@ class PublicDocumentRequestUploadView(APIView):
         except DocumentRequestError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
+        _audit(request, req.owner, "document_request_file_uploaded", "document_request",
+               public=True, obj=req, actor_label="Request recipient",
+               metadata={"filename": document_file.original_filename})
         return Response(
             {"ok": True, "detail": "Your file was uploaded securely. Thank you."},
             status=status.HTTP_201_CREATED,
@@ -4167,6 +4228,8 @@ class SharingRoomListCreateView(_SharingRoomScopedMixin, generics.ListCreateAPIV
             object_type="sharing_room", object_id=room.id,
             metadata={"room_type": room.room_type},
         )
+        _audit(request, room.owner, "sharing_room_created", "sharing_room",
+               obj=room, metadata={"room_type": room.room_type})
         return Response(
             SharingRoomSerializer(room, context={"request": request}).data,
             status=status.HTTP_201_CREATED,
@@ -4211,9 +4274,11 @@ class SharingRoomAddItemView(_SharingRoomActionView):
 
         room = self.get_room(request, pk)
         try:
-            add_room_item(room, request.user, request.data)
+            item = add_room_item(room, request.user, request.data)
         except SharingRoomError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        _audit(request, room.owner, "sharing_room_item_added", "sharing_room",
+               obj=room, metadata={"item_type": item.item_type, "title": item.title})
         return Response(self._serialize(room, request), status=status.HTTP_201_CREATED)
 
 
@@ -4226,6 +4291,7 @@ class SharingRoomRemoveItemView(_SharingRoomActionView):
             remove_room_item(room, request.user, request.data.get("item_id"))
         except SharingRoomError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        _audit(request, room.owner, "sharing_room_item_removed", "sharing_room", obj=room)
         return Response(self._serialize(room, request))
 
 
@@ -4234,6 +4300,8 @@ class SharingRoomRevokeView(_SharingRoomActionView):
         from .sharing_rooms import revoke_sharing_room
 
         room = revoke_sharing_room(self.get_room(request, pk), request.user)
+        _audit(request, room.owner, "sharing_room_revoked", "sharing_room",
+               obj=room, severity="warning")
         return Response(self._serialize(room, request))
 
 
@@ -4242,6 +4310,7 @@ class SharingRoomArchiveView(_SharingRoomActionView):
         from .sharing_rooms import archive_sharing_room
 
         room = archive_sharing_room(self.get_room(request, pk), request.user)
+        _audit(request, room.owner, "sharing_room_archived", "sharing_room", obj=room)
         return Response(self._serialize(room, request))
 
 
@@ -4311,6 +4380,8 @@ class PublicSharingRoomMetadataView(APIView):
                 else status.HTTP_410_GONE,
             )
         mark_room_opened(room)
+        _audit(request, room.owner, "sharing_room_opened", "sharing_room",
+               public=True, obj=room, actor_label="Room visitor")
         payload = build_public_sharing_room_payload(room)
         payload["state"] = state
         return Response(payload, status=status.HTTP_200_OK)
@@ -4357,6 +4428,9 @@ class PublicSharingRoomFilePreviewView(_PublicSharingRoomFileMixin):
                 {"detail": "This file type cannot be previewed."},
                 status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             )
+        _audit(request, room.owner, "sharing_room_file_previewed", "sharing_room",
+               public=True, obj=room, actor_label="Room visitor",
+               metadata={"filename": f.original_filename})
         return _inline_file_response(f)
 
 
@@ -4370,6 +4444,9 @@ class PublicSharingRoomFileDownloadView(_PublicSharingRoomFileMixin):
                 {"detail": "Downloads are disabled for this room."},
                 status=status.HTTP_403_FORBIDDEN,
             )
+        _audit(request, room.owner, "sharing_room_file_downloaded", "sharing_room",
+               public=True, obj=room, actor_label="Room visitor",
+               metadata={"filename": f.original_filename})
         return _file_response(f, as_attachment=True)
 
 
@@ -4425,6 +4502,8 @@ class ProtectedCopyListCreateView(APIView):
             object_type="protected_document_copy", object_id=copy.id,
             metadata={"protection_type": copy.protection_type},
         )
+        _audit(request, copy.owner, "protected_copy_created", "protected_copy",
+               obj=copy, metadata={"protection_type": copy.protection_type})
         return Response(
             build_protected_copy_payload(copy), status=status.HTTP_201_CREATED
         )
@@ -4517,6 +4596,14 @@ class ProtectedCopyGenerateView(_ProtectedCopyScopedView):
             object_type="protected_document_copy", object_id=copy.id,
             metadata={"status": copy.status},
         )
+        from .models import ProtectedDocumentCopy
+
+        if copy.status == ProtectedDocumentCopy.Status.FAILED:
+            _audit(request, copy.owner, "protected_copy_failed", "protected_copy",
+                   obj=copy, severity="warning", metadata={"result": "failure"})
+        else:
+            _audit(request, copy.owner, "protected_copy_generated", "protected_copy",
+                   obj=copy, metadata={"result": "success", "page_count": copy.page_count})
         return Response(build_protected_copy_payload(copy))
 
 
@@ -4525,6 +4612,7 @@ class ProtectedCopyArchiveView(_ProtectedCopyScopedView):
         from .document_protection import archive_protected_copy, build_protected_copy_payload
 
         copy = archive_protected_copy(self.get_copy(request, pk), request.user)
+        _audit(request, copy.owner, "protected_copy_archived", "protected_copy", obj=copy)
         return Response(build_protected_copy_payload(copy))
 
 
@@ -4548,11 +4636,82 @@ class ProtectedCopyAddToRoomView(_ProtectedCopyScopedView):
             item = add_protected_copy_to_room(copy, room, request.user)
         except ProtectionError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        _audit(request, copy.owner, "protected_copy_added_to_room", "protected_copy",
+               obj=copy, related_object=room)
         return Response(
             {"room_id": room.id, "item_id": item.id,
              "protected_copy": build_protected_copy_payload(copy)},
             status=status.HTTP_201_CREATED,
         )
+
+
+# ---- Audit logs -------------------------------------------------------------
+
+
+class AuditLogListView(generics.ListAPIView):
+    """
+    GET → the owner's audit log (owner-scoped, newest first, paginated). Filters:
+    category, event_type, severity, object_type, object_id, date_from, date_to,
+    search (safe labels only). Public actors can never reach this — it requires
+    authentication and only ever returns the requesting user's own entries.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get_serializer_class(self):
+        from .serializers import AuditLogEntrySerializer
+
+        return AuditLogEntrySerializer
+
+    def get_queryset(self):
+        from .audit import list_audit_logs_for_user
+
+        return list_audit_logs_for_user(self.request.user, self.request.query_params)
+
+
+class AuditLogDetailView(generics.RetrieveAPIView):
+    """GET one owner-scoped audit entry."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get_serializer_class(self):
+        from .serializers import AuditLogEntrySerializer
+
+        return AuditLogEntrySerializer
+
+    def get_queryset(self):
+        from .models import AuditLogEntry
+
+        return AuditLogEntry.objects.filter(owner=self.request.user)
+
+
+class AuditLogSummaryView(APIView):
+    """GET → compact owner-scoped audit counts for the last 30 days."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from datetime import timedelta
+
+        from django.db.models import Q
+        from django.utils import timezone
+
+        from .models import AuditLogEntry
+
+        since = timezone.now() - timedelta(days=30)
+        qs = AuditLogEntry.objects.filter(owner=request.user, created_at__gte=since)
+        public_link = qs.filter(actor_type=AuditLogEntry.ActorType.PUBLIC_LINK)
+        return Response({
+            "total_events_30d": qs.count(),
+            "public_link_events_30d": public_link.count(),
+            "downloads_30d": qs.filter(event_type__endswith="downloaded").count(),
+            "uploads_30d": qs.filter(
+                Q(event_type__endswith="uploaded") | Q(event_type__endswith="upload")
+            ).count(),
+            "critical_events_30d": qs.filter(
+                severity=AuditLogEntry.Severity.CRITICAL
+            ).count(),
+        })
 
 
 # ---- Timeline ---------------------------------------------------------------

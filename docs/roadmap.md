@@ -1020,6 +1020,7 @@ notifications/weekly-radar-email       (done — deterministic Life-Radar weekly
 sharing/document-request-links-v1      (done — secure single-document collection via public token upload)
 sharing/rooms-v1                       (done — secure shared room workspaces: selected items + request links behind one token)
 security/redaction-watermarking-v1     (done — secure server-side protected copies: redaction + watermark, original never modified)
+security/audit-logs-v1                 (done — owner-scoped security/document event log, hashed fingerprints, owner-only, no AI)
 b2b/portals-mvp                        ← next
 integrations/inbox-mailbox-import      (future — Gmail/Drive/Outlook import into Magic Inbox)
 backend/ai-org-credit-pools            (future)
@@ -1886,3 +1887,57 @@ Key facts:
 See `docs/api-spec.md`, `docs/BILLING.md`, `docs/security-plan.md`,
 `docs/PUBLIC_LINK_SECURITY.md`, and `docs/security/public-upload-links.md` for
 contract, plan, and security details.
+
+## Shipped: Audit Logs V1 — delivered (2026-06-24)
+
+A unified, **owner-scoped** audit log that records security-relevant document and
+sharing events so a user can answer *"who uploaded/opened/downloaded this, who
+accepted a request, when was a room revoked?"* **Deterministic — no AI, no AI
+credits.** **Append-only.** **Owner-only:** public actors (anonymous token
+visitors) can never read audit logs.
+
+* **New unified model.** `AuditLogEntry` (`apps/documents/models.py`, migration
+  `documents/0038_auditlogentry`) — owner; `actor_user` (nullable, `SET_NULL`);
+  `actor_type` (owner / authenticated_user / public_link / system);
+  `actor_label`; `event_type`; `category` (document / file / document_request /
+  sharing_room / protected_copy / application / pack / security / system);
+  `severity` (info / warning / critical); `object_type` / `object_id` /
+  `object_label`; `related_object_type` / `id` / `label`; `ip_hash`;
+  `user_agent_hash`; `country_code`; `metadata` JSON; `created_at`. It is a
+  **new** model — distinct from the existing per-feature activity trails
+  (`DocumentFileActivity`, `RoomActivity`, `DocumentActivity`,
+  `QuickShareActivity`, `ProductEvent`), which are unchanged.
+* **Privacy is the point.** Never stored: document contents, extracted text,
+  private file URLs, raw storage keys, raw public tokens, passwords/secrets,
+  passport/ID numbers, AI prompts/responses, raw email bodies. IP and user-agent
+  are stored **only** as a salted SHA-256 hash (`AUDIT_LOG_HASH_SALT`, env-backed
+  with a dev fallback) — the model has no raw IP/UA columns. `country_code` comes
+  from a CDN edge header (no IP geolocation). Metadata is sanitized at write time
+  by `safe_audit_metadata` (forbidden-substring filter + small allow-list + size
+  caps). The audit API serializer returns only safe fields and **excludes the
+  hashes entirely**.
+* **Best-effort / non-breaking.** `record_audit_event` is wrapped in try/except —
+  a logging failure logs a server-side warning and returns `None`; it **never
+  raises**, so it can never break the user action it records.
+* **Service:** `apps/documents/audit.py` — `record_audit_event`,
+  `record_public_link_event` (anonymous `public_link` actor), `safe_audit_metadata`,
+  `safe_object_label`, `hash_request_fingerprint`, `list_audit_logs_for_user`.
+* **Endpoints (all `/api/v1`, owner-authenticated):** `GET /audit-logs/`
+  (paginated; filters category / event_type / severity / object_type / object_id /
+  date_from / date_to / search over safe labels), `GET /audit-logs/{id}/`,
+  `GET /audit-logs/summary/` (30-day counts).
+* **Events integrated (V1):** Document Requests (created, email_sent, opened,
+  file_uploaded, accepted, rejected, needs_replacement, cancelled, saved-to-vault,
+  requirement satisfied), Sharing Rooms (created, opened, file previewed, file
+  downloaded, item added/removed, revoked, archived), Protected Copies (created,
+  generated, failed, added_to_room, archived), Applications/Packs (application
+  created, application status changed, pack created, pack requirement satisfied).
+  Public-route events are recorded with `actor_type` `public_link`. Read-only
+  dashboard requests are **not** logged.
+* **Frontend:** owner-only `/dashboard/security/audit` (list + filters + detail
+  drawer + 30-day summary) plus a nav item. No public UI.
+* **Retention:** V1 keeps entries indefinitely (no automatic purge); a
+  retention/export policy is future work.
+
+See `docs/security/audit-logs.md`, `docs/api-spec.md`, and `docs/security-plan.md`
+for the event catalog, privacy rules, and API contract.

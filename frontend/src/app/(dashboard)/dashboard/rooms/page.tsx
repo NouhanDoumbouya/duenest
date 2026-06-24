@@ -782,6 +782,17 @@ function RoomDetailDrawer({
           />
         )}
 
+        {/* Audit history (read-only) */}
+        <div className="mt-5">
+          <Link
+            href={`/dashboard/security/audit?object_type=SharingRoom&object_id=${room.id}`}
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowUpRight className="size-3.5" aria-hidden />
+            View audit history
+          </Link>
+        </div>
+
         {/* Footer: revoke + archive */}
         <div className="mt-6 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
           <p className="text-xs text-muted-foreground">
