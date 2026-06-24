@@ -21,6 +21,7 @@ import {
 } from "@/components/dashboard/life-radar/metric-grid";
 import { FixFirstSection } from "@/components/dashboard/life-radar/fix-first";
 import { QuickActionsPanel } from "@/components/dashboard/life-radar/quick-actions";
+import { LifeRadarSuggestedActions } from "@/components/dashboard/life-radar/suggested-actions";
 import {
   RecentActivityPanel,
   SharingEmergencyPanel,
@@ -443,6 +444,9 @@ export default function DashboardPage() {
               <SectionCard title="Quick actions">
                 <QuickActionsPanel />
               </SectionCard>
+
+              {/* Server-driven, deterministic Life Radar next steps (no AI). */}
+              <LifeRadarSuggestedActions />
 
               {/* Recent activity sits under the main column on desktop. */}
               {loading ? (

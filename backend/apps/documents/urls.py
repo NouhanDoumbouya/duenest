@@ -106,6 +106,7 @@ from .views import (
     DocumentVersionRestoreMetadataView,
     DocumentViewSet,
     EmergencyPackViewSet,
+    LifeRadarView,
     PlanUsageView,
     ProofRecordViewSet,
     PublicEmergencyPackItemDownloadView,
@@ -342,6 +343,12 @@ urlpatterns = [
         "plan/usage/",
         PlanUsageView.as_view(),
         name="plan-usage",
+    ),
+    # ---- Life Radar V1: deterministic readiness dashboard (no AI) ----------
+    path(
+        "documents/life-radar/",
+        LifeRadarView.as_view(),
+        name="life-radar",
     ),
     # ---- Intelligence polish: scanners over the whole vault ----------------
     path(

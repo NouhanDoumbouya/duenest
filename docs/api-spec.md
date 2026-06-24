@@ -1866,6 +1866,72 @@ strictly owner-scoped; one user's usage never affects another's limits.
 
 ---
 
+## 13C.7 Life Radar V1 (readiness dashboard)
+
+The signature readiness surface. One authenticated call returns a deterministic,
+owner-scoped snapshot of what needs attention across documents, deadlines,
+application packs, and emergency access.
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/v1/documents/life-radar/` | Deterministic readiness score + sections |
+
+**Deterministic & free to compute.** Life Radar V1 is built purely from the
+user's own DB rows (`apps/documents/life_radar.py` → `build_life_radar`). It
+makes **no AI/Anthropic call**, consumes **no AI credits**, and never touches R2
+or exposes private file URLs. Available to Free and Pro alike (never gated).
+
+**Readiness score (0–100):** starts at 100 and subtracts (per-category capped)
+for expired documents, documents expiring within 30 days, overdue reminders,
+urgent upcoming reminders (≤7 days), incomplete packs, missing required pack
+documents, emergency access not configured, and storage near the limit. Clamped
+to `[0, 100]`. Labels: 90–100 "Ready", 70–89 "Mostly ready", 40–69 "Needs
+attention", 0–39 "At risk". A brand-new (empty) vault returns a neutral score of
+`30` with onboarding-focused suggested actions.
+
+### Response: `200 OK`
+
+```json
+{
+  "score": 72,
+  "label": "Mostly ready",
+  "is_empty": false,
+  "generated_at": "2026-06-24T12:00:00Z",
+  "summary": {
+    "expiring_soon": 2,
+    "upcoming_deadlines": 3,
+    "overdue_reminders": 0,
+    "missing_documents": 1,
+    "incomplete_packs": 1,
+    "emergency_ready": false
+  },
+  "sections": {
+    "urgent": [],
+    "expiring_documents": [],
+    "upcoming_deadlines": [],
+    "incomplete_packs": [],
+    "missing_documents": [],
+    "emergency_access": {
+      "configured": false, "status": "none",
+      "pack_count": 0, "active_pack_count": 0,
+      "item_count": 0, "trusted_contact_count": 0
+    },
+    "suggested_actions": [
+      { "key": "setup_emergency_access", "label": "Set up emergency access",
+        "description": "...", "action": "setup_emergency" }
+    ]
+  }
+}
+```
+
+`suggested_actions` are deterministic and plan-aware (e.g. a `upgrade_plan`
+nudge for Free users near their storage limit). `missing_documents` is derived
+from real required `DocumentBundleRequirement` rows — never invented. Deeper pack
+readiness lands in `product/application-pack-readiness-v1`; AI-enhanced
+suggestions are future work (`product/life-radar-ai-insights`).
+
+---
+
 ## 13B.6 AI: Ask your documents (grounded Q&A)
 
 | Method | Path | Description |

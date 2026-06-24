@@ -4859,6 +4859,24 @@ class PlanUsageView(APIView):
         return Response(compute_plan_usage(request.user))
 
 
+class LifeRadarView(APIView):
+    """
+    Life Radar V1 — the signature readiness dashboard.
+
+    GET returns a single deterministic, owner-scoped payload (score + summary +
+    sections) computed from the user's documents, reminders, application packs,
+    and emergency-access status. Available to Free and Pro alike. Makes NO AI
+    call, consumes NO AI credits, and never touches R2 or exposes file URLs.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from .life_radar import build_life_radar
+
+        return Response(build_life_radar(request.user))
+
+
 # ---- Intelligence polish: tags, history, appointments, payments, scanners --
 
 
