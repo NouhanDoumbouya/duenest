@@ -916,6 +916,7 @@ backend/document-ocr-foundation        frontend/document-ocr-review-ui         (
 backend/document-vault-maturity        frontend/document-vault-maturity        (backend foundation done)
 feature/document-onboarding-trust      onboarding/trust/data launch polish     (done)
 backend/storage-plan-limits            Free/Pro product limits enforced        (done)
+product/life-radar-v1                  Deterministic readiness dashboard       (done)
 ```
 
 `backend/storage-plan-limits` is **implemented**: storage (100 MB Free / 10 GB
@@ -924,19 +925,30 @@ unlimited Pro), and active reminders (10 Free / unlimited Pro) are all
 hard-enforced. Storage quota is computed from `DocumentFile.file_size` in the
 database — never from R2. All limit violations return `403 plan_limit_exceeded`.
 
-**Next recommended branch: `product/life-radar-v1`**
+`product/life-radar-v1` is **implemented**: a single deterministic readiness
+endpoint `GET /api/v1/documents/life-radar/` (`apps/documents/life_radar.py`,
+`build_life_radar`) returns a 0–100 score, a summary, and radar sections
+(urgent, expiring documents, upcoming deadlines, incomplete packs, missing
+documents, emergency access, suggested actions). It is **deterministic and makes
+no AI call / consumes no AI credits / never touches R2** — fast, free, and
+available to Free and Pro alike. Suggested actions are plan-aware (e.g. a
+storage-upgrade nudge near the Free limit). AI-enhanced suggestions are future
+work (`product/life-radar-ai-insights`); deeper pack readiness is next.
 
-Suggested sequencing after storage-plan-limits:
+**Next recommended branch: `product/application-pack-readiness-v1`**
+
+Suggested sequencing:
 
 ```txt
 backend/storage-plan-limits            (done)
-product/life-radar-v1                  (next)
-product/application-pack-readiness-v1
+product/life-radar-v1                  (done)
+product/application-pack-readiness-v1  (next)
 ai/requirement-link-to-checklist
 product/application-tracker-v1
 product/smart-profile-v1
 b2b/portals-mvp
 backend/ai-org-credit-pools            (future)
+product/life-radar-ai-insights         (future — AI-enhanced Life Radar)
 ```
 
 ---
