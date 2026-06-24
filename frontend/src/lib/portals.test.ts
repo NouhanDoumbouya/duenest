@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { ApiError } from "./api";
 import {
   PORTAL_CASE_PRIORITY_LABELS,
   PORTAL_CASE_PRIORITY_ORDER,
@@ -14,7 +15,13 @@ import {
   PORTAL_PERSON_STATUS_TONE,
   PORTAL_PERSON_TYPE_LABELS,
   PORTAL_PERSON_TYPE_ORDER,
+  isNearLimit,
+  isOrgLimitError,
+  isPortalNotEnabledError,
+  limitLabel,
+  planLabel,
   progressPercent,
+  usagePercent,
 } from "./portals";
 import type { PortalCaseProgress } from "@/types/portals";
 
@@ -151,5 +158,119 @@ describe("progressPercent", () => {
         makeProgress({ total_requirements: 2, satisfied_requirements: 5 }),
       ),
     ).toBe(100);
+  });
+});
+
+describe("usagePercent", () => {
+  it("reads an unlimited limit (null) as 0%", () => {
+    expect(usagePercent(7, null)).toBe(0);
+    expect(usagePercent(0, null)).toBe(0);
+  });
+
+  it("treats a zero limit as full when anything is used, else 0", () => {
+    expect(usagePercent(1, 0)).toBe(100);
+    expect(usagePercent(0, 0)).toBe(0);
+  });
+
+  it("computes a rounded percentage of the limit used", () => {
+    expect(usagePercent(1, 4)).toBe(25);
+    expect(usagePercent(1, 3)).toBe(33);
+    expect(usagePercent(5, 10)).toBe(50);
+  });
+
+  it("clamps over-limit usage to 100 (never above)", () => {
+    expect(usagePercent(12, 10)).toBe(100);
+  });
+
+  it("never returns NaN for negative limits", () => {
+    const value = usagePercent(3, -2);
+    expect(Number.isNaN(value)).toBe(false);
+    expect(value).toBe(100);
+  });
+});
+
+describe("isNearLimit", () => {
+  it("is never near an unlimited (null) limit", () => {
+    expect(isNearLimit(9999, null)).toBe(false);
+  });
+
+  it("uses an 80% default threshold", () => {
+    expect(isNearLimit(8, 10)).toBe(true);
+    expect(isNearLimit(7, 10)).toBe(false);
+    expect(isNearLimit(10, 10)).toBe(true);
+  });
+
+  it("respects a custom threshold", () => {
+    expect(isNearLimit(5, 10, 0.5)).toBe(true);
+    expect(isNearLimit(4, 10, 0.5)).toBe(false);
+  });
+
+  it("treats a zero limit as near only when something is used", () => {
+    expect(isNearLimit(1, 0)).toBe(true);
+    expect(isNearLimit(0, 0)).toBe(false);
+  });
+});
+
+describe("limitLabel + planLabel", () => {
+  it("labels every limit resource", () => {
+    expect(limitLabel("members")).toBe("Team members");
+    expect(limitLabel("portal_people")).toBe("People");
+    expect(limitLabel("active_portal_cases")).toBe("Active cases");
+    expect(limitLabel("active_document_requests")).toBe("Active requests");
+    expect(limitLabel("active_sharing_rooms")).toBe("Active rooms");
+  });
+
+  it("gives friendly plan names", () => {
+    expect(planLabel("free")).toBe("Free");
+    expect(planLabel("teams_beta")).toBe("Teams (beta)");
+    expect(planLabel("teams")).toBe("Teams");
+    expect(planLabel("enterprise")).toBe("Enterprise");
+  });
+
+  it("falls back to the raw plan string for unknown plans", () => {
+    expect(planLabel("mystery")).toBe("mystery");
+  });
+});
+
+describe("isOrgLimitError + isPortalNotEnabledError", () => {
+  it("detects the org plan-limit error (403 + code)", () => {
+    const err = new ApiError("Limit reached", 403, {
+      code: "organization_plan_limit_exceeded",
+      resource: "active_portal_cases",
+      limit: 5,
+      used: 5,
+      plan: "teams",
+      message: "You've reached your active case limit.",
+    });
+    expect(isOrgLimitError(err)).toBe(true);
+    expect(isPortalNotEnabledError(err)).toBe(false);
+  });
+
+  it("detects the portal-not-enabled error (403 + code)", () => {
+    const err = new ApiError("Not enabled", 403, {
+      code: "portal_not_enabled",
+      message: "B2B Portals are available on Teams.",
+    });
+    expect(isPortalNotEnabledError(err)).toBe(true);
+    expect(isOrgLimitError(err)).toBe(false);
+  });
+
+  it("ignores a 403 with a different code", () => {
+    const err = new ApiError("Nope", 403, { code: "plan_limit_exceeded" });
+    expect(isOrgLimitError(err)).toBe(false);
+    expect(isPortalNotEnabledError(err)).toBe(false);
+  });
+
+  it("ignores a non-403 status even with the right code", () => {
+    const err = new ApiError("Nope", 503, {
+      code: "organization_plan_limit_exceeded",
+    });
+    expect(isOrgLimitError(err)).toBe(false);
+  });
+
+  it("ignores plain errors and null data", () => {
+    expect(isOrgLimitError(new Error("boom"))).toBe(false);
+    expect(isPortalNotEnabledError(null)).toBe(false);
+    expect(isOrgLimitError(new ApiError("x", 403, null))).toBe(false);
   });
 });

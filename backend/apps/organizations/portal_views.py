@@ -20,19 +20,26 @@ from apps.features.flags import require_feature_enabled
 
 from . import portals
 from .models import Organization, PortalCase, PortalPerson
+from .portal_limits import enforce_portal_enabled
 from .services import ADMIN_ROLES, require_membership, require_role
 
 
 class _PortalBase(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get_org(self, request, org_id, *, write=False):
+    def get_org(self, request, org_id, *, write=False, require_enabled=True):
+        # Two gates: the b2b_portals feature flag controls BETA exposure (503 when
+        # off), and the organization's entitlement controls actual portal usage
+        # (portal_not_enabled 403 when the org isn't on a Teams plan). The limits
+        # endpoint passes require_enabled=False so it can report the disabled state.
         require_feature_enabled("b2b_portals", request.user)
         org = get_object_or_404(Organization, pk=org_id, archived_at__isnull=True)
         if write:
             require_role(request.user, org, ADMIN_ROLES)
         else:
             require_membership(request.user, org)
+        if require_enabled:
+            enforce_portal_enabled(org)
         return org
 
     def get_person(self, org, person_id):
@@ -193,3 +200,15 @@ class PortalReviewQueueView(_PortalBase):
         org = self.get_org(request, org_id)
         items = portals.build_review_queue(org)
         return Response({"items": items, "count": len(items)})
+
+
+class PortalLimitsView(_PortalBase):
+    """GET → the organization's portal plan, limits, usage, and remaining. Readable
+    by any member (even when the portal is not enabled, so the UI can show the
+    paywall/coming-soon state)."""
+
+    def get(self, request, org_id):
+        from .portal_limits import build_organization_limit_payload
+
+        org = self.get_org(request, org_id, require_enabled=False)
+        return Response(build_organization_limit_payload(org))

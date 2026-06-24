@@ -59,6 +59,11 @@ class _Base(APITestCase):
             role=OrganizationMembership.Role.MEMBER,
             status=OrganizationMembership.Status.ACTIVE,
         )
+        # Teams Plan V1: the portal requires an organization entitlement. Enable it
+        # for this org so the existing portal flows are exercised.
+        from apps.organizations.portal_limits import set_organization_plan
+
+        set_organization_plan(self.org, plan="teams_beta", portal_enabled=True)
         self.base = f"/api/v1/organizations/{self.org.id}/portal"
         self.client.force_authenticate(self.owner)
 
@@ -133,6 +138,9 @@ class PeopleTests(_Base):
             organization=other_org, user=other_owner,
             role=OrganizationMembership.Role.OWNER, status=OrganizationMembership.Status.ACTIVE,
         )
+        from apps.organizations.portal_limits import set_organization_plan
+
+        set_organization_plan(other_org, plan="teams_beta", portal_enabled=True)
         self.client.force_authenticate(other_owner)
         with _flag_on():
             resp = self.client.get(

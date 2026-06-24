@@ -1855,3 +1855,39 @@ stored (the same privacy rules as Audit Logs V1 above).
 
 See `docs/b2b-portals.md`, `docs/api-spec.md` §38, and
 `docs/security/audit-logs.md` for the full contract and event catalog.
+
+## Teams Plan + Portal Limits V1
+
+Portals are now governed by an **organization-level entitlement** in addition to
+the membership scoping above. A new `OrganizationPlanProfile` (OneToOne →
+`Organization`, migration `organizations/0006_organizationplanprofile`) carries the
+org's `plan`, `status`, `portal_enabled`, and optional per-org caps. **An org with
+no profile has portals disabled.** It is **deterministic — no AI.**
+
+### Two gates
+
+* **`b2b_portals` feature flag** — controls beta exposure (`503` when off).
+* **Org entitlement** — controls actual usage: a non-Teams (portal-disabled) org
+  gets `403 portal_not_enabled`, and an over-limit create gets `403
+  organization_plan_limit_exceeded` (distinct from the personal
+  `plan_limit_exceeded`). Limits are enforced **org-wide and portal-scoped only**
+  (never a member's unrelated personal rooms/requests).
+
+### Founder-command activation only (no self-serve, no secrets stored)
+
+A Teams plan is activated **only** by a founder/beta management command
+(`python manage.py set_organization_plan …`), **not** by public self-serve or live
+checkout. No live Stripe prices are created and **no billing secrets/tokens are
+stored** on the profile — the profile holds plan/status/limit metadata only.
+Activation records audit events (`organization_plan_profile_created`,
+`organization_plan_changed`, `organization_portal_enabled`,
+`organization_portal_disabled`, `organization_portal_limit_reached`) through the
+unified Audit Logs (category `system`, owner = the org owner, `metadata.org_id`; no
+secrets/tokens/URLs).
+
+The org-limits readout `GET /api/v1/organizations/{org_id}/portal/limits/` is
+readable by **any member** (even when portals are disabled) so the UI can show the
+paywall, but it exposes only plan/limit/usage metadata — no tokens or file URLs.
+
+See `docs/b2b-portals.md`, `docs/api-spec.md` §39, `docs/BILLING.md`, and
+`docs/security/audit-logs.md`.

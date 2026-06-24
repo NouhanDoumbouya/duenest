@@ -248,6 +248,11 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             invites = organization.invites.select_related("invited_by", "accepted_by")
             return Response(OrganizationInviteSerializer(invites, many=True).data)
         require_role(request.user, organization, ADMIN_ROLES)
+        # Teams orgs are bounded by their org seat limit; others by the creator's
+        # personal member limit (existing behavior).
+        from .portal_limits import enforce_organization_seat_limit
+
+        enforce_organization_seat_limit(organization)
         enforce_organization_member_limit(_limit_owner(organization, request.user))
         serializer = OrganizationInviteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -268,8 +273,11 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         serializer = BulkInviteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         emails = parse_bulk_emails(serializer.validated_data["emails"])
+        from .portal_limits import enforce_organization_seat_limit
+
         invites = []
         for email in emails:
+            enforce_organization_seat_limit(organization)
             enforce_organization_member_limit(_limit_owner(organization, request.user))
             invites.append(
                 create_invite(

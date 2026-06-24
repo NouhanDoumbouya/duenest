@@ -925,3 +925,53 @@ class PortalCaseDocumentRequest(models.Model):
 
     def __str__(self):
         return f"PortalCaseDocumentRequest(case={self.case_id}, req={self.document_request_id})"
+
+
+class OrganizationPlanProfile(models.Model):
+    """
+    Organization-level entitlement for B2B Portals (Teams Plan V1).
+
+    Governs whether an organization may use portals and its org-level resource
+    limits — independent of any single staff member's personal Free/Pro plan. V1
+    is activated by a founder/beta management command (no Stripe checkout). The
+    numeric caps default from a central table (see ``portal_limits`` /
+    ``ORG_PORTAL_PLAN_LIMITS``); the nullable ``max_*`` fields here are optional
+    PER-ORG overrides (``null`` → use the plan default; a plan default of ``None``
+    means unlimited).
+    """
+
+    class Plan(models.TextChoices):
+        FREE = "free", "Free"
+        PRO = "pro", "Pro"
+        TEAMS_BETA = "teams_beta", "Teams (beta)"
+        TEAMS = "teams", "Teams"
+        ENTERPRISE = "enterprise", "Enterprise"
+
+    class Status(models.TextChoices):
+        ACTIVE = "active", "Active"
+        TRIALING = "trialing", "Trialing"
+        DISABLED = "disabled", "Disabled"
+        CANCELLED = "cancelled", "Cancelled"
+
+    organization = models.OneToOneField(
+        Organization, on_delete=models.CASCADE, related_name="plan_profile"
+    )
+    plan = models.CharField(max_length=20, choices=Plan.choices, default=Plan.FREE)
+    status = models.CharField(
+        max_length=12, choices=Status.choices, default=Status.ACTIVE
+    )
+    portal_enabled = models.BooleanField(default=False)
+
+    # Optional per-org overrides (null = use the central plan default).
+    max_members = models.PositiveIntegerField(null=True, blank=True)
+    max_portal_people = models.PositiveIntegerField(null=True, blank=True)
+    max_active_portal_cases = models.PositiveIntegerField(null=True, blank=True)
+    max_active_document_requests = models.PositiveIntegerField(null=True, blank=True)
+    max_active_sharing_rooms = models.PositiveIntegerField(null=True, blank=True)
+
+    notes = models.CharField(max_length=500, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"OrganizationPlanProfile(org={self.organization_id}, plan={self.plan})"

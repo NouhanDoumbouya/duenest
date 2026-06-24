@@ -154,6 +154,54 @@ export interface PortalReviewItem {
   uploaded_at: string;
 }
 
+// ---- Plan + limits ----------------------------------------------------------
+
+/** The org's billing/entitlement plan as it relates to portal capacity. */
+export type PortalPlan =
+  | "free"
+  | "pro"
+  | "teams_beta"
+  | "teams"
+  | "enterprise";
+
+/**
+ * The set of capacity-limited portal resources. `null` anywhere in `limits`
+ * or `remaining` means "unlimited" for that resource.
+ */
+export interface PortalLimitsBuckets {
+  members: number | null;
+  portal_people: number | null;
+  active_portal_cases: number | null;
+  active_document_requests: number | null;
+  active_sharing_rooms: number | null;
+}
+
+/** Current usage counts. Always concrete numbers (never unlimited). */
+export interface PortalUsageBuckets {
+  members: number;
+  portal_people: number;
+  active_portal_cases: number;
+  active_document_requests: number;
+  active_sharing_rooms: number;
+}
+
+/**
+ * The org's portal plan, limits, usage, and remaining headroom. Readable by any
+ * org member even when the portal is not enabled — so the paywall can render.
+ * `portal_enabled` decides whether the live portal (people/cases/requests) is
+ * available; `false` means show the Teams paywall.
+ */
+export interface PortalLimits {
+  plan: PortalPlan;
+  portal_enabled: boolean;
+  limits: PortalLimitsBuckets;
+  usage: PortalUsageBuckets;
+  remaining: PortalLimitsBuckets;
+}
+
+/** A capacity-limited portal resource key, used for labels and warnings. */
+export type PortalLimitResource = keyof PortalLimitsBuckets;
+
 // ---- List responses ---------------------------------------------------------
 
 export interface PortalPeopleResponse {
