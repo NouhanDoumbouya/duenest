@@ -21,6 +21,7 @@ from .models import (
     DocumentFileShareLink,
     DocumentReminderRule,
     EmergencyAccessPack,
+    TrackedApplication,
 )
 
 
@@ -79,6 +80,11 @@ def count_resource(user, resource: str) -> int:
         # frees a slot; editing an existing active rule never creates a new one.
         return DocumentReminderRule.objects.filter(
             owner=user, is_enabled=True, document__is_trashed=False
+        ).count()
+    if resource == plans.RESOURCE_APPLICATIONS:
+        # Only active (non-archived) tracked applications count toward the limit.
+        return TrackedApplication.objects.filter(
+            owner=user, is_archived=False
         ).count()
     if resource == plans.RESOURCE_SHARE_LINKS:
         # Active single-file share links plus active Quick Share QR sessions.

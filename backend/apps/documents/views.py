@@ -65,12 +65,14 @@ from .models import (
     RoomActivity,
     ShareRoom,
     ShareRoomItem,
+    TrackedApplication,
     generate_share_token,
 )
 from .serializers import (
     BundleReadinessSerializer,
     BundleExportRequestSerializer,
     ChecklistFromTemplateSerializer,
+    TrackedApplicationSerializer,
     DocumentActivityEventSerializer,
     DocumentAppointmentSerializer,
     DocumentBundleRequirementSerializer,
@@ -3280,6 +3282,123 @@ class RequirementLinkImportApplyView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+# ---- Application Tracker V1 (deterministic; no AI) -------------------------
+
+
+class _ApplicationScopedMixin:
+    permission_classes = [IsAuthenticated]
+    serializer_class = TrackedApplicationSerializer
+
+    def get_queryset(self):
+        return TrackedApplication.objects.filter(
+            owner=self.request.user
+        ).select_related("linked_bundle")
+
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        ctx["request"] = self.request
+        return ctx
+
+
+class ApplicationListCreateView(_ApplicationScopedMixin, generics.ListCreateAPIView):
+    """GET lists the user's applications; POST creates one (plan-limited)."""
+
+    def get_queryset(self):
+        qs = super().get_queryset().prefetch_related("linked_bundle__requirements")
+        params = self.request.query_params
+        # Archived are excluded by default unless explicitly requested.
+        if params.get("archived") in ("1", "true", "yes"):
+            qs = qs.filter(is_archived=True)
+        else:
+            qs = qs.filter(is_archived=False)
+        if params.get("status"):
+            qs = qs.filter(status=params["status"])
+        if params.get("type"):
+            qs = qs.filter(application_type=params["type"])
+        return qs
+
+    def list(self, request, *args, **kwargs):
+        from .application_tracker import build_application_tracker_payload
+
+        items = [
+            build_application_tracker_payload(app, request.user)
+            for app in self.get_queryset()
+        ]
+        return Response({"count": len(items), "items": items})
+
+    def create(self, request, *args, **kwargs):
+        enforce_plan_limit(request.user, user_plans.RESOURCE_APPLICATIONS)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        application = serializer.save(owner=request.user)
+
+        from .application_tracker import build_application_tracker_payload
+
+        _track_product_event(
+            request,
+            "application_created",
+            object_type="tracked_application",
+            object_id=application.id,
+            metadata={
+                "type": application.application_type,
+                "linked_pack": bool(application.linked_bundle_id),
+            },
+        )
+        return Response(
+            build_application_tracker_payload(application, request.user),
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class ApplicationDetailView(_ApplicationScopedMixin, generics.RetrieveUpdateDestroyAPIView):
+    """GET/PATCH one application; DELETE archives it (soft) rather than erasing."""
+
+    lookup_url_kwarg = "application_id"
+
+    def get_queryset(self):
+        return super().get_queryset().prefetch_related("linked_bundle__requirements")
+
+    def retrieve(self, request, *args, **kwargs):
+        from .application_tracker import build_application_tracker_payload
+
+        return Response(
+            build_application_tracker_payload(self.get_object(), request.user)
+        )
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop("partial", False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        application = serializer.save()
+
+        from .application_tracker import build_application_tracker_payload
+
+        return Response(
+            build_application_tracker_payload(application, request.user)
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        # Archive instead of hard-deleting so history is preserved and the active
+        # plan-limit count is freed.
+        application = self.get_object()
+        if not application.is_archived:
+            application.is_archived = True
+            application.save(update_fields=["is_archived", "updated_at"])
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ApplicationSummaryView(APIView):
+    """GET a deterministic account-wide application summary (owner-scoped)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from .application_tracker import build_application_tracker_summary
+
+        return Response(build_application_tracker_summary(request.user))
 
 
 # ---- Timeline ---------------------------------------------------------------

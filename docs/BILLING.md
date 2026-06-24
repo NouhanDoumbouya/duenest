@@ -68,15 +68,20 @@ branch is **implemented and merged**.
 | Documents | **30** |
 | Files | **60** |
 | Application packs / bundles | **1** |
+| Tracked applications | **3** (active; archived excluded) |
 | Active reminders | **10** (counts only enabled reminder rules on non-trashed documents) |
 | Active share links | **5** |
 | Emergency packs | **1** |
 | Scanner | 5 pages per scanned PDF |
 | AI credits | 10 credits/month |
 
-**Pro limits:** 10 GB storage, 1,000 documents. Files, bundles, active reminders,
-share links, and emergency packs are effectively unlimited (high numeric cap).
-Scanner and AI: see sections below.
+**Pro limits:** 10 GB storage, 1,000 documents, 100 active tracked applications.
+Files, bundles, active reminders, share links, and emergency packs are
+effectively unlimited (high numeric cap). Scanner and AI: see sections below.
+
+The Application Tracker (`resource "applications"`, Free 3 / Pro 100) counts only
+active (non-archived) applications; archiving frees a slot. The tracker itself is
+deterministic (no AI) and available to Free and Pro.
 
 **Storage quota method:** storage used is the sum of stored `DocumentFile.file_size`
 values for the user's non-trashed files, computed from the database. Cloudflare R2

@@ -1953,6 +1953,94 @@ suggestions are future work (`product/life-radar-ai-insights`).
 
 ---
 
+## 13C.8 Application Tracker V1
+
+Tracks the lifecycle of an application/renewal (scholarship, visa, job, grant,
+permit, university, internship, …) and optionally links it to an application
+pack (`DocumentBundle`). **Deterministic — no AI call, no AI credits, no R2, no
+private file URLs.** Owner-scoped. Behind the founder-only rollout flag
+`application_tracker` until launched.
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/v1/applications/` | List the user's applications (`?status=`, `?type=`, `?archived=true`; archived excluded by default) |
+| `POST` | `/api/v1/applications/` | Create an application (plan-limited) |
+| `GET` | `/api/v1/applications/{id}/` | Retrieve one application |
+| `PATCH` | `/api/v1/applications/{id}/` | Update an application |
+| `DELETE` | `/api/v1/applications/{id}/` | **Archive** (soft-delete) — preserves history, frees the active limit |
+| `GET` | `/api/v1/applications/summary/` | Account-wide counts |
+
+**Types:** `scholarship`, `university`, `visa`, `job`, `internship`, `grant`,
+`permit`, `renewal`, `other`.
+**Statuses:** `planning`, `checklist_created`, `documents_missing`,
+`ready_to_submit`, `submitted`, `under_review`, `interview`, `accepted`,
+`rejected`, `withdrawn`, `renewal_needed`.
+**Priority:** `low` / `medium` / `high`.
+
+Create/update accept: `title` (required), `application_type`, `status`,
+`linked_bundle` (must belong to the user — `400` otherwise), `source_url`,
+`organization_name`, `deadline_date`, `submitted_at`, `decision_date`,
+`target_start_date`, `notes`, `priority`, `is_archived`.
+
+### List / detail item shape
+
+```json
+{
+  "id": 12,
+  "title": "Malaysia Student Visa Renewal",
+  "type": "visa",
+  "status": "documents_missing",
+  "status_label": "Documents missing",
+  "suggested_status": "documents_missing",
+  "suggested_status_label": "Documents missing",
+  "priority": "high",
+  "source_url": "https://...",
+  "organization_name": null,
+  "deadline_date": "2026-08-31",
+  "days_until_deadline": 42,
+  "deadline_state": "soon",
+  "submitted_at": null,
+  "decision_date": null,
+  "target_start_date": null,
+  "linked_pack": {
+    "id": 5, "name": "Visa Renewal Pack", "readiness_score": 72,
+    "has_checklist": true, "is_ready_to_share": false,
+    "missing_count": 3, "warning_count": 1
+  },
+  "next_actions": [ { "type": "finish_missing_documents", "label": "…", "description": "…", "priority": "high", "bundle_id": 5 } ],
+  "notes": "",
+  "is_archived": false,
+  "created_at": "…", "updated_at": "…"
+}
+```
+
+- **Deadline states:** `no_deadline`, `upcoming` (>30d), `soon` (≤30d), `urgent`
+  (≤7d), `overdue` (deadline past and not submitted/closed), `completed`
+  (accepted/rejected/withdrawn). Once submitted/under-review/interview, deadline
+  pressure is relieved (state `upcoming`).
+- **Suggested status** is computed deterministically from the linked pack's
+  readiness — no checklist → `planning`; missing required docs → `documents_missing`;
+  ready → `ready_to_submit` — and is returned **alongside** (never overriding) the
+  user's chosen `status`. The UI may offer "Apply suggestion".
+- `GET /applications/summary/` returns `{ total_active, urgent, ready_to_submit,
+  submitted, overdue, completed, archived }` (archived excluded from `total_active`).
+
+### Plan limit
+
+Active (non-archived) applications are limited per plan: **Free 3 / Pro 100**
+(`resource: "applications"`). Creating beyond the limit returns
+`403 plan_limit_exceeded` (same shape/discriminator as other limits; the global
+upgrade paywall handles it). Archiving an application frees a slot.
+
+### Life Radar integration (additive)
+
+`GET /api/v1/documents/life-radar/`'s `summary` gains four additive keys —
+`active_applications`, `urgent_applications`, `ready_to_submit_applications`,
+`overdue_applications` — and may add "submit ready application" / "deadline
+approaching" suggested actions. Existing Life Radar keys/shape are unchanged.
+
+---
+
 ## 13B.6 AI: Ask your documents (grounded Q&A)
 
 | Method | Path | Description |

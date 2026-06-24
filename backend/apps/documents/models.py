@@ -2580,3 +2580,90 @@ class RequirementExtractionDraft(models.Model):
 
     def __str__(self):
         return f"RequirementExtractionDraft(bundle={self.bundle_id}, status={self.status})"
+
+
+class TrackedApplication(models.Model):
+    """
+    A tracked document-based workflow (scholarship, visa, job, grant, renewal…).
+
+    Connects the user's intent (deadline, status, notes, source link) to an
+    optional application pack (``DocumentBundle``), so CertaNest can say not just
+    "your pack is 72% ready" but "your visa renewal is documents-missing" or
+    "your scholarship is ready to submit". Owner-scoped; deterministic (no AI);
+    stores no file URLs.
+    """
+
+    class Type(models.TextChoices):
+        SCHOLARSHIP = "scholarship", "Scholarship"
+        UNIVERSITY = "university", "University"
+        VISA = "visa", "Visa"
+        JOB = "job", "Job"
+        INTERNSHIP = "internship", "Internship"
+        GRANT = "grant", "Grant"
+        PERMIT = "permit", "Permit"
+        RENEWAL = "renewal", "Renewal"
+        OTHER = "other", "Other"
+
+    class Status(models.TextChoices):
+        PLANNING = "planning", "Planning"
+        CHECKLIST_CREATED = "checklist_created", "Checklist created"
+        DOCUMENTS_MISSING = "documents_missing", "Documents missing"
+        READY_TO_SUBMIT = "ready_to_submit", "Ready to submit"
+        SUBMITTED = "submitted", "Submitted"
+        UNDER_REVIEW = "under_review", "Under review"
+        INTERVIEW = "interview", "Interview"
+        ACCEPTED = "accepted", "Accepted"
+        REJECTED = "rejected", "Rejected"
+        WITHDRAWN = "withdrawn", "Withdrawn"
+        RENEWAL_NEEDED = "renewal_needed", "Renewal needed"
+
+    class Priority(models.TextChoices):
+        LOW = "low", "Low"
+        MEDIUM = "medium", "Medium"
+        HIGH = "high", "High"
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="tracked_applications",
+    )
+    title = models.CharField(max_length=255)
+    application_type = models.CharField(
+        max_length=20, choices=Type.choices, default=Type.OTHER
+    )
+    status = models.CharField(
+        max_length=24, choices=Status.choices, default=Status.PLANNING
+    )
+    # Optional link to an application pack; SET_NULL so deleting a pack never
+    # destroys the application record.
+    linked_bundle = models.ForeignKey(
+        DocumentBundle,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="tracked_applications",
+    )
+    source_url = models.URLField(max_length=2048, blank=True)
+    organization_name = models.CharField(max_length=255, blank=True)
+    deadline_date = models.DateField(null=True, blank=True)
+    submitted_at = models.DateField(null=True, blank=True)
+    decision_date = models.DateField(null=True, blank=True)
+    target_start_date = models.DateField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+    priority = models.CharField(
+        max_length=8, choices=Priority.choices, default=Priority.MEDIUM
+    )
+    is_archived = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+        indexes = [
+            models.Index(fields=["owner", "is_archived", "-updated_at"]),
+            models.Index(fields=["owner", "status"]),
+            models.Index(fields=["owner", "deadline_date"]),
+        ]
+
+    def __str__(self):
+        return f"TrackedApplication(owner={self.owner_id}, title={self.title!r})"
