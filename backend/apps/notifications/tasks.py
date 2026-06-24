@@ -122,3 +122,18 @@ def process_due_notifications(limit: int = 200, user_id: int | None = None) -> d
     summary = _process(limit=limit, user_id=user_id)
     logger.info("process_due_notifications_task summary=%s", summary)
     return summary
+
+
+@shared_task(name="apps.notifications.tasks.send_weekly_radar_emails", acks_late=True)
+def send_weekly_radar_emails(limit: int | None = None) -> dict:
+    """Scheduled weekly sweep: send the opt-in deterministic Weekly Radar email.
+
+    No AI, no credits. No-ops gracefully unless email is configured and users have
+    opted in (eligibility is enforced per-recipient). Idempotent within the dedupe
+    window, so a weekly beat plus a rerun won't double-send.
+    """
+    from apps.notifications.weekly_radar import send_weekly_radar_batch
+
+    summary = send_weekly_radar_batch(limit=limit)
+    logger.info("send_weekly_radar_emails_task summary=%s", summary)
+    return summary

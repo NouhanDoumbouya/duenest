@@ -28,7 +28,8 @@ type ToggleKey =
   | "emergency_reminders_enabled"
   | "security_alerts_enabled"
   | "activity_notifications_enabled"
-  | "reminder_digest_enabled";
+  | "reminder_digest_enabled"
+  | "weekly_radar_email_enabled";
 
 const TOGGLES: Array<{ key: ToggleKey; label: string; helper: string }> = [
   {
@@ -75,6 +76,12 @@ const TOGGLES: Array<{ key: ToggleKey; label: string; helper: string }> = [
     key: "reminder_digest_enabled",
     label: "Reminder digest",
     helper: "Prepared for a later grouped digest workflow.",
+  },
+  {
+    key: "weekly_radar_email_enabled",
+    label: "Weekly Radar Email",
+    helper:
+      "Get a weekly summary of expiring documents, deadlines, incomplete packs, applications, and Magic Inbox items.",
   },
 ];
 
@@ -201,7 +208,7 @@ export default function NotificationSettingsPage() {
       >
         {prefs === null ? (
           <div className="grid gap-3 md:grid-cols-2">
-            {Array.from({ length: 8 }).map((_, index) => (
+            {Array.from({ length: TOGGLES.length }).map((_, index) => (
               <Skeleton key={index} className="h-20 w-full rounded-xl" />
             ))}
           </div>

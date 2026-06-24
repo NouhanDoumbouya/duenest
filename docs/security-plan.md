@@ -911,6 +911,22 @@ Your passport document is expiring soon. Please review it in CertaNest.
 Avoid including highly sensitive details in email bodies unless a future,
 explicit, separately reviewed user setting is added.
 
+### Implemented: Weekly Radar email
+
+The Weekly Radar email (`apps/notifications/weekly_radar.py`) is owner-scoped and
+**deterministic** — it is built entirely from the existing Life Radar payload
+(`build_life_radar`) and makes **no AI call and consumes no AI credits**. It
+never includes document contents, private file URLs, attachments, passport/ID
+numbers, raw OCR text, or notes — only titles, counts, dates, and internal app
+routes (the Life Radar payload itself carries no file URLs).
+
+It is strictly **opt-in** (`NotificationPreference.weekly_radar_email_enabled`,
+default off) and additionally requires `email_enabled`. Sending honours
+suppression and one-click unsubscribe through the shared `send_branded_email`
+(category `lifecycle`), and is **deduped weekly** (no Weekly Radar in the last
+6 days, tracked via `EmailLog`) so a weekly beat plus an accidental rerun cannot
+double-send. A per-recipient failure never aborts the batch.
+
 ---
 
 ## 20. Application Pack Security

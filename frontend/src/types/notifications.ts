@@ -86,6 +86,7 @@ export interface NotificationPreferences {
   security_alerts_enabled: boolean;
   activity_notifications_enabled: boolean;
   reminder_digest_enabled: boolean;
+  weekly_radar_email_enabled: boolean;
   default_reminder_lead_days: number[];
   timezone: string;
   created_at: string;

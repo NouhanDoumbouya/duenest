@@ -37,6 +37,11 @@ class NotificationPreference(models.Model):
     # opt-in, and only delivered when AI + email are configured and the user can
     # see the ai_briefing feature.
     ai_briefing_digest_enabled = models.BooleanField(default=False)
+    # Opt-in weekly Radar email: a deterministic (no-AI) summary of expiring
+    # documents, deadlines, incomplete packs, applications, and Magic Inbox items
+    # to review. Default off — strictly opt-in; only sent when email is configured
+    # and the user is active with a valid address.
+    weekly_radar_email_enabled = models.BooleanField(default=False)
     default_reminder_lead_days = models.JSONField(default=default_lead_days, blank=True)
     timezone = models.CharField(max_length=64, default="UTC")
     created_at = models.DateTimeField(auto_now_add=True)

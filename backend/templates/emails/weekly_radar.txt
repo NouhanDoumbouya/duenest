@@ -1,0 +1,26 @@
+{% extends "emails/base.txt" %}
+{% block content %}Your CertaNest Weekly Radar
+{{ tagline }}
+{% if score is not None %}
+Readiness: {{ label }}{% if score is not None %} ({{ score }}/100){% endif %}
+{% endif %}
+{% if has_attention %}
+{{ attention_count }} thing{{ attention_count|pluralize }} need attention this week:
+{% for item in top_priorities %}
+{{ forloop.counter }}. {{ item.title }} — {{ item.detail }}
+{% endfor %}
+{% else %}
+You're all caught up — nothing urgent on your radar this week.
+{% endif %}
+Suggested next step: {{ next_action.label }}
+{{ next_action.url }}
+{% if details %}
+{% for section in details %}
+{{ section.title }}:
+{% for row in section.rows %}  - {{ row }}
+{% endfor %}{% endfor %}{% endif %}
+This summary is generated from your own documents' dates and statuses. CertaNest
+emails never include document contents, files, access codes, share tokens, raw
+text, private notes, or ID numbers.
+{% endblock %}
+{% block footer %}Manage notification preferences: {{ preferences_url }}{% endblock %}
