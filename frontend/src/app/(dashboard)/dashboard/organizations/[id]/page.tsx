@@ -17,6 +17,7 @@ import {
   ClipboardList,
   Copy,
   DoorClosed,
+  DoorOpen,
   FileText,
   Loader2,
   Package,
@@ -27,6 +28,7 @@ import {
 } from "lucide-react";
 
 import { ProductMetric, SegmentedControl } from "@/components/ui/product-ui";
+import { useFeature } from "@/components/features/feature-flags-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -130,6 +132,7 @@ export default function OrganizationWorkspacePage({
 }) {
   const { id } = use(params);
   const organizationId = Number(id);
+  const portalsEnabled = useFeature("b2b_portals");
   const [state, setState] = useState<WorkspaceState | null>(null);
   const [tab, setTab] = useState<WorkspaceTab>("overview");
   const [error, setError] = useState<string | null>(null);
@@ -284,6 +287,15 @@ export default function OrganizationWorkspacePage({
         </div>
 
         <div className="flex flex-wrap gap-2">
+          {portalsEnabled && (
+            <Link
+              href={`/dashboard/organizations/${organization.id}/portal`}
+              className={cn(buttonVariants({ variant: "outline" }))}
+            >
+              <DoorOpen className="size-4" />
+              Portal
+            </Link>
+          )}
           {canEdit && (
             <Button variant="outline" onClick={() => setTab("documents")}>
               <FileText className="size-4" />

@@ -5668,3 +5668,145 @@ The salted IP/UA hash setting (`AUDIT_LOG_HASH_SALT`), metadata sanitization, an
 the full privacy contract live in `docs/security-plan.md` and
 `docs/security/audit-logs.md`. The owner-only UI is `/dashboard/security/audit`.
 
+## 38 — B2B Portals MVP (`organizations/{org_id}/portal/`)
+
+An organization-facing portal workspace to manage **people**
+(clients/students/applicants/employees) and document **cases**. It is an MVP that
+**orchestrates existing primitives** — it does **not** introduce a second upload,
+sharing-room, or request system. **Deterministic — no AI call, no AI credits, no
+new public route.**
+
+**Convergence.** The portal **reuses** the existing `Organization` +
+`OrganizationMembership` (roles owner/admin/member/viewer) for the workspace and
+permissions, and the per-user `apps.documents` primitives for the real work — a
+case's checklist/progress is a `DocumentBundle` + requirements
+(`bundle_readiness`), a case's secure workspace is a `SharingRoom`, each document
+is collected via a `DocumentRequestLink` (recipient defaults to the case person;
+satisfies a pack requirement on acceptance), plus `TrackedApplication` and the
+unified `AuditLogEntry`. It **adds only three minimal new models** in
+`apps/organizations`: `PortalPerson`, `PortalCase`, `PortalCaseDocumentRequest`
+(migration `organizations/0005_*`). The older/parallel org systems
+(`OrganizationSecureRoom`, `OrganizationDocument`, the org-side
+`DocumentRequest`/campaigns, the personal `ShareRoom`) are **left untouched**.
+
+### Permissions & gating
+
+* **Authentication required** on every endpoint; the requester must be a **member**
+  of `{org_id}`. Reads require any membership; **writes require an admin/owner
+  role** (`require_role(ADMIN_ROLES)`).
+* **Org isolation:** a member only sees their own organization's people/cases.
+* **Feature flag `b2b_portals`** (FOUNDER_ONLY default) gates the whole surface —
+  a `503` when the flag is off for the user.
+* **No public portal route.** Recipients continue through the existing
+  `/document-request/{token}` (upload) and `/room/{token}` (Sharing Room) public
+  pages.
+
+### Ownership model
+
+The document primitives stay **User-owned** (no org FK). A case's pack/room/request
+are owned by the case's **creating member** (`created_by`), so the existing
+owner-scoped services apply unchanged. **Known MVP limitation:** portal-created
+primitives count against the **creating member's personal plan limits** (Free: 1
+pack / 3 rooms / 5 request links) — a Teams plan that lifts these is future work
+(`docs/BILLING.md`).
+
+### Endpoints
+
+All under `/api/v1/organizations/{org_id}/portal/` (authenticated, member-scoped,
+feature-gated). Writes require admin/owner.
+
+| Method | Path | Role | Description |
+| --- | --- | --- | --- |
+| `GET` | `/summary/` | member | Dashboard counts (see shape below) |
+| `GET` | `/people/` | member | List the org's people |
+| `POST` | `/people/` | admin | Create a person |
+| `GET` | `/people/{id}/` | member | Retrieve a person |
+| `PATCH` | `/people/{id}/` | admin | Update a person |
+| `POST` | `/people/{id}/archive/` | admin | Archive a person |
+| `GET` | `/cases/` | member | List the org's cases |
+| `POST` | `/cases/` | admin | Create a case (for a person) |
+| `GET` | `/cases/{id}/` | member | Retrieve a case |
+| `PATCH` | `/cases/{id}/` | admin | Update a case (status changes audited) |
+| `POST` | `/cases/{id}/archive/` | admin | Archive a case |
+| `POST` | `/cases/{id}/create-pack/` | admin | Create + link a `DocumentBundle` (case checklist) |
+| `POST` | `/cases/{id}/create-room/` | admin | Create + link a `SharingRoom` (case workspace) |
+| `POST` | `/cases/{id}/create-request/` | admin | Create a `DocumentRequestLink` (recipient defaults to the case person) |
+| `GET` | `/cases/{id}/progress/` | member | Deterministic per-case progress (see shape) |
+| `GET` | `/review-queue/` | member | Case document requests with an upload awaiting review (`UPLOADED` / `UNDER_REVIEW`) |
+
+### Models
+
+* **`PortalPerson`** — `organization`, `created_by`, `full_name`, `email`,
+  `phone`, `person_type` (`client` / `student` / `applicant` / `employee` /
+  `family_member` / `other`), `status` (`active` / `waiting_for_documents` /
+  `under_review` / `completed` / `archived`), `notes`, `archived_at`.
+* **`PortalCase`** — `organization`, `person`, `created_by`, `title`, `case_type`
+  (`visa` / `scholarship` / `admission` / `employee_onboarding` / `compliance` /
+  `client_file` / `general`), `status` (`draft` / `collecting_documents` /
+  `waiting_for_review` / `ready` / `submitted` / `completed` / `blocked` /
+  `archived`), `priority` (`low` / `normal` / `high` / `urgent`), `due_date`,
+  `linked_bundle` / `linked_application` / `linked_room` (all `SET_NULL` FKs to the
+  `apps.documents` primitives), `notes`, `archived_at`.
+* **`PortalCaseDocumentRequest`** — a join: `case`, `document_request`
+  (`DocumentRequestLink`), `requirement` (`DocumentBundleRequirement`).
+
+### Summary shape
+
+```json
+{
+  "people_total": 12,
+  "active_cases": 5,
+  "people_waiting_for_documents": 3,
+  "uploads_needing_review": 2,
+  "overdue_cases": 1,
+  "ready_cases": 2,
+  "blocked_cases": 0
+}
+```
+
+### Progress shape (`GET /cases/{id}/progress/`)
+
+Deterministic. A **flat** dict combining the linked pack's requirements with the
+case's document-request statuses:
+
+```json
+{
+  "total_requirements": 4,
+  "satisfied_requirements": 2,
+  "missing_requirements": 2,
+  "readiness_score": 50,
+  "requests_total": 3,
+  "requests_uploaded": 1,
+  "requests_accepted": 2,
+  "requests_needs_replacement": 0,
+  "uploads_needing_review": 1,
+  "suggested_status": "waiting_for_review"
+}
+```
+
+`readiness_score` and the requirement counts come from the existing
+`bundle_readiness` (zeros when no pack is linked). `requests_uploaded` mirrors
+`uploads_needing_review` (requests in `UPLOADED` / `UNDER_REVIEW`).
+`suggested_status` is `waiting_for_review` if any uploads are pending review,
+`ready` if all required requirements are satisfied (and a pack is linked),
+otherwise `collecting_documents` — shown alongside the case's own status; it never
+overrides it.
+
+### Audit
+
+Portal events are recorded via the unified Audit Logs (`record_audit_event`,
+category `system`, owner = the org's owner user, actor = the acting member,
+`metadata.org_id` for scoping): `portal_person_created`, `portal_person_archived`,
+`portal_case_created`, `portal_case_status_changed`, `portal_case_archived`,
+`portal_case_pack_created`, `portal_case_room_created`,
+`portal_case_request_created`. No document contents, tokens, or URLs are stored
+(see §37 and `docs/security/audit-logs.md`).
+
+### Frontend
+
+Owner/staff page `/dashboard/organizations/[orgId]/portal` (dashboard summary +
+people + cases + review queue + case detail/actions). No public UI.
+
+See `docs/b2b-portals.md`, `docs/BILLING.md`, and `docs/security-plan.md` for the
+convergence detail, plan-limit note, and security model.
+
