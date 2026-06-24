@@ -3811,6 +3811,317 @@ class MagicInboxArchiveView(APIView):
         )
 
 
+# ---- Document Request Links -------------------------------------------------
+
+
+class _DocumentRequestScopedMixin:
+    """Owner-scoped document-request queryset (no cross-user leakage)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        from .models import DocumentRequestLink
+
+        return DocumentRequestLink.objects.filter(owner=self.request.user)
+
+    def get_serializer_class(self):
+        from .serializers import DocumentRequestLinkSerializer
+
+        return DocumentRequestLinkSerializer
+
+
+class DocumentRequestListCreateView(_DocumentRequestScopedMixin, generics.ListCreateAPIView):
+    """GET list (owner-scoped) / POST create a document request (mints a token)."""
+
+    def list(self, request, *args, **kwargs):
+        from .serializers import DocumentRequestLinkSerializer
+
+        qs = self.get_queryset()
+        status_filter = request.query_params.get("status")
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+        data = DocumentRequestLinkSerializer(
+            qs, many=True, context={"request": request}
+        ).data
+        return Response({"requests": data, "count": len(data)}, status=status.HTTP_200_OK)
+
+    def create(self, request, *args, **kwargs):
+        from .document_requests import DocumentRequestError, create_document_request
+        from .serializers import DocumentRequestLinkSerializer
+
+        try:
+            req = create_document_request(request.user, request.data)
+        except DocumentRequestError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        send_email = bool(request.data.get("send_email"))
+        if send_email:
+            from .document_requests_email import send_document_request_email
+
+            send_document_request_email(req)
+
+        _track_product_event(
+            request, "document_request_created",
+            object_type="document_request_link", object_id=req.id,
+            metadata={"has_recipient_email": bool(req.recipient_email)},
+        )
+        return Response(
+            DocumentRequestLinkSerializer(req, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class DocumentRequestDetailView(_DocumentRequestScopedMixin, generics.RetrieveUpdateAPIView):
+    """GET / PATCH (editable metadata only — state changes go through actions)."""
+
+    EDITABLE = {
+        "requested_document_title", "requested_document_type", "instructions",
+        "recipient_name", "recipient_email", "recipient_message", "due_date",
+        "expires_at", "owner_note", "max_uploads",
+    }
+
+    def update(self, request, *args, **kwargs):
+        # Restrict writes to safe metadata fields; ignore everything else.
+        partial = kwargs.pop("partial", True)
+        instance = self.get_object()
+        data = {k: v for k, v in request.data.items() if k in self.EDITABLE}
+        serializer = self.get_serializer(instance, data=data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+
+class _DocumentRequestActionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_request(self, request, pk):
+        from .models import DocumentRequestLink
+
+        return get_object_or_404(DocumentRequestLink, pk=pk, owner=request.user)
+
+    def _serialize(self, req, request):
+        from .serializers import DocumentRequestLinkSerializer
+
+        return DocumentRequestLinkSerializer(req, context={"request": request}).data
+
+
+class DocumentRequestSendView(_DocumentRequestActionView):
+    """POST → email the secure upload link to the recipient (branded email)."""
+
+    def post(self, request, pk):
+        req = self.get_request(request, pk)
+        if not req.recipient_email:
+            return Response(
+                {"detail": "Add a recipient email first, or copy the link manually."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        from .document_requests_email import send_document_request_email
+
+        ok = send_document_request_email(req)
+        return Response({"sent": bool(ok), "request": self._serialize(req, request)})
+
+
+class DocumentRequestCancelView(_DocumentRequestActionView):
+    def post(self, request, pk):
+        from .document_requests import cancel_document_request
+
+        req = cancel_document_request(self.get_request(request, pk))
+        return Response(self._serialize(req, request))
+
+
+class DocumentRequestReviewView(_DocumentRequestActionView):
+    """POST {action: accept|reject|needs_replacement, reason?}."""
+
+    def post(self, request, pk):
+        from .document_requests import DocumentRequestError, review_document_request
+
+        action = (request.data.get("action") or "").strip()
+        reason = (request.data.get("reason") or "").strip()
+        try:
+            req = review_document_request(self.get_request(request, pk), action, reason=reason)
+        except DocumentRequestError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        _track_product_event(
+            request, "document_request_reviewed",
+            object_type="document_request_link", object_id=req.id,
+            metadata={"action": action},
+        )
+        return Response(self._serialize(req, request))
+
+
+class DocumentRequestAcceptView(_DocumentRequestActionView):
+    def post(self, request, pk):
+        from .document_requests import DocumentRequestError, accept_document_request
+
+        try:
+            req = accept_document_request(self.get_request(request, pk))
+        except DocumentRequestError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(self._serialize(req, request))
+
+
+class DocumentRequestRejectView(_DocumentRequestActionView):
+    def post(self, request, pk):
+        from .document_requests import DocumentRequestError, reject_document_request
+
+        reason = (request.data.get("reason") or "").strip()
+        try:
+            req = reject_document_request(self.get_request(request, pk), reason)
+        except DocumentRequestError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(self._serialize(req, request))
+
+
+class DocumentRequestNeedsReplacementView(_DocumentRequestActionView):
+    def post(self, request, pk):
+        from .document_requests import DocumentRequestError, mark_needs_replacement
+
+        reason = (request.data.get("reason") or "").strip()
+        try:
+            req = mark_needs_replacement(self.get_request(request, pk), reason)
+        except DocumentRequestError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(self._serialize(req, request))
+
+
+class DocumentRequestSaveToVaultView(_DocumentRequestActionView):
+    def post(self, request, pk):
+        from .document_requests import DocumentRequestError, save_request_file_to_vault
+
+        try:
+            document = save_request_file_to_vault(self.get_request(request, pk))
+        except DocumentRequestError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        req = self.get_request(request, pk)
+        return Response(
+            {"document_id": document.id, "request": self._serialize(req, request)},
+            status=status.HTTP_200_OK,
+        )
+
+
+class DocumentRequestAttachToPackView(_DocumentRequestActionView):
+    def post(self, request, pk):
+        from .document_requests import DocumentRequestError, attach_request_file_to_pack
+
+        try:
+            requirement = attach_request_file_to_pack(self.get_request(request, pk))
+        except DocumentRequestError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        req = self.get_request(request, pk)
+        return Response(
+            {
+                "requirement_id": requirement.id,
+                "bundle_id": requirement.bundle_id,
+                "readiness_score": requirement.bundle.readiness_score,
+                "request": self._serialize(req, request),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class PublicDocumentRequestMetadataView(APIView):
+    """
+    GET (public, token-only) → the minimal metadata a recipient needs to upload.
+    Reveals no owner private data and no file URLs. Marks the request opened.
+    """
+
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "public_access_code"
+
+    def get(self, request, token):
+        from .document_requests import (
+            RESOLVE_OK,
+            build_public_document_request_payload,
+            mark_document_request_opened,
+            resolve_document_request_token,
+        )
+
+        req, state = resolve_document_request_token(token)
+        if req is None:
+            return Response(
+                {"detail": "This request link is not available.", "state": state},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if state == RESOLVE_OK:
+            mark_document_request_opened(req)
+        payload = build_public_document_request_payload(req)
+        payload["state"] = state
+        return Response(payload, status=status.HTTP_200_OK)
+
+
+class PublicDocumentRequestUploadView(APIView):
+    """
+    POST (public, token-only) → the recipient uploads ONE file. Strict validation
+    (extension/type/magic bytes) + malware scan + encrypt-at-rest as an
+    owner-owned DocumentFile. Enforces the OWNER's file + storage plan limits.
+    Never auto-accepts; never returns a storage URL.
+    """
+
+    permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get_throttles(self):
+        if self.request.method == "POST":
+            throttle = ScopedRateThrottle()
+            throttle.scope = "public_document_upload"
+            return [throttle]
+        return []
+
+    def post(self, request, token):
+        from .constants import ALLOWED_CONTENT_TYPES, ALLOWED_EXTENSIONS, MAX_FILE_SIZE
+        from .document_requests import (
+            DocumentRequestError,
+            attach_uploaded_file,
+            resolve_document_request_token,
+        )
+
+        req, state = resolve_document_request_token(token)
+        if req is None or not req.can_upload:
+            return Response(
+                {"detail": "This upload link is not available.", "state": state},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        uploaded = request.FILES.get("file")
+        if uploaded is None:
+            return Response({"file": "Upload a file."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Structural validation (extension/type/magic bytes); scan runs in
+        # _create_document_file below so an engine outage is a clear error.
+        try:
+            file_validation.validate_secure_upload(
+                uploaded,
+                allowed_content_types=ALLOWED_CONTENT_TYPES,
+                allowed_extensions=ALLOWED_EXTENSIONS,
+                max_bytes=MAX_FILE_SIZE,
+                scan=False,
+            )
+        except file_validation.SecureUploadError as exc:
+            return Response({"detail": exc.message}, status=status.HTTP_400_BAD_REQUEST)
+
+        # The uploaded file is owned by the request owner and counts against THEIR
+        # file + storage limits (it lands in their private vault on accept).
+        owner = req.owner
+        try:
+            enforce_plan_limit(owner, user_plans.RESOURCE_FILES)
+            enforce_storage_limit(owner, uploaded.size)
+        except Exception as exc:  # PlanLimitExceeded → friendly 403
+            detail = getattr(exc, "detail", {"detail": "Upload limit reached."})
+            return Response(detail, status=status.HTTP_403_FORBIDDEN)
+
+        document_file = _create_document_file(uploaded=uploaded, user=owner)
+        try:
+            attach_uploaded_file(req, document_file)
+        except DocumentRequestError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(
+            {"ok": True, "detail": "Your file was uploaded securely. Thank you."},
+            status=status.HTTP_201_CREATED,
+        )
+
+
 # ---- Timeline ---------------------------------------------------------------
 
 

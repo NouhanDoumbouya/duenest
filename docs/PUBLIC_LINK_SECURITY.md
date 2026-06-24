@@ -1,7 +1,7 @@
 # Public Link Security
 
 Rules for token-gated public routes: Quick Share, Emergency Access, Secure
-Rooms, and public organization request/room links.
+Rooms, Document Request Links, and public organization request/room links.
 
 ## Tokens
 - High-entropy random `secrets.token_urlsafe(32)` (256-bit).
@@ -32,6 +32,14 @@ Rooms, and public organization request/room links.
 - **Emergency Access**: only the selected emergency items; full vault never
   exposed; no owner identity or token in the public serializer.
 - **Secure Rooms**: only selected room files; membership/limits enforced.
+- **Document Request Links** (`DocumentRequestLink`): a single-document collection
+  link. The public GET exposes only the upload metadata (requested title/type,
+  instructions, due/expiry, recipient name, a safe `from_name` + "CertaNest",
+  status, `can_upload`) — never the owner's email, vault, notes, or any file URL.
+  The recipient uploads one file without an account; it is stored as an encrypted,
+  owner-owned `DocumentFile` reachable only via the authenticated owner route and
+  never returned to the recipient. Owner reviews before accepting (no
+  auto-accept). See `docs/security/public-upload-links.md`.
 
 ## Response headers (always)
 `X-Robots-Tag: noindex, nofollow`, `Referrer-Policy: no-referrer`,

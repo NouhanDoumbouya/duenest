@@ -1,0 +1,20 @@
+{% extends "emails/base.txt" %}
+{% block content %}Document request
+
+{% if recipient_name %}Hi {{ recipient_name }},{% else %}Hello,{% endif %} {{ from_name }} is requesting a document from you via CertaNest.
+
+Requested: {{ requested_document_title }}
+{% if instructions %}{{ instructions }}
+{% endif %}{% if due_date %}Due by {{ due_date }}
+{% endif %}{% if recipient_message %}
+Note: "{{ recipient_message }}"
+{% endif %}
+Upload your document securely here:
+{{ upload_url }}
+{% if expires_at %}
+This secure link expires on {{ expires_at }}.{% endif %}
+
+Your upload is sent securely to the requester. CertaNest stores files privately
+and never shares them publicly. You don't need an account to upload.
+{% endblock %}
+{% block footer %}Sent via CertaNest on behalf of {{ from_name }}.{% endblock %}

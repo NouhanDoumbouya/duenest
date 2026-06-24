@@ -24,6 +24,18 @@ from .views import (
     MagicInboxAnalyzeView,
     MagicInboxApplyView,
     MagicInboxArchiveView,
+    DocumentRequestListCreateView,
+    DocumentRequestDetailView,
+    DocumentRequestSendView,
+    DocumentRequestCancelView,
+    DocumentRequestReviewView,
+    DocumentRequestAcceptView,
+    DocumentRequestRejectView,
+    DocumentRequestNeedsReplacementView,
+    DocumentRequestSaveToVaultView,
+    DocumentRequestAttachToPackView,
+    PublicDocumentRequestMetadataView,
+    PublicDocumentRequestUploadView,
     BundleRequirementLinkDocumentView,
     BundleRequirementLinkFileView,
     ChecklistTemplateDetailView,
@@ -577,6 +589,70 @@ urlpatterns = [
         "magic-inbox/<int:pk>/archive/",
         MagicInboxArchiveView.as_view(),
         name="magic-inbox-archive",
+    ),
+    # Document Request Links V1 — request -> upload -> review -> attach. Owner-scoped.
+    path(
+        "document-requests/",
+        DocumentRequestListCreateView.as_view(),
+        name="document-requests",
+    ),
+    path(
+        "document-requests/<int:pk>/",
+        DocumentRequestDetailView.as_view(),
+        name="document-request-detail",
+    ),
+    path(
+        "document-requests/<int:pk>/send/",
+        DocumentRequestSendView.as_view(),
+        name="document-request-send",
+    ),
+    path(
+        "document-requests/<int:pk>/cancel/",
+        DocumentRequestCancelView.as_view(),
+        name="document-request-cancel",
+    ),
+    path(
+        "document-requests/<int:pk>/review/",
+        DocumentRequestReviewView.as_view(),
+        name="document-request-review",
+    ),
+    path(
+        "document-requests/<int:pk>/accept/",
+        DocumentRequestAcceptView.as_view(),
+        name="document-request-accept",
+    ),
+    path(
+        "document-requests/<int:pk>/reject/",
+        DocumentRequestRejectView.as_view(),
+        name="document-request-reject",
+    ),
+    path(
+        "document-requests/<int:pk>/needs-replacement/",
+        DocumentRequestNeedsReplacementView.as_view(),
+        name="document-request-needs-replacement",
+    ),
+    path(
+        "document-requests/<int:pk>/save-to-vault/",
+        DocumentRequestSaveToVaultView.as_view(),
+        name="document-request-save-to-vault",
+    ),
+    path(
+        "document-requests/<int:pk>/attach-to-pack/",
+        DocumentRequestAttachToPackView.as_view(),
+        name="document-request-attach-to-pack",
+    ),
+    # Public recipient routes (no auth — token only). Distinct prefix from the
+    # organizations app's ``public/document-requests/`` portal routes to avoid a
+    # URL collision (documents is included before organizations in config/urls).
+    path(
+        "public/document-request-links/<str:token>/",
+        PublicDocumentRequestMetadataView.as_view(),
+        name="public-document-request-link",
+    ),
+    path(
+        "public/document-request-links/<str:token>/upload/",
+        PublicDocumentRequestUploadView.as_view(),
+        name="public-document-request-link-upload",
     ),
     path(
         "document-bundles/",

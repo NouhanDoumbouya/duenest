@@ -228,6 +228,9 @@ def build_life_radar(user, *, today: date | None = None) -> dict:
     # ---- Magic Inbox (additive; deterministic, owner-scoped) ----------------
     inbox = _magic_inbox_counts(user)
 
+    # ---- Document Request Links (additive; deterministic, owner-scoped) ------
+    doc_requests = _document_request_counts(user, today=today)
+
     # ---- Empty-vault onboarding short-circuit ------------------------------
     is_empty = (
         total_documents == 0
@@ -252,6 +255,11 @@ def build_life_radar(user, *, today: date | None = None) -> dict:
         "inbox_new_count": inbox["inbox_new_count"],
         "inbox_needs_review_count": inbox["inbox_needs_review_count"],
         "inbox_failed_count": inbox["inbox_failed_count"],
+        # Document Request Links (additive keys — never removed).
+        "pending_document_requests": doc_requests["pending_document_requests"],
+        "uploaded_document_requests": doc_requests["uploaded_document_requests"],
+        "needs_replacement_document_requests": doc_requests["needs_replacement_document_requests"],
+        "overdue_document_requests": doc_requests["overdue_document_requests"],
     }
 
     if is_empty:
@@ -422,6 +430,44 @@ def _magic_inbox_counts(user) -> dict:
         }
     except Exception:  # noqa: BLE001 — Life Radar must never break on this
         return {"inbox_new_count": 0, "inbox_needs_review_count": 0, "inbox_failed_count": 0}
+
+
+def _document_request_counts(user, *, today) -> dict:
+    """Compact Document Request Link counts for Life Radar (additive; never raises).
+
+    ``pending`` = sent/opened, awaiting an upload; ``uploaded`` = a file is waiting
+    for the owner's review; ``needs_replacement`` = the recipient was asked for a
+    new file; ``overdue`` = still active past its due date.
+    """
+    try:
+        from django.db.models import Count
+
+        from .models import DocumentRequestLink as DR
+
+        rows = (
+            DR.objects.filter(owner=user)
+            .values("status")
+            .annotate(n=Count("id"))
+        )
+        by_status = {r["status"]: r["n"] for r in rows}
+        pending = by_status.get(DR.Status.REQUESTED, 0) + by_status.get(DR.Status.OPENED, 0)
+        uploaded = by_status.get(DR.Status.UPLOADED, 0) + by_status.get(DR.Status.UNDER_REVIEW, 0)
+        overdue = DR.objects.filter(
+            owner=user, status__in=DR.ACTIVE_STATUSES, due_date__lt=today
+        ).count()
+        return {
+            "pending_document_requests": pending,
+            "uploaded_document_requests": uploaded,
+            "needs_replacement_document_requests": by_status.get(DR.Status.NEEDS_REPLACEMENT, 0),
+            "overdue_document_requests": overdue,
+        }
+    except Exception:  # noqa: BLE001 — Life Radar must never break on this
+        return {
+            "pending_document_requests": 0,
+            "uploaded_document_requests": 0,
+            "needs_replacement_document_requests": 0,
+            "overdue_document_requests": 0,
+        }
 
 
 def _suggested_actions(

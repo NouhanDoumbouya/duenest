@@ -1605,3 +1605,49 @@ link, then proposes routes into the vault. Capture → Analyze → Review → Ap
   Gmail/Outlook or read any external mailbox — it is in-app upload/paste only, so
   it introduces no third-party inbox credentials or OAuth scope. Gmail/Drive/
   Outlook import is future work.
+
+## Document Request Links V1 security
+
+Document Request Links (`DocumentRequestLink`, `apps/documents`) let an
+authenticated owner collect **one document from another person** via an
+unguessable public upload link. Request → Upload → Review → Accept / Reject /
+Needs-replacement → Attach / Save. See also `docs/PUBLIC_LINK_SECURITY.md` and
+`docs/security/public-upload-links.md`.
+
+* **Unguessable token.** Each link carries a 256-bit URL-safe
+  `secrets.token_urlsafe` token (unique, indexed), the same pattern as the app's
+  other share links, resolved by exact token match on the public route only. No
+  internal IDs are exposed.
+* **Minimal public payload (no owner data, no file URLs).** The public `GET`
+  reveals **only** the metadata needed to upload — requested document title/type,
+  instructions, due/expiry, recipient name, a safe `from_name` display name +
+  "CertaNest", status, and `can_upload`. It **never** discloses the owner's email,
+  vault, notes, the uploaded file, or any file URL.
+* **Encrypted, owner-owned upload via the private route only.** The recipient
+  uploads a single file with no CertaNest account. It is stored as an encrypted,
+  owner-owned `DocumentFile` through the standard private-storage chain
+  (extension/type/magic-byte validation + malware scan + encrypt-at-rest,
+  AES-256-GCM) and is served **only** through the authenticated owner download
+  route `/api/v1/files/{id}/download/` — never a raw/public storage URL and never
+  returned to the recipient. R2 stays private.
+* **Owner file/storage limits enforced on public upload.** Because the file lands
+  in the owner's vault, public upload also enforces the **owner's** Free/Pro file
+  and storage plan limits, in addition to the per-owner active
+  `document_request_links` cap (Free 5 / Pro 100, active statuses only).
+* **Review-before-accept (no auto-accept).** Nothing is auto-accepted. The owner
+  must explicitly review each upload (accept / reject(reason) /
+  needs_replacement(reason)). Save-to-vault and attach-to-pack run **only after
+  acceptance**; `needs_replacement` re-opens the link for a fresh upload.
+* **No public recipient account.** Recipients never authenticate, never see a
+  dashboard, and cannot read any owner resource. Public endpoints are throttled
+  (`public_access_code` for metadata, `public_document_upload` for upload) and
+  reject uploads once expired/cancelled/accepted/rejected or past the upload
+  allowance.
+* **Deterministic — no AI.** The entire flow makes no AI provider call and
+  consumes no AI credits. This is the bridge toward B2B Portals; full
+  portals/staff/bulk/multi-recipient are not in V1.
+* **Email carries no private data.** Optional, owner-triggered email uses the
+  shared branded path (`send_branded_email`, suppression + `EmailLog`) and
+  contains only the request details + the public upload link — no owner
+  documents, attachments, or private file URLs. No email is ever sent
+  automatically.
