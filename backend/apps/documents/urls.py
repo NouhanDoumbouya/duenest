@@ -14,6 +14,11 @@ from .views import (
     ApplicationListCreateView,
     ApplicationDetailView,
     ApplicationSummaryView,
+    ApplicationDocumentTemplatesView,
+    ApplicationDocumentGenerateView,
+    ApplicationDocumentDetailView,
+    ApplicationDocumentExportView,
+    ApplicationDocumentSaveToPackView,
     BundleRequirementLinkDocumentView,
     BundleRequirementLinkFileView,
     ChecklistTemplateDetailView,
@@ -513,6 +518,34 @@ urlpatterns = [
         "applications/<int:application_id>/",
         ApplicationDetailView.as_view(),
         name="application-detail",
+    ),
+    # ---- AI Application Document Generator V1 -----------------------------
+    # Distinct `application-documents/` prefix — the legacy `generated-documents/`
+    # routes belong to the older text-draft GeneratedDocument feature.
+    path(
+        "application-documents/templates/",
+        ApplicationDocumentTemplatesView.as_view(),
+        name="application-documents-templates",
+    ),
+    path(
+        "application-documents/generate/",
+        ApplicationDocumentGenerateView.as_view(),
+        name="application-documents-generate",
+    ),
+    path(
+        "application-documents/<int:pk>/",
+        ApplicationDocumentDetailView.as_view(),
+        name="application-document-detail",
+    ),
+    path(
+        "application-documents/<int:pk>/export/",
+        ApplicationDocumentExportView.as_view(),
+        name="application-document-export",
+    ),
+    path(
+        "application-documents/<int:pk>/save-to-pack/",
+        ApplicationDocumentSaveToPackView.as_view(),
+        name="application-document-save-to-pack",
     ),
     path(
         "document-bundles/",

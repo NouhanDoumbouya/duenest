@@ -2394,3 +2394,34 @@ class TrackedApplicationSerializer(serializers.ModelSerializer):
         if value is not None and request and value.owner_id != request.user.id:
             raise serializers.ValidationError("Pack not found.")
         return value
+
+
+# ---- AI Application Document Generator V1 ----------------------------------
+
+from .models import GeneratedApplicationDocument  # noqa: E402
+
+
+class GeneratedApplicationDocumentSerializer(serializers.ModelSerializer):
+    """Detail/review serializer. System/AI fields are read-only; the user may
+    edit the reviewed content + presentation choices before export."""
+
+    owner = serializers.PrimaryKeyRelatedField(read_only=True)
+
+    class Meta:
+        model = GeneratedApplicationDocument
+        fields = [
+            "id", "owner", "application", "bundle", "document_type", "status",
+            "title", "target_organization", "template_key", "content_style",
+            "structured_content", "plain_text_preview", "ats_score",
+            "quality_score", "warnings", "ai_model", "credits_charged",
+            "exported_pdf_file", "exported_docx_file", "created_document",
+            "created_at", "updated_at",
+        ]
+        read_only_fields = [
+            "id", "owner", "application", "bundle", "document_type",
+            "target_organization", "ats_score", "quality_score", "warnings",
+            "ai_model", "credits_charged", "exported_pdf_file",
+            "exported_docx_file", "created_document", "created_at", "updated_at",
+        ]
+        # Editable on review: title, status, template_key, content_style,
+        # structured_content, plain_text_preview.

@@ -995,12 +995,13 @@ provides a deterministic profile+application+pack context for **future** AI
 document generation (not called here, not a public endpoint in V1). Available to
 Free and Pro; founder-only rollout flag `smart_profile` until launched.
 
-**Next recommended branch: `ai/application-document-generator`**
+**Next recommended branch: `product/magic-inbox-v1`**
 
 Smart Profile was built mainly to power CV/résumé, motivation letters,
-application emails, SOPs, and form filling — so the immediate "wow" value is to
-turn that reusable profile (+ application + pack context) into generated,
-review-before-save documents next, rather than jumping to B2B portals.
+application emails, SOPs, and form filling — the AI Application Document
+Generator V1 has now shipped (see the done section at the bottom of this file),
+delivering review-before-save generation from Smart Profile + application + pack
+context.
 
 Suggested sequencing:
 
@@ -1011,8 +1012,8 @@ product/application-pack-readiness-v1  (done)
 ai/requirement-link-to-checklist       (done)
 product/application-tracker-v1         (done)
 product/smart-profile-v1               (done)
-ai/application-document-generator      (next — CVs/letters/emails/SOPs from Smart Profile)
-product/magic-inbox-v1
+ai/application-document-generator      (done — CVs/letters/emails/SOPs from Smart Profile)
+product/magic-inbox-v1                 (next)
 notifications/weekly-radar-email
 sharing/document-request-links-v1
 b2b/portals-mvp
@@ -1533,3 +1534,44 @@ The current implementation covers only personal (per-user) monthly AI credits.
 Free users receive 10 credits/month; Pro users receive 200 credits/month. These
 are personal credits — one user's balance is never shared with or consumed by
 another user's activity.
+
+---
+
+## AI Application Document Generator V1 (`ai/application-document-generator`) — (done)
+
+Generates professional documents (ATS resume, academic CV, scholarship CV, cover
+letter, motivation letter, statement of purpose, recommendation request email,
+application email, missing-document explanation, visa explanation letter) from
+Smart Profile + application/pack context.
+
+Key facts:
+
+* **Flow:** Generate → Review → Template → Export → Save to pack. Strictly
+  review-before-save; no auto-writes to the vault.
+* **Pro-only** (`ai_application_document_generation` entitlement; Free plan
+  returns a gated `200` with upgrade copy). Rollout flag
+  `application_document_generation` (default `founder_only`) + `ai_features`
+  master gate. AI consent (`AiPreference.ai_enabled`) required.
+* **Variable credit costs:** email/recommendation = 3 credits; letters = 5;
+  SOP + CV/resume = 8. Credits charged only after a successful generation.
+  Export and save-to-pack make no AI call and consume no credits.
+* **Real PDF + DOCX:** fpdf2 (selectable text, never an image PDF) and
+  python-docx (editable, ATS-friendly). Six visual templates, eight content
+  styles. ATS exports are single-column with no tables/images/icons.
+* **No-hallucination policy:** model uses only supplied Smart Profile/
+  application/pack data; missing info surfaces in `quality_checks`, never
+  invented. Passport/national-ID numbers excluded from model context.
+* **Private storage:** exported files encrypted at rest (AES-256-GCM), served
+  only via private owner-only download route — never raw R2 URLs. Export
+  respects Free/Pro file and storage plan limits.
+* **Endpoints:** `GET /api/v1/application-documents/templates/`,
+  `POST .../generate/`, `GET/PATCH .../{id}/`, `POST .../{id}/export/`,
+  `POST .../{id}/save-to-pack/`. Distinct `application-documents/` prefix (not
+  the legacy `generated-documents/`).
+* **Next recommended branch:** `product/magic-inbox-v1`
+
+Upcoming planned branches (in order):
+1. `product/magic-inbox-v1` ← **next**
+2. `notifications/weekly-radar-email`
+3. `sharing/document-request-links-v1`
+4. `b2b/portals-mvp`

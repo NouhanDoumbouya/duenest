@@ -55,6 +55,7 @@ from .models import (
     DocumentRenewalEvent,
     DocumentTag,
     DocumentVersion,
+    GeneratedApplicationDocument,
     EmergencyAccessPack,
     EmergencyAccessPackItem,
     EmergencyActivityEvent,
@@ -72,6 +73,7 @@ from .serializers import (
     BundleReadinessSerializer,
     BundleExportRequestSerializer,
     ChecklistFromTemplateSerializer,
+    GeneratedApplicationDocumentSerializer,
     TrackedApplicationSerializer,
     DocumentActivityEventSerializer,
     DocumentAppointmentSerializer,
@@ -3399,6 +3401,147 @@ class ApplicationSummaryView(APIView):
         from .application_tracker import build_application_tracker_summary
 
         return Response(build_application_tracker_summary(request.user))
+
+
+# ---- AI Application Document Generator V1 ----------------------------------
+
+
+class ApplicationDocumentTemplatesView(APIView):
+    """GET the template registry (content styles, document types, templates)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from .document_templates import build_template_registry
+
+        return Response(build_template_registry())
+
+
+class ApplicationDocumentGenerateView(APIView):
+    """
+    POST → generate a structured application document draft (review-before-export).
+
+    Mirrors the AI-feature gate: `ai_features` + `application_document_generation`
+    flags, AI consent, then the `application_document_generation` plan/credit
+    gate. Credits (variable 3/5/8 by document type) are charged ONLY on a
+    successful model-backed generation. No file is created here.
+    """
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "ai_doc_generation"
+
+    def post(self, request):
+        require_feature_enabled("ai_features", request.user)
+        require_feature_enabled("application_document_generation", request.user)
+
+        from apps.ai.privacy import ai_consented
+
+        if not ai_consented(request.user):
+            return Response(
+                {"available": False, "reason": "consent_required"},
+                status=status.HTTP_200_OK,
+            )
+
+        block = _ai_plan_block(request.user, "application_document_generation")
+        if block is not None:
+            return Response(block, status=status.HTTP_200_OK)
+
+        from apps.billing import entitlements as billing_ent
+
+        from .application_document_generator import generate_application_document
+
+        result = generate_application_document(request.user, request.data)
+        if not (result.get("available") and result.get("reason") == "ok"):
+            return Response(result, status=status.HTTP_200_OK)
+
+        credits_charged = 0
+        if billing_ent.ai_call_succeeded(result):
+            credits_charged = billing_ent.spend_ai_credits(
+                request.user,
+                "application_document_generation",
+                amount=result.get("credit_cost"),
+            )
+            # Record what was charged on the draft.
+            GeneratedApplicationDocument.objects.filter(
+                pk=result["generated_document_id"], owner=request.user
+            ).update(credits_charged=credits_charged)
+
+        _track_product_event(
+            request,
+            "application_document_generated",
+            object_type="generated_application_document",
+            object_id=result["generated_document_id"],
+            metadata={"document_type": result.get("document_type")},
+        )
+        result["credits_charged"] = credits_charged
+        return Response(result, status=status.HTTP_200_OK)
+
+
+class _GeneratedAppDocScopedMixin:
+    permission_classes = [IsAuthenticated]
+    serializer_class = GeneratedApplicationDocumentSerializer
+    lookup_url_kwarg = "pk"
+
+    def get_queryset(self):
+        return GeneratedApplicationDocument.objects.filter(owner=self.request.user)
+
+
+class ApplicationDocumentDetailView(
+    _GeneratedAppDocScopedMixin, generics.RetrieveUpdateAPIView
+):
+    """GET/PATCH a generated draft (owner-scoped). PATCH edits the reviewed
+    content/title/template/style/status — no AI call, no credits."""
+
+
+class ApplicationDocumentExportView(APIView):
+    """POST → render a real PDF/DOCX, store it as an encrypted DocumentFile, and
+    optionally save it to the linked pack. No AI call, no AI credits; enforces
+    file + storage plan limits."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        gad = get_object_or_404(
+            GeneratedApplicationDocument, pk=pk, owner=request.user
+        )
+        export_format = (request.data.get("format") or "pdf").strip().lower()
+        template_key = request.data.get("template_key") or gad.template_key
+        save_to_pack = bool(request.data.get("save_to_pack"))
+
+        from .application_document_generator import export_generated_document
+
+        try:
+            result = export_generated_document(
+                gad, request.user, export_format=export_format,
+                template_key=template_key, save_to_pack=save_to_pack,
+            )
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        _track_product_event(
+            request,
+            "application_document_exported",
+            object_type="generated_application_document",
+            object_id=gad.id,
+            metadata={"format": export_format, "saved_to_pack": save_to_pack},
+        )
+        return Response(result, status=status.HTTP_200_OK)
+
+
+class ApplicationDocumentSaveToPackView(APIView):
+    """POST → attach the exported file to the vault + linked pack. No AI/credits."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        gad = get_object_or_404(
+            GeneratedApplicationDocument, pk=pk, owner=request.user
+        )
+        from .application_document_generator import save_generated_document_to_pack
+
+        result = save_generated_document_to_pack(gad, request.user)
+        return Response(result, status=status.HTTP_200_OK)
 
 
 # ---- Timeline ---------------------------------------------------------------

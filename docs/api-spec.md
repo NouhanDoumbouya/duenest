@@ -4742,3 +4742,245 @@ Known limitations: QR does not prevent screenshots (watermark is deterrence
 only); saved copies cannot be revoked after the receiver saves them; in-browser
 camera scanning is not implemented (native camera + copy-link/fallback-code are
 provided); emergency-card and organization-collection QR UIs are deferred.
+
+---
+
+## 32 — AI Application Document Generator V1 (`application-documents/`)
+
+### Overview
+
+From an application pack or renewal bundle, generate a professional document
+(ATS resume, academic CV, scholarship CV, cover letter, motivation letter,
+statement of purpose, recommendation request email, application email,
+missing-document explanation, visa explanation letter) using Smart Profile +
+application context. The flow is strictly:
+
+**Generate → Review → Template → Export → Save to pack**
+
+AI produces **structured content only**; nothing is written to the vault
+automatically. Real PDF (fpdf2 — selectable text, never an image-based PDF) and
+editable DOCX (python-docx — ATS-friendly) are created only on an explicit
+export step and stored as encrypted, owner-scoped `DocumentFile` records.
+
+### Gating
+
+Three layers must all pass before a generation is attempted:
+
+1. **Rollout flag** — `application_document_generation` (default `founder_only`)
+   + `ai_features` master gate. Either flag off → `503`.
+2. **AI consent** — `AiPreference.ai_enabled` must be true; else → `200`
+   `{ available: false, reason: "consent_required" }`.
+3. **Plan entitlement** — `ai_application_document_generation` is **Pro-only**
+   (`Free=off`, `Pro=on`; seeded by billing migration `0015`).
+   Free plan → `200` `{ available: false, reason: "ai_feature_not_in_plan" }`
+   with upgrade copy.
+
+`application_document_generation` is included in `AI_FEATURE_PLAN_FLAGS` and
+`AI_FEATURE_CREDIT_COSTS`. Failed validation / not-found / not-configured /
+blocked plan / disabled consent / AI refusal / provider error / budget block all
+return **0 credits charged**.
+
+### Variable AI credit costs
+
+Credits are charged **only after a successful model-backed generation**
+(`ai_call_succeeded`). Export and save-to-pack make no AI call and consume no
+AI credits.
+
+| Document types | Credits |
+| --- | --- |
+| `recommendation_request_email`, `application_email` | **3** |
+| `cover_letter`, `motivation_letter`, `missing_document_explanation`, `visa_explanation_letter` | **5** |
+| `statement_of_purpose`, `ats_resume`, `academic_cv`, `scholarship_cv` | **8** |
+
+### Template registry
+
+`GET /api/v1/application-documents/templates/`
+
+Returns the full template registry. No authentication required; no AI call; no
+credits consumed.
+
+**Response:**
+```json
+{
+  "content_styles": ["formal", "warm_professional", "academic", "scholarship_focused",
+                     "embassy_safe", "corporate", "concise", "confident"],
+  "document_types": ["ats_resume", "academic_cv", "scholarship_cv", "cover_letter",
+                     "motivation_letter", "statement_of_purpose",
+                     "recommendation_request_email", "application_email",
+                     "missing_document_explanation", "visa_explanation_letter"],
+  "templates": [
+    {
+      "key": "ats_classic",
+      "label": "ATS Classic",
+      "description": "...",
+      "document_types": ["ats_resume", "cover_letter", ...],
+      "export_formats": ["pdf", "docx"],
+      "ats_safe": true,
+      "recommended_for": ["ats_resume"],
+      "pro_only": false
+    }
+    // ... 5 more template objects
+  ]
+}
+```
+
+Six visual templates — `ats_classic`, `ats_modern` (ATS-safe single-column,
+PDF+DOCX), `academic_cv`, `scholarship_cv` (PDF+DOCX), `formal_letter`
+(PDF+DOCX, embassy/university/company safe), `premium_letter` (PDF only,
+human-review). Defined in `apps/documents/document_templates.py`.
+
+Eight content styles: `formal`, `warm_professional`, `academic`,
+`scholarship_focused`, `embassy_safe`, `corporate`, `concise`, `confident`.
+
+### Generate
+
+`POST /api/v1/application-documents/generate/`
+
+Throttled: `ai_doc_generation`, 10 requests/minute per user.
+
+**Request body:**
+```json
+{
+  "document_type": "ats_resume",
+  "content_style": "formal",
+  "template_key": "ats_classic",
+  "application_id": 42,
+  "bundle_id": 7,
+  "target_organization": "Acme Corp",
+  "additional_instructions": "Emphasise Python and leadership."
+}
+```
+
+`document_type` is required; all other fields are optional. `application_id` and
+`bundle_id` scope context; omitting both results in Smart Profile context only.
+
+**Success response (`200`):**
+```json
+{
+  "available": true,
+  "reason": "ok",
+  "generated_document_id": 123,
+  "document_type": "ats_resume",
+  "credit_cost": 8,
+  "credits_charged": 8,
+  "title": "Résumé — Acme Corp — June 2026",
+  "template_key": "ats_classic",
+  "recommended_template": "ats_classic",
+  "plain_text_preview": "...",
+  "structured_content": { ... },
+  "quality_checks": {
+    "ats_safe": true,
+    "score": 87,
+    "warnings": ["No measurable achievements found."],
+    "missing_information": ["Employment end dates missing for 2 roles."]
+  },
+  "ats_score": 87,
+  "warnings": ["No measurable achievements found."],
+  "available_exports": ["pdf", "docx"]
+}
+```
+
+**Gating / error responses (all `200` unless noted):**
+- `{ available: false, reason: "consent_required" }` — user has not opted in to AI.
+- `{ available: false, reason: "ai_feature_not_in_plan" }` — Free plan; upgrade copy included.
+- `{ available: false, reason: "ai_credits_exhausted" }` — monthly credit cap reached.
+- `{ available: false, reason: "budget_exceeded" }` — infrastructure budget guard triggered.
+- `{ available: false, reason: "ai_not_configured" }` — `ANTHROPIC_API_KEY` not set.
+- `503` — rollout flag is `off` / `founder_only`.
+- `429` — throttle exceeded (`ai_doc_generation` 10/min).
+
+All gating / error paths charge **0 credits**.
+
+**No-hallucination policy.** The model is instructed to use only the supplied
+Smart Profile, application, and pack data. Missing information surfaces in
+`quality_checks.missing_information`, never invented. The model context
+explicitly excludes passport numbers and national-ID numbers (Smart Profile
+context strips them before any AI call).
+
+### Review / edit draft
+
+```
+GET  /api/v1/application-documents/{id}/
+PATCH /api/v1/application-documents/{id}/
+```
+
+Owner-only. `GET` retrieves the full draft. `PATCH` accepts edits to: `title`,
+`status`, `template_key`, `content_style`, `structured_content`,
+`plain_text_preview`. No AI call; no credits consumed.
+
+### Export
+
+`POST /api/v1/application-documents/{id}/export/`
+
+**Request body:**
+```json
+{
+  "format": "pdf",
+  "template_key": "ats_classic",
+  "save_to_pack": true
+}
+```
+
+`format` is `"pdf"` or `"docx"`. `template_key` and `save_to_pack` are optional.
+
+**Response:**
+```json
+{
+  "exported": true,
+  "format": "pdf",
+  "file_id": 456,
+  "download_url": "/api/v1/files/456/download/",
+  "saved_to_pack": true,
+  "document_id": 789,
+  "pack_readiness": { ... }
+}
+```
+
+**No AI call; no credits consumed.** Export renders the stored `structured_content`
+into a real PDF (fpdf2, selectable text — never an image PDF) or an editable DOCX
+(python-docx, ATS-friendly). The exported file is stored as an encrypted,
+owner-scoped `DocumentFile` record (AES-256-GCM, same encryption as all vault
+files). The `download_url` is the private, owner-only route — never a raw
+storage/R2 URL.
+
+Export enforces Free/Pro file and storage plan limits; exceeding either returns
+`403` `{ code: "plan_limit_exceeded" }`.
+
+ATS exports (`ats_classic`, `ats_modern`) are single-column, no tables / icons /
+images / text-boxes / graphics, standard headings (Summary, Education, Experience,
+Projects, Skills, Certifications, Awards, Leadership, Languages, Publications),
+simple bullets.
+
+Dependencies: `fpdf2` (existing), `python-docx==1.1.2` (pure-Python OOXML, no
+LibreOffice or system dependencies).
+
+### Save to pack
+
+`POST /api/v1/application-documents/{id}/save-to-pack/`
+
+Creates a vault `Document` and attaches it as a fulfilled bundle requirement.
+Returns `pack_readiness`. **No AI call; no credits consumed.** Enforces the same
+storage/file plan limits as export.
+
+### ATS validator
+
+`validate_ats_structure(structured_content, template_key)` → `{ ats_safe, score (0–100), warnings[] }`.
+
+ATS warnings include (non-exhaustive): `"Missing Skills section."`,
+`"No measurable achievements found."`, `"Avoid visual templates for online job portals."`.
+
+### Privacy and storage
+
+- Exported files are **encrypted at rest** (AES-256-GCM) exactly like all other
+  `DocumentFile` records.
+- Files are served **only** via `/api/v1/files/{id}/download/` (private,
+  owner-only) — never via raw R2 or storage URLs.
+- The AI model context **never includes** passport numbers or national-ID numbers.
+  Smart Profile's `build_application_context_from_profile` strips them before
+  the context is passed to any AI call.
+- The generate step is **review-before-save**: structured content is returned for
+  review; nothing is written to the vault until the user explicitly exports or
+  saves to pack.
+- The existing AI credit + budget guard system is reused; no second metering
+  system is introduced.
+

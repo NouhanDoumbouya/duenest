@@ -70,6 +70,47 @@ the digest (Notification preferences). Then either run on a schedule:
 - `ENABLE_CELERY_BEAT=true` (Mon 08:00 UTC), or
 - a platform cron: `python manage.py send_ai_digests` (use `--dry-run` first).
 
+## Application document generator
+
+From an application pack or renewal bundle, generate a professional document
+(ATS resume, academic CV, scholarship CV, cover letter, motivation letter,
+statement of purpose, recommendation request email, application email,
+missing-document explanation, visa explanation letter) using Smart Profile +
+application/pack context.
+
+- **What it does:** The user selects a document type and optionally a template
+  and content style. The backend builds a context from their Smart Profile,
+  linked application, and pack, then calls Claude to produce structured content.
+  The user reviews the output, optionally edits it, selects a template, then
+  explicitly exports to PDF or DOCX and/or saves to their pack. Nothing is
+  written to the vault until the user triggers export or save.
+- **Plan:** **Pro-only** (`ai_application_document_generation` entitlement).
+  Free users receive a gated `200` with upgrade copy rather than an error.
+- **Credits (variable by document type):**
+  - Recommendation request email, application email: **3 credits**
+  - Cover letter, motivation letter, missing-document explanation, visa
+    explanation letter: **5 credits**
+  - Statement of purpose, ATS resume, academic CV, scholarship CV: **8 credits**
+  - Credits charged **only after a successful generation**. Failed validation,
+    consent missing, plan block, provider error, and budget block all charge
+    **0 credits**. Export and save-to-pack make no AI call and consume no credits.
+- **Consent:** `AiPreference.ai_enabled` must be on — same as all AI features.
+- **Flags:** `application_document_generation` (default `founder_only`) +
+  `ai_features` master gate. Both must resolve on for the feature to be
+  reachable.
+- **Flow:** Generate → Review → Template → Export → Save to pack. Strictly
+  review-before-save; AI produces structured content only.
+- **Output formats:** Real PDF (fpdf2, selectable text — never an image PDF) and
+  editable DOCX (python-docx, ATS-friendly). Produced only on the explicit export
+  step; stored as encrypted, owner-scoped vault files.
+- **No-hallucination policy:** model uses only the supplied Smart Profile,
+  application, and pack data; missing information is surfaced for the user to
+  fill in, never invented. Passport and national-ID numbers are excluded from the
+  model context.
+- **Endpoints:** `GET /api/v1/application-documents/templates/`,
+  `POST .../generate/`, `GET/PATCH .../{id}/`, `POST .../{id}/export/`,
+  `POST .../{id}/save-to-pack/`. See `docs/api-spec.md` §32.
+
 ## Requirement link import
 
 Paste a scholarship, visa, university, or other application URL into a pack to

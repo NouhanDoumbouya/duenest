@@ -485,6 +485,8 @@ REST_FRAMEWORK = {
         "ai_index": _throttle_rate("10/min"),
         # Requirement-link import (per authenticated user) — bounds web-fetch + model cost.
         "ai_requirement_import": _throttle_rate("10/min"),
+        # AI application document generation (per authenticated user) — bounds model cost.
+        "ai_doc_generation": _throttle_rate("10/min"),
     },
 }
 
