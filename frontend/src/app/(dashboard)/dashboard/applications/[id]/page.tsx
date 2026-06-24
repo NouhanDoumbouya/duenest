@@ -30,7 +30,10 @@ import {
   Card,
   CardContent,
 } from "@/components/ui/card";
+import { useFeature } from "@/components/features/feature-flags-provider";
 import { ApiError } from "@/lib/api";
+import { getSmartProfileCompleteness } from "@/lib/smart-profile";
+import type { SmartProfileCompleteness } from "@/types/smart-profile";
 import {
   APPLICATION_TYPE_LABELS,
   applicationStatusTone,
@@ -86,6 +89,68 @@ function TimelineRow({ label, date }: { label: string; date: string }) {
       <p className="text-sm font-medium">{label}</p>
       <p className="text-xs text-muted-foreground">{formatDate(date)}</p>
     </li>
+  );
+}
+
+/**
+ * Additive nudge: shows how complete the user's reusable Smart Profile is, with
+ * a link to finish it. Gated by the `smart_profile` feature and never blocks
+ * application tracking — it stays hidden until the data loads.
+ */
+function SmartProfileNudge() {
+  const enabled = useFeature("smart_profile");
+  const [data, setData] = useState<SmartProfileCompleteness | null>(null);
+
+  useEffect(() => {
+    if (!enabled) return;
+    let active = true;
+    getSmartProfileCompleteness()
+      .then((res) => active && setData(res))
+      .catch(() => active && setData(null));
+    return () => {
+      active = false;
+    };
+  }, [enabled]);
+
+  if (!enabled || data === null) return null;
+
+  const score = Math.max(0, Math.min(100, data.score));
+  const topAction = data.next_actions[0];
+
+  return (
+    <Card>
+      <CardContent className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Sparkles className="size-4 text-primary" aria-hidden />
+          <p className="text-sm font-medium">Smart Profile</p>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Your Smart Profile is {score}% complete.
+        </p>
+        <div
+          className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+          role="progressbar"
+          aria-valuenow={score}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label="Smart Profile completeness"
+        >
+          <div
+            className="h-full rounded-full bg-primary transition-all"
+            style={{ width: `${score}%` }}
+          />
+        </div>
+        {topAction && (
+          <p className="text-xs text-muted-foreground">{topAction.label}</p>
+        )}
+        <Link
+          href="/dashboard/profile"
+          className={cn(buttonVariants({ variant: "outline", size: "sm" }), "w-full")}
+        >
+          Complete profile
+        </Link>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -493,6 +558,8 @@ export default function ApplicationDetailPage() {
               )}
             </CardContent>
           </Card>
+
+          <SmartProfileNudge />
 
           <TrustNotice icon={ShieldCheck} title="Private to you">
             Applications and their notes stay private to the owner. Linked packs

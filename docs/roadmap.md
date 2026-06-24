@@ -920,6 +920,7 @@ product/life-radar-v1                  Deterministic readiness dashboard       (
 product/application-pack-readiness-v1  Structured pack readiness workflow      (done)
 ai/requirement-link-to-checklist       Paste a URL → reviewable checklist      (done)
 product/application-tracker-v1         Application/renewal lifecycle tracker    (done)
+product/smart-profile-v1               Reusable application profile             (done)
 ```
 
 `backend/storage-plan-limits` is **implemented**: storage (100 MB Free / 10 GB
@@ -978,7 +979,28 @@ Pro 100 active applications (`resource "applications"`, archived excluded,
 `overdue_applications` (existing shape unchanged). Founder-only rollout flag
 `application_tracker` until launched.
 
-**Next recommended branch: `product/smart-profile-v1`**
+`product/smart-profile-v1` is **implemented**: a per-user reusable profile
+(`apps/users/models.py` SmartProfile + Education/Work/Skill/Achievement/
+CommonAnswer rows; `apps/users/smart_profile.py`) so users store identity,
+education, work, skills, achievements, and common application answers once and
+reuse them later. Endpoints under `GET/PATCH /api/v1/smart-profile/`,
+`/smart-profile/completeness/`, and `GET/POST` + `/{id}/` CRUD for
+`education/work/skills/achievements/common-answers`. A deterministic 0–100
+completeness score spans eight sections. **No AI call, no AI credits, no R2, no
+file URLs.** Sensitive identity/document numbers (passport, national ID) are
+**not** duplicated — they stay in the existing AES-GCM-encrypted
+`UserProfileDetails` store (`/users/me/profile-details/`); Smart Profile reads
+only non-secret values + presence flags. `build_application_context_from_profile`
+provides a deterministic profile+application+pack context for **future** AI
+document generation (not called here, not a public endpoint in V1). Available to
+Free and Pro; founder-only rollout flag `smart_profile` until launched.
+
+**Next recommended branch: `ai/application-document-generator`**
+
+Smart Profile was built mainly to power CV/résumé, motivation letters,
+application emails, SOPs, and form filling — so the immediate "wow" value is to
+turn that reusable profile (+ application + pack context) into generated,
+review-before-save documents next, rather than jumping to B2B portals.
 
 Suggested sequencing:
 
@@ -988,7 +1010,11 @@ product/life-radar-v1                  (done)
 product/application-pack-readiness-v1  (done)
 ai/requirement-link-to-checklist       (done)
 product/application-tracker-v1         (done)
-product/smart-profile-v1               (next)
+product/smart-profile-v1               (done)
+ai/application-document-generator      (next — CVs/letters/emails/SOPs from Smart Profile)
+product/magic-inbox-v1
+notifications/weekly-radar-email
+sharing/document-request-links-v1
 b2b/portals-mvp
 backend/ai-org-credit-pools            (future)
 product/life-radar-ai-insights         (future — AI-enhanced Life Radar)

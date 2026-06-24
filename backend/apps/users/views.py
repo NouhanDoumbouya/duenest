@@ -778,3 +778,149 @@ class AccountCancelDeletionView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
         return Response(AccountDeletionRequestSerializer(deletion).data)
+
+
+# ---- Smart Profile V1 (deterministic; no AI; owner-only) -------------------
+
+from .models import (  # noqa: E402  (grouped with the Smart Profile views)
+    SmartProfileAchievement,
+    SmartProfileCommonAnswer,
+    SmartProfileEducation,
+    SmartProfileSkill,
+    SmartProfileWork,
+)
+from .serializers import (  # noqa: E402  (grouped with the Smart Profile views)
+    SmartProfileAchievementSerializer,
+    SmartProfileCommonAnswerSerializer,
+    SmartProfileEducationSerializer,
+    SmartProfileExtrasSerializer,
+    SmartProfileSkillSerializer,
+    SmartProfileWorkSerializer,
+)
+
+
+class SmartProfileView(APIView):
+    """GET the unified Smart Profile payload; PATCH the reusable extras.
+
+    Identity/document fields (legal name, passport number, national ID, …) are
+    managed via the encrypted `/users/me/profile-details/` endpoint and are only
+    read (presence/non-secret values) here. No AI, no R2, owner-only.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from .smart_profile import build_smart_profile_payload
+
+        return Response(build_smart_profile_payload(request.user))
+
+    def patch(self, request):
+        from .smart_profile import (
+            build_smart_profile_payload,
+            get_or_create_smart_profile,
+        )
+
+        profile = get_or_create_smart_profile(request.user)
+        serializer = SmartProfileExtrasSerializer(
+            profile, data=request.data, partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(build_smart_profile_payload(request.user))
+
+
+class SmartProfileCompletenessView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from .smart_profile import build_smart_profile_completeness
+
+        return Response(build_smart_profile_completeness(request.user))
+
+
+class _SmartProfileEntryMixin:
+    """Owner-scoped CRUD for a Smart Profile sub-entry collection."""
+
+    permission_classes = [IsAuthenticated]
+    model = None
+
+    def get_queryset(self):
+        return self.model.objects.filter(owner=self.request.user)
+
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        ctx["request"] = self.request
+        return ctx
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
+
+
+class SmartProfileEducationListCreateView(
+    _SmartProfileEntryMixin, generics.ListCreateAPIView
+):
+    model = SmartProfileEducation
+    serializer_class = SmartProfileEducationSerializer
+
+
+class SmartProfileEducationDetailView(
+    _SmartProfileEntryMixin, generics.RetrieveUpdateDestroyAPIView
+):
+    model = SmartProfileEducation
+    serializer_class = SmartProfileEducationSerializer
+
+
+class SmartProfileWorkListCreateView(
+    _SmartProfileEntryMixin, generics.ListCreateAPIView
+):
+    model = SmartProfileWork
+    serializer_class = SmartProfileWorkSerializer
+
+
+class SmartProfileWorkDetailView(
+    _SmartProfileEntryMixin, generics.RetrieveUpdateDestroyAPIView
+):
+    model = SmartProfileWork
+    serializer_class = SmartProfileWorkSerializer
+
+
+class SmartProfileSkillListCreateView(
+    _SmartProfileEntryMixin, generics.ListCreateAPIView
+):
+    model = SmartProfileSkill
+    serializer_class = SmartProfileSkillSerializer
+
+
+class SmartProfileSkillDetailView(
+    _SmartProfileEntryMixin, generics.RetrieveUpdateDestroyAPIView
+):
+    model = SmartProfileSkill
+    serializer_class = SmartProfileSkillSerializer
+
+
+class SmartProfileAchievementListCreateView(
+    _SmartProfileEntryMixin, generics.ListCreateAPIView
+):
+    model = SmartProfileAchievement
+    serializer_class = SmartProfileAchievementSerializer
+
+
+class SmartProfileAchievementDetailView(
+    _SmartProfileEntryMixin, generics.RetrieveUpdateDestroyAPIView
+):
+    model = SmartProfileAchievement
+    serializer_class = SmartProfileAchievementSerializer
+
+
+class SmartProfileCommonAnswerListCreateView(
+    _SmartProfileEntryMixin, generics.ListCreateAPIView
+):
+    model = SmartProfileCommonAnswer
+    serializer_class = SmartProfileCommonAnswerSerializer
+
+
+class SmartProfileCommonAnswerDetailView(
+    _SmartProfileEntryMixin, generics.RetrieveUpdateDestroyAPIView
+):
+    model = SmartProfileCommonAnswer
+    serializer_class = SmartProfileCommonAnswerSerializer

@@ -20,6 +20,7 @@ export function getFeatureMap(): Promise<FeatureMap> {
 
 /** Maps a dashboard nav href to the feature key that gates it (if any). */
 export const FEATURE_BY_NAV_HREF: Record<string, string> = {
+  "/dashboard/profile": "smart_profile",
   "/dashboard/files": "file_inbox",
   "/dashboard/notifications": "notification_center",
   "/dashboard/organizations": "organizations",

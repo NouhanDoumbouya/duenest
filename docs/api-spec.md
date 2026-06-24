@@ -644,6 +644,55 @@ All optional strings: `legal_name`, `preferred_name`, `date_of_birth`,
 
 ---
 
+## Smart Profile V1
+
+Per-user **reusable application data** (education, work, skills, achievements,
+common answers + scalar extras) with a deterministic completeness score, so
+users store information once and reuse it across applications, packs, letters,
+CVs, and forms later. **Deterministic — no AI call, no AI credits, no R2, no
+private file URLs.** Strictly owner-scoped. Behind the founder-only rollout flag
+`smart_profile` until launched; available to Free and Pro.
+
+**Privacy:** the most-sensitive identity/document numbers (passport number,
+national ID) are **not** stored or returned here — they live in the encrypted
+`UserProfileDetails` store (`/users/me/profile-details/`). Smart Profile reads
+only non-secret identity values plus presence booleans (`has_passport_number`,
+`has_national_id`). Smart Profile is never exposed publicly (no share endpoints).
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/v1/smart-profile/` | Unified payload (identity summary + extras + collections + completeness) |
+| `PATCH` | `/api/v1/smart-profile/` | Update the reusable extras (subset allowed) |
+| `GET` | `/api/v1/smart-profile/completeness/` | Completeness score + sections + next actions |
+| `GET`/`POST` | `/api/v1/smart-profile/education/` | List/create education entries (list is paginated) |
+| `GET`/`PATCH`/`DELETE` | `/api/v1/smart-profile/education/{id}/` | Detail CRUD |
+| `GET`/`POST` · `…/{id}/` | `/api/v1/smart-profile/work/` | Work / experience entries |
+| `GET`/`POST` · `…/{id}/` | `/api/v1/smart-profile/skills/` | Skills (`technical`/`language`/`soft`/`tool`/`other`) |
+| `GET`/`POST` · `…/{id}/` | `/api/v1/smart-profile/achievements/` | Achievements (8 categories; optional `related_document`, owner-validated) |
+| `GET`/`POST` · `…/{id}/` | `/api/v1/smart-profile/common-answers/` | Common application answers (`scholarship`/`visa`/`job`/`university`/`general`) |
+
+**Extras (PATCH `/smart-profile/`):** `email_for_applications`,
+`country_of_residence`, `current_address`, `permanent_address`,
+`passport_expiry_date`, `emergency_contact_name`,
+`emergency_contact_relationship`, `emergency_contact_phone`.
+
+**Completeness** (also embedded in the unified payload): `{ score (0–100),
+label, sections: [{key, label, complete, missing_fields[]}], next_actions:
+[{type, label, priority}] }`. Eight sections (basic identity, contact, address,
+education, work, skills, achievements, emergency contact); score =
+complete-sections ÷ 8 × 100. Labels: 90–100 "Ready to reuse", 70–89 "Mostly
+ready", 40–69 "Getting ready", 0–39 "Incomplete". Empty profile returns a stable
+zeroed payload.
+
+Sub-entries are owner-scoped (a foreign id → `404`); `related_document` must
+belong to the user (`400` otherwise); all rows cascade-delete with the account.
+`build_application_context_from_profile(user, application)` (service-only, not a
+public endpoint) assembles a deterministic profile+application+pack context for
+**future** AI document generation — it makes no AI call and never includes
+passport/ID numbers or file URLs.
+
+---
+
 # 13.3 Onboarding, Trust, Demo, and Account Controls API (implemented)
 
 These endpoints are user-owned support surfaces for the document module. They

@@ -26,6 +26,18 @@ from .views import (
     PasswordResetConfirmView,
     PasswordResetRequestView,
     RegisterView,
+    SmartProfileAchievementDetailView,
+    SmartProfileAchievementListCreateView,
+    SmartProfileCommonAnswerDetailView,
+    SmartProfileCommonAnswerListCreateView,
+    SmartProfileCompletenessView,
+    SmartProfileEducationDetailView,
+    SmartProfileEducationListCreateView,
+    SmartProfileSkillDetailView,
+    SmartProfileSkillListCreateView,
+    SmartProfileView,
+    SmartProfileWorkDetailView,
+    SmartProfileWorkListCreateView,
     TrustSecuritySummaryView,
 )
 
@@ -66,6 +78,63 @@ urlpatterns = [
         "users/me/profile-details/",
         CurrentUserProfileDetailsView.as_view(),
         name="users-me-profile-details",
+    ),
+    # ---- Smart Profile V1 (reusable application data; deterministic) -------
+    path("smart-profile/", SmartProfileView.as_view(), name="smart-profile"),
+    path(
+        "smart-profile/completeness/",
+        SmartProfileCompletenessView.as_view(),
+        name="smart-profile-completeness",
+    ),
+    path(
+        "smart-profile/education/",
+        SmartProfileEducationListCreateView.as_view(),
+        name="smart-profile-education",
+    ),
+    path(
+        "smart-profile/education/<int:pk>/",
+        SmartProfileEducationDetailView.as_view(),
+        name="smart-profile-education-detail",
+    ),
+    path(
+        "smart-profile/work/",
+        SmartProfileWorkListCreateView.as_view(),
+        name="smart-profile-work",
+    ),
+    path(
+        "smart-profile/work/<int:pk>/",
+        SmartProfileWorkDetailView.as_view(),
+        name="smart-profile-work-detail",
+    ),
+    path(
+        "smart-profile/skills/",
+        SmartProfileSkillListCreateView.as_view(),
+        name="smart-profile-skills",
+    ),
+    path(
+        "smart-profile/skills/<int:pk>/",
+        SmartProfileSkillDetailView.as_view(),
+        name="smart-profile-skill-detail",
+    ),
+    path(
+        "smart-profile/achievements/",
+        SmartProfileAchievementListCreateView.as_view(),
+        name="smart-profile-achievements",
+    ),
+    path(
+        "smart-profile/achievements/<int:pk>/",
+        SmartProfileAchievementDetailView.as_view(),
+        name="smart-profile-achievement-detail",
+    ),
+    path(
+        "smart-profile/common-answers/",
+        SmartProfileCommonAnswerListCreateView.as_view(),
+        name="smart-profile-common-answers",
+    ),
+    path(
+        "smart-profile/common-answers/<int:pk>/",
+        SmartProfileCommonAnswerDetailView.as_view(),
+        name="smart-profile-common-answer-detail",
     ),
     path("onboarding/state/", OnboardingStateView.as_view(), name="onboarding-state"),
     path(
