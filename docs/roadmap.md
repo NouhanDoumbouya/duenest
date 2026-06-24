@@ -1013,10 +1013,11 @@ ai/requirement-link-to-checklist       (done)
 product/application-tracker-v1         (done)
 product/smart-profile-v1               (done)
 ai/application-document-generator      (done — CVs/letters/emails/SOPs from Smart Profile)
-product/magic-inbox-v1                 (next)
+product/magic-inbox-v1                 (done — capture → analyze → review → apply)
 notifications/weekly-radar-email
 sharing/document-request-links-v1
 b2b/portals-mvp
+integrations/inbox-mailbox-import      (future — Gmail/Drive/Outlook import into Magic Inbox)
 backend/ai-org-credit-pools            (future)
 product/life-radar-ai-insights         (future — AI-enhanced Life Radar)
 ```
@@ -1590,10 +1591,52 @@ A polish pass on the generator above. Shipped:
   PDFs remain selectable text via fpdf2 (latin-1 with graceful replacement; full
   Unicode embedding is future work); DOCX stays editable + ATS-safe.
 
-* **Next recommended branch:** `product/magic-inbox-v1`
+## Magic Inbox V1 — delivered (2026-06-24)
+
+`product/magic-inbox-v1` is **implemented** (backend complete + tested). One
+place to drop a file, paste email/message/requirement text, or paste a link;
+CertaNest analyzes it and proposes routes into the rest of the vault. The flow is
+strictly **Capture → Analyze → Review Suggestions → Apply** — nothing is created
+automatically; the user selects suggestions before any record is written.
+
+Key facts:
+
+* **Intake types:** file upload, pasted text, or a pasted link. File intake
+  stores an encrypted `DocumentFile` through the existing File Inbox upload path
+  (no raw storage URLs — files are reachable only via the private
+  `/api/v1/files/{id}/download/` route) and is enforced by the Free/Pro file and
+  storage plan limits. New `MagicInboxItem` model + migration
+  `documents/0034_magicinboxitem`.
+* **Deterministic analysis (always on, every plan):** detects dates (reuses the
+  document extractor's date pattern/normalizer), spots likely required documents
+  from known keywords only (never invents), and proposes basic suggestions (save
+  to vault, create pack/application, add requirements, create reminder, import a
+  requirement link, archive). Makes **no AI call and consumes no AI credits.**
+* **Optional AI smart triage (Pro):** Claude classifies the item, detects
+  deadlines, and enriches suggestions with source snippets under a strict JSON,
+  no-hallucination schema. Gated by `ai_features` + the new `magic_inbox_triage`
+  feature flag + AI consent + Pro plan (`ai_magic_inbox`, seeded by billing
+  migration `0016_ai_magic_inbox_flag`: Free off, Pro/Teams on) + monthly AI
+  credits + the infrastructure budget guard. Costs **3 credits**, charged only on
+  a genuine model success; every blocked/failed path charges 0.
+* **Review-before-apply:** `apply` lets the user select suggestions to create
+  owner-scoped records; it **never calls AI and never charges credits**. Some
+  suggestions (`import_requirement_link`, `generate_application_document`) apply
+  as route hints that continue in their existing, separately gated flows.
+* **Life Radar** gains additive summary counts `inbox_new_count`,
+  `inbox_needs_review_count`, `inbox_failed_count` (existing shape preserved).
+* **Frontend:** a new `/dashboard/inbox` page ("Inbox" nav item) with an intake
+  panel (upload / paste text / paste link), a status-grouped list, an item detail
+  with suggestion cards + warnings, review-before-apply, and Pro-gated smart
+  analysis with a "uses 3 AI credits after successful analysis" notice.
+
+**Explicit non-goal (V1):** Magic Inbox does **not** integrate Gmail/Outlook or
+any external mailbox — it is in-app upload/paste only. Gmail/Drive/Outlook import
+is on the future roadmap (`integrations/inbox-mailbox-import`). See `docs/api-spec.md`
+for the endpoint contract.
 
 Upcoming planned branches (in order):
-1. `product/magic-inbox-v1` ← **next**
-2. `notifications/weekly-radar-email`
-3. `sharing/document-request-links-v1`
-4. `b2b/portals-mvp`
+1. `notifications/weekly-radar-email` ← **next**
+2. `sharing/document-request-links-v1`
+3. `b2b/portals-mvp`
+4. `integrations/inbox-mailbox-import` (future — Gmail/Drive/Outlook import)

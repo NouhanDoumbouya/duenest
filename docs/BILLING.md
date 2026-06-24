@@ -126,6 +126,7 @@ Seeded by migration `0012` (after `0010`/`0011`):
 | `pack_copilot` | 3 |
 | `document_draft` | 3 |
 | `requirement_link_checklist` | 5 (future) |
+| `magic_inbox_triage` | 3 |
 | `multi_document_qa` | 5 |
 | `long_application_review` | 5 (future) |
 | `application_document_generation` — email types (`recommendation_request_email`, `application_email`) | **3** |
@@ -153,6 +154,16 @@ shown on a draft are **deterministic, AI-free recomputes** — re-running them b
 editing content is always free. Export and save-to-pack do consume file count and
 storage quota under the normal Free/Pro plan limits (Free: 30 files / 100 MB;
 Pro: 1 000 files / 10 GB).
+
+**Magic Inbox smart triage** (`magic_inbox_triage`) is **Pro-only**
+(`ai_magic_inbox` entitlement, seeded by billing migration
+`0016_ai_magic_inbox_flag`: Free off, Pro/Teams on). AI triage costs **3
+credits**, charged **only** after a successful model-backed analysis; every other
+path (consent missing, plan blocked, credits exhausted, budget paused, provider
+error/not-configured, refusal) charges **0**. **Capturing an item, the
+always-on deterministic analysis, and applying suggestions make no AI call and
+consume no AI credits.** File intake counts against the normal Free/Pro file and
+storage limits.
 
 These are **product entitlements**. They sit alongside — and never replace — the
 **infrastructure AI budget guard** (`AI_DAILY_TOKEN_CAP_USER`,

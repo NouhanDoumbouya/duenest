@@ -12,7 +12,8 @@ An AI feature runs for a user only when **all** of these are true:
 2. **The feature flag is on** for that user — `ai_features` (master) plus the
    per-feature flag (`ai_document_extraction`, `ai_document_qa`,
    `ai_document_drafting`, `ai_pack_copilot`, `ai_briefing`, `ai_chat`,
-   `ai_intake`, `ai_briefing` for the digest). All default `founder_only`.
+   `ai_intake`, `magic_inbox_triage`, `ai_briefing` for the digest). All default
+   `founder_only`.
 3. **The user has consented** — they turned AI on (Settings → AI & privacy, or
    the in-app "Turn on AI" card). Off until they opt in, regardless of 1–2.
 
@@ -149,6 +150,36 @@ extract a requirements checklist without any manual typing.
 - **Endpoints:** `POST .../requirements/import-link/` (extract) and
   `POST .../requirements/import-link/{draft_id}/apply/` (apply). See
   `docs/api-spec.md` §13B.8a for the full spec.
+
+## Magic Inbox smart triage
+
+Drop a file or paste email/message/requirement text or a link into Magic Inbox;
+optional AI triage classifies the item, detects deadlines, and enriches the
+suggested routes with source snippets.
+
+- **What it does:** on `POST .../magic-inbox/{id}/analyze/` with `use_ai: true`,
+  Claude classifies the captured item, detects deadlines, and enriches the
+  suggestion list (under a strict JSON, no-hallucination schema — it never invents
+  documents or deadlines). The user reviews suggestions and applies the ones they
+  choose; nothing is created automatically.
+- **Deterministic fallback works without AI.** Deterministic analysis always runs
+  and is available on **every plan** — it makes no AI call and consumes no
+  credits. AI triage only adds enrichment on top, so the feature is fully usable
+  with no key configured / consent off / Free plan.
+- **Plan:** **Pro-only** (`ai_magic_inbox` entitlement, seeded by billing
+  migration `0016_ai_magic_inbox_flag`: Free off, Pro/Teams on).
+- **Credits:** **3 credits** per successful AI triage, charged **only** on a
+  genuine model success. Every blocked/failed path (consent missing, not in plan,
+  credits exhausted, budget paused, provider error/not-configured, refusal)
+  charges **0**. Applying suggestions never calls AI and never charges credits.
+- **Consent:** `AiPreference.ai_enabled` must be on.
+- **Flags:** new `magic_inbox_triage` (default `founder_only`) + `ai_features`
+  master gate. Both must resolve on for AI triage to be reachable.
+- **Budget guard:** the infrastructure budget guard
+  (`AI_DAILY_TOKEN_CAP_USER`/`_GLOBAL`, `AI_MONTHLY_COST_LIMIT_USD`) applies
+  normally. Throttle scope `magic_inbox_triage` (10/min).
+- **Endpoints:** `POST .../magic-inbox/{id}/analyze/` (triage) and
+  `POST .../magic-inbox/{id}/apply/` (apply, no AI). See `docs/api-spec.md` §33.
 
 ## Plan credits
 

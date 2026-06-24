@@ -1560,3 +1560,32 @@ addresses, and emergency contact). Security posture:
 * **No new dependency exposes secrets.** `python-docx==1.1.2` is a pure-Python
   OOXML library with no system or LibreOffice dependencies. PDFs use the
   existing `fpdf2` library. Neither library makes network calls.
+
+## Magic Inbox V1 security
+
+Magic Inbox lets a user drop a file or paste email/message/requirement text or a
+link, then proposes routes into the vault. Capture → Analyze → Review → Apply.
+
+* **Owner-scoped.** Every `MagicInboxItem` and every endpoint is scoped to the
+  signed-in user; another user's item returns `404 Not Found`, never `403`.
+* **Encrypted file intake, no raw URLs.** File capture stores an encrypted
+  `DocumentFile` through the existing File Inbox upload path (AES-256-GCM at
+  rest), and is enforced by the Free/Pro **file + storage** plan limits. The file
+  is reachable only via the private, owner-only `/api/v1/files/{id}/download/`
+  route — raw object-storage/R2 URLs are never returned.
+* **Review-before-apply (no auto-create).** Analysis only proposes suggestions;
+  nothing is created until the user explicitly selects suggestions and calls
+  apply. There is no auto-share, auto-submit, or auto-write path.
+* **Apply never calls AI or charges credits.** Applying creates only owner-scoped
+  records for the selected suggestions; it makes no AI provider call and consumes
+  no AI credits. Deterministic analysis is likewise AI-free and free of charge.
+* **AI triage reuses existing gates.** Optional AI smart triage reuses the
+  standard layers — consent (`AiPreference.ai_enabled`), rollout flags
+  (`magic_inbox_triage` + `ai_features`), Pro entitlement (`ai_magic_inbox`),
+  monthly AI credit metering, and the infrastructure budget guard. No second
+  metering or bypass path. No-hallucination schema: triage never invents
+  documents or deadlines.
+* **No external mailbox access (V1).** Magic Inbox does **not** integrate
+  Gmail/Outlook or read any external mailbox — it is in-app upload/paste only, so
+  it introduces no third-party inbox credentials or OAuth scope. Gmail/Drive/
+  Outlook import is future work.

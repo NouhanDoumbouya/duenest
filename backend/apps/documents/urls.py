@@ -19,6 +19,11 @@ from .views import (
     ApplicationDocumentDetailView,
     ApplicationDocumentExportView,
     ApplicationDocumentSaveToPackView,
+    MagicInboxListCreateView,
+    MagicInboxDetailView,
+    MagicInboxAnalyzeView,
+    MagicInboxApplyView,
+    MagicInboxArchiveView,
     BundleRequirementLinkDocumentView,
     BundleRequirementLinkFileView,
     ChecklistTemplateDetailView,
@@ -546,6 +551,32 @@ urlpatterns = [
         "application-documents/<int:pk>/save-to-pack/",
         ApplicationDocumentSaveToPackView.as_view(),
         name="application-document-save-to-pack",
+    ),
+    # Magic Inbox V1 — capture -> analyze -> review -> apply. Owner-scoped.
+    path(
+        "magic-inbox/",
+        MagicInboxListCreateView.as_view(),
+        name="magic-inbox-list-create",
+    ),
+    path(
+        "magic-inbox/<int:pk>/",
+        MagicInboxDetailView.as_view(),
+        name="magic-inbox-detail",
+    ),
+    path(
+        "magic-inbox/<int:pk>/analyze/",
+        MagicInboxAnalyzeView.as_view(),
+        name="magic-inbox-analyze",
+    ),
+    path(
+        "magic-inbox/<int:pk>/apply/",
+        MagicInboxApplyView.as_view(),
+        name="magic-inbox-apply",
+    ),
+    path(
+        "magic-inbox/<int:pk>/archive/",
+        MagicInboxArchiveView.as_view(),
+        name="magic-inbox-archive",
     ),
     path(
         "document-bundles/",

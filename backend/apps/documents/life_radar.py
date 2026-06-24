@@ -225,6 +225,9 @@ def build_life_radar(user, *, today: date | None = None) -> dict:
     # ---- Application Tracker (additive; deterministic, owner-scoped) --------
     applications = _application_counts(user, today=today)
 
+    # ---- Magic Inbox (additive; deterministic, owner-scoped) ----------------
+    inbox = _magic_inbox_counts(user)
+
     # ---- Empty-vault onboarding short-circuit ------------------------------
     is_empty = (
         total_documents == 0
@@ -245,6 +248,10 @@ def build_life_radar(user, *, today: date | None = None) -> dict:
         "urgent_applications": applications["urgent_applications"],
         "ready_to_submit_applications": applications["ready_to_submit_applications"],
         "overdue_applications": applications["overdue_applications"],
+        # Magic Inbox (additive keys — never removed).
+        "inbox_new_count": inbox["inbox_new_count"],
+        "inbox_needs_review_count": inbox["inbox_needs_review_count"],
+        "inbox_failed_count": inbox["inbox_failed_count"],
     }
 
     if is_empty:
@@ -389,6 +396,32 @@ def _application_counts(user, *, today) -> dict:
             "ready_to_submit_applications": 0,
             "overdue_applications": 0,
         }
+
+
+def _magic_inbox_counts(user) -> dict:
+    """Compact Magic Inbox counts for Life Radar (additive; never raises).
+
+    ``new`` = freshly captured, not analyzed; ``needs_review`` = analyzed but not
+    yet applied/archived; ``failed`` = capture/analysis failure.
+    """
+    try:
+        from django.db.models import Count
+
+        from .models import MagicInboxItem
+
+        rows = (
+            MagicInboxItem.objects.filter(owner=user)
+            .values("status")
+            .annotate(n=Count("id"))
+        )
+        by_status = {r["status"]: r["n"] for r in rows}
+        return {
+            "inbox_new_count": by_status.get(MagicInboxItem.Status.NEW, 0),
+            "inbox_needs_review_count": by_status.get(MagicInboxItem.Status.ANALYZED, 0),
+            "inbox_failed_count": by_status.get(MagicInboxItem.Status.FAILED, 0),
+        }
+    except Exception:  # noqa: BLE001 — Life Radar must never break on this
+        return {"inbox_new_count": 0, "inbox_needs_review_count": 0, "inbox_failed_count": 0}
 
 
 def _suggested_actions(

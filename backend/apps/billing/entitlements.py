@@ -288,6 +288,7 @@ AI_FEATURE_PLAN_FLAGS = {
     "bundle_readiness": "ai_readiness_checks",
     "requirement_link_checklist": "ai_requirement_checklist",
     "application_document_generation": "ai_application_document_generation",
+    "magic_inbox_triage": "ai_magic_inbox",
 }
 
 # Feature-based credit costs. Heavier / multi-document features cost more. An
@@ -304,6 +305,7 @@ AI_FEATURE_CREDIT_COSTS = {
     "pack_copilot": 3,
     "document_draft": 3,
     "requirement_link_checklist": 5,  # future feature
+    "magic_inbox_triage": 3,  # smart triage of one intake item (text/file)
     "multi_document_qa": 5,
     "long_application_review": 5,  # future feature
     # Application document generation cost VARIES by document type (email 3 /
