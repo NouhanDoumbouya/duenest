@@ -1488,3 +1488,33 @@ and organization-collection QR surfaces are deferred to later iterations.
 * Verification asserts **provenance + integrity only** (an unaltered copy shared
   from a CertaNest account), never the document's real-world authenticity; the UI
   states this explicitly to avoid over-claiming.
+
+## Smart Profile V1 privacy
+
+Smart Profile stores **reusable application data** (education, work, skills,
+achievements, common answers, plus scalar extras like application email,
+addresses, and emergency contact). Security posture:
+
+* **Owner-only.** Every endpoint and query is scoped to the signed-in user;
+  foreign ids return `404` and a linked `related_document` must belong to the
+  user (`400` otherwise). Smart Profile is **never exposed publicly** — there are
+  no share endpoints, and it is not surfaced in any unrelated endpoint.
+* **Sensitive numbers stay encrypted and are not duplicated.** Passport number
+  and national ID continue to live only in the AES-256-GCM-encrypted
+  `UserProfileDetails` store (`/users/me/profile-details/`). Smart Profile reads
+  only **non-secret** identity values plus presence booleans
+  (`has_passport_number`, `has_national_id`) — the actual numbers are never
+  returned by, or copied into, Smart Profile.
+* **Lower-sensitivity rows are standard owner-scoped data.** Education/work/etc.
+  and the scalar extras (incl. emergency-contact phone, addresses) are stored as
+  ordinary DB rows with DB-at-rest protection and owner-only access. Field-level
+  encryption (`apps.core.security.encryption`) is available and is noted as a
+  future hardening option for the emergency-contact/extras fields.
+* **No AI, no logs of values.** Smart Profile makes **no AI provider call** and
+  consumes **no AI credits**; profile data is not sent to any model in this
+  branch. `build_application_context_from_profile` builds a deterministic context
+  for *future* AI generation but is service-only (not a public endpoint) and
+  excludes passport/ID numbers and file URLs.
+* **Deletion.** All Smart Profile rows use `on_delete=CASCADE` to the user, so
+  they are removed automatically by the existing account-deletion flow
+  (`AccountDeletionRequest`). No new deletion hook is required.

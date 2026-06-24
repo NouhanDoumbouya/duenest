@@ -33,6 +33,7 @@ import {
   PenLine,
   QrCode,
   ScanLine,
+  IdCard,
   Settings,
   ShieldAlert,
   ShieldCheck,
@@ -246,6 +247,12 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
   {
     heading: "Life admin",
     items: [
+      {
+        label: "Profile",
+        href: "/dashboard/profile",
+        icon: IdCard,
+        featureKey: "smart_profile",
+      },
       {
         label: "Vault",
         href: "/dashboard/vault",

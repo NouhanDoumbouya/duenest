@@ -229,3 +229,97 @@ class AccountDeletionRequestCreateSerializer(serializers.Serializer):
         trim_whitespace=True,
         max_length=2000,
     )
+
+
+# ---- Smart Profile V1 serializers ------------------------------------------
+
+from .models import (  # noqa: E402  (grouped with the Smart Profile section)
+    SmartProfile,
+    SmartProfileAchievement,
+    SmartProfileCommonAnswer,
+    SmartProfileEducation,
+    SmartProfileSkill,
+    SmartProfileWork,
+)
+
+
+class SmartProfileExtrasSerializer(serializers.ModelSerializer):
+    """The reusable scalar extras on SmartProfile (identity/document numbers live
+    in the encrypted UserProfileDetails and are edited via its own endpoint)."""
+
+    class Meta:
+        model = SmartProfile
+        fields = [
+            "email_for_applications",
+            "country_of_residence",
+            "current_address",
+            "permanent_address",
+            "passport_expiry_date",
+            "emergency_contact_name",
+            "emergency_contact_relationship",
+            "emergency_contact_phone",
+        ]
+
+
+class _OwnerScopedEntrySerializer(serializers.ModelSerializer):
+    owner = serializers.PrimaryKeyRelatedField(read_only=True)
+
+
+class SmartProfileEducationSerializer(_OwnerScopedEntrySerializer):
+    class Meta:
+        model = SmartProfileEducation
+        fields = [
+            "id", "owner", "institution_name", "degree_or_program",
+            "field_of_study", "start_date", "end_date", "currently_studying",
+            "grade_or_cgpa", "country", "description", "sort_order",
+            "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "owner", "created_at", "updated_at"]
+
+
+class SmartProfileWorkSerializer(_OwnerScopedEntrySerializer):
+    class Meta:
+        model = SmartProfileWork
+        fields = [
+            "id", "owner", "organization_name", "role_title", "start_date",
+            "end_date", "currently_working", "location", "description",
+            "achievements", "sort_order", "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "owner", "created_at", "updated_at"]
+
+
+class SmartProfileSkillSerializer(_OwnerScopedEntrySerializer):
+    class Meta:
+        model = SmartProfileSkill
+        fields = [
+            "id", "owner", "name", "category", "proficiency", "sort_order",
+            "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "owner", "created_at", "updated_at"]
+
+
+class SmartProfileAchievementSerializer(_OwnerScopedEntrySerializer):
+    class Meta:
+        model = SmartProfileAchievement
+        fields = [
+            "id", "owner", "title", "category", "date", "description",
+            "related_document", "sort_order", "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "owner", "created_at", "updated_at"]
+
+    def validate_related_document(self, value):
+        # A document may only be linked if it belongs to the requesting user.
+        request = self.context.get("request")
+        if value is not None and request and value.owner_id != request.user.id:
+            raise serializers.ValidationError("Document not found.")
+        return value
+
+
+class SmartProfileCommonAnswerSerializer(_OwnerScopedEntrySerializer):
+    class Meta:
+        model = SmartProfileCommonAnswer
+        fields = [
+            "id", "owner", "prompt", "answer", "category", "sort_order",
+            "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "owner", "created_at", "updated_at"]
