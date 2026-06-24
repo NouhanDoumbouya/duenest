@@ -27,6 +27,8 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { useFeature } from "@/components/features/feature-flags-provider";
+import { ProtectCopyDialog } from "@/components/documents/protect-copy-dialog";
 import { DrawerBackdrop, DrawerPanel } from "@/components/ui/drawer";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
@@ -42,6 +44,7 @@ import { ApiError } from "@/lib/api";
 import {
   formatFileSize,
   getInboxFileDownloadBlob,
+  getInboxFilePreviewBlob,
   saveBlob,
 } from "@/lib/document-files";
 import {
@@ -55,6 +58,7 @@ import {
   buildPublicRoomUrl,
   copyToClipboard,
   createSharingRoom,
+  getSharingRoom,
   getSharingRooms,
   removeSharingRoomItem,
   revokeSharingRoom,
@@ -757,6 +761,24 @@ function RoomDetailDrawer({
             onAdd={(body, key) =>
               run(key, () => addSharingRoomItem(room.id, body), "Item added.")
             }
+            onProtectedCopyAdded={async () => {
+              // The protected copy was added to the room server-side; re-fetch
+              // the room so the new item shows up, and surface a confirmation.
+              try {
+                const updated = await getSharingRoom(room.id);
+                onUpdated(updated);
+                onToast({
+                  message: "Protected copy added to the room.",
+                  kind: "success",
+                });
+              } catch {
+                onToast({
+                  message:
+                    "Protected copy was created, but the room view couldn't refresh. Reopen the room to see it.",
+                  kind: "error",
+                });
+              }
+            }}
           />
         )}
 
@@ -895,16 +917,24 @@ function RoomItemRow({
 function AddItemForm({
   disabled,
   onAdd,
+  onProtectedCopyAdded,
 }: {
   disabled: boolean;
   onAdd: (body: AddSharingRoomItemBody, key: string) => void;
+  onProtectedCopyAdded: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [itemType, setItemType] = useState<SharingRoomItemType>("document");
   const [refId, setRefId] = useState("");
   const [itemTitle, setItemTitle] = useState("");
+  // Owner-only protected-copy editor (redaction + watermark). Gated by the
+  // feature flag; the backend still 503s when off.
+  const redactionOn = useFeature("redaction_watermarking");
+  const [protectingFileId, setProtectingFileId] = useState<number | null>(null);
 
   const idEmpty = refId.trim().length === 0 || Number.isNaN(Number(refId));
+  const fileIdReady =
+    itemType === "file" && refId.trim().length > 0 && !Number.isNaN(Number(refId));
 
   function submit() {
     if (idEmpty) return;
@@ -982,6 +1012,35 @@ function AddItemForm({
         Add by ID for now. A full picker is coming. Find IDs in your Vault, File
         Inbox, or Document Requests.
       </p>
+
+      {/* Protect-copy entry point: only for FILE items, only when the feature
+          is on. Lets the owner redact/watermark a NEW copy and add that copy
+          (never the original) to the room. */}
+      {redactionOn && itemType === "file" && (
+        <div className="mt-3 rounded-lg border border-dashed border-border bg-background px-3 py-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground">
+              <ShieldCheck className="mr-1 inline size-3.5" aria-hidden />
+              Sharing something sensitive? Create a redacted or watermarked copy
+              first.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={disabled || !fileIdReady}
+              onClick={() => setProtectingFileId(Number(refId))}
+            >
+              Create a protected copy first
+            </Button>
+          </div>
+          {!fileIdReady && (
+            <p className="mt-1 text-[11px] text-muted-foreground/80">
+              Enter the File ID above to protect it.
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="mt-3 flex justify-end gap-2">
         <Button
           variant="ghost"
@@ -995,6 +1054,29 @@ function AddItemForm({
           <Plus className="size-4" /> Add
         </Button>
       </div>
+
+      {protectingFileId !== null && (
+        <ProtectCopyDialog
+          file={{
+            id: protectingFileId,
+            // The owner is supplying a File Inbox / document file ID. The blob
+            // helper authenticates the preview fetch; content type/filename are
+            // resolved from the response, but we provide a permissive default so
+            // the editor opens — the backend rejects unsupported formats.
+            contentType: "application/pdf",
+            filename: `File #${protectingFileId}`,
+            fetchPreviewBlob: () => getInboxFilePreviewBlob(protectingFileId),
+          }}
+          onClose={() => setProtectingFileId(null)}
+          onAddedToRoom={() => {
+            setProtectingFileId(null);
+            setOpen(false);
+            setRefId("");
+            setItemTitle("");
+            onProtectedCopyAdded();
+          }}
+        />
+      )}
     </div>
   );
 }

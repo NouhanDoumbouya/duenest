@@ -5477,3 +5477,78 @@ page (singular — distinct from the `ShareRoom` `/rooms/{token}` plural). Files
 served only via the proxy routes; no raw URLs. Security details in
 `docs/security-plan.md` and `docs/PUBLIC_LINK_SECURITY.md`.
 
+## 36 — Redaction + Watermarking V1 (`protected-copies/`)
+
+Create a safe **protected copy** of an owned document/file before sharing it —
+manual redaction rectangles and/or a watermark, generated **server-side** so
+redaction is genuinely secure. The **original file is never modified**; the
+protected copy is a brand-new encrypted, private file. Fully **deterministic — no
+AI call, no AI credits, no automatic PII detection in V1.**
+
+All endpoints are authenticated and owner-scoped (another user's copy returns
+`404 Not Found`) and gated behind the founder-only feature flag
+`redaction_watermarking`. There is **no public route** — protected copies are
+shared through Sharing Rooms (§35) or the private owner download route; no raw
+storage URLs are ever exposed.
+
+**Supported formats:** PDF, PNG, JPEG only (the previewable types). DOC/DOCX and
+other types return `400` ("available for PDF, PNG, and JPEG files only").
+
+### Protection types & statuses
+
+**`protection_type`:** `watermark`, `redaction`, `redaction_watermark`.
+**`status`:** `draft`, `processing`, `ready`, `failed`, `archived`.
+
+### Endpoints
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/v1/protected-copies/` | List the owner's protected copies |
+| `POST` | `/api/v1/protected-copies/` | Create a `draft` from an owned `original_file` |
+| `GET` | `/api/v1/protected-copies/{id}/` | Retrieve one protected copy |
+| `PATCH` | `/api/v1/protected-copies/{id}/` | Edit settings while `draft` / `failed` |
+| `POST` | `/api/v1/protected-copies/{id}/generate/` | Render the protected file |
+| `POST` | `/api/v1/protected-copies/{id}/archive/` | Archive the copy |
+| `POST` | `/api/v1/protected-copies/{id}/add-to-room/` | Add the **protected** file (never the original) to an owner Sharing Room; requires `status: ready`. Body `{ "sharing_room": <id> }` |
+
+### Model
+
+`ProtectedDocumentCopy` (`apps/documents/models.py`, migration
+`documents/0037_protecteddocumentcopy`): `owner`; `original_file` (read-only
+source `DocumentFile`); `original_document`; the generated `protected_file` /
+`protected_document` output; `title`; `protection_type`; `status`;
+`watermark_text`; `watermark_position` (`diagonal` / `center` / `footer` /
+`header`); `opacity`; `redactions` JSON (normalized boxes); `output_mime_type`;
+`page_count`; `error_message`; `created_at` / `updated_at` / `processed_at`.
+
+### Redaction contract (normalized coordinates)
+
+The frontend sends **only** redaction coordinates + watermark config; the backend
+performs the actual redaction. Each redaction box uses **normalized coordinates**
+— `x`, `y`, `width`, `height` as fractions (`0..1`) of page width/height — so they
+are DPI/point independent. PDFs may carry a `page` index per box.
+
+### Secure (non-overlay) redaction
+
+This is **not** removable black-rectangle overlay redaction:
+
+- **Images (PNG/JPEG):** redaction rectangles are drawn directly into pixel data
+  and the watermark is baked into pixels — nothing recoverable.
+- **PDFs with redaction:** each page is **rasterized** to an image
+  (pdf2image/poppler at 150 DPI), the rectangles + watermark are burned in, and
+  pages are recomposed into a new PDF. The underlying text/objects are destroyed,
+  so redacted content is **not** extractable (this sacrifices selectable text in
+  the redacted PDF).
+- **Watermark-only PDFs:** a light watermark page is overlaid per page (pypdf + an
+  fpdf2 transparent watermark page), so selectable text is **preserved** (nothing
+  sensitive is hidden).
+
+### Original preservation, storage & plan
+
+The original is only ever **read** (decrypted in memory) and is byte-for-byte
+unchanged. The protected output is a **new encrypted, private, owner-owned
+`DocumentFile`**, referenced only via `/api/v1/files/{id}/download/` — never a raw
+storage URL. It counts against the owner's existing **file + storage** plan limits
+(enforced on `generate/`; over the limit returns `403 plan_limit_exceeded`). No
+separate plan resource was added. See `docs/BILLING.md` and `docs/security-plan.md`.
+

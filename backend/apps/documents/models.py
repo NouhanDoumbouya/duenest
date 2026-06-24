@@ -3167,3 +3167,113 @@ class SharingRoomParticipant(models.Model):
 
     def __str__(self):
         return f"SharingRoomParticipant(room={self.room_id})"
+
+
+class ProtectedDocumentCopy(models.Model):
+    """
+    A safe, owner-scoped PROTECTED COPY of an existing document/file: a new file
+    with manual redaction rectangles burned into the pixels and/or a watermark
+    applied, generated server-side so the result is genuinely protected (not a
+    removable overlay). The ORIGINAL file is never modified — the protected output
+    is a brand-new encrypted, private ``DocumentFile``.
+
+    Redaction is secure: PDFs that carry redactions are flattened to images and
+    recomposed (underlying text is destroyed — not extractable); images have the
+    redaction rectangles drawn directly into pixel data. Watermark-only PDFs may
+    keep selectable text (nothing sensitive is being hidden). Deterministic — no
+    AI. The recipient of a shared protected copy never sees the original or its
+    private origin metadata.
+    """
+
+    class ProtectionType(models.TextChoices):
+        WATERMARK = "watermark", "Watermark"
+        REDACTION = "redaction", "Redaction"
+        REDACTION_WATERMARK = "redaction_watermark", "Redaction + watermark"
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        PROCESSING = "processing", "Processing"
+        READY = "ready", "Ready"
+        FAILED = "failed", "Failed"
+        ARCHIVED = "archived", "Archived"
+
+    class WatermarkPosition(models.TextChoices):
+        DIAGONAL = "diagonal", "Diagonal"
+        CENTER = "center", "Center"
+        FOOTER = "footer", "Footer"
+        HEADER = "header", "Header"
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="protected_document_copies",
+    )
+    # The source file (never modified). ``original_document`` is its parent doc,
+    # if any. CASCADE on the source: a protected copy is meaningless without it.
+    original_file = models.ForeignKey(
+        DocumentFile, on_delete=models.CASCADE,
+        related_name="protected_copies_from",
+    )
+    original_document = models.ForeignKey(
+        Document, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="protected_copies_from",
+    )
+    # The generated protected output (an encrypted, owner-owned DocumentFile).
+    protected_file = models.ForeignKey(
+        DocumentFile, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="protected_copy_output",
+    )
+    protected_document = models.ForeignKey(
+        Document, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="protected_copy_output",
+    )
+
+    title = models.CharField(max_length=255)
+    protection_type = models.CharField(
+        max_length=20, choices=ProtectionType.choices,
+        default=ProtectionType.REDACTION_WATERMARK,
+    )
+    status = models.CharField(
+        max_length=12, choices=Status.choices, default=Status.DRAFT
+    )
+
+    watermark_text = models.CharField(max_length=120, blank=True)
+    watermark_position = models.CharField(
+        max_length=10, choices=WatermarkPosition.choices,
+        default=WatermarkPosition.DIAGONAL,
+    )
+    watermark_opacity = models.FloatField(default=0.25)
+    # Manual redaction rectangles. Coordinates are NORMALIZED (0..1 fractions of
+    # the page width/height) so they are DPI/point independent:
+    #   [{"page_number": 1, "x": 0.1, "y": 0.2, "width": 0.3, "height": 0.05}, ...]
+    redactions = models.JSONField(default=list, blank=True)
+
+    output_mime_type = models.CharField(max_length=120, blank=True)
+    page_count = models.PositiveIntegerField(null=True, blank=True)
+    error_message = models.CharField(max_length=500, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["owner", "status", "-created_at"]),
+            models.Index(fields=["owner", "original_file"]),
+        ]
+
+    def __str__(self):
+        return f"ProtectedDocumentCopy(owner={self.owner_id}, status={self.status})"
+
+    @property
+    def has_redactions(self) -> bool:
+        return self.protection_type in (
+            self.ProtectionType.REDACTION, self.ProtectionType.REDACTION_WATERMARK
+        )
+
+    @property
+    def has_watermark(self) -> bool:
+        return self.protection_type in (
+            self.ProtectionType.WATERMARK, self.ProtectionType.REDACTION_WATERMARK
+        )

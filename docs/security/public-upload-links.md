@@ -67,6 +67,11 @@ new public upload system**:
   never a raw storage URL, with download gated by `allow_download`.
 - Revoke / expiry / archive remove public access (`410`). Deterministic — no AI.
   See `docs/security-plan.md` and `docs/api-spec.md` §35.
+- A room can share a **protected copy** (redacted/watermarked) of a document
+  instead of the original (`ProtectedDocumentCopy` → `add-to-room`; see
+  `docs/api-spec.md` §36). Only the protected file is added — the original is
+  never exposed unless the owner separately adds it — and it streams through the
+  same authenticated decrypt-in-memory proxy (no raw storage URL).
 
 ## Honest limits
 

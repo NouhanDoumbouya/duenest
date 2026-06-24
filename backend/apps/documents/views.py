@@ -4373,6 +4373,188 @@ class PublicSharingRoomFileDownloadView(_PublicSharingRoomFileMixin):
         return _file_response(f, as_attachment=True)
 
 
+# ---- Protected copies (redaction + watermarking) ----------------------------
+
+
+def _owned_document_file(user, pk):
+    """An owner-owned, non-trashed DocumentFile (vault or inbox), or None."""
+    return _owned_file_queryset(user).filter(pk=pk).first()
+
+
+class ProtectedCopyListCreateView(APIView):
+    """
+    GET → list the owner's protected copies. POST → create a draft protected copy
+    from an OWNED file (the original is never modified). Gated by the
+    ``redaction_watermarking`` feature flag.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from .document_protection import build_protected_copy_payload
+        from .models import ProtectedDocumentCopy
+
+        require_feature_enabled("redaction_watermarking", request.user)
+        qs = ProtectedDocumentCopy.objects.filter(owner=request.user)
+        original = request.query_params.get("original_file")
+        if original:
+            qs = qs.filter(original_file_id=original)
+        data = [build_protected_copy_payload(c) for c in qs]
+        return Response({"protected_copies": data, "count": len(data)})
+
+    def post(self, request):
+        from .document_protection import (
+            ProtectionError,
+            build_protected_copy_payload,
+            create_protected_copy,
+        )
+
+        require_feature_enabled("redaction_watermarking", request.user)
+        original = _owned_document_file(request.user, request.data.get("original_file"))
+        if original is None:
+            return Response(
+                {"detail": "That file was not found or is not yours."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        try:
+            copy = create_protected_copy(request.user, original, request.data)
+        except ProtectionError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        _track_product_event(
+            request, "protected_copy_created",
+            object_type="protected_document_copy", object_id=copy.id,
+            metadata={"protection_type": copy.protection_type},
+        )
+        return Response(
+            build_protected_copy_payload(copy), status=status.HTTP_201_CREATED
+        )
+
+
+class _ProtectedCopyScopedView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_copy(self, request, pk):
+        from .models import ProtectedDocumentCopy
+
+        require_feature_enabled("redaction_watermarking", request.user)
+        return get_object_or_404(ProtectedDocumentCopy, pk=pk, owner=request.user)
+
+
+class ProtectedCopyDetailView(_ProtectedCopyScopedView):
+    """GET one / PATCH editable settings (only while draft or failed)."""
+
+    EDITABLE = {
+        "title", "protection_type", "watermark_text", "watermark_position",
+        "watermark_opacity", "redactions",
+    }
+
+    def get(self, request, pk):
+        from .document_protection import build_protected_copy_payload
+
+        return Response(build_protected_copy_payload(self.get_copy(request, pk)))
+
+    def patch(self, request, pk):
+        from .document_protection import (
+            ProtectionError,
+            build_protected_copy_payload,
+            validate_redaction_payload,
+            validate_watermark_payload,
+        )
+        from .models import ProtectedDocumentCopy
+
+        copy = self.get_copy(request, pk)
+        if copy.status not in (ProtectedDocumentCopy.Status.DRAFT,
+                               ProtectedDocumentCopy.Status.FAILED):
+            return Response(
+                {"detail": "Only a draft copy can be edited. Create a new copy."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        data = {k: v for k, v in request.data.items() if k in self.EDITABLE}
+        protection_type = data.get("protection_type", copy.protection_type)
+        if protection_type not in ProtectedDocumentCopy.ProtectionType.values:
+            return Response({"detail": "Invalid protection_type."}, status=400)
+        try:
+            validate_watermark_payload(protection_type, {**_copy_as_payload(copy), **data})
+            redactions = validate_redaction_payload(
+                protection_type, {**_copy_as_payload(copy), **data}
+            )
+        except ProtectionError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        for field in ("title", "watermark_text", "watermark_position"):
+            if field in data:
+                setattr(copy, field, str(data[field])[:255])
+        if "watermark_opacity" in data:
+            copy.watermark_opacity = float(data["watermark_opacity"])
+        copy.protection_type = protection_type
+        if "redactions" in data:
+            copy.redactions = redactions
+        copy.save()
+        return Response(build_protected_copy_payload(copy))
+
+
+def _copy_as_payload(copy) -> dict:
+    return {
+        "watermark_text": copy.watermark_text,
+        "watermark_position": copy.watermark_position,
+        "watermark_opacity": copy.watermark_opacity,
+        "redactions": copy.redactions,
+    }
+
+
+class ProtectedCopyGenerateView(_ProtectedCopyScopedView):
+    """POST → render the protected file (new encrypted private file). No AI."""
+
+    def post(self, request, pk):
+        from .document_protection import (
+            build_protected_copy_payload,
+            generate_protected_file,
+        )
+
+        copy = generate_protected_file(self.get_copy(request, pk))
+        _track_product_event(
+            request, "protected_copy_generated",
+            object_type="protected_document_copy", object_id=copy.id,
+            metadata={"status": copy.status},
+        )
+        return Response(build_protected_copy_payload(copy))
+
+
+class ProtectedCopyArchiveView(_ProtectedCopyScopedView):
+    def post(self, request, pk):
+        from .document_protection import archive_protected_copy, build_protected_copy_payload
+
+        copy = archive_protected_copy(self.get_copy(request, pk), request.user)
+        return Response(build_protected_copy_payload(copy))
+
+
+class ProtectedCopyAddToRoomView(_ProtectedCopyScopedView):
+    """POST {sharing_room} → add the protected output (never the original) to an
+    owner Sharing Room. Requires status ready."""
+
+    def post(self, request, pk):
+        from .document_protection import (
+            ProtectionError,
+            add_protected_copy_to_room,
+            build_protected_copy_payload,
+        )
+        from .models import SharingRoom
+
+        copy = self.get_copy(request, pk)
+        room = get_object_or_404(
+            SharingRoom, pk=request.data.get("sharing_room"), owner=request.user
+        )
+        try:
+            item = add_protected_copy_to_room(copy, room, request.user)
+        except ProtectionError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {"room_id": room.id, "item_id": item.id,
+             "protected_copy": build_protected_copy_payload(copy)},
+            status=status.HTTP_201_CREATED,
+        )
+
+
 # ---- Timeline ---------------------------------------------------------------
 
 
