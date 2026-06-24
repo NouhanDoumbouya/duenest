@@ -2771,3 +2771,99 @@ class GeneratedApplicationDocument(models.Model):
 
     def __str__(self):
         return f"GeneratedApplicationDocument(owner={self.owner_id}, type={self.document_type})"
+
+
+class MagicInboxItem(models.Model):
+    """
+    A single captured intake item in the Magic Inbox: an uploaded file, pasted
+    email/text, or a pasted link. CertaNest analyzes it (deterministically, and
+    optionally with AI triage) into review-before-apply suggestions — save to
+    vault, create a pack/application, add requirements, set a deadline, import a
+    requirement link, etc.
+
+    Owner-scoped. Stores no raw storage URLs: a file intake references an
+    encrypted ``DocumentFile`` and is only ever served through the private file
+    download route. Nothing is applied automatically — the user reviews and
+    selects suggestions before any record is created.
+    """
+
+    class ItemType(models.TextChoices):
+        FILE = "file", "Uploaded file"
+        TEXT = "text", "Pasted text/email"
+        LINK = "link", "Pasted link"
+
+    class Status(models.TextChoices):
+        NEW = "new", "New"
+        ANALYZED = "analyzed", "Analyzed"
+        APPLIED = "applied", "Applied"
+        ARCHIVED = "archived", "Archived"
+        FAILED = "failed", "Failed"
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="magic_inbox_items",
+    )
+    item_type = models.CharField(max_length=8, choices=ItemType.choices)
+    status = models.CharField(
+        max_length=12, choices=Status.choices, default=Status.NEW
+    )
+    title = models.CharField(max_length=255, blank=True)
+    # Friendly provenance label: "uploaded file", "pasted email", etc.
+    source_label = models.CharField(max_length=120, blank=True)
+    source_url = models.URLField(max_length=2048, blank=True)
+    # Pasted email/message/requirement text. Capped to keep intake reasonable.
+    pasted_text = models.TextField(blank=True)
+
+    # Links to existing content; SET_NULL so deleting the target never destroys
+    # the inbox record. A file intake references an encrypted DocumentFile.
+    linked_file = models.ForeignKey(
+        DocumentFile,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="magic_inbox_items",
+    )
+    linked_document = models.ForeignKey(
+        Document,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="magic_inbox_items",
+    )
+    linked_bundle = models.ForeignKey(
+        DocumentBundle,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="magic_inbox_items",
+    )
+    linked_application = models.ForeignKey(
+        TrackedApplication,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="magic_inbox_items",
+    )
+
+    # Deterministic + AI analysis output. ``suggestions`` is the reviewed action
+    # list; ``warnings`` flags ambiguity (e.g. unclear deadline).
+    extracted_payload = models.JSONField(default=dict, blank=True)
+    suggestions = models.JSONField(default=list, blank=True)
+    warnings = models.JSONField(default=list, blank=True)
+
+    ai_model = models.CharField(max_length=120, blank=True)
+    credits_charged = models.PositiveSmallIntegerField(default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+        indexes = [
+            models.Index(fields=["owner", "status", "-updated_at"]),
+            models.Index(fields=["owner", "item_type"]),
+        ]
+
+    def __str__(self):
+        return f"MagicInboxItem(owner={self.owner_id}, type={self.item_type}, status={self.status})"

@@ -287,6 +287,12 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
   {
     heading: "Prepare & share",
     items: [
+      {
+        label: "Inbox",
+        href: "/dashboard/inbox",
+        icon: Inbox,
+        featureKey: "magic_inbox",
+      },
       { label: "Application Packs", href: "/dashboard/bundles", icon: Package, featureKey: "bundles" },
       {
         label: "Applications",

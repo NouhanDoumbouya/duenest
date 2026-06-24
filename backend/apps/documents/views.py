@@ -3562,6 +3562,255 @@ class ApplicationDocumentSaveToPackView(APIView):
         return Response(result, status=status.HTTP_200_OK)
 
 
+# ---- Magic Inbox ------------------------------------------------------------
+
+
+class _MagicInboxScopedMixin:
+    """Owner-scoped Magic Inbox queryset (no cross-user leakage)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        from .models import MagicInboxItem
+
+        return MagicInboxItem.objects.filter(owner=self.request.user)
+
+
+class MagicInboxListCreateView(_MagicInboxScopedMixin, generics.ListCreateAPIView):
+    """
+    GET  → list the user's inbox items (owner-scoped, newest first).
+    POST → capture a new item. Accepts JSON (text/link) OR multipart (file +
+    item_type=file). File intake stores an encrypted DocumentFile and enforces the
+    file + storage plan limits. No AI, no credits on capture.
+    """
+
+    def get_serializer_class(self):
+        from .serializers import MagicInboxItemSerializer
+
+        return MagicInboxItemSerializer
+
+    def list(self, request, *args, **kwargs):
+        from .serializers import MagicInboxItemSerializer
+
+        qs = self.get_queryset()
+        status_filter = request.query_params.get("status")
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+        data = MagicInboxItemSerializer(qs, many=True, context={"request": request}).data
+        return Response({"items": data, "count": len(data)}, status=status.HTTP_200_OK)
+
+    def create(self, request, *args, **kwargs):
+        from .magic_inbox import create_magic_inbox_item
+        from .serializers import MagicInboxItemSerializer
+
+        item_type = (request.data.get("item_type") or "").strip()
+        linked_file = None
+        if item_type == "file":
+            uploaded = request.FILES.get("file")
+            if uploaded is None:
+                return Response(
+                    {"detail": "A file is required for a file intake item."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            # Same enforcement as the File Inbox: file count + storage, encrypt-at-rest.
+            enforce_plan_limit(request.user, user_plans.RESOURCE_FILES)
+            enforce_storage_limit(request.user, uploaded.size)
+            linked_file = _create_document_file(uploaded=uploaded, user=request.user)
+
+        try:
+            item = create_magic_inbox_item(
+                request.user, request.data, linked_file=linked_file
+            )
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        _track_product_event(
+            request,
+            "magic_inbox_item_created",
+            object_type="magic_inbox_item",
+            object_id=item.id,
+            metadata={"item_type": item.item_type},
+        )
+        return Response(
+            MagicInboxItemSerializer(item, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class MagicInboxDetailView(_MagicInboxScopedMixin, generics.RetrieveDestroyAPIView):
+    """GET one item / DELETE (hard delete an inbox capture). Owner-scoped."""
+
+    def get_serializer_class(self):
+        from .serializers import MagicInboxItemSerializer
+
+        return MagicInboxItemSerializer
+
+
+class MagicInboxAnalyzeView(APIView):
+    """
+    POST → analyze an item into review-before-apply suggestions.
+
+    Always runs deterministic analysis. When ``use_ai`` is true it adds Claude
+    smart triage — gated by the master AI flag + ``magic_inbox_triage`` flag +
+    consent + Pro plan + credits + the budget guard. AI credits (3) are charged
+    ONLY on a genuine model success; every blocked/failed path charges 0.
+    """
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "magic_inbox_triage"
+
+    def post(self, request, pk):
+        from .magic_inbox import (
+            analyze_magic_inbox_item,
+            run_magic_inbox_ai_triage,
+        )
+        from .models import MagicInboxItem
+        from .serializers import MagicInboxItemSerializer
+
+        item = get_object_or_404(MagicInboxItem, pk=pk, owner=request.user)
+        use_ai = bool(request.data.get("use_ai"))
+
+        ai_result = None
+        ai_reason = None
+        credits_charged = 0
+        if use_ai:
+            require_feature_enabled("ai_features", request.user)
+            require_feature_enabled("magic_inbox_triage", request.user)
+
+            from apps.ai.privacy import ai_consented
+
+            if not ai_consented(request.user):
+                return Response(
+                    {"available": False, "reason": "consent_required"},
+                    status=status.HTTP_200_OK,
+                )
+            block = _ai_plan_block(request.user, "magic_inbox_triage")
+            if block is not None:
+                return Response(block, status=status.HTTP_200_OK)
+
+            context = self._build_context(request, item)
+            ai_result = run_magic_inbox_ai_triage(item, request.user, context=context)
+            if ai_result.get("reason") != "ok":
+                # Budget/refusal/error/not-configured — persist deterministic only.
+                analyze_magic_inbox_item(item, request.user, ai_result=None)
+                return Response(ai_result, status=status.HTTP_200_OK)
+
+            from apps.billing import entitlements as billing_ent
+
+            if billing_ent.ai_call_succeeded(ai_result):
+                credits_charged = billing_ent.spend_ai_credits(
+                    request.user, "magic_inbox_triage"
+                )
+            ai_reason = "ok"
+
+        item = analyze_magic_inbox_item(item, request.user, ai_result=ai_result)
+
+        _track_product_event(
+            request,
+            "magic_inbox_item_analyzed",
+            object_type="magic_inbox_item",
+            object_id=item.id,
+            metadata={"use_ai": use_ai, "credits_charged": credits_charged},
+        )
+        return Response(
+            {
+                "available": True,
+                "reason": ai_reason or "ok",
+                "ai_used": bool(ai_result),
+                "credits_charged": credits_charged,
+                "item": MagicInboxItemSerializer(item, context={"request": request}).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def _build_context(self, request, item):
+        context = {}
+        bundle_id = request.data.get("bundle_id") or item.linked_bundle_id
+        if bundle_id:
+            bundle = DocumentBundle.objects.filter(
+                owner=request.user, pk=bundle_id
+            ).first()
+            if bundle:
+                item.linked_bundle = bundle
+                item.save(update_fields=["linked_bundle", "updated_at"])
+                context["bundle_title"] = bundle.title
+        app_id = request.data.get("application_id") or item.linked_application_id
+        if app_id:
+            from .models import TrackedApplication
+
+            app = TrackedApplication.objects.filter(
+                owner=request.user, pk=app_id
+            ).first()
+            if app:
+                item.linked_application = app
+                item.save(update_fields=["linked_application", "updated_at"])
+                context["application_title"] = app.title
+        return context
+
+
+class MagicInboxApplyView(APIView):
+    """
+    POST → apply the user-selected suggestions. Reuses existing services; creates
+    only owner-scoped records; enforces plan limits. NEVER calls AI or charges
+    credits.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        from .magic_inbox import apply_magic_inbox_suggestions
+        from .models import MagicInboxItem
+        from .serializers import MagicInboxItemSerializer
+
+        item = get_object_or_404(MagicInboxItem, pk=pk, owner=request.user)
+        selected = request.data.get("selected_suggestions")
+        if not isinstance(selected, list) or not selected:
+            return Response(
+                {"detail": "selected_suggestions must be a non-empty list."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        result = apply_magic_inbox_suggestions(item, request.user, selected)
+        item.refresh_from_db()
+
+        _track_product_event(
+            request,
+            "magic_inbox_suggestions_applied",
+            object_type="magic_inbox_item",
+            object_id=item.id,
+            metadata={
+                "applied": len(result["applied"]),
+                "skipped": len(result["skipped"]),
+            },
+        )
+        return Response(
+            {
+                **result,
+                "item": MagicInboxItemSerializer(item, context={"request": request}).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class MagicInboxArchiveView(APIView):
+    """POST → archive an item. Owner-scoped; no AI, no credits."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        from .magic_inbox import archive_magic_inbox_item
+        from .models import MagicInboxItem
+        from .serializers import MagicInboxItemSerializer
+
+        item = get_object_or_404(MagicInboxItem, pk=pk, owner=request.user)
+        archive_magic_inbox_item(item, request.user)
+        return Response(
+            MagicInboxItemSerializer(item, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )
+
+
 # ---- Timeline ---------------------------------------------------------------
 
 

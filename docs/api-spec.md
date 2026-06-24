@@ -5054,3 +5054,113 @@ warning is present. ATS-structure warning `type` values include
 - The existing AI credit + budget guard system is reused; no second metering
   system is introduced.
 
+---
+
+## 33 — Magic Inbox V1 (`magic-inbox/`)
+
+One place to drop a file, paste email/message/requirement text, or paste a link.
+CertaNest analyzes the item and proposes routes into the rest of the vault. The
+flow is strictly **Capture → Analyze → Review Suggestions → Apply** — nothing is
+created automatically; the user selects suggestions before any record is written.
+
+All endpoints are authenticated and **owner-scoped**: another user's item returns
+`404 Not Found` (it is simply not in the caller's queryset). Backing model:
+`MagicInboxItem` (`apps/documents/models.py`), migration
+`documents/0034_magicinboxitem`.
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/v1/magic-inbox/` | List the user's items (`{items, count}`; optional `?status=`) |
+| `POST` | `/api/v1/magic-inbox/` | Capture a new item — JSON (text/link) or multipart (file) |
+| `GET` | `/api/v1/magic-inbox/{id}/` | Retrieve one item |
+| `DELETE` | `/api/v1/magic-inbox/{id}/` | Delete one item |
+| `POST` | `/api/v1/magic-inbox/{id}/analyze/` | Analyze the item (deterministic always; optional AI triage) |
+| `POST` | `/api/v1/magic-inbox/{id}/apply/` | Apply selected suggestions (no AI, no credits) |
+| `POST` | `/api/v1/magic-inbox/{id}/archive/` | Archive the item |
+
+### Model
+
+`MagicInboxItem` fields: `owner`; `item_type` (`file` | `text` | `link`);
+`status` (`new` | `analyzed` | `applied` | `archived` | `failed`); `title`;
+`source_label`; `source_url`; `pasted_text`; nullable FKs `linked_file`
+(`DocumentFile`), `linked_document` (`Document`), `linked_bundle`
+(`DocumentBundle`), `linked_application` (`TrackedApplication`);
+`extracted_payload` / `suggestions` / `warnings` (JSON); `ai_model`;
+`credits_charged`.
+
+### Capture
+
+`POST /api/v1/magic-inbox/`
+
+- **Text / link:** JSON body, e.g. `{ "item_type": "text", "pasted_text": "…",
+  "title": "…" }` or `{ "item_type": "link", "source_url": "https://…" }`.
+- **File:** `multipart/form-data` with a `file` field. The file is stored as an
+  encrypted `DocumentFile` through the existing File Inbox upload path (no raw
+  storage URLs — reachable only via the private `/api/v1/files/{id}/download/`
+  route) and enforces the Free/Pro **file + storage** plan limits
+  (`403 plan_limit_exceeded` when exceeded).
+
+### Analyze
+
+`POST /api/v1/magic-inbox/{id}/analyze/`
+
+Request: `{ "use_ai": bool, "bundle_id"?: int, "application_id"?: int }`.
+Response: `{ available, reason, ai_used, credits_charged, item }`.
+
+- **Deterministic analysis always runs** and works on **every plan** — it makes
+  **no AI call and consumes no AI credits**. It detects dates (reuses the document
+  extractor's date pattern/normalizer), spots likely required documents from known
+  keywords only (never invents), and proposes basic suggestions.
+- **Optional AI smart triage** (`use_ai: true`) calls Claude to classify the
+  item, detect deadlines, and enrich suggestions with source snippets under a
+  strict JSON, no-hallucination schema. It is gated by `ai_features` (master) +
+  `magic_inbox_triage` feature flag + AI consent (`AiPreference.ai_enabled`) + the
+  **Pro** plan (`ai_magic_inbox` entitlement) + monthly AI credits + the
+  infrastructure budget guard. Cost: **3 credits**, charged **only** on a genuine
+  model success.
+- **`reason` / gating values** when AI triage is requested but not run (each
+  charges **0 credits**): consent missing, feature not in plan, credits exhausted,
+  budget paused, provider not configured / provider error, AI refusal. `available`
+  reflects whether AI triage ran; `ai_used` is `true` only on a successful
+  model-backed triage. The deterministic suggestions are still returned regardless.
+- Throttle scope `magic_inbox_triage` at `10/min`.
+
+### Suggestion types
+
+`suggestions` items carry a `type` and a `data` payload. Types:
+
+```txt
+save_to_vault            categorize_document       attach_to_pack
+link_to_application      create_application        create_pack
+add_requirements_to_pack create_reminder           import_requirement_link
+generate_application_document                       ignore_or_archive
+```
+
+### Apply
+
+`POST /api/v1/magic-inbox/{id}/apply/`
+
+Request: `{ "selected_suggestions": [{ "type": "…", "data": { … } }] }`.
+Response: `{ applied, skipped, routes, item }`.
+
+- **Applying NEVER calls AI and NEVER charges credits.** It creates only
+  owner-scoped records for the suggestions the user selected.
+- **Reminders** attach to a `Document` that has a date (the system's only reminder
+  target, `DocumentReminderRule`). A `create_reminder` therefore needs a linked
+  document **and** a clear ISO date, otherwise it is **skipped** (returned in
+  `skipped`, not silently dropped).
+- `import_requirement_link` and `generate_application_document` apply as
+  **route hints** (`routes`) — they continue in their existing, separately gated
+  flows. Magic Inbox does **not** itself fetch URLs or call those AI features.
+
+### Life Radar integration (additive)
+
+`GET /api/v1/documents/life-radar/`'s `summary` gains three additive keys —
+`inbox_new_count`, `inbox_needs_review_count`, `inbox_failed_count`. Existing Life
+Radar keys/shape are unchanged.
+
+### Non-goal (V1)
+
+Magic Inbox V1 is **in-app upload/paste only**. It does **not** integrate
+Gmail/Outlook or any external mailbox. Gmail/Drive/Outlook import is future work.
+

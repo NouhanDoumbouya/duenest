@@ -487,6 +487,8 @@ REST_FRAMEWORK = {
         "ai_requirement_import": _throttle_rate("10/min"),
         # AI application document generation (per authenticated user) — bounds model cost.
         "ai_doc_generation": _throttle_rate("10/min"),
+        # Magic Inbox AI triage (per authenticated user) — bounds model cost.
+        "magic_inbox_triage": _throttle_rate("10/min"),
     },
 }
 

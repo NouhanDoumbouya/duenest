@@ -138,3 +138,29 @@ save-to-pack flow. The following security controls apply:
 
 See `docs/security-plan.md` (AI Application Document Generator V1 subsection)
 and `docs/api-spec.md` §32 for the full spec.
+
+## Magic Inbox smart triage (V1)
+
+Magic Inbox optionally runs AI triage over a captured item (a file, pasted text,
+or a link). Security controls:
+
+- **Item-scoped context only.** AI triage analyzes only the captured item's own
+  text (pasted text / extracted file text / the link's own label) — it does not
+  pull in the user's other documents, and it never reaches another user's data.
+- **No-hallucination.** The model runs under a strict JSON schema and is
+  instructed never to invent documents or deadlines; it only classifies and
+  enriches what the item actually contains. Deterministic analysis (always on)
+  likewise detects likely required documents from known keywords only.
+- **Review-before-apply.** Triage produces suggestions only; nothing is written
+  to the vault until the user selects suggestions and applies them. Applying
+  creates only **owner-scoped** records and **never calls AI** — no auto-share,
+  auto-submit, or auto-create.
+- **Existing gates reused.** Consent (`AiPreference.ai_enabled`), flags
+  (`magic_inbox_triage` + `ai_features`), Pro entitlement (`ai_magic_inbox`),
+  monthly credits (3 per success), the throttle (`magic_inbox_triage`, 10/min),
+  and the infrastructure budget guard all apply. 0 credits on any block/failure.
+- **No external mailbox.** V1 is in-app upload/paste only — no Gmail/Outlook
+  integration, so no third-party inbox access or OAuth scope is introduced.
+
+See `docs/security-plan.md` (Magic Inbox V1 security) and `docs/api-spec.md` §33
+for the full spec.

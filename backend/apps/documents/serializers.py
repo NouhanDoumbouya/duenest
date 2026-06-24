@@ -2425,3 +2425,43 @@ class GeneratedApplicationDocumentSerializer(serializers.ModelSerializer):
         ]
         # Editable on review: title, status, template_key, content_style,
         # structured_content, plain_text_preview.
+
+
+from .models import MagicInboxItem  # noqa: E402
+
+
+class MagicInboxItemSerializer(serializers.ModelSerializer):
+    """
+    Read serializer for a Magic Inbox item. Exposes linked-record ids and a
+    minimal file descriptor — the file is only ever served via the existing
+    PRIVATE download route (``/api/v1/files/{id}/download/``); raw storage URLs
+    are never exposed. All write fields are handled by the service, so everything
+    here is read-only.
+    """
+
+    owner = serializers.PrimaryKeyRelatedField(read_only=True)
+    file = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MagicInboxItem
+        fields = [
+            "id", "owner", "item_type", "status", "title", "source_label",
+            "source_url", "pasted_text", "linked_file", "linked_document",
+            "linked_bundle", "linked_application", "extracted_payload",
+            "suggestions", "warnings", "ai_model", "credits_charged",
+            "file", "created_at", "updated_at",
+        ]
+        read_only_fields = fields
+
+    def get_file(self, obj):
+        f = obj.linked_file
+        if f is None:
+            return None
+        # Private, authenticated download route only — never a storage URL.
+        return {
+            "id": f.id,
+            "original_filename": f.original_filename,
+            "content_type": f.content_type,
+            "file_size": f.file_size,
+            "download_url": f"/api/v1/files/{f.id}/download/",
+        }
