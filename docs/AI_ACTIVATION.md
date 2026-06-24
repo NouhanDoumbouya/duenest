@@ -98,11 +98,25 @@ application/pack context.
 - **Flags:** `application_document_generation` (default `founder_only`) +
   `ai_features` master gate. Both must resolve on for the feature to be
   reachable.
-- **Flow:** Generate → Review → Template → Export → Save to pack. Strictly
-  review-before-save; AI produces structured content only.
+- **Flow:** Generate → Review → Edit → Choose Template → Export → Save to pack.
+  Strictly review-before-save; AI produces structured content only.
+- **Editable review (no extra credits):** `PATCH .../{id}/` lets the user edit
+  the `structured_content` (and title/status/template/style) before export. When
+  the content is edited the backend deterministically rebuilds the preview and
+  recomputes the scores and warnings — **no AI call and no credits charged**.
+  Exports render from the edited/persisted content.
+- **Quality feedback:** each generation returns structured `warnings`
+  (`{ type, severity, message }`, capped at 30 — ATS-structure, content-quality,
+  and model `quality_checks` items) plus a deterministic `quality_score`
+  (0–100) alongside the existing `ats_score`.
+- **Per-type presets:** each document type carries a recommended style/template,
+  length guidance, quality rules, and best-for notes that shape both the prompt
+  and the templates registry.
 - **Output formats:** Real PDF (fpdf2, selectable text — never an image PDF) and
-  editable DOCX (python-docx, ATS-friendly). Produced only on the explicit export
-  step; stored as encrypted, owner-scoped vault files.
+  editable DOCX (python-docx, ATS-friendly), with per-template spacing/dividers
+  and letter structure. Produced only on the explicit export step; stored as
+  encrypted, owner-scoped vault files. (PDF core fonts use latin-1 with graceful
+  character replacement; full Unicode embedding is future work.)
 - **No-hallucination policy:** model uses only the supplied Smart Profile,
   application, and pack data; missing information is surfaced for the user to
   fill in, never invented. Passport and national-ID numbers are excluded from the

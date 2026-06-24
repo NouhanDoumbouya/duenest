@@ -3493,6 +3493,24 @@ class ApplicationDocumentDetailView(
     """GET/PATCH a generated draft (owner-scoped). PATCH edits the reviewed
     content/title/template/style/status — no AI call, no credits."""
 
+    def perform_update(self, serializer):
+        from .application_document_generator import (
+            plain_text_from_content,
+            recompute_document_quality,
+        )
+
+        gad = serializer.save()
+        # If the structured content was edited, rebuild the plain-text preview
+        # and recompute deterministic quality/ATS warnings — all without AI.
+        if "structured_content" in serializer.validated_data:
+            preview = plain_text_from_content(
+                gad.structured_content or {}, gad.document_type
+            )
+            if preview:
+                gad.plain_text_preview = preview
+                gad.save(update_fields=["plain_text_preview"])
+            recompute_document_quality(gad)
+
 
 class ApplicationDocumentExportView(APIView):
     """POST → render a real PDF/DOCX, store it as an encrypted DocumentFile, and

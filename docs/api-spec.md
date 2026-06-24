@@ -4804,10 +4804,18 @@ credits consumed.
 {
   "content_styles": ["formal", "warm_professional", "academic", "scholarship_focused",
                      "embassy_safe", "corporate", "concise", "confident"],
-  "document_types": ["ats_resume", "academic_cv", "scholarship_cv", "cover_letter",
-                     "motivation_letter", "statement_of_purpose",
-                     "recommendation_request_email", "application_email",
-                     "missing_document_explanation", "visa_explanation_letter"],
+  "document_types": [
+    {
+      "key": "ats_resume",
+      "label": "ATS Résumé",
+      "description": "...",
+      "recommended_style": "formal",
+      "length_guidance": "...",
+      "best_for": "...",
+      "export_formats": ["pdf", "docx"]
+    }
+    // ... 9 more document-type objects
+  ],
   "templates": [
     {
       "key": "ats_classic",
@@ -4817,12 +4825,24 @@ credits consumed.
       "export_formats": ["pdf", "docx"],
       "ats_safe": true,
       "recommended_for": ["ats_resume"],
+      "best_for": "...",
+      "preview": { "tone": "...", "divider": "...", "columns": 1, "header": "..." },
       "pro_only": false
     }
     // ... 5 more template objects
   ]
 }
 ```
+
+Each `document_types[]` entry now carries `recommended_style`, `length_guidance`,
+`best_for`, `description`, and `export_formats`, driven by per-document-type
+presets (recommended style/template, length guidance, quality rules, best-for)
+that also shape the generation prompt.
+
+Each `templates[]` entry now carries `best_for` and a presentational `preview`
+hint — `{ tone, divider, columns, header }`. The `preview` block is a **UI-only**
+display hint; it does **not** add graphics, columns, or styling to the exported
+PDF/DOCX (exports stay ATS-safe).
 
 Six visual templates — `ats_classic`, `ats_modern` (ATS-safe single-column,
 PDF+DOCX), `academic_cv`, `scholarship_cv` (PDF+DOCX), `formal_letter`
@@ -4875,10 +4895,39 @@ Throttled: `ai_doc_generation`, 10 requests/minute per user.
     "missing_information": ["Employment end dates missing for 2 roles."]
   },
   "ats_score": 87,
-  "warnings": ["No measurable achievements found."],
+  "quality_score": 82,
+  "warnings": [
+    {
+      "type": "missing_metrics",
+      "severity": "medium",
+      "message": "No measurable achievements found."
+    }
+  ],
   "available_exports": ["pdf", "docx"]
 }
 ```
+
+**Structured `warnings`.** The top-level `warnings` (on both the generate
+response and the draft detail) is now a list of objects, **not** plain strings:
+
+```json
+{ "type": "missing_metrics", "severity": "low" | "medium" | "high", "message": "..." }
+```
+
+`type` values cover ATS-structure checks (`non_ats_template`, `missing_summary`,
+`missing_education`, `missing_experience`, `missing_skills`, `missing_contact`,
+`missing_metrics`, `long_bullets`), content-quality checks (`generic_language`,
+`missing_target_organization`, `missing_application_context`, `weak_profile`),
+and checks passed through from the model's own `quality_checks` (`risk`,
+`missing_information`). Warnings are capped at **30**. The raw model
+`quality_checks` object (with its string `warnings`/`missing_information`) is
+retained for reference.
+
+**`quality_score`** (`0–100` integer, or `null`) is a deterministic
+content-quality score, separate from `ats_score`. It is derived from the
+structured warnings only — base `100`, minus `18` per high-severity, `9` per
+medium, `4` per low. It is persisted on the `GeneratedApplicationDocument` and
+returned on the detail endpoint.
 
 **Gating / error responses (all `200` unless noted):**
 - `{ available: false, reason: "consent_required" }` — user has not opted in to AI.
@@ -4904,9 +4953,17 @@ GET  /api/v1/application-documents/{id}/
 PATCH /api/v1/application-documents/{id}/
 ```
 
-Owner-only. `GET` retrieves the full draft. `PATCH` accepts edits to: `title`,
+Owner-only. `GET` retrieves the full draft, including the persisted `ats_score`,
+`quality_score`, and structured `warnings`. `PATCH` accepts edits to: `title`,
 `status`, `template_key`, `content_style`, `structured_content`,
-`plain_text_preview`. No AI call; no credits consumed.
+`plain_text_preview`.
+
+When `structured_content` is edited, the backend **deterministically rebuilds**
+`plain_text_preview` and **recomputes** `ats_score`, `quality_score`, and the
+structured `warnings` from the edited content — **with no AI call and no credits
+charged**. This is the editable review-before-export step: the full flow is
+**Generate → Review → Edit → Choose Template → Export → Save to Pack**, and
+nothing is auto-saved. Exports always render from the edited/persisted content.
 
 ### Export
 
@@ -4936,12 +4993,21 @@ Owner-only. `GET` retrieves the full draft. `PATCH` accepts edits to: `title`,
 }
 ```
 
-**No AI call; no credits consumed.** Export renders the stored `structured_content`
-into a real PDF (fpdf2, selectable text — never an image PDF) or an editable DOCX
-(python-docx, ATS-friendly). The exported file is stored as an encrypted,
-owner-scoped `DocumentFile` record (AES-256-GCM, same encryption as all vault
-files). The `download_url` is the private, owner-only route — never a raw
-storage/R2 URL.
+**No AI call; no credits consumed.** Export renders the edited/persisted
+`structured_content` into a real PDF (fpdf2, selectable text — never an image
+PDF) or an editable DOCX (python-docx, ATS-friendly). The exported file is stored
+as an encrypted, owner-scoped `DocumentFile` record (AES-256-GCM, same encryption
+as all vault files). The `download_url` is the private, owner-only route — never a
+raw storage/R2 URL.
+
+PDFs apply per-template spacing/dividers with orphan-heading avoidance and
+page-break awareness; letters render subject / salutation / sections / closing /
+signature, and `premium_letter` adds a letterhead rule. DOCX uses standard
+headings / paragraphs / bullets (no tables or images) and the same letter
+structure (date / target org / subject / salutation / closing / signature), so it
+stays editable and ATS-safe. **Unicode limitation:** PDF core fonts encode as
+latin-1 with graceful character replacement; full Unicode font embedding is
+future work.
 
 Export enforces Free/Pro file and storage plan limits; exceeding either returns
 `403` `{ code: "plan_limit_exceeded" }`.
@@ -4964,10 +5030,14 @@ storage/file plan limits as export.
 
 ### ATS validator
 
-`validate_ats_structure(structured_content, template_key)` → `{ ats_safe, score (0–100), warnings[] }`.
+`validate_ats_structure(structured_content, template_key)` →
+`{ ats_safe: bool, score: int (0–100), warnings: [{ type, severity, message }] }`.
 
-ATS warnings include (non-exhaustive): `"Missing Skills section."`,
-`"No measurable achievements found."`, `"Avoid visual templates for online job portals."`.
+Each warning is a structured object (`severity` is `low` | `medium` | `high`).
+`ats_safe` is `false` when the template is non-ATS **or** any high-severity
+warning is present. ATS-structure warning `type` values include
+`non_ats_template`, `missing_summary`, `missing_education`, `missing_experience`,
+`missing_skills`, `missing_contact`, `missing_metrics`, and `long_bullets`.
 
 ### Privacy and storage
 

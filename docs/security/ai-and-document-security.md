@@ -95,9 +95,19 @@ See `docs/security-plan.md` §18 and `docs/api-spec.md` §13B.8a for details.
 The AI Application Document Generator introduces a generate → review → export →
 save-to-pack flow. The following security controls apply:
 
-- **Review-before-save.** The `POST .../generate/` endpoint returns structured
-  content only; nothing is written to the vault automatically. The user must
-  explicitly call export or save-to-pack to persist a file.
+- **Review-before-save (editable).** The `POST .../generate/` endpoint returns
+  structured content only; nothing is written to the vault automatically. The
+  user reviews and can edit the draft via `PATCH .../{id}/` before persisting.
+  No auto-share and no auto-submit: the user must explicitly call export or
+  save-to-pack to persist a file.
+- **Edit path never calls AI or charges credits.** When `structured_content` is
+  edited the backend deterministically rebuilds the preview and recomputes
+  `ats_score`, `quality_score`, and the structured `warnings` — no provider is
+  contacted and no credits are consumed. Exports render from the edited content.
+- **Structured warnings surfaced to the user.** Each generation/draft returns
+  `warnings` as `{ type, severity, message }` objects (ATS-structure,
+  content-quality, and model `quality_checks` items) plus a deterministic
+  `quality_score`, so the user sees concrete quality/risk signals before export.
 - **Encrypted at rest.** Exported PDF and DOCX files are stored as
   `DocumentFile` records with the same AES-256-GCM encryption used for all vault
   files. No new encryption scheme or storage path is introduced.

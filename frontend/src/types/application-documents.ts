@@ -38,6 +38,18 @@ export interface DocumentTypeMeta {
   credit_cost: number;
   ats_relevant: boolean;
   recommended_template: string;
+  recommended_style: string;
+  length_guidance: string;
+  best_for: string;
+  description: string;
+  export_formats: ExportFormat[];
+}
+
+/** A short mini-preview hint used to differentiate template cards. */
+export interface TemplatePreview {
+  tone?: string;
+  divider?: boolean;
+  sample?: string;
 }
 
 /** A writing style applied to the generated content. */
@@ -57,6 +69,21 @@ export interface DocumentTemplate {
   recommended_for: string[];
   kind: string;
   pro_only: boolean;
+  best_for: string;
+  preview: TemplatePreview;
+}
+
+/** Severity of a content/ATS warning, ordered low → high. */
+export type WarningSeverity = "low" | "medium" | "high";
+
+/**
+ * A structured quality/ATS warning. `type` is a stable machine key
+ * (e.g. "missing_education", "generic_language"); `message` is human copy.
+ */
+export interface DocumentWarning {
+  type: string;
+  severity: WarningSeverity;
+  message: string;
 }
 
 /** The full registry returned by the templates endpoint. */
@@ -105,7 +132,8 @@ export interface GenerateResult {
   structured_content?: Record<string, unknown>;
   quality_checks?: QualityChecks;
   ats_score?: number | null;
-  warnings?: string[];
+  quality_score?: number | null;
+  warnings?: DocumentWarning[];
   available_exports?: ExportFormat[];
   /** Blocked-state fields. */
   message?: string;
@@ -124,13 +152,64 @@ export interface GeneratedApplicationDocument {
   plain_text_preview: string;
   ats_score: number | null;
   quality_score: number | null;
-  warnings: string[];
+  warnings: DocumentWarning[];
   credits_charged: number;
   exported_pdf_file: number | null;
   exported_docx_file: number | null;
   created_document: number | null;
   created_at: string;
   updated_at: string;
+}
+
+/**
+ * Narrow, editor-facing views of `structured_content`. The backend stores
+ * `structured_content` as a free-form JSON object; these interfaces describe the
+ * subset the editor reads and writes. Unknown keys are preserved on PATCH by
+ * spreading the original object — the editor never discards fields it doesn't
+ * understand.
+ */
+
+/** Header block shared by CV-style documents. */
+export interface CvHeader {
+  name?: string;
+  email?: string;
+  phone?: string;
+  location?: string;
+}
+
+/**
+ * CV-style structured content. The backend stores every list section as an
+ * array of plain strings (each element is rendered with `str(item)`), and
+ * `summary` as a string — only `header` is an object. Writing objects into the
+ * list sections would render as literal dict text in the preview/PDF/DOCX, so
+ * the editor must keep every list section as `string[]`.
+ */
+export interface CvStructuredContent {
+  header?: CvHeader;
+  summary?: string;
+  education?: string[];
+  experience?: string[];
+  skills?: string[];
+  projects?: string[];
+  certifications?: string[];
+  awards?: string[];
+  leadership?: string[];
+  languages?: string[];
+}
+
+/** A single labelled body block in a letter. */
+export interface LetterSection {
+  heading?: string;
+  body?: string;
+}
+
+/** Letter-style structured content (subject, salutation, sections, closing). */
+export interface LetterStructuredContent {
+  subject?: string;
+  salutation?: string;
+  sections?: LetterSection[];
+  closing?: string;
+  signature?: string;
 }
 
 /** Writable fields when editing a reviewed document. */

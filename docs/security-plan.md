@@ -1536,9 +1536,15 @@ addresses, and emergency contact). Security posture:
   Smart Profile, application, and pack data. Missing information is surfaced in
   `quality_checks.missing_information`; the model must never invent degrees,
   employers, dates, skills, awards, or metrics.
-* **Review-before-save.** The generate endpoint returns structured content for
-  user review. Nothing is written to the vault until the user explicitly calls
-  export or save-to-pack. There is no auto-save path.
+* **Review-before-save (editable).** The generate endpoint returns structured
+  content for user review, and the user may edit the draft via `PATCH .../{id}/`
+  before persisting. Nothing is written to the vault until the user explicitly
+  calls export or save-to-pack. There is no auto-save path.
+* **Edit and export paths never call AI or charge credits.** Editing
+  `structured_content` deterministically rebuilds the preview and recomputes the
+  `ats_score`, `quality_score`, and structured `warnings` with no provider call;
+  export renders the edited/persisted content. Neither contacts the AI provider
+  or consumes credits. Credits are charged only on a successful generation.
 * **Existing consent + credits + budget guard reused.** `AiPreference.ai_enabled`
   consent check, monthly AI credit metering, and the infrastructure budget guard
   (`AI_DAILY_TOKEN_CAP_USER`, `AI_DAILY_TOKEN_CAP_GLOBAL`,
