@@ -996,8 +996,8 @@ document generation (not called here, not a public endpoint in V1). Available to
 Free and Pro; founder-only rollout flag `smart_profile` until launched.
 
 **Next recommended branch: `b2b/portals-mvp`** (Magic Inbox V1, Weekly Radar
-Email V1, and Document Request Links V1 are now done — see the done sections
-below)
+Email V1, Document Request Links V1, and Sharing Rooms V1 are now done — see the
+done sections below)
 
 Smart Profile was built mainly to power CV/résumé, motivation letters,
 application emails, SOPs, and form filling — the AI Application Document
@@ -1018,6 +1018,7 @@ ai/application-document-generator      (done — CVs/letters/emails/SOPs from Sm
 product/magic-inbox-v1                 (done — capture → analyze → review → apply)
 notifications/weekly-radar-email       (done — deterministic Life-Radar weekly email)
 sharing/document-request-links-v1      (done — secure single-document collection via public token upload)
+sharing/rooms-v1                       (done — secure shared room workspaces: selected items + request links behind one token)
 b2b/portals-mvp                        ← next
 integrations/inbox-mailbox-import      (future — Gmail/Drive/Outlook import into Magic Inbox)
 backend/ai-org-credit-pools            (future)
@@ -1640,8 +1641,9 @@ for the endpoint contract.
 Upcoming planned branches (in order):
 1. `notifications/weekly-radar-email` — **delivered** (2026-06-24, see below)
 2. `sharing/document-request-links-v1` — **delivered** (2026-06-24, see below)
-3. `b2b/portals-mvp` ← **next**
-4. `integrations/inbox-mailbox-import` (future — Gmail/Drive/Outlook import)
+3. `sharing/rooms-v1` — **delivered** (2026-06-24, see below)
+4. `b2b/portals-mvp` ← **next**
+5. `integrations/inbox-mailbox-import` (future — Gmail/Drive/Outlook import)
 
 ## Weekly Radar Email V1 — delivered (2026-06-24)
 
@@ -1740,4 +1742,74 @@ Key facts:
   item.
 
 See `docs/api-spec.md`, `docs/BILLING.md`, and `docs/security-plan.md` for
+contract, plan-limit, and security details.
+
+## Sharing Rooms V1 — delivered (2026-06-24)
+
+`sharing/rooms-v1` is **implemented** (backend complete + tested). A secure,
+owner-scoped **workspace shared around a pack, application, or emergency case**.
+A Sharing Room bundles selected documents/files **plus** Document Request Links
+behind **one unguessable public token**, with expiry / revoke / archive controls
+and view/upload permission toggles. Fully **deterministic — no AI call, no AI
+credits.** This is a **bridge toward CertaNest Portals**; it is **not** a full
+B2B portal — no staff roles, per-participant tokens, redaction/watermarking, or
+bulk rooms in V1.
+
+**Distinct from the existing personal `ShareRoom`** (the simple single-token
+multi-file share with access codes/watermark/view-limits at `share-rooms/` +
+`public/rooms/`). Sharing Rooms V1 is a **new, separate model** (`SharingRoom`)
+that adds pack/application linking, room types, view/upload toggles, and
+Document-Request-Link items. It does **not** replace `ShareRoom`.
+
+Key facts:
+
+* **Data model:** new `SharingRoom` (`apps/documents/models.py`, migration
+  `documents/0036_…`) — owner; unguessable 256-bit `token`
+  (`secrets.token_urlsafe`, unique indexed column, resolved by exact match on the
+  public route only); `room_type` (application/pack/emergency/client/employee/
+  general); `status` (active/expired/revoked/archived); description; nullable FKs
+  `linked_bundle` (`DocumentBundle`) / `linked_application` (`TrackedApplication`);
+  `expires_at`; `allow_download` / `allow_upload` toggles; open tracking
+  (`opened_at`, `last_opened_at`, `open_count`, `revoked_at`); timestamps.
+  `SharingRoomItem` — `item_type` (document/file/request), nullable document/file/
+  request_link, title/note/sort_order. `SharingRoomParticipant` — lightweight
+  invite metadata (name/email/permission/last_opened_at); the room's single token
+  governs access (no per-participant tokens in V1).
+* **Token / privacy:** the public payload exposes **only** the selected items +
+  safe room metadata (title, description, room_type, status, allow flags, expiry,
+  a safe `from_name` display name, and pack/application **title** labels) — never
+  the owner's vault, identity, email, or any raw storage URL. Room files are
+  streamed through an authenticated **proxy** that decrypts in memory
+  (`/api/v1/public/sharing-rooms/{token}/files/{file_id}/preview|download/`) —
+  never a storage URL; download is gated by `allow_download`. Items not added to
+  the room are never exposed. Revoke and expiry return `410`. R2 stays private.
+* **Uploads:** **no second public upload system** — Document Request Links are
+  added **as items**; the public room surfaces each request's own public token so
+  uploaders continue on the existing `/document-request/{token}` page (with its
+  own review/accept flow). `allow_upload` gates whether request upload tokens are
+  surfaced.
+* **Plan limits:** new resource `sharing_rooms` — Free **3**, Pro **50** **active**
+  rooms. Only active rooms count; expired/revoked/archived free a slot. Over the
+  limit returns `403 {code:"plan_limit_exceeded", resource:"sharing_rooms"}`.
+* **Endpoints (all `/api/v1`):** owner (authenticated, owner-scoped) `GET/POST
+  /sharing-rooms/`, `GET/PATCH /sharing-rooms/{id}/`, `POST .../add-item/`,
+  `.../remove-item/`, `.../revoke/`, `.../archive/`, `POST
+  /sharing-rooms/from-pack/{bundle_id}/`, `POST
+  /sharing-rooms/from-application/{application_id}/` (auto-populate items from the
+  pack's attached files/documents); public (no auth, token only, throttle
+  `public_access_code`) `GET /public/sharing-rooms/{token}/`, plus the file
+  preview/download proxy routes above.
+* **Lifecycle:** revoke → revoked (public `410`); archive → archived; the
+  deterministic sweep `expire_sharing_rooms()` marks past-expiry active rooms
+  expired.
+* **Life Radar:** additive summary keys `active_sharing_rooms`,
+  `expiring_sharing_rooms`, `rooms_with_pending_requests` (existing shape
+  preserved); Weekly Radar benefits automatically since it reads the Life Radar
+  summary.
+* **Frontend:** owner page `/dashboard/rooms` ("Sharing Rooms") and a **public**
+  `/room/{token}` page (singular — distinct from the `ShareRoom` `/rooms/{token}`
+  plural). Files served only via the proxy routes; no raw URLs.
+
+See `docs/api-spec.md` §35, `docs/BILLING.md`, `docs/security-plan.md`,
+`docs/PUBLIC_LINK_SECURITY.md`, and `docs/security/public-upload-links.md` for
 contract, plan-limit, and security details.

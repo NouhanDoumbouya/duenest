@@ -94,6 +94,13 @@ def count_resource(user, resource: str) -> int:
         return DocumentRequestLink.objects.filter(
             owner=user, status__in=DocumentRequestLink.ACTIVE_STATUSES
         ).count()
+    if resource == plans.RESOURCE_SHARING_ROOMS:
+        # Only ACTIVE rooms count: expired/revoked/archived free a slot.
+        from .models import SharingRoom
+
+        return SharingRoom.objects.filter(
+            owner=user, status__in=SharingRoom.ACTIVE_STATUSES
+        ).count()
     if resource == plans.RESOURCE_SHARE_LINKS:
         # Active single-file share links plus active Quick Share QR sessions.
         from apps.quick_share.models import QuickShareSession

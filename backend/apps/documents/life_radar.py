@@ -231,6 +231,9 @@ def build_life_radar(user, *, today: date | None = None) -> dict:
     # ---- Document Request Links (additive; deterministic, owner-scoped) ------
     doc_requests = _document_request_counts(user, today=today)
 
+    # ---- Sharing Rooms (additive; deterministic, owner-scoped) --------------
+    rooms_counts = _sharing_room_counts(user, today=today)
+
     # ---- Empty-vault onboarding short-circuit ------------------------------
     is_empty = (
         total_documents == 0
@@ -260,6 +263,10 @@ def build_life_radar(user, *, today: date | None = None) -> dict:
         "uploaded_document_requests": doc_requests["uploaded_document_requests"],
         "needs_replacement_document_requests": doc_requests["needs_replacement_document_requests"],
         "overdue_document_requests": doc_requests["overdue_document_requests"],
+        # Sharing Rooms (additive keys — never removed).
+        "active_sharing_rooms": rooms_counts["active_sharing_rooms"],
+        "expiring_sharing_rooms": rooms_counts["expiring_sharing_rooms"],
+        "rooms_with_pending_requests": rooms_counts["rooms_with_pending_requests"],
     }
 
     if is_empty:
@@ -467,6 +474,53 @@ def _document_request_counts(user, *, today) -> dict:
             "uploaded_document_requests": 0,
             "needs_replacement_document_requests": 0,
             "overdue_document_requests": 0,
+        }
+
+
+def _sharing_room_counts(user, *, today) -> dict:
+    """Compact Sharing Room counts for Life Radar (additive; never raises).
+
+    ``active`` = currently shareable rooms; ``expiring`` = active rooms expiring
+    within the soon window; ``with_pending_requests`` = active rooms hosting a
+    Document Request Link still awaiting an upload.
+    """
+    try:
+        from datetime import timedelta
+
+        from .models import DocumentRequestLink, SharingRoom, SharingRoomItem
+
+        active = SharingRoom.objects.filter(
+            owner=user, status=SharingRoom.Status.ACTIVE
+        )
+        soon = today + timedelta(days=SOON_EXPIRY_DAYS)
+        expiring = active.filter(
+            expires_at__isnull=False, expires_at__date__lte=soon
+        ).count()
+        with_pending = (
+            SharingRoomItem.objects.filter(
+                room__owner=user,
+                room__status=SharingRoom.Status.ACTIVE,
+                item_type=SharingRoomItem.ItemType.REQUEST,
+                request_link__status__in=(
+                    DocumentRequestLink.Status.REQUESTED,
+                    DocumentRequestLink.Status.OPENED,
+                    DocumentRequestLink.Status.NEEDS_REPLACEMENT,
+                ),
+            )
+            .values("room_id")
+            .distinct()
+            .count()
+        )
+        return {
+            "active_sharing_rooms": active.count(),
+            "expiring_sharing_rooms": expiring,
+            "rooms_with_pending_requests": with_pending,
+        }
+    except Exception:  # noqa: BLE001 — Life Radar must never break on this
+        return {
+            "active_sharing_rooms": 0,
+            "expiring_sharing_rooms": 0,
+            "rooms_with_pending_requests": 0,
         }
 
 

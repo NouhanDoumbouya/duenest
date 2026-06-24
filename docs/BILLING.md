@@ -72,6 +72,7 @@ branch is **implemented and merged**.
 | Active reminders | **10** (counts only enabled reminder rules on non-trashed documents) |
 | Active share links | **5** |
 | Active document request links | **5** (active statuses only; terminal states free a slot) |
+| Active sharing rooms | **3** (active rooms only; expired/revoked/archived free a slot) |
 | Emergency packs | **1** |
 | Scanner | 5 pages per scanned PDF |
 | AI credits | 10 credits/month |
@@ -91,6 +92,12 @@ Document Request Links (`resource "document_request_links"`, Free **5** / Pro
 AI). Public uploads against a link also enforce the **owner's** file and storage
 limits, since the uploaded file lands in the owner's vault.
 
+Sharing Rooms (`resource "sharing_rooms"`, Free **3** / Pro **50**) count only
+**active** rooms; `expired`, `revoked`, and `archived` rooms free a slot. A
+Sharing Room is a secure, owner-scoped workspace that bundles selected
+documents/files plus Document Request Links behind one public token (see
+`docs/api-spec.md` §35). The flow is deterministic (no AI).
+
 **Storage quota method:** storage used is the sum of stored `DocumentFile.file_size`
 values for the user's non-trashed files, computed from the database. Cloudflare R2
 is never queried for quota calculation — these are product limits, separate from
@@ -105,8 +112,8 @@ of 100MB. Upgrade to Pro for 10GB."
 **Plan-limit violation format:** all limit violations return `HTTP 403` with body
 `{ detail, code: "plan_limit_exceeded", resource, limit, plan }`. The `resource`
 discriminator (e.g. `"documents"`, `"files"`, `"bundles"`, `"reminders"`,
-`"active_share_links"`, `"document_request_links"`, `"emergency_packs"`,
-`"storage_bytes"`) identifies which limit was hit. The frontend's single global upgrade paywall keys on
+`"active_share_links"`, `"document_request_links"`, `"sharing_rooms"`,
+`"emergency_packs"`, `"storage_bytes"`) identifies which limit was hit. The frontend's single global upgrade paywall keys on
 `code: "plan_limit_exceeded"`.
 
 ### AI plan limits (monthly credits — enforced)

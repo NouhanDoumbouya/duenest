@@ -1651,3 +1651,48 @@ Needs-replacement → Attach / Save. See also `docs/PUBLIC_LINK_SECURITY.md` and
   contains only the request details + the public upload link — no owner
   documents, attachments, or private file URLs. No email is ever sent
   automatically.
+
+## Sharing Rooms V1 security
+
+Sharing Rooms (`SharingRoom`, `apps/documents`) are a secure, owner-scoped
+workspace shared around a pack, application, or emergency case: selected
+documents/files plus Document Request Links behind **one unguessable public
+token**, with expiry / revoke / archive controls and view/upload toggles. This is
+a **new, separate model** from the existing personal `ShareRoom` (it does not
+replace it). See also `docs/api-spec.md` §35, `docs/PUBLIC_LINK_SECURITY.md`, and
+`docs/security/public-upload-links.md`.
+
+* **Unguessable token.** Each room carries a 256-bit URL-safe
+  `secrets.token_urlsafe` token (unique, indexed), resolved by exact token match
+  on the public route only. No internal IDs are exposed.
+* **Selected-item-only exposure.** A room exposes **only** the items the owner
+  added (documents/files/request links) — never the rest of the owner's vault.
+  Items not added to the room are never reachable through the public route
+  (accessing an unrelated `file_id` returns `404`).
+* **Minimal public payload (no owner data, no file URLs).** The public `GET`
+  reveals only safe room metadata — title, description, `room_type`, `status`,
+  `allow_download` / `allow_upload`, `expires_at`, a safe `from_name` display
+  name, and pack/application **title** labels. It **never** discloses the owner's
+  vault, identity, email, or any raw storage URL.
+* **Files via decrypt-in-memory proxy only.** Room files are streamed through the
+  authenticated proxy routes
+  (`/api/v1/public/sharing-rooms/{token}/files/{file_id}/preview|download/`),
+  which decrypt in memory and stream bytes. A storage URL is **never** returned;
+  R2 stays private.
+* **Download gated by `allow_download`.** With downloads off, only preview is
+  available for supported types; the proxy enforces this server-side regardless
+  of the client.
+* **Revoke / expiry enforced (410).** Revoking a room (`revoked`) and expiry
+  (`expire_sharing_rooms()` marks past-expiry rooms `expired`) make the public
+  route return `410`. Archive (`archived`) likewise removes public access.
+* **Uploads reuse the Document Request Link flow.** There is no second public
+  upload system — request links are added as room items and surface their own
+  request tokens, so uploaders continue on the existing `/document-request/{token}`
+  page with its own review/accept flow. `allow_upload` gates whether those upload
+  tokens are surfaced.
+* **Lightweight participants, no per-participant tokens.**
+  `SharingRoomParticipant` stores only invite metadata (name/email/permission);
+  the room's single token governs access in V1.
+* **Deterministic — no AI.** The entire flow makes no AI provider call and
+  consumes no AI credits. This is a bridge toward CertaNest Portals; full
+  portals/staff roles/redaction/bulk rooms are not in V1.

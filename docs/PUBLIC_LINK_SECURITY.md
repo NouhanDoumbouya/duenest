@@ -1,7 +1,8 @@
 # Public Link Security
 
 Rules for token-gated public routes: Quick Share, Emergency Access, Secure
-Rooms, Document Request Links, and public organization request/room links.
+Rooms, Sharing Rooms, Document Request Links, and public organization
+request/room links.
 
 ## Tokens
 - High-entropy random `secrets.token_urlsafe(32)` (256-bit).
@@ -32,6 +33,19 @@ Rooms, Document Request Links, and public organization request/room links.
 - **Emergency Access**: only the selected emergency items; full vault never
   exposed; no owner identity or token in the public serializer.
 - **Secure Rooms**: only selected room files; membership/limits enforced.
+- **Sharing Rooms** (`SharingRoom`, distinct from the personal `ShareRoom`
+  above): a secure owner-scoped workspace around a pack/application/emergency
+  case — only the selected documents/files + embedded Document Request Links are
+  exposed, behind one unguessable token with expiry/revoke/archive and
+  view/upload toggles. The public payload carries only safe room metadata
+  (title, description, room_type, status, allow flags, expiry, a safe
+  `from_name`, pack/application title labels) — never the owner's vault,
+  identity, email, or any raw storage URL. Files stream only through the
+  authenticated decrypt-in-memory **proxy** routes
+  (`/api/v1/public/sharing-rooms/{token}/files/{file_id}/preview|download/`);
+  download is gated by `allow_download`. Uploads happen **via embedded
+  Document Request Links** (no second upload system), so uploaders continue on
+  the existing `/document-request/{token}` page. See `docs/api-spec.md` §35.
 - **Document Request Links** (`DocumentRequestLink`): a single-document collection
   link. The public GET exposes only the upload metadata (requested title/type,
   instructions, due/expiry, recipient name, a safe `from_name` + "CertaNest",

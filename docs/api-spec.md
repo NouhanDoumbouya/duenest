@@ -5355,3 +5355,125 @@ accept/reject/needs-replacement, save-to-vault/attach-to-pack) and a **public**
 `/document-request/{token}` upload page (no login); a "Requests" nav item. Security details
 in `docs/security-plan.md` and `docs/PUBLIC_LINK_SECURITY.md`.
 
+## 35 — Sharing Rooms V1 (`sharing-rooms/`)
+
+A secure, owner-scoped **workspace shared around a pack, application, or
+emergency case**. A Sharing Room bundles selected documents/files **plus**
+Document Request Links behind **one unguessable public token**, with
+expiry / revoke / archive controls and view/upload permission toggles. The entire
+flow is **deterministic — no AI call, no AI credits.** This is a bridge toward
+**CertaNest Portals**; it is **not** a full B2B portal — no staff roles,
+per-participant tokens, redaction/watermarking, or bulk rooms in V1.
+
+> **Distinct from the existing personal `ShareRoom`** (§28.4 Secure Rooms,
+> `share-rooms/` + `public/rooms/`). That feature is a simple single-token
+> multi-file share with access codes/watermark/view-limits and is unchanged.
+> **Sharing Rooms V1 is a separate, new model** (`SharingRoom`) that adds
+> pack/application linking, room types, view/upload toggles, and
+> Document-Request-Link items. It does **not** replace `ShareRoom`.
+
+Backing model: `SharingRoom` (`apps/documents/models.py`), migration
+`documents/0036_…`. Owner endpoints are authenticated and owner-scoped; another
+user's room returns `404 Not Found`. Public endpoints are `AllowAny` and resolved
+strictly by exact token match on the public route only.
+
+**Room types:** `application`, `pack`, `emergency`, `client`, `employee`,
+`general`. **Statuses:** `active`, `expired`, `revoked`, `archived`.
+
+### Owner endpoints (authenticated, owner-scoped)
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/v1/sharing-rooms/` | List the owner's rooms |
+| `POST` | `/api/v1/sharing-rooms/` | Create a room and mint a token |
+| `GET` | `/api/v1/sharing-rooms/{id}/` | Retrieve one room (items + participants) |
+| `PATCH` | `/api/v1/sharing-rooms/{id}/` | Update editable metadata + toggles (state changes go through actions) |
+| `POST` | `/api/v1/sharing-rooms/{id}/add-item/` | Add a `document` / `file` / `request` item |
+| `POST` | `/api/v1/sharing-rooms/{id}/remove-item/` | Remove an item |
+| `POST` | `/api/v1/sharing-rooms/{id}/revoke/` | Revoke the room (public access → `410`) |
+| `POST` | `/api/v1/sharing-rooms/{id}/archive/` | Archive the room |
+| `POST` | `/api/v1/sharing-rooms/from-pack/{bundle_id}/` | Create a room auto-populated from the pack's attached files/documents |
+| `POST` | `/api/v1/sharing-rooms/from-application/{application_id}/` | Create a room auto-populated from the application's pack files/documents |
+
+`add-item` / `remove-item`, linked pack/application references, and `from-pack` /
+`from-application` sources must all belong to the owner (otherwise `404`/`400`).
+Items not added to the room are never exposed publicly.
+
+### Public endpoints (no auth, token only)
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/v1/public/sharing-rooms/{token}/` | Safe room metadata + selected items only |
+| `GET` | `/api/v1/public/sharing-rooms/{token}/files/{file_id}/preview/` | Inline preview via decrypt-in-memory proxy |
+| `GET` | `/api/v1/public/sharing-rooms/{token}/files/{file_id}/download/` | Download via proxy (gated by `allow_download`) |
+
+Throttle: `public_access_code`. Revoked and expired rooms return `410`.
+
+### Models
+
+`SharingRoom` fields: `owner`; unguessable 256-bit `token`
+(`secrets.token_urlsafe`, unique indexed column, resolved by exact match on the
+public route only); `room_type`; `status`; `description`; nullable FKs
+`linked_bundle` (`DocumentBundle`) / `linked_application` (`TrackedApplication`);
+`expires_at`; `allow_download` / `allow_upload` toggles; `opened_at`,
+`last_opened_at`, `open_count`, `revoked_at`; `created_at` / `updated_at`.
+
+`SharingRoomItem` fields: `item_type` (`document` / `file` / `request`), nullable
+`document` / `file` / `request_link`, `title`, `note`, `sort_order`.
+
+`SharingRoomParticipant` fields: lightweight invite metadata (`name`, `email`,
+`permission`, `last_opened_at`). The room's **single token governs access** —
+there are **no per-participant tokens** in V1.
+
+### Public payload (`GET /public/sharing-rooms/{token}/`)
+
+Exposes **only** the selected items plus safe room metadata: title, `description`,
+`room_type`, `status`, `allow_download` / `allow_upload`, `expires_at`, a safe
+`from_name` display name, and pack/application **title** labels. It **never**
+exposes the owner's vault, identity, email, or any raw storage URL. Files are
+served only through the authenticated **proxy** routes (next section); the payload
+carries no file URLs to object storage.
+
+### File serving (decrypt-in-memory proxy)
+
+Room files are streamed through the proxy routes
+`/api/v1/public/sharing-rooms/{token}/files/{file_id}/preview|download/`, which
+**decrypt in memory** and stream the bytes — a storage URL is **never** returned.
+`download` is gated by `allow_download`; with downloads off, only `preview` is
+available for supported types. R2 stays private. Accessing a `file_id` that was
+not added to the room returns `404`.
+
+### Uploads (via embedded request links)
+
+There is **no second public upload system.** Document Request Links are added to a
+room **as items**; the public room surfaces each request's own public token so
+uploaders continue on the existing `/document-request/{token}` page (which has its
+own review / accept flow — see §34). The room's `allow_upload` toggle gates whether
+those request upload tokens are surfaced.
+
+### Lifecycle
+
+`revoke` → `revoked` (public `410`); `archive` → `archived`. The deterministic
+sweep `expire_sharing_rooms()` marks past-expiry `active` rooms `expired`.
+
+### Plan limit
+
+New resource `sharing_rooms` — Free **3**, Pro **50** **active** rooms. Only
+`active` rooms count; `expired` / `revoked` / `archived` free a slot. Over the
+limit returns `403 { code: "plan_limit_exceeded", resource: "sharing_rooms" }`.
+See `docs/BILLING.md`.
+
+### Life Radar
+
+The Life Radar `summary` gains additive keys `active_sharing_rooms`,
+`expiring_sharing_rooms`, and `rooms_with_pending_requests` (existing shape
+preserved). The Weekly Radar email benefits automatically since it reads the Life
+Radar summary.
+
+### Frontend
+
+Owner page `/dashboard/rooms` ("Sharing Rooms") and a **public** `/room/{token}`
+page (singular — distinct from the `ShareRoom` `/rooms/{token}` plural). Files are
+served only via the proxy routes; no raw URLs. Security details in
+`docs/security-plan.md` and `docs/PUBLIC_LINK_SECURITY.md`.
+

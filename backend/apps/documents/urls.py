@@ -36,6 +36,17 @@ from .views import (
     DocumentRequestAttachToPackView,
     PublicDocumentRequestMetadataView,
     PublicDocumentRequestUploadView,
+    SharingRoomListCreateView,
+    SharingRoomDetailView,
+    SharingRoomAddItemView,
+    SharingRoomRemoveItemView,
+    SharingRoomRevokeView,
+    SharingRoomArchiveView,
+    SharingRoomFromPackView,
+    SharingRoomFromApplicationView,
+    PublicSharingRoomMetadataView,
+    PublicSharingRoomFilePreviewView,
+    PublicSharingRoomFileDownloadView,
     BundleRequirementLinkDocumentView,
     BundleRequirementLinkFileView,
     ChecklistTemplateDetailView,
@@ -653,6 +664,64 @@ urlpatterns = [
         "public/document-request-links/<str:token>/upload/",
         PublicDocumentRequestUploadView.as_view(),
         name="public-document-request-link-upload",
+    ),
+    # Sharing Rooms V1 — secure workspaces around a pack/application. Owner-scoped.
+    path(
+        "sharing-rooms/",
+        SharingRoomListCreateView.as_view(),
+        name="sharing-rooms",
+    ),
+    path(
+        "sharing-rooms/from-pack/<int:bundle_id>/",
+        SharingRoomFromPackView.as_view(),
+        name="sharing-room-from-pack",
+    ),
+    path(
+        "sharing-rooms/from-application/<int:application_id>/",
+        SharingRoomFromApplicationView.as_view(),
+        name="sharing-room-from-application",
+    ),
+    path(
+        "sharing-rooms/<int:pk>/",
+        SharingRoomDetailView.as_view(),
+        name="sharing-room-detail",
+    ),
+    path(
+        "sharing-rooms/<int:pk>/add-item/",
+        SharingRoomAddItemView.as_view(),
+        name="sharing-room-add-item",
+    ),
+    path(
+        "sharing-rooms/<int:pk>/remove-item/",
+        SharingRoomRemoveItemView.as_view(),
+        name="sharing-room-remove-item",
+    ),
+    path(
+        "sharing-rooms/<int:pk>/revoke/",
+        SharingRoomRevokeView.as_view(),
+        name="sharing-room-revoke",
+    ),
+    path(
+        "sharing-rooms/<int:pk>/archive/",
+        SharingRoomArchiveView.as_view(),
+        name="sharing-room-archive",
+    ),
+    # Public recipient routes (no auth — token only). Distinct from the older
+    # ShareRoom ``public/rooms/`` routes.
+    path(
+        "public/sharing-rooms/<str:token>/",
+        PublicSharingRoomMetadataView.as_view(),
+        name="public-sharing-room",
+    ),
+    path(
+        "public/sharing-rooms/<str:token>/files/<int:file_id>/preview/",
+        PublicSharingRoomFilePreviewView.as_view(),
+        name="public-sharing-room-file-preview",
+    ),
+    path(
+        "public/sharing-rooms/<str:token>/files/<int:file_id>/download/",
+        PublicSharingRoomFileDownloadView.as_view(),
+        name="public-sharing-room-file-download",
     ),
     path(
         "document-bundles/",

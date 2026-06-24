@@ -24,6 +24,7 @@ import {
   FileUp,
   CreditCard,
   DoorClosed,
+  DoorOpen,
   FileText,
   Inbox,
   LayoutDashboard,
@@ -332,6 +333,16 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
         href: "/dashboard/share-rooms",
         icon: DoorClosed,
         featureKey: "secure_rooms",
+      },
+      {
+        // Sharing Rooms V1: gather documents, files, and requests behind one
+        // secure public link. Distinct from the older "Secure rooms" feature
+        // (/dashboard/share-rooms → public /rooms/{token}); this one lives at
+        // /dashboard/rooms → public /room/{token}. Shown unconditionally —
+        // apiFetch still enforces plan limits server-side.
+        label: "Sharing Rooms",
+        href: "/dashboard/rooms",
+        icon: DoorOpen,
       },
     ],
   },
