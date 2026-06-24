@@ -949,7 +949,18 @@ Missing documents come only from real requirement rows (never invented). The
 base score/counts still come from `bundle_readiness()`, so **Life Radar is
 unchanged**. AI requirement extraction is the next branch.
 
-**Next recommended branch: `ai/requirement-link-to-checklist`**
+**Next recommended branch: `product/application-tracker-v1`**
+
+`ai/requirement-link-to-checklist` is **implemented**: paste a scholarship,
+visa, university, job, grant, school, or permit URL into an application pack;
+the backend safely fetches only that one page (no crawling), Claude extracts a
+structured requirements checklist (required/optional documents, deadlines,
+eligibility notes, submission instructions, source citations), the user reviews
+the draft, and selects items to apply. Strictly Extract → Review → Apply —
+nothing is added until the user approves. Pro-only, 5 AI credits per successful
+extraction (charged only on model-backed success). Safe URL fetch includes an
+SSRF guard (scheme allowlist + private-IP rejection + redirect cap + timeout +
+size cap). See §13B.8a in `docs/api-spec.md`.
 
 Suggested sequencing:
 
@@ -957,8 +968,8 @@ Suggested sequencing:
 backend/storage-plan-limits            (done)
 product/life-radar-v1                  (done)
 product/application-pack-readiness-v1  (done)
-ai/requirement-link-to-checklist       (next)
-product/application-tracker-v1
+ai/requirement-link-to-checklist       (done)
+product/application-tracker-v1        (next)
 product/smart-profile-v1
 b2b/portals-mvp
 backend/ai-org-credit-pools            (future)

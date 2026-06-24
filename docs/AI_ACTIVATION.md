@@ -70,6 +70,31 @@ the digest (Notification preferences). Then either run on a schedule:
 - `ENABLE_CELERY_BEAT=true` (Mon 08:00 UTC), or
 - a platform cron: `python manage.py send_ai_digests` (use `--dry-run` first).
 
+## Requirement link import
+
+Paste a scholarship, visa, university, or other application URL into a pack to
+extract a requirements checklist without any manual typing.
+
+- **What it does:** the backend safely fetches the single user-provided URL (no
+  crawling, no following links), Claude extracts required/optional documents,
+  deadlines, eligibility notes, and submission instructions with source
+  citations, the user reviews the draft, and selects items to apply to the pack.
+  Nothing is added until the user approves (Extract → Review → Apply).
+- **Plan:** Pro-only (`ai_requirement_checklist` entitlement).
+- **Credits:** 5 AI credits per successful extraction. Failed fetches, blocked
+  requests, and AI errors charge 0 credits. The Apply step is free.
+- **Consent:** `AiPreference.ai_enabled` must be on.
+- **Safe fetch:** fetches only the single user-provided URL; rejects non-http/https
+  schemes; resolves the host and blocks private/loopback/reserved IPs (SSRF guard);
+  caps redirects (max 3), request timeout (10 s), and response size (2 MB);
+  accepts HTML/text only. No raw HTML is stored — only the structured extracted
+  payload and short source snippets.
+- **Flags:** `ai_requirement_import` (default `founder_only`) + `ai_features` master gate.
+  Returns `503` when off.
+- **Endpoints:** `POST .../requirements/import-link/` (extract) and
+  `POST .../requirements/import-link/{draft_id}/apply/` (apply). See
+  `docs/api-spec.md` §13B.8a for the full spec.
+
 ## Plan credits
 
 AI usage is now metered with **monthly AI credits** (not per-day actions):

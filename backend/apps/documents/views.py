@@ -61,6 +61,7 @@ from .models import (
     EmergencyTrustedContact,
     EmergencyUnlockRequest,
     ProofRecord,
+    RequirementExtractionDraft,
     RoomActivity,
     ShareRoom,
     ShareRoomItem,
@@ -3093,6 +3094,192 @@ class BundleReadinessSummaryView(APIView):
         from .pack_readiness import build_pack_readiness_summary
 
         return Response(build_pack_readiness_summary(request.user))
+
+
+# Fields persisted in a RequirementExtractionDraft payload (structured only).
+_REQ_IMPORT_PAYLOAD_FIELDS = (
+    "title",
+    "summary",
+    "confidence",
+    "source_url",
+    "page_title",
+    "required_documents",
+    "optional_documents",
+    "deadlines",
+    "eligibility_notes",
+    "submission_instructions",
+    "warnings",
+)
+
+
+class RequirementLinkImportView(APIView):
+    """
+    POST a URL → safely fetch the page + AI-extract a requirements checklist as a
+    reviewable draft. Extract → review → APPLY: this NEVER mutates the pack.
+
+    Gated by `ai_features` + `ai_requirement_import` (503 when off), AI consent
+    (200 `consent_required`), and the `requirement_link_checklist` plan/credit
+    gate (Pro-only; 5 credits). Credits are charged ONLY on a successful
+    model-backed extraction; failed fetches/validation/budget never charge. No R2,
+    no private file URLs, no raw HTML persisted.
+    """
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "ai_requirement_import"
+
+    def post(self, request, bundle_id):
+        require_feature_enabled("ai_features", request.user)
+        require_feature_enabled("ai_requirement_import", request.user)
+        bundle = get_object_or_404(DocumentBundle, pk=bundle_id, owner=request.user)
+
+        from apps.ai.privacy import ai_consented
+
+        if not ai_consented(request.user):
+            return Response(
+                {"available": False, "reason": "consent_required"},
+                status=status.HTTP_200_OK,
+            )
+
+        url = (request.data.get("url") or "").strip()
+        if not url:
+            return Response(
+                {"detail": "A URL is required."}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        block = _ai_plan_block(request.user, "requirement_link_checklist")
+        if block is not None:
+            return Response(block, status=status.HTTP_200_OK)
+
+        from apps.billing import entitlements as billing_ent
+
+        from .ai_requirement_import import extract_requirements
+
+        result = extract_requirements(request.user, url)
+        if not (result.get("available") and result.get("reason") == "ok"):
+            # Fetch/validation/budget/error — no draft, no credit charged.
+            return Response(result, status=status.HTTP_200_OK)
+
+        draft = RequirementExtractionDraft.objects.create(
+            owner=request.user,
+            bundle=bundle,
+            source_url=str(result.get("source_url") or url)[:2048],
+            page_title=str(result.get("page_title") or "")[:255],
+            status=RequirementExtractionDraft.Status.EXTRACTED,
+            extracted_payload={k: result.get(k) for k in _REQ_IMPORT_PAYLOAD_FIELDS},
+        )
+        credits_charged = 0
+        if billing_ent.ai_call_succeeded(result):
+            credits_charged = billing_ent.spend_ai_credits(
+                request.user, "requirement_link_checklist"
+            )
+
+        _track_product_event(
+            request,
+            "requirement_link_extracted",
+            object_type="document_bundle",
+            object_id=bundle.id,
+            metadata={
+                "confidence": result.get("confidence"),
+                "required": len(result.get("required_documents") or []),
+                "optional": len(result.get("optional_documents") or []),
+                "deadlines": len(result.get("deadlines") or []),
+            },
+        )
+        return Response(
+            {
+                "draft_id": draft.id,
+                "status": draft.status,
+                "credits_charged": credits_charged,
+                **{k: result.get(k) for k in _REQ_IMPORT_PAYLOAD_FIELDS},
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class RequirementLinkImportApplyView(APIView):
+    """
+    POST a reviewed selection from a draft → create the chosen pack requirements
+    (deduped by normalized title) and, for a clear selected deadline, set the
+    pack's target date. No AI call, no credits. Owner- and bundle-scoped; a draft
+    can only be applied by its owner within its own pack.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, bundle_id, draft_id):
+        require_feature_enabled("ai_features", request.user)
+        require_feature_enabled("ai_requirement_import", request.user)
+        bundle = get_object_or_404(DocumentBundle, pk=bundle_id, owner=request.user)
+        draft = get_object_or_404(
+            RequirementExtractionDraft,
+            pk=draft_id,
+            owner=request.user,
+            bundle=bundle,
+        )
+
+        def _str_list(value):
+            return [str(v) for v in value] if isinstance(value, list) else []
+
+        def _int_list(value):
+            out = []
+            if isinstance(value, list):
+                for v in value:
+                    try:
+                        out.append(int(v))
+                    except (TypeError, ValueError):
+                        continue
+            return out
+
+        from .ai_requirement_import import apply_extraction
+        from .pack_readiness import build_pack_readiness
+
+        outcome = apply_extraction(
+            request.user,
+            bundle,
+            draft.extracted_payload or {},
+            selected_required=_str_list(
+                request.data.get("selected_required_documents")
+            ),
+            selected_optional=_str_list(
+                request.data.get("selected_optional_documents")
+            ),
+            selected_deadlines=_int_list(request.data.get("selected_deadlines")),
+            create_reminders=bool(request.data.get("create_reminders")),
+        )
+
+        draft.status = RequirementExtractionDraft.Status.APPLIED
+        draft.created_requirements = outcome["created_requirements"]
+        draft.created_reminders = outcome["created_reminders"]
+        draft.save(
+            update_fields=[
+                "status",
+                "created_requirements",
+                "created_reminders",
+                "updated_at",
+            ]
+        )
+
+        _track_product_event(
+            request,
+            "requirement_link_applied",
+            object_type="document_bundle",
+            object_id=bundle.id,
+            metadata={
+                "created_requirements": outcome["created_requirements"],
+                "created_reminders": outcome["created_reminders"],
+            },
+        )
+        return Response(
+            {
+                "applied": True,
+                "created_requirements": outcome["created_requirements"],
+                "created_reminders": outcome["created_reminders"],
+                "target_date_set": outcome["target_date_set"],
+                "pack_readiness": build_pack_readiness(bundle, request.user),
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 # ---- Timeline ---------------------------------------------------------------

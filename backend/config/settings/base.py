@@ -483,6 +483,8 @@ REST_FRAMEWORK = {
         "ai_intake": _throttle_rate("15/min"),
         # AI chunk-level RAG indexing (per authenticated user) — bounds embed cost.
         "ai_index": _throttle_rate("10/min"),
+        # Requirement-link import (per authenticated user) — bounds web-fetch + model cost.
+        "ai_requirement_import": _throttle_rate("10/min"),
     },
 }
 

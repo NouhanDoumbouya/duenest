@@ -2530,3 +2530,53 @@ class GeneratedDocument(models.Model):
 
     def __str__(self):
         return f"GeneratedDocument(owner={self.owner_id}, type={self.document_type})"
+
+
+class RequirementExtractionDraft(models.Model):
+    """
+    A reviewable draft from Requirement Link import (Extract → Review → Apply).
+
+    Stores the AI-extracted, structured payload (required/optional documents,
+    deadlines, eligibility, instructions, warnings) plus the source URL/title —
+    NEVER raw page HTML. Owner- and bundle-scoped. The user reviews the draft and
+    explicitly applies a selection; nothing touches the pack until then.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        EXTRACTED = "extracted", "Extracted"
+        APPLIED = "applied", "Applied"
+        FAILED = "failed", "Failed"
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="requirement_extraction_drafts",
+    )
+    bundle = models.ForeignKey(
+        DocumentBundle,
+        on_delete=models.CASCADE,
+        related_name="requirement_extraction_drafts",
+    )
+    source_url = models.URLField(max_length=2048)
+    page_title = models.CharField(max_length=255, blank=True)
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.PENDING
+    )
+    # Structured extraction only (documents/deadlines/notes/snippets) — no HTML.
+    extracted_payload = models.JSONField(default=dict, blank=True)
+    created_requirements = models.PositiveIntegerField(default=0)
+    created_reminders = models.PositiveIntegerField(default=0)
+    error_message = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["owner", "bundle"]),
+            models.Index(fields=["bundle", "status"]),
+        ]
+
+    def __str__(self):
+        return f"RequirementExtractionDraft(bundle={self.bundle_id}, status={self.status})"
