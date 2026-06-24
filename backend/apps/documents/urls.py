@@ -11,6 +11,9 @@ from .views import (
     BundleReadinessSummaryView,
     RequirementLinkImportView,
     RequirementLinkImportApplyView,
+    ApplicationListCreateView,
+    ApplicationDetailView,
+    ApplicationSummaryView,
     BundleRequirementLinkDocumentView,
     BundleRequirementLinkFileView,
     ChecklistTemplateDetailView,
@@ -494,6 +497,22 @@ urlpatterns = [
         "document-bundles/pack-templates/",
         PackTemplatesView.as_view(),
         name="pack-templates",
+    ),
+    # ---- Application Tracker V1 -------------------------------------------
+    path(
+        "applications/",
+        ApplicationListCreateView.as_view(),
+        name="applications",
+    ),
+    path(
+        "applications/summary/",
+        ApplicationSummaryView.as_view(),
+        name="applications-summary",
+    ),
+    path(
+        "applications/<int:application_id>/",
+        ApplicationDetailView.as_view(),
+        name="application-detail",
     ),
     path(
         "document-bundles/",

@@ -24,6 +24,7 @@ export const FEATURE_BY_NAV_HREF: Record<string, string> = {
   "/dashboard/notifications": "notification_center",
   "/dashboard/organizations": "organizations",
   "/dashboard/bundles": "bundles",
+  "/dashboard/applications": "application_tracker",
   "/dashboard/quick-share": "quick_share",
   "/dashboard/shared-with-me": "shared_with_me",
   "/dashboard/share-rooms": "secure_rooms",

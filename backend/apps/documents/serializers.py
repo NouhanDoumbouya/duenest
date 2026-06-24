@@ -58,6 +58,7 @@ from .models import (
     RoomActivity,
     ShareRoom,
     ShareRoomItem,
+    TrackedApplication,
 )
 from .services import (
     APPLICABLE_EXTRACTION_FIELDS,
@@ -2342,6 +2343,53 @@ class GeneratedDocumentSerializer(serializers.ModelSerializer):
 
     def validate_related_pack(self, value):
         # A draft may only be attached to one of the requesting user's own packs.
+        request = self.context.get("request")
+        if value is not None and request and value.owner_id != request.user.id:
+            raise serializers.ValidationError("Pack not found.")
+        return value
+
+
+class TrackedApplicationSerializer(serializers.ModelSerializer):
+    """Create/update validation for a tracked application (owner-scoped).
+
+    Read/list/detail responses use the richer deterministic payload from
+    ``apps.documents.application_tracker`` (status, deadline state, linked-pack
+    readiness, next actions); this serializer governs writes + ownership.
+    """
+
+    owner = serializers.PrimaryKeyRelatedField(read_only=True)
+
+    class Meta:
+        model = TrackedApplication
+        fields = [
+            "id",
+            "owner",
+            "title",
+            "application_type",
+            "status",
+            "linked_bundle",
+            "source_url",
+            "organization_name",
+            "deadline_date",
+            "submitted_at",
+            "decision_date",
+            "target_start_date",
+            "notes",
+            "priority",
+            "is_archived",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "owner", "created_at", "updated_at"]
+
+    def validate_title(self, value):
+        cleaned = " ".join((value or "").split())
+        if not cleaned:
+            raise serializers.ValidationError("A title is required.")
+        return cleaned[:255]
+
+    def validate_linked_bundle(self, value):
+        # A pack may only be linked if it belongs to the requesting user.
         request = self.context.get("request")
         if value is not None and request and value.owner_id != request.user.id:
             raise serializers.ValidationError("Pack not found.")

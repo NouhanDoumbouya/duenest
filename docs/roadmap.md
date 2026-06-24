@@ -918,6 +918,8 @@ feature/document-onboarding-trust      onboarding/trust/data launch polish     (
 backend/storage-plan-limits            Free/Pro product limits enforced        (done)
 product/life-radar-v1                  Deterministic readiness dashboard       (done)
 product/application-pack-readiness-v1  Structured pack readiness workflow      (done)
+ai/requirement-link-to-checklist       Paste a URL → reviewable checklist      (done)
+product/application-tracker-v1         Application/renewal lifecycle tracker    (done)
 ```
 
 `backend/storage-plan-limits` is **implemented**: storage (100 MB Free / 10 GB
@@ -949,8 +951,6 @@ Missing documents come only from real requirement rows (never invented). The
 base score/counts still come from `bundle_readiness()`, so **Life Radar is
 unchanged**. AI requirement extraction is the next branch.
 
-**Next recommended branch: `product/application-tracker-v1`**
-
 `ai/requirement-link-to-checklist` is **implemented**: paste a scholarship,
 visa, university, job, grant, school, or permit URL into an application pack;
 the backend safely fetches only that one page (no crawling), Claude extracts a
@@ -962,6 +962,24 @@ extraction (charged only on model-backed success). Safe URL fetch includes an
 SSRF guard (scheme allowlist + private-IP rejection + redirect cap + timeout +
 size cap). See §13B.8a in `docs/api-spec.md`.
 
+`product/application-tracker-v1` is **implemented**: a deterministic
+`TrackedApplication` model + service (`apps/documents/application_tracker.py`)
+tracks the lifecycle of an application/renewal (scholarship, visa, job, grant,
+permit, …) — status, suggested status, deadline state, optional linked
+application-pack readiness, and next actions. Endpoints: `GET/POST
+/api/v1/applications/`, `GET/PATCH/DELETE /api/v1/applications/{id}/` (DELETE
+archives), `GET /api/v1/applications/summary/`. **Deterministic — no AI call, no
+AI credits, no R2, no file URLs.** Suggested status is derived from linked pack
+readiness (missing → documents_missing; ready → ready_to_submit) and shown
+alongside (never overriding) the user's chosen status. Plan limit: Free 3 /
+Pro 100 active applications (`resource "applications"`, archived excluded,
+`403 plan_limit_exceeded`). Life Radar `summary` gains additive
+`active_applications` / `urgent_applications` / `ready_to_submit_applications` /
+`overdue_applications` (existing shape unchanged). Founder-only rollout flag
+`application_tracker` until launched.
+
+**Next recommended branch: `product/smart-profile-v1`**
+
 Suggested sequencing:
 
 ```txt
@@ -969,8 +987,8 @@ backend/storage-plan-limits            (done)
 product/life-radar-v1                  (done)
 product/application-pack-readiness-v1  (done)
 ai/requirement-link-to-checklist       (done)
-product/application-tracker-v1        (next)
-product/smart-profile-v1
+product/application-tracker-v1         (done)
+product/smart-profile-v1               (next)
 b2b/portals-mvp
 backend/ai-org-credit-pools            (future)
 product/life-radar-ai-insights         (future — AI-enhanced Life Radar)

@@ -34,6 +34,7 @@ RESOURCE_ORGANIZATION_MEMBERS = "organization_members"
 RESOURCE_ORGANIZATION_REQUESTS = "organization_document_requests"
 RESOURCE_ORGANIZATION_CAMPAIGNS = "organization_campaigns"
 RESOURCE_ORGANIZATION_ROOMS = "organization_secure_rooms"
+RESOURCE_APPLICATIONS = "applications"
 
 # Human-friendly labels for each tracked resource (used in error messages/UI).
 RESOURCE_LABELS = {
@@ -50,6 +51,7 @@ RESOURCE_LABELS = {
     RESOURCE_ORGANIZATION_REQUESTS: "organization document requests",
     RESOURCE_ORGANIZATION_CAMPAIGNS: "organization campaigns",
     RESOURCE_ORGANIZATION_ROOMS: "organization secure rooms",
+    RESOURCE_APPLICATIONS: "tracked applications",
     # Personal external document collection (share requests open to non-users).
     "external_collection_requests": "external collection requests",
 }
@@ -82,6 +84,7 @@ PLAN_LIMITS = {
         RESOURCE_ORGANIZATION_REQUESTS: 20,
         RESOURCE_ORGANIZATION_CAMPAIGNS: 3,
         RESOURCE_ORGANIZATION_ROOMS: 1,
+        RESOURCE_APPLICATIONS: 3,
         "storage_bytes": FREE_STORAGE_BYTES,
     },
     PLAN_PRO_PLACEHOLDER: {
@@ -98,6 +101,7 @@ PLAN_LIMITS = {
         RESOURCE_ORGANIZATION_REQUESTS: None,
         RESOURCE_ORGANIZATION_CAMPAIGNS: None,
         RESOURCE_ORGANIZATION_ROOMS: None,
+        RESOURCE_APPLICATIONS: 100,
         "storage_bytes": PRO_STORAGE_BYTES,
     },
 }
@@ -117,6 +121,7 @@ ENFORCED_RESOURCES = (
     RESOURCE_ORGANIZATION_REQUESTS,
     RESOURCE_ORGANIZATION_CAMPAIGNS,
     RESOURCE_ORGANIZATION_ROOMS,
+    RESOURCE_APPLICATIONS,
 )
 
 

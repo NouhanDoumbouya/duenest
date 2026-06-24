@@ -8,6 +8,7 @@ import {
   Check,
   CheckCircle2,
   ChevronRight,
+  ClipboardCheck,
   Download,
   FileText,
   Link2,
@@ -424,6 +425,7 @@ export default function BundleDetailPage() {
   const safeSendEnabled = useFeature("application_pack_safesend");
   const packPrepEnabled = useFeature("application_pack_preparation");
   const shareReadinessEnabled = useFeature("ai_share_readiness");
+  const applicationTrackerEnabled = useFeature("application_tracker");
   const visibleTabs = [
     ...(packPrepEnabled ? [REVIEW_TAB] : []),
     ...BUNDLE_TABS,
@@ -1100,6 +1102,23 @@ export default function BundleDetailPage() {
                     created until you confirm access there.
                   </p>
                 </div>
+              )}
+
+              {applicationTrackerEnabled && (
+                <Link
+                  href={`/dashboard/applications/new?bundle=${bundleId}&title=${encodeURIComponent(
+                    bundle.title,
+                  )}${
+                    bundle.target_date ? `&deadline=${bundle.target_date}` : ""
+                  }`}
+                  className={cn(
+                    buttonVariants({ variant: "outline" }),
+                    "w-full",
+                  )}
+                >
+                  <ClipboardCheck className="size-4" />
+                  Track this application
+                </Link>
               )}
 
               <dl className="space-y-2 text-sm">

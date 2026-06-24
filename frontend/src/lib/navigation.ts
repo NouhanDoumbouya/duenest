@@ -18,6 +18,7 @@ import {
   Building2,
   CalendarClock,
   CalendarDays,
+  ClipboardCheck,
   ClipboardList,
   Clock,
   CreditCard,
@@ -280,6 +281,12 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
     heading: "Prepare & share",
     items: [
       { label: "Application Packs", href: "/dashboard/bundles", icon: Package, featureKey: "bundles" },
+      {
+        label: "Applications",
+        href: "/dashboard/applications",
+        icon: ClipboardCheck,
+        featureKey: "application_tracker",
+      },
       {
         label: "SafeSend",
         href: "/dashboard/quick-share",

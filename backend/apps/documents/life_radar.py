@@ -222,6 +222,9 @@ def build_life_radar(user, *, today: date | None = None) -> dict:
     # ---- Plan usage (storage nudge) ----------------------------------------
     storage = _storage_snapshot(user)
 
+    # ---- Application Tracker (additive; deterministic, owner-scoped) --------
+    applications = _application_counts(user, today=today)
+
     # ---- Empty-vault onboarding short-circuit ------------------------------
     is_empty = (
         total_documents == 0
@@ -237,6 +240,11 @@ def build_life_radar(user, *, today: date | None = None) -> dict:
         "missing_documents": len(missing_documents),
         "incomplete_packs": len(incomplete_packs),
         "emergency_ready": emergency_access["configured"],
+        # Application Tracker (additive keys — never removed).
+        "active_applications": applications["active_applications"],
+        "urgent_applications": applications["urgent_applications"],
+        "ready_to_submit_applications": applications["ready_to_submit_applications"],
+        "overdue_applications": applications["overdue_applications"],
     }
 
     if is_empty:
@@ -263,6 +271,7 @@ def build_life_radar(user, *, today: date | None = None) -> dict:
         has_packs=bool(bundles),
         emergency_access=emergency_access,
         storage=storage,
+        applications=applications,
     )
 
     return {
@@ -367,6 +376,21 @@ def _compute_score(
     return max(0, min(100, score))
 
 
+def _application_counts(user, *, today) -> dict:
+    """Compact application-tracker counts for Life Radar (additive; never raises)."""
+    try:
+        from .application_tracker import application_counts_for_life_radar
+
+        return application_counts_for_life_radar(user, today=today)
+    except Exception:  # noqa: BLE001 — Life Radar must never break on this
+        return {
+            "active_applications": 0,
+            "urgent_applications": 0,
+            "ready_to_submit_applications": 0,
+            "overdue_applications": 0,
+        }
+
+
 def _suggested_actions(
     *,
     is_empty: bool,
@@ -376,6 +400,7 @@ def _suggested_actions(
     has_packs: bool,
     emergency_access: dict,
     storage: dict,
+    applications: dict | None = None,
 ) -> list[dict]:
     """Deterministic, prioritized next-steps. No AI."""
     if is_empty:
@@ -469,6 +494,29 @@ def _suggested_actions(
                 "label": "Create an application pack",
                 "description": "Track required documents for an application or renewal.",
                 "action": "create_pack",
+            }
+        )
+
+    # Application Tracker nudges (additive).
+    apps_counts = applications or {}
+    ready_apps = apps_counts.get("ready_to_submit_applications", 0)
+    urgent_apps = apps_counts.get("urgent_applications", 0)
+    if ready_apps:
+        actions.append(
+            {
+                "key": "submit_ready_application",
+                "label": f"Submit {ready_apps} ready application{'s' if ready_apps > 1 else ''}",
+                "description": "All required documents are ready — time to submit.",
+                "action": "view_applications",
+            }
+        )
+    if urgent_apps:
+        actions.append(
+            {
+                "key": "urgent_application_deadline",
+                "label": f"{urgent_apps} application deadline{'s' if urgent_apps > 1 else ''} approaching",
+                "description": "Finish and submit before the deadline passes.",
+                "action": "view_applications",
             }
         )
 
