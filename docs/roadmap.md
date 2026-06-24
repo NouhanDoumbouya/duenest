@@ -1019,6 +1019,7 @@ product/magic-inbox-v1                 (done — capture → analyze → review 
 notifications/weekly-radar-email       (done — deterministic Life-Radar weekly email)
 sharing/document-request-links-v1      (done — secure single-document collection via public token upload)
 sharing/rooms-v1                       (done — secure shared room workspaces: selected items + request links behind one token)
+security/redaction-watermarking-v1     (done — secure server-side protected copies: redaction + watermark, original never modified)
 b2b/portals-mvp                        ← next
 integrations/inbox-mailbox-import      (future — Gmail/Drive/Outlook import into Magic Inbox)
 backend/ai-org-credit-pools            (future)
@@ -1813,3 +1814,75 @@ Key facts:
 See `docs/api-spec.md` §35, `docs/BILLING.md`, `docs/security-plan.md`,
 `docs/PUBLIC_LINK_SECURITY.md`, and `docs/security/public-upload-links.md` for
 contract, plan-limit, and security details.
+
+## Redaction + Watermarking V1 — delivered (2026-06-24)
+
+`security/redaction-watermarking-v1` is **implemented** (backend complete +
+tested). Before sharing an owned document or file, the user creates a safe
+**protected copy** — manual redaction rectangles and/or a watermark — generated
+**server-side** so redaction is genuinely secure. The **original file is never
+modified**; the protected copy is a brand-new encrypted, private file. Fully
+**deterministic — no AI, no AI credits, no automatic PII detection in V1.**
+
+Key facts:
+
+* **Supported formats:** PDF, PNG, JPEG only (the previewable types). DOC/DOCX
+  and other types return a clear `400` ("available for PDF, PNG, and JPEG files
+  only").
+* **Secure (non-overlay) redaction:** for **images**, redaction rectangles are
+  drawn directly into pixel data and the watermark is baked into pixels —
+  nothing recoverable. For **PDFs with redaction**, each page is **rasterized**
+  to an image (pdf2image/poppler at 150 DPI), the rectangles + watermark are
+  burned into the images, and pages are recomposed into a new PDF — the
+  underlying text/objects are destroyed and redacted content is **not**
+  extractable (sacrificing selectable text in the redacted PDF). This is **not**
+  removable black-rectangle overlay redaction. **Watermark-only PDFs** instead
+  overlay a light watermark page per page (pypdf + an fpdf2 transparent
+  watermark page), so selectable text is **preserved** (nothing sensitive is
+  hidden). Redaction coordinates are **normalized** (0..1 fractions of page
+  width/height), so they are DPI/point independent; the frontend sends only
+  coordinates + watermark config, and the backend performs the actual redaction.
+* **Data model:** new `ProtectedDocumentCopy` (`apps/documents/models.py`,
+  migration `documents/0037_protecteddocumentcopy`) — owner; `original_file`
+  (read-only source `DocumentFile`); `original_document`; the generated
+  `protected_file` / `protected_document` output; `title`; `protection_type`
+  (`watermark` / `redaction` / `redaction_watermark`); `status` (`draft` /
+  `processing` / `ready` / `failed` / `archived`); `watermark_text` /
+  `watermark_position` (diagonal/center/footer/header) / `opacity`; `redactions`
+  JSON (normalized boxes); `output_mime_type`; `page_count`; `error_message`;
+  timestamps + `processed_at`.
+* **Original preservation:** the original is only ever **read** (decrypted in
+  memory); a test asserts the original bytes are byte-for-byte unchanged after
+  generation and its text is still extractable. A separate test asserts redacted
+  sample text ("SECRET123") is absent from the redacted PDF's extracted text.
+* **Storage / plan:** the protected output is a **new encrypted, private,
+  owner-owned `DocumentFile`**, so it counts against the owner's existing
+  **file + storage** plan limits (enforced on generate; over the limit returns
+  `403 plan_limit_exceeded`). No separate plan resource was added. The feature is
+  gated behind the new founder-only feature flag `redaction_watermarking`.
+* **Endpoints (all `/api/v1`, owner-authenticated, gated by
+  `redaction_watermarking`):** `GET/POST /protected-copies/` (POST creates a
+  draft from an owned `original_file`); `GET /protected-copies/{id}/`,
+  `PATCH /protected-copies/{id}/` (edit settings while draft/failed);
+  `POST /protected-copies/{id}/generate/` (renders the protected file);
+  `POST /protected-copies/{id}/archive/`;
+  `POST /protected-copies/{id}/add-to-room/` (adds the **protected** file — never
+  the original — to an owner Sharing Room; requires status `ready`). There is
+  **no public route** for protected copies; they are shared through Sharing Rooms
+  or the private owner download route, and no raw storage URLs are exposed (the
+  protected file is referenced only via `/api/v1/files/{id}/download/`).
+* **Sharing integration:** a protected copy can be added to a Sharing Room as a
+  file item; the public room shows only the protected copy (never the original,
+  unless the owner separately added the original). Document Request Links: no
+  public redaction in V1 (the owner may protect an accepted file afterward).
+  Magic Inbox: no integration in V1.
+* **Frontend:** an owner-only editor (draw redaction rectangles on a PDF/image
+  preview + enter watermark text) reachable from the Sharing Room add-item flow
+  (and document detail if wired); it sends **coordinates only**, then
+  generate → download / add-to-room. No public UI.
+
+**Out of scope (V1, future work):** automatic PII detection and audit logs.
+
+See `docs/api-spec.md`, `docs/BILLING.md`, `docs/security-plan.md`,
+`docs/PUBLIC_LINK_SECURITY.md`, and `docs/security/public-upload-links.md` for
+contract, plan, and security details.

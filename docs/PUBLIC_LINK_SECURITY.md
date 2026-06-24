@@ -46,6 +46,11 @@ request/room links.
   download is gated by `allow_download`. Uploads happen **via embedded
   Document Request Links** (no second upload system), so uploaders continue on
   the existing `/document-request/{token}` page. See `docs/api-spec.md` §35.
+  A room can share a **protected copy** (redacted/watermarked) of a document
+  instead of the original (`ProtectedDocumentCopy` → `add-to-room`, §36): only
+  the protected file is added, and the original is never exposed unless the owner
+  separately adds it. The protected file streams through the same authenticated
+  decrypt-in-memory proxy routes — no raw storage URL.
 - **Document Request Links** (`DocumentRequestLink`): a single-document collection
   link. The public GET exposes only the upload metadata (requested title/type,
   instructions, due/expiry, recipient name, a safe `from_name` + "CertaNest",

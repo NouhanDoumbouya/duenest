@@ -1696,3 +1696,47 @@ replace it). See also `docs/api-spec.md` §35, `docs/PUBLIC_LINK_SECURITY.md`, a
 * **Deterministic — no AI.** The entire flow makes no AI provider call and
   consumes no AI credits. This is a bridge toward CertaNest Portals; full
   portals/staff roles/redaction/bulk rooms are not in V1.
+
+## Redaction + Watermarking V1 security
+
+`ProtectedDocumentCopy` (`apps/documents`) creates a safe **protected copy** of an
+owned document/file before sharing — manual redaction rectangles and/or a
+watermark, generated **server-side** so redaction is genuinely secure. All
+endpoints are owner-scoped and gated behind the founder-only feature flag
+`redaction_watermarking`. See also `docs/api-spec.md` §36 and `docs/BILLING.md`.
+
+* **Original is never modified.** The original file is only ever **read**
+  (decrypted in memory) to produce the copy; it is byte-for-byte unchanged and its
+  text remains extractable (asserted by test). The protected copy is a separate,
+  brand-new file — there is no in-place edit path.
+* **Secure (non-overlay) redaction.** Redaction is genuinely destructive, not a
+  removable layer. For **images (PNG/JPEG)**, redaction rectangles are drawn
+  directly into pixel data and the watermark is baked into pixels — nothing is
+  recoverable. For **PDFs with redaction**, each page is **rasterized** to an
+  image (pdf2image/poppler at 150 DPI), the rectangles + watermark are burned in,
+  and pages are recomposed into a new PDF; the underlying text/objects are
+  destroyed, so redacted content is **not extractable** (a test asserts sample
+  redacted text "SECRET123" is absent from the output's extracted text). This is
+  the endorsed safe approach and sacrifices selectable text in the redacted PDF.
+* **Watermark-only preserves text.** When there is no redaction, a light watermark
+  page is overlaid per page (pypdf + an fpdf2 transparent watermark page), so
+  selectable text is preserved — nothing sensitive is being hidden in that case.
+* **Backend does the redaction.** The frontend sends only **normalized**
+  coordinates (`0..1` fractions of page width/height, DPI/point independent) plus
+  watermark config; the server performs the actual redaction. There is no
+  client-only "black box" that could be peeled off.
+* **Protected output is a new encrypted, private file.** The result is a new
+  encrypted (AES-256-GCM), owner-owned `DocumentFile`, served **only** via the
+  authenticated owner route `/api/v1/files/{id}/download/` — never a raw/public
+  storage URL. R2 stays private. Generation enforces the owner's existing Free/Pro
+  **file + storage** plan limits (`403 plan_limit_exceeded` over the limit); no
+  separate plan resource was added.
+* **No public route; shared only via Sharing Rooms / private download.** There is
+  no public endpoint for protected copies. A copy can be added to an owner Sharing
+  Room (the **protected** file only — never the original); Document Request Links
+  have no public redaction in V1 (the owner may protect an accepted file
+  afterward); Magic Inbox has no integration in V1.
+* **Deterministic — no AI.** The entire flow makes no AI provider call and
+  consumes no AI credits; there is **no automatic PII detection** in V1.
+* **Future work (out of scope):** automatic PII detection and audit logs for
+  protected-copy generation.

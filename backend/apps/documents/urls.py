@@ -47,6 +47,11 @@ from .views import (
     PublicSharingRoomMetadataView,
     PublicSharingRoomFilePreviewView,
     PublicSharingRoomFileDownloadView,
+    ProtectedCopyListCreateView,
+    ProtectedCopyDetailView,
+    ProtectedCopyGenerateView,
+    ProtectedCopyArchiveView,
+    ProtectedCopyAddToRoomView,
     BundleRequirementLinkDocumentView,
     BundleRequirementLinkFileView,
     ChecklistTemplateDetailView,
@@ -722,6 +727,33 @@ urlpatterns = [
         "public/sharing-rooms/<str:token>/files/<int:file_id>/download/",
         PublicSharingRoomFileDownloadView.as_view(),
         name="public-sharing-room-file-download",
+    ),
+    # Redaction + Watermarking V1 — protected copies. Owner-scoped; no public route
+    # (protected files are shared through Sharing Rooms / private download only).
+    path(
+        "protected-copies/",
+        ProtectedCopyListCreateView.as_view(),
+        name="protected-copies",
+    ),
+    path(
+        "protected-copies/<int:pk>/",
+        ProtectedCopyDetailView.as_view(),
+        name="protected-copy-detail",
+    ),
+    path(
+        "protected-copies/<int:pk>/generate/",
+        ProtectedCopyGenerateView.as_view(),
+        name="protected-copy-generate",
+    ),
+    path(
+        "protected-copies/<int:pk>/archive/",
+        ProtectedCopyArchiveView.as_view(),
+        name="protected-copy-archive",
+    ),
+    path(
+        "protected-copies/<int:pk>/add-to-room/",
+        ProtectedCopyAddToRoomView.as_view(),
+        name="protected-copy-add-to-room",
     ),
     path(
         "document-bundles/",

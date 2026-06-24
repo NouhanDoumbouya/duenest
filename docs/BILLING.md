@@ -98,6 +98,14 @@ Sharing Room is a secure, owner-scoped workspace that bundles selected
 documents/files plus Document Request Links behind one public token (see
 `docs/api-spec.md` §35). The flow is deterministic (no AI).
 
+**Redaction + Watermarking V1 (`protected-copies/`)** adds **no new plan
+resource**. A generated protected copy is a brand-new encrypted, private,
+owner-owned `DocumentFile`, so it counts as a normal **file + storage** against
+the owner's existing Free/Pro limits (enforced on `generate/`; over the limit
+returns `403 plan_limit_exceeded`). The feature is gated behind the founder-only
+feature flag `redaction_watermarking`, and the flow is deterministic — no AI, no
+AI credits (see `docs/api-spec.md` §36).
+
 **Storage quota method:** storage used is the sum of stored `DocumentFile.file_size`
 values for the user's non-trashed files, computed from the database. Cloudflare R2
 is never queried for quota calculation — these are product limits, separate from
