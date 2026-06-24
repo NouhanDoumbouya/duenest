@@ -915,11 +915,29 @@ backend/document-checklists            frontend/document-checklists            (
 backend/document-ocr-foundation        frontend/document-ocr-review-ui         (done)
 backend/document-vault-maturity        frontend/document-vault-maturity        (backend foundation done)
 feature/document-onboarding-trust      onboarding/trust/data launch polish     (done)
+backend/storage-plan-limits            Free/Pro product limits enforced        (done)
 ```
 
-The **next implementation branch** should polish the frontend for vault maturity
-features: trash/restore, versions, exports, emergency packs, proof records, and
-document-wide activity.
+`backend/storage-plan-limits` is **implemented**: storage (100 MB Free / 10 GB
+Pro), document count (30 Free / 1,000 Pro), application packs (1 Free /
+unlimited Pro), and active reminders (10 Free / unlimited Pro) are all
+hard-enforced. Storage quota is computed from `DocumentFile.file_size` in the
+database — never from R2. All limit violations return `403 plan_limit_exceeded`.
+
+**Next recommended branch: `product/life-radar-v1`**
+
+Suggested sequencing after storage-plan-limits:
+
+```txt
+backend/storage-plan-limits            (done)
+product/life-radar-v1                  (next)
+product/application-pack-readiness-v1
+ai/requirement-link-to-checklist
+product/application-tracker-v1
+product/smart-profile-v1
+b2b/portals-mvp
+backend/ai-org-credit-pools            (future)
+```
 
 ---
 

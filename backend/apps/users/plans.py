@@ -54,17 +54,25 @@ RESOURCE_LABELS = {
     "external_collection_requests": "external collection requests",
 }
 
-# Storage is reported but not hard-enforced on its own (the file count limit is
-# the practical guard). Bytes, so the UI can render a friendly size.
+# Storage is a hard product limit (enforced at upload via
+# ``apps.documents.plan_usage.enforce_storage_limit``). Bytes, so the UI can
+# render a friendly size. These are PRODUCT limits — wholly separate from the
+# Cloudflare R2 infrastructure, which stays private regardless.
 FREE_STORAGE_BYTES = 100 * 1024 * 1024  # 100 MB
+PRO_STORAGE_BYTES = 10 * 1024 * 1024 * 1024  # 10 GB
+
+# Pro keeps generous (effectively "serious vault") numeric caps where the task
+# defines them, and stays unlimited elsewhere. Free is bounded enough to fully
+# evaluate CertaNest without becoming a free cloud drive.
+PRO_DOCUMENTS = 1000
 
 # A value of ``None`` means unlimited for that resource on that plan.
 PLAN_LIMITS = {
     PLAN_FREE: {
-        RESOURCE_DOCUMENTS: 25,
+        RESOURCE_DOCUMENTS: 30,
         RESOURCE_FILES: 60,
-        RESOURCE_BUNDLES: 3,
-        RESOURCE_REMINDERS: 40,
+        RESOURCE_BUNDLES: 1,
+        RESOURCE_REMINDERS: 10,
         RESOURCE_SHARE_LINKS: 5,
         RESOURCE_EMERGENCY_PACKS: 1,
         RESOURCE_SUBSCRIPTIONS: 10,
@@ -77,7 +85,7 @@ PLAN_LIMITS = {
         "storage_bytes": FREE_STORAGE_BYTES,
     },
     PLAN_PRO_PLACEHOLDER: {
-        RESOURCE_DOCUMENTS: None,
+        RESOURCE_DOCUMENTS: PRO_DOCUMENTS,
         RESOURCE_FILES: None,
         RESOURCE_BUNDLES: None,
         RESOURCE_REMINDERS: None,
@@ -90,7 +98,7 @@ PLAN_LIMITS = {
         RESOURCE_ORGANIZATION_REQUESTS: None,
         RESOURCE_ORGANIZATION_CAMPAIGNS: None,
         RESOURCE_ORGANIZATION_ROOMS: None,
-        "storage_bytes": None,
+        "storage_bytes": PRO_STORAGE_BYTES,
     },
 }
 

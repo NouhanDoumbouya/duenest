@@ -51,7 +51,7 @@ class BillingCoreTests(APITestCase):
 
     def test_free_entitlements(self):
         self.assertEqual(
-            entitlements.get_feature_limit(self.user, "documents_limit"), 25
+            entitlements.get_feature_limit(self.user, "documents_limit"), 30
         )
         self.assertTrue(
             entitlements.has_feature(self.user, "emergency_protocol_enabled")
@@ -64,7 +64,11 @@ class BillingCoreTests(APITestCase):
             grant_status=UserSubscription.Status.MANUAL_PRO,
         )
         self.assertTrue(entitlements.is_pro(self.user))
-        self.assertIsNone(entitlements.get_feature_limit(self.user, "documents_limit"))
+        # Pro keeps a high (non-unlimited) document cap; bundles stay unlimited.
+        self.assertEqual(
+            entitlements.get_feature_limit(self.user, "documents_limit"), 1000
+        )
+        self.assertIsNone(entitlements.get_feature_limit(self.user, "bundles_limit"))
         # The service/endpoints call sync_user_plan; do so here for the bridge.
         entitlements.sync_user_plan(self.user)
         self.user.refresh_from_db()
