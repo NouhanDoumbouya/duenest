@@ -2528,3 +2528,102 @@ class DocumentRequestLinkSerializer(serializers.ModelSerializer):
         # Public recipient page route (distinct from the share_requests /request
         # route, which is a different feature).
         return f"{base}/document-request/{obj.token}"
+
+
+from .models import (  # noqa: E402
+    SharingRoom,
+    SharingRoomItem,
+    SharingRoomParticipant,
+)
+
+
+class SharingRoomItemSerializer(serializers.ModelSerializer):
+    """Owner-facing room item. A file descriptor uses the PRIVATE owner download
+    route only — never a storage URL. Request items surface the link status."""
+
+    file_info = serializers.SerializerMethodField()
+    request_info = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SharingRoomItem
+        fields = [
+            "id", "item_type", "document", "file", "request_link",
+            "title", "note", "sort_order", "file_info", "request_info", "created_at",
+        ]
+        read_only_fields = fields
+
+    def get_file_info(self, obj):
+        f = obj.file
+        if f is None:
+            return None
+        return {
+            "id": f.id,
+            "original_filename": f.original_filename,
+            "content_type": f.content_type,
+            "file_size": f.file_size,
+            "download_url": f"/api/v1/files/{f.id}/download/",
+        }
+
+    def get_request_info(self, obj):
+        link = obj.request_link
+        if link is None:
+            return None
+        return {
+            "id": link.id,
+            "status": link.status,
+            "requested_document_title": link.requested_document_title,
+        }
+
+
+class SharingRoomParticipantSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SharingRoomParticipant
+        fields = ["id", "name", "email", "permission", "last_opened_at", "created_at"]
+        read_only_fields = ["id", "last_opened_at", "created_at"]
+
+
+class SharingRoomSerializer(serializers.ModelSerializer):
+    """
+    Owner-facing room serializer. Exposes the public token + room URL (the owner
+    needs them to share) and nested items/participants. State changes happen
+    through actions, so the write surface is just editable metadata.
+    """
+
+    owner = serializers.PrimaryKeyRelatedField(read_only=True)
+    items = SharingRoomItemSerializer(many=True, read_only=True)
+    participants = SharingRoomParticipantSerializer(many=True, read_only=True)
+    public_url = serializers.SerializerMethodField()
+    item_count = serializers.SerializerMethodField()
+    request_count = serializers.SerializerMethodField()
+    is_expired = serializers.BooleanField(read_only=True)
+    is_open = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = SharingRoom
+        fields = [
+            "id", "owner", "title", "description", "room_type", "status",
+            "token", "public_url", "linked_bundle", "linked_application",
+            "expires_at", "allow_download", "allow_upload",
+            "items", "participants", "item_count", "request_count",
+            "is_expired", "is_open",
+            "opened_at", "last_opened_at", "open_count", "revoked_at",
+            "created_at", "updated_at",
+        ]
+        read_only_fields = [
+            "id", "owner", "status", "token", "public_url", "items", "participants",
+            "item_count", "request_count", "is_expired", "is_open",
+            "opened_at", "last_opened_at", "open_count", "revoked_at",
+            "created_at", "updated_at",
+        ]
+
+    def get_public_url(self, obj):
+        from django.conf import settings
+
+        base = (getattr(settings, "DUENEST_APP_BASE_URL", "") or "").rstrip("/")
+        return f"{base}/room/{obj.token}"
+
+    def get_item_count(self, obj):
+        return obj.items.count()
+
+    def get_request_count(self, obj):
+        return obj.items.filter(item_type=SharingRoomItem.ItemType.REQUEST).count()

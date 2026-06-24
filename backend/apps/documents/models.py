@@ -2994,3 +2994,176 @@ class DocumentRequestLink(models.Model):
         if self.status == self.Status.NEEDS_REPLACEMENT:
             return True
         return self.upload_count < max(self.max_uploads, 1)
+
+
+class SharingRoom(models.Model):
+    """
+    A secure, owner-scoped workspace shared around a pack / application / emergency
+    case. A room bundles selected documents/files + Document Request Links behind
+    ONE unguessable public token, with expiry / revoke controls and view/upload
+    permission toggles. This is a bridge toward CertaNest Portals — NOT a full B2B
+    portal (no staff roles, no per-participant tokens, no redaction/watermarking in
+    V1).
+
+    Owner-scoped. The public page resolves by token only and exposes ONLY the
+    selected room items + safe room metadata — never the owner's vault, private
+    data, or raw storage URLs. Room files are streamed through an authenticated
+    proxy route (decrypt-in-memory), never a storage URL. Deterministic (no AI).
+
+    Distinct from the older personal ``ShareRoom`` (a simple single-token file
+    share): a SharingRoom links a pack/application and can host Document Request
+    Links so collaborators can upload requested documents in-context.
+    """
+
+    class RoomType(models.TextChoices):
+        APPLICATION = "application", "Application"
+        PACK = "pack", "Pack"
+        EMERGENCY = "emergency", "Emergency"
+        CLIENT = "client", "Client"
+        EMPLOYEE = "employee", "Employee"
+        GENERAL = "general", "General"
+
+    class Status(models.TextChoices):
+        ACTIVE = "active", "Active"
+        EXPIRED = "expired", "Expired"
+        REVOKED = "revoked", "Revoked"
+        ARCHIVED = "archived", "Archived"
+
+    # Only ACTIVE rooms count toward the plan limit.
+    ACTIVE_STATUSES = (Status.ACTIVE,)
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="sharing_rooms",
+    )
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    room_type = models.CharField(
+        max_length=16, choices=RoomType.choices, default=RoomType.GENERAL
+    )
+    status = models.CharField(
+        max_length=12, choices=Status.choices, default=Status.ACTIVE
+    )
+    # Unguessable, URL-safe public token (same pattern as the app's other share
+    # links). Resolved by exact token match on the public route only.
+    token = models.CharField(
+        max_length=128, unique=True, db_index=True, default=generate_share_token
+    )
+
+    linked_bundle = models.ForeignKey(
+        DocumentBundle, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="sharing_rooms",
+    )
+    linked_application = models.ForeignKey(
+        TrackedApplication, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="sharing_rooms",
+    )
+
+    expires_at = models.DateTimeField(null=True, blank=True)
+    # Permission toggles (room-level in V1). ``allow_download`` gates file
+    # downloads; ``allow_upload`` surfaces the room's Document Request Links so
+    # collaborators can upload requested documents.
+    allow_download = models.BooleanField(default=True)
+    allow_upload = models.BooleanField(default=True)
+
+    opened_at = models.DateTimeField(null=True, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    last_opened_at = models.DateTimeField(null=True, blank=True)
+    open_count = models.PositiveIntegerField(default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+        indexes = [
+            models.Index(fields=["owner", "status", "-updated_at"]),
+            models.Index(fields=["owner", "room_type"]),
+        ]
+
+    def __str__(self):
+        return f"SharingRoom(owner={self.owner_id}, status={self.status})"
+
+    @property
+    def is_expired(self) -> bool:
+        from django.utils import timezone
+
+        return bool(self.expires_at and self.expires_at <= timezone.now())
+
+    @property
+    def is_open(self) -> bool:
+        """Whether the room can currently be opened publicly."""
+        return self.status == self.Status.ACTIVE and not self.is_expired
+
+
+class SharingRoomItem(models.Model):
+    """
+    One item exposed inside a room: a vault Document, a single DocumentFile, or a
+    Document Request Link (for in-context collection). Exactly one target is set.
+    Owner-scoped via the parent room.
+    """
+
+    class ItemType(models.TextChoices):
+        DOCUMENT = "document", "Document"
+        FILE = "file", "File"
+        REQUEST = "request", "Document request"
+
+    room = models.ForeignKey(
+        SharingRoom, on_delete=models.CASCADE, related_name="items"
+    )
+    item_type = models.CharField(max_length=10, choices=ItemType.choices)
+    document = models.ForeignKey(
+        Document, on_delete=models.CASCADE, null=True, blank=True,
+        related_name="sharing_room_items",
+    )
+    file = models.ForeignKey(
+        DocumentFile, on_delete=models.CASCADE, null=True, blank=True,
+        related_name="sharing_room_items",
+    )
+    request_link = models.ForeignKey(
+        DocumentRequestLink, on_delete=models.CASCADE, null=True, blank=True,
+        related_name="sharing_room_items",
+    )
+    title = models.CharField(max_length=255, blank=True)
+    note = models.CharField(max_length=500, blank=True)
+    sort_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["sort_order", "id"]
+        indexes = [models.Index(fields=["room", "item_type"])]
+
+    def __str__(self):
+        return f"SharingRoomItem(room={self.room_id}, type={self.item_type})"
+
+
+class SharingRoomParticipant(models.Model):
+    """
+    Lightweight invite metadata for a room (V1). The room's single token governs
+    actual access; participants are a display/tracking list, NOT per-person access
+    tokens. ``permission`` is informational in V1 — room-level toggles
+    (allow_download/allow_upload) govern what any visitor can do.
+    """
+
+    class Permission(models.TextChoices):
+        VIEW = "view", "View"
+        UPLOAD = "upload", "Upload"
+        VIEW_UPLOAD = "view_upload", "View and upload"
+
+    room = models.ForeignKey(
+        SharingRoom, on_delete=models.CASCADE, related_name="participants"
+    )
+    name = models.CharField(max_length=255, blank=True)
+    email = models.EmailField(blank=True)
+    permission = models.CharField(
+        max_length=12, choices=Permission.choices, default=Permission.VIEW
+    )
+    last_opened_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"SharingRoomParticipant(room={self.room_id})"

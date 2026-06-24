@@ -4122,6 +4122,257 @@ class PublicDocumentRequestUploadView(APIView):
         )
 
 
+# ---- Sharing Rooms ----------------------------------------------------------
+
+
+class _SharingRoomScopedMixin:
+    """Owner-scoped sharing-room queryset (no cross-user leakage)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        from .models import SharingRoom
+
+        return SharingRoom.objects.filter(owner=self.request.user)
+
+    def get_serializer_class(self):
+        from .serializers import SharingRoomSerializer
+
+        return SharingRoomSerializer
+
+
+class SharingRoomListCreateView(_SharingRoomScopedMixin, generics.ListCreateAPIView):
+    """GET list (owner-scoped) / POST create a sharing room (mints a token)."""
+
+    def list(self, request, *args, **kwargs):
+        from .serializers import SharingRoomSerializer
+
+        qs = self.get_queryset()
+        status_filter = request.query_params.get("status")
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+        data = SharingRoomSerializer(qs, many=True, context={"request": request}).data
+        return Response({"rooms": data, "count": len(data)}, status=status.HTTP_200_OK)
+
+    def create(self, request, *args, **kwargs):
+        from .serializers import SharingRoomSerializer
+        from .sharing_rooms import SharingRoomError, create_sharing_room
+
+        try:
+            room = create_sharing_room(request.user, request.data)
+        except SharingRoomError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        _track_product_event(
+            request, "sharing_room_created",
+            object_type="sharing_room", object_id=room.id,
+            metadata={"room_type": room.room_type},
+        )
+        return Response(
+            SharingRoomSerializer(room, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class SharingRoomDetailView(_SharingRoomScopedMixin, generics.RetrieveUpdateAPIView):
+    """GET / PATCH (editable metadata only — lifecycle changes go through actions)."""
+
+    EDITABLE = {
+        "title", "description", "room_type", "expires_at",
+        "allow_download", "allow_upload",
+    }
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop("partial", True)
+        instance = self.get_object()
+        data = {k: v for k, v in request.data.items() if k in self.EDITABLE}
+        serializer = self.get_serializer(instance, data=data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+
+class _SharingRoomActionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_room(self, request, pk):
+        from .models import SharingRoom
+
+        return get_object_or_404(SharingRoom, pk=pk, owner=request.user)
+
+    def _serialize(self, room, request):
+        from .serializers import SharingRoomSerializer
+
+        return SharingRoomSerializer(room, context={"request": request}).data
+
+
+class SharingRoomAddItemView(_SharingRoomActionView):
+    def post(self, request, pk):
+        from .sharing_rooms import SharingRoomError, add_room_item
+
+        room = self.get_room(request, pk)
+        try:
+            add_room_item(room, request.user, request.data)
+        except SharingRoomError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(self._serialize(room, request), status=status.HTTP_201_CREATED)
+
+
+class SharingRoomRemoveItemView(_SharingRoomActionView):
+    def post(self, request, pk):
+        from .sharing_rooms import SharingRoomError, remove_room_item
+
+        room = self.get_room(request, pk)
+        try:
+            remove_room_item(room, request.user, request.data.get("item_id"))
+        except SharingRoomError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(self._serialize(room, request))
+
+
+class SharingRoomRevokeView(_SharingRoomActionView):
+    def post(self, request, pk):
+        from .sharing_rooms import revoke_sharing_room
+
+        room = revoke_sharing_room(self.get_room(request, pk), request.user)
+        return Response(self._serialize(room, request))
+
+
+class SharingRoomArchiveView(_SharingRoomActionView):
+    def post(self, request, pk):
+        from .sharing_rooms import archive_sharing_room
+
+        room = archive_sharing_room(self.get_room(request, pk), request.user)
+        return Response(self._serialize(room, request))
+
+
+class SharingRoomFromPackView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, bundle_id):
+        from .models import DocumentBundle
+        from .serializers import SharingRoomSerializer
+        from .sharing_rooms import SharingRoomError, create_room_from_pack
+
+        bundle = get_object_or_404(DocumentBundle, pk=bundle_id, owner=request.user)
+        try:
+            room = create_room_from_pack(bundle, request.user, payload=request.data)
+        except SharingRoomError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            SharingRoomSerializer(room, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class SharingRoomFromApplicationView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, application_id):
+        from .models import TrackedApplication
+        from .serializers import SharingRoomSerializer
+        from .sharing_rooms import SharingRoomError, create_room_from_application
+
+        application = get_object_or_404(
+            TrackedApplication, pk=application_id, owner=request.user
+        )
+        try:
+            room = create_room_from_application(application, request.user, payload=request.data)
+        except SharingRoomError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            SharingRoomSerializer(room, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class PublicSharingRoomMetadataView(APIView):
+    """
+    GET (public, token-only) → safe room metadata + ONLY the selected items.
+    No owner data, no storage URLs. Respects revoke/expiry. Marks the room opened.
+    """
+
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "public_access_code"
+
+    def get(self, request, token):
+        from .sharing_rooms import (
+            RESOLVE_OK,
+            build_public_sharing_room_payload,
+            mark_room_opened,
+            resolve_sharing_room_token,
+        )
+
+        room, state = resolve_sharing_room_token(token)
+        if room is None or state != RESOLVE_OK:
+            return Response(
+                {"detail": "This room is not available.", "state": state or "not_found"},
+                status=status.HTTP_404_NOT_FOUND if state in (None, "not_found")
+                else status.HTTP_410_GONE,
+            )
+        mark_room_opened(room)
+        payload = build_public_sharing_room_payload(room)
+        payload["state"] = state
+        return Response(payload, status=status.HTTP_200_OK)
+
+
+class _PublicSharingRoomFileMixin(APIView):
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "public_access_code"
+
+    def resolve(self, token, file_id):
+        """Return (room, file, error_response). Permission-first; never exposes a
+        storage URL."""
+        from .sharing_rooms import (
+            RESOLVE_OK,
+            public_room_file,
+            resolve_sharing_room_token,
+        )
+
+        room, state = resolve_sharing_room_token(token)
+        if room is None or state != RESOLVE_OK:
+            code = (status.HTTP_404_NOT_FOUND if state in (None, "not_found")
+                    else status.HTTP_410_GONE)
+            return None, None, Response(
+                {"detail": "This room is not available.", "state": state or "not_found"},
+                status=code,
+            )
+        f = public_room_file(room, file_id)
+        if f is None:
+            return room, None, Response(
+                {"detail": "File not found in this room."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return room, f, None
+
+
+class PublicSharingRoomFilePreviewView(_PublicSharingRoomFileMixin):
+    def get(self, request, token, file_id):
+        room, f, err = self.resolve(token, file_id)
+        if err is not None:
+            return err
+        if not f.is_previewable:
+            return Response(
+                {"detail": "This file type cannot be previewed."},
+                status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            )
+        return _inline_file_response(f)
+
+
+class PublicSharingRoomFileDownloadView(_PublicSharingRoomFileMixin):
+    def get(self, request, token, file_id):
+        room, f, err = self.resolve(token, file_id)
+        if err is not None:
+            return err
+        if not room.allow_download:
+            return Response(
+                {"detail": "Downloads are disabled for this room."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return _file_response(f, as_attachment=True)
+
+
 # ---- Timeline ---------------------------------------------------------------
 
 

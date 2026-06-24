@@ -49,6 +49,25 @@ full subsection. Key points:
   needs-replacement). Throttles: `public_access_code` (metadata) +
   `public_document_upload` (upload). Deterministic — no AI.
 
+## Sharing Rooms V1 (`SharingRoom`) — uploads via embedded request links
+
+A Sharing Room (`apps/documents`, distinct from the personal `ShareRoom`) is a
+secure owner-scoped workspace that bundles selected documents/files plus
+Document Request Links behind one unguessable public token. It introduces **no
+new public upload system**:
+
+- Uploads happen **only** through Document Request Links added to the room as
+  items. The public room surfaces each request's own public token, so uploaders
+  continue on the existing `/document-request/{token}` page with its own
+  review/accept flow (see the Document Request Links V1 section above). The
+  room's `allow_upload` toggle gates whether those upload tokens are surfaced.
+- The public room route exposes only selected items + safe room metadata; files
+  are served only through the authenticated decrypt-in-memory **proxy** routes
+  (`/api/v1/public/sharing-rooms/{token}/files/{file_id}/preview|download/`),
+  never a raw storage URL, with download gated by `allow_download`.
+- Revoke / expiry / archive remove public access (`410`). Deterministic — no AI.
+  See `docs/security-plan.md` and `docs/api-spec.md` §35.
+
 ## Honest limits
 
 - Anyone with the link can upload until it is revoked/cancelled or expires —
