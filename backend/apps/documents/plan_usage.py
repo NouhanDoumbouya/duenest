@@ -25,15 +25,23 @@ from .models import (
 
 
 class PlanLimitExceeded(APIException):
-    """Raised when a create would exceed the user's plan limit (HTTP 403)."""
+    """Raised when a create would exceed the user's plan limit (HTTP 403).
+
+    Always carries ``code = "plan_limit_exceeded"`` plus a ``resource``
+    discriminator (e.g. ``documents`` / ``files`` / ``storage_bytes`` /
+    ``bundles`` / ``reminders``) so the frontend's single global upgrade paywall
+    keeps working for every limit. ``message``/``extra`` let storage (which needs
+    friendly MB/GB copy + byte counters) customize the payload without a parallel
+    error scheme.
+    """
 
     status_code = status.HTTP_403_FORBIDDEN
     default_code = "plan_limit_exceeded"
 
-    def __init__(self, resource: str, limit: int, plan: str):
+    def __init__(self, resource: str, limit: int, plan: str, *, message=None, extra=None):
         label = plans.RESOURCE_LABELS.get(resource, resource)
         detail = {
-            "detail": (
+            "detail": message or (
                 f"You've reached the {plans.PLAN_LABELS.get(plan, plan)} plan "
                 f"limit of {limit} {label}. Remove some or upgrade to add more."
             ),
@@ -42,6 +50,8 @@ class PlanLimitExceeded(APIException):
             "limit": limit,
             "plan": plan,
         }
+        if extra:
+            detail.update(extra)
         super().__init__(detail=detail, code=self.default_code)
 
 
@@ -64,7 +74,12 @@ def count_resource(user, resource: str) -> int:
     if resource == plans.RESOURCE_BUNDLES:
         return DocumentBundle.objects.filter(owner=user).count()
     if resource == plans.RESOURCE_REMINDERS:
-        return DocumentReminderRule.objects.filter(owner=user).count()
+        # Only ACTIVE reminders count toward the limit: an enabled rule on a
+        # live (non-trashed) document. Disabling a rule or trashing its document
+        # frees a slot; editing an existing active rule never creates a new one.
+        return DocumentReminderRule.objects.filter(
+            owner=user, is_enabled=True, document__is_trashed=False
+        ).count()
     if resource == plans.RESOURCE_SHARE_LINKS:
         # Active single-file share links plus active Quick Share QR sessions.
         from apps.quick_share.models import QuickShareSession
@@ -152,6 +167,88 @@ def enforce_plan_limit(user, resource: str) -> None:
         return
     if count_resource(user, resource) >= limit:
         raise PlanLimitExceeded(resource=resource, limit=limit, plan=user.plan)
+
+
+# ---- Storage quota (a hard product limit; R2 stays private) -----------------
+#
+# Storage is summed from the stored plaintext ``DocumentFile.file_size`` (set at
+# upload), owner-scoped — never by calling R2. It is a PRODUCT limit and is fully
+# independent of the Cloudflare R2 bucket, which remains private.
+
+
+def _fmt_bytes(n) -> str:
+    """Friendly size label (e.g. ``100MB`` / ``10GB``) for limit copy."""
+    if n is None:
+        return "unlimited"
+    n = int(n)
+    gb = 1024 * 1024 * 1024
+    mb = 1024 * 1024
+    if n >= gb and n % gb == 0:
+        return f"{n // gb}GB"
+    if n >= gb:
+        return f"{n / gb:.1f}GB"
+    if n >= mb:
+        return f"{n // mb}MB"
+    return f"{max(n // 1024, 0)}KB"
+
+
+def get_user_storage_used_bytes(user) -> int:
+    """Total stored bytes the user currently occupies (owner-scoped)."""
+    return _storage_bytes(user)
+
+
+def get_user_storage_limit_bytes(user):
+    """The user's storage limit in bytes, or ``None`` when uncapped."""
+    return plans.get_limit(plans.normalize_plan(user.plan), "storage_bytes")
+
+
+def get_user_storage_remaining_bytes(user):
+    """Remaining storage in bytes, or ``None`` when uncapped."""
+    limit = get_user_storage_limit_bytes(user)
+    if limit is None:
+        return None
+    return max(int(limit) - get_user_storage_used_bytes(user), 0)
+
+
+def can_upload_bytes(user, incoming_size) -> bool:
+    """Whether an upload of ``incoming_size`` bytes fits the user's storage limit."""
+    limit = get_user_storage_limit_bytes(user)
+    if limit is None:
+        return True
+    incoming = max(int(incoming_size or 0), 0)
+    return get_user_storage_used_bytes(user) + incoming <= int(limit)
+
+
+def enforce_storage_limit(user, incoming_size) -> None:
+    """
+    Raise :class:`PlanLimitExceeded` (resource ``storage_bytes``) if an upload of
+    ``incoming_size`` bytes would exceed the user's storage quota. ``None`` limit
+    (Pro placeholder edge / uncapped) is always allowed. Never calls R2.
+    """
+    limit = get_user_storage_limit_bytes(user)
+    if limit is None:
+        return
+    incoming = max(int(incoming_size or 0), 0)
+    used = get_user_storage_used_bytes(user)
+    if used + incoming > int(limit):
+        plan = plans.normalize_plan(user.plan)
+        if plan == plans.PLAN_FREE:
+            message = (
+                f"You've reached your Free storage limit of {_fmt_bytes(limit)}. "
+                f"Upgrade to Pro for {_fmt_bytes(plans.PRO_STORAGE_BYTES)}."
+            )
+        else:
+            message = (
+                f"This upload would exceed your plan's storage limit of "
+                f"{_fmt_bytes(limit)}."
+            )
+        raise PlanLimitExceeded(
+            resource="storage_bytes",
+            limit=int(limit),
+            plan=plan,
+            message=message,
+            extra={"used_bytes": used, "incoming_bytes": incoming},
+        )
 
 
 def _resource_usage(user, resource: str, limit) -> dict:

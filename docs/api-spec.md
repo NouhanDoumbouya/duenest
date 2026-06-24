@@ -1793,10 +1793,18 @@ and access-code data are not exposed.
 
 ## 13C.6 Plan limits & usage
 
-A small internal plan foundation. Each user has a `plan` (`free` or
-`pro_placeholder`) exposed read-only on `GET /api/v1/users/me/`. There is **no
-real billing yet** — the plan only drives usage limits. Limits are defined in
-`apps/users/plans.py` and enforced on the relevant create endpoints.
+Each user has a `plan` (`free` or `pro_placeholder`) exposed read-only on
+`GET /api/v1/users/me/`. Limits are defined in `apps/users/plans.py` and
+enforced on the relevant create and upload endpoints. The billing layer keeps
+`User.plan` in sync via `entitlements.sync_user_plan(user)`.
+
+**Enforced Free limits:** 30 documents, 60 files, 1 application pack/bundle,
+10 active reminders (enabled rules on non-trashed documents), 5 active share
+links, 1 emergency pack, 100 MB storage (104,857,600 bytes).
+
+**Pro limits:** 1,000 documents; 10 GB storage (10,737,418,240 bytes); files,
+bundles, active reminders, share links, and emergency packs are effectively
+unlimited (high numeric cap).
 
 | Method | Path | Description |
 | --- | --- | --- |
@@ -1810,10 +1818,10 @@ real billing yet** — the plan only drives usage limits. Limits are defined in
   "plan_label": "Free",
   "is_free": true,
   "resources": {
-    "documents": { "resource": "documents", "label": "documents", "used": 3, "limit": 25, "remaining": 22, "at_limit": false, "unlimited": false },
+    "documents": { "resource": "documents", "label": "documents", "used": 3, "limit": 30, "remaining": 27, "at_limit": false, "unlimited": false },
     "files": { "...": "..." },
-    "bundles": { "...": "..." },
-    "reminders": { "...": "..." },
+    "bundles": { "resource": "bundles", "label": "bundles", "used": 0, "limit": 1, "remaining": 1, "at_limit": false, "unlimited": false },
+    "reminders": { "resource": "reminders", "label": "reminders", "used": 2, "limit": 10, "remaining": 8, "at_limit": false, "unlimited": false },
     "active_share_links": { "...": "..." },
     "emergency_packs": { "...": "..." }
   },
@@ -1821,10 +1829,18 @@ real billing yet** — the plan only drives usage limits. Limits are defined in
 }
 ```
 
+The `storage` block contains `used_bytes`, `limit_bytes`, `remaining_bytes`, and
+`unlimited`. Free `limit_bytes` is `104857600` (100 MB); Pro `limit_bytes` is
+`10737418240` (10 GB). Storage used is the sum of `DocumentFile.file_size` for the
+user's non-trashed files — computed from the database, never from Cloudflare R2.
+
 ### Limit enforcement
 
 Creating a document, file, bundle, reminder rule, active share link, or
-emergency pack while at the free-tier limit returns:
+emergency pack while at the free-tier limit returns `403 Forbidden`. Uploading a
+file that would exceed the storage quota also returns `403 Forbidden`.
+
+All limit violations share the same response shape:
 
 ```http
 403 Forbidden
@@ -1832,15 +1848,20 @@ emergency pack while at the free-tier limit returns:
 
 ```json
 {
-  "detail": "You've reached the Free plan limit of 25 documents. Remove some or upgrade to add more.",
+  "detail": "You've reached the Free plan limit of 30 documents. Remove some or upgrade to add more.",
   "code": "plan_limit_exceeded",
   "resource": "documents",
-  "limit": 25,
+  "limit": 30,
   "plan": "free"
 }
 ```
 
-The `pro_placeholder` plan treats every resource as unlimited. Counts are
+The `resource` field identifies which limit was hit: `"documents"`, `"files"`,
+`"bundles"`, `"reminders"`, `"active_share_links"`, `"emergency_packs"`, or
+`"storage_bytes"`. The frontend's single global upgrade paywall keys on
+`code: "plan_limit_exceeded"`.
+
+The `pro_placeholder` plan treats every resource as effectively unlimited. Counts are
 strictly owner-scoped; one user's usage never affects another's limits.
 
 ---

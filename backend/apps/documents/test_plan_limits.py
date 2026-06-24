@@ -114,11 +114,13 @@ class PlanUsageTests(APITestCase):
 
     # --- Pro placeholder is unlimited ---------------------------------------
 
-    def test_pro_placeholder_has_no_limits(self):
+    def test_pro_placeholder_lifts_free_limits(self):
+        # Pro keeps a high document cap (1,000) and stays unlimited elsewhere
+        # (e.g. bundles), so creating past the Free document limit still succeeds.
         self.alice.plan = plans.PLAN_PRO_PLACEHOLDER
         self.alice.save(update_fields=["plan"])
-        limit = plans.get_limit(plans.PLAN_FREE, plans.RESOURCE_DOCUMENTS)
-        for i in range(limit):
+        free_limit = plans.get_limit(plans.PLAN_FREE, plans.RESOURCE_DOCUMENTS)
+        for i in range(free_limit):
             Document.objects.create(owner=self.alice, title=f"Doc {i}")
         self.client.force_authenticate(self.alice)
         response = self.client.post(DOCUMENTS_URL, {"title": "Beyond free limit"})
@@ -126,8 +128,12 @@ class PlanUsageTests(APITestCase):
 
         usage = self.client.get(USAGE_URL)
         self.assertEqual(usage.data["plan"], plans.PLAN_PRO_PLACEHOLDER)
+        # Documents are capped high (not unlimited); bundles stay unlimited.
+        self.assertEqual(
+            usage.data["resources"][plans.RESOURCE_DOCUMENTS]["limit"], 1000
+        )
         self.assertTrue(
-            usage.data["resources"][plans.RESOURCE_DOCUMENTS]["unlimited"]
+            usage.data["resources"][plans.RESOURCE_BUNDLES]["unlimited"]
         )
 
     def test_me_endpoint_exposes_plan(self):

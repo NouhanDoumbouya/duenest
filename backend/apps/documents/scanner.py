@@ -35,7 +35,7 @@ from rest_framework.views import APIView
 
 from .file_encryption import encrypt_bytes_into_record, sha256_hex
 from .models import DocumentExtraction, DocumentFile
-from .plan_usage import enforce_plan_limit
+from .plan_usage import enforce_plan_limit, enforce_storage_limit
 
 logger = logging.getLogger("duenest.scanner")
 
@@ -463,6 +463,11 @@ class UploadScannedDocumentView(APIView):
             content_type = validate_uploaded_scan(uploaded)
         except ScanValidationError as exc:
             return json_error(exc.message, exc.status_code)
+
+        # Storage quota is a product limit too — a scanned PDF counts against it
+        # like any upload. Enforced on the uploaded size (conservative; the file
+        # is losslessly compressed before storage).
+        enforce_storage_limit(request.user, getattr(uploaded, "size", 0))
 
         uploaded.seek(0)
         data = uploaded.read()

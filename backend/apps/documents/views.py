@@ -111,7 +111,7 @@ from .serializers import (
 )
 from apps.users import plans as user_plans
 
-from .plan_usage import compute_plan_usage, enforce_plan_limit
+from .plan_usage import compute_plan_usage, enforce_plan_limit, enforce_storage_limit
 from rest_framework.exceptions import (
     APIException,
     ValidationError as DRFValidationError,
@@ -858,6 +858,7 @@ class DocumentFileListCreateView(_DocumentScopedMixin, generics.ListCreateAPIVie
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         uploaded = serializer.validated_data["file"]
+        enforce_storage_limit(request.user, uploaded.size)
 
         # uploaded_by comes from the session, not the client. Bytes are
         # encrypted at rest inside _create_document_file before persistence.
@@ -1168,8 +1169,10 @@ class FileInboxListCreateView(generics.ListCreateAPIView):
         enforce_plan_limit(request.user, user_plans.RESOURCE_FILES)
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        uploaded = serializer.validated_data["file"]
+        enforce_storage_limit(request.user, uploaded.size)
         instance = _create_document_file(
-            uploaded=serializer.validated_data["file"],
+            uploaded=uploaded,
             user=request.user,
         )
         log_activity(
@@ -3397,6 +3400,10 @@ class DocumentFileCreateVersionView(_DocumentScopedMixin, APIView):
         serializer = DocumentFileUploadSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         uploaded = serializer.validated_data["file"]
+        # A replacement is stored as a fresh DocumentFile (old blob retained), so
+        # it consumes a file slot and storage like any other upload.
+        enforce_plan_limit(request.user, user_plans.RESOURCE_FILES)
+        enforce_storage_limit(request.user, uploaded.size)
 
         checksum = _compute_checksum(uploaded)
         instance = DocumentFile.objects.create(

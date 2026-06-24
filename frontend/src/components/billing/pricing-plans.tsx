@@ -37,7 +37,7 @@ const FALLBACK_PLANS: BillingPlan[] = [
     trial_days: 0,
     sort_order: 0,
     entitlements: [
-      { feature_key: "documents_limit", limit_value: 25, limit_period: "total", is_enabled: true },
+      { feature_key: "documents_limit", limit_value: 30, limit_period: "total", is_enabled: true },
       { feature_key: "storage_mb", limit_value: 100, limit_period: "total", is_enabled: true },
       { feature_key: "scanner_scans_per_month", limit_value: 10, limit_period: "month", is_enabled: true },
     ],
@@ -139,7 +139,7 @@ function planHighlights(plan: BillingPlan): string[] {
   }
   // Pro
   return [
-    "Unlimited documents & high storage",
+    "1,000 documents & 10GB secure storage",
     "Full premium scanner & Smart Intake",
     ...(AI_ENABLED ? ["AI document assist — extract & ask, you confirm"] : []),
     "Full Life Radar & Application Packs",

@@ -55,12 +55,46 @@ list returns all `is_public` plans; the frontend hides checkout for inactive one
 ### Free vs Pro limits
 
 Non-AI resource limits are enforced via `apps.users.plans.PLAN_LIMITS` /
-`apps.documents.plan_usage` and mirrored as display entitlements. **Recommended
-product targets** (Free → Pro): documents 30 → 1,000; storage 500 MB → 10 GB;
-active reminders 10 → unlimited; application packs 1 → unlimited; scanner basic →
-full. Adjusting the enforced numeric limits to these targets (and hard storage-
-quota enforcement now that R2 is live) is the **`backend/storage-plan-limits`**
-follow-up — this branch keeps the current enforced limits stable.
+`apps.documents.plan_usage`. `PlanEntitlement` rows in the billing app are a
+**display mirror** that powers the public pricing/comparison UI; migration `0013`
+keeps them in sync with the enforced values. The `backend/storage-plan-limits`
+branch is **implemented and merged**.
+
+**Enforced Free limits:**
+
+| Resource | Free limit |
+| --- | --- |
+| Storage | **100 MB** (104,857,600 bytes) — hard-enforced at upload |
+| Documents | **30** |
+| Files | **60** |
+| Application packs / bundles | **1** |
+| Active reminders | **10** (counts only enabled reminder rules on non-trashed documents) |
+| Active share links | **5** |
+| Emergency packs | **1** |
+| Scanner | 5 pages per scanned PDF |
+| AI credits | 10 credits/month |
+
+**Pro limits:** 10 GB storage, 1,000 documents. Files, bundles, active reminders,
+share links, and emergency packs are effectively unlimited (high numeric cap).
+Scanner and AI: see sections below.
+
+**Storage quota method:** storage used is the sum of stored `DocumentFile.file_size`
+values for the user's non-trashed files, computed from the database. Cloudflare R2
+is never queried for quota calculation — these are product limits, separate from
+R2 infrastructure. R2 remains private (no public bucket, credentials untouched).
+Storage is enforced at upload in: normal document file upload, file inbox upload,
+scanner save/upload, and file-version replacement. Helpers:
+`get_user_storage_used_bytes`, `get_user_storage_limit_bytes`,
+`get_user_storage_remaining_bytes`, `can_upload_bytes`, `enforce_storage_limit`.
+Friendly copy when the Free limit is hit: "You've reached your Free storage limit
+of 100MB. Upgrade to Pro for 10GB."
+
+**Plan-limit violation format:** all limit violations return `HTTP 403` with body
+`{ detail, code: "plan_limit_exceeded", resource, limit, plan }`. The `resource`
+discriminator (e.g. `"documents"`, `"files"`, `"bundles"`, `"reminders"`,
+`"active_share_links"`, `"emergency_packs"`, `"storage_bytes"`) identifies which
+limit was hit. The frontend's single global upgrade paywall keys on
+`code: "plan_limit_exceeded"`.
 
 ### AI plan limits (monthly credits — enforced)
 

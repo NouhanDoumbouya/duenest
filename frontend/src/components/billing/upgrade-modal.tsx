@@ -13,7 +13,7 @@ import { useFocusTrap } from "@/lib/use-focus-trap";
 import type { BillingInterval } from "@/types/billing";
 
 const PRO_UNLOCKS = [
-  "Unlimited documents & high storage",
+  "1,000 documents & 10GB secure storage",
   "Full premium scanner & Smart Intake",
   "Full Life Radar, Application Packs & Emergency Protocol",
   "Higher secure-sharing limits",
