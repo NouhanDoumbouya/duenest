@@ -1434,7 +1434,8 @@ Checklist response includes a derived `progress` object:
 | `GET` | `/api/v1/document-bundles/:bundle_id/` | Retrieve a bundle + requirements + readiness |
 | `PATCH` | `/api/v1/document-bundles/:bundle_id/` | Update a bundle |
 | `DELETE` | `/api/v1/document-bundles/:bundle_id/` | Delete a bundle |
-| `GET` | `/api/v1/document-bundles/:bundle_id/readiness/` | Fresh readiness breakdown |
+| `GET` | `/api/v1/document-bundles/:bundle_id/readiness/` | Structured pack readiness (V1) — score, per-requirement status, warnings, next actions |
+| `GET` | `/api/v1/document-bundles/readiness-summary/` | Deterministic readiness rollup across the user's active packs |
 | `POST` | `/api/v1/document-bundles/:bundle_id/requirements/` | Add a requirement |
 | `PATCH` | `/api/v1/document-bundles/:bundle_id/requirements/:requirement_id/` | Update a requirement |
 | `DELETE` | `/api/v1/document-bundles/:bundle_id/requirements/:requirement_id/` | Delete a requirement |
@@ -1448,6 +1449,26 @@ Checklist response includes a derived `progress` object:
   `attached` or `completed`. Missing required requirements reduce the score
   proportionally. When there are no required requirements, readiness falls back
   to optional ones. The score is recalculated whenever a requirement changes.
+- **Application Pack Readiness V1** (`apps/documents/pack_readiness.py`): the
+  `GET .../readiness/` endpoint returns a **deterministic** structured payload
+  (a superset of the legacy fields — old keys preserved):
+  `{ pack_id, name, score, base_score, label, has_checklist, is_ready_to_share,
+  summary{ required_count, satisfied_count, missing_count, warning_count,
+  expired_count, expiring_soon_count }, required_documents[],
+  satisfied_requirements[], missing_requirements[], attached_documents[],
+  warnings[], next_actions[] }`. Per-requirement `status` is
+  `satisfied | missing | expired | expiring_soon | needs_review` (an attached
+  document with no file is `needs_review`, never silently "satisfied"). The
+  headline `score` is the base required-ratio with capped penalties (expired −20,
+  expiring-soon −10, missing-file −15, needs-review −5; clamped 0–100); labels
+  90+/70+/40+/else map to Ready / Mostly ready / Needs attention / At risk.
+  `is_ready_to_share` requires score ≥ 90, no missing/expired required items, and
+  no critical warnings. **No AI call, no AI credits, no R2, no private file URLs.**
+  Missing documents come only from real requirement rows — never invented.
+  `base_score` (the unpenalized ratio) is what `bundle_readiness()` / Life Radar
+  use, so those are unaffected. `readiness-summary/` returns
+  `{ total_packs, ready_packs, needs_attention_packs, total_missing_required,
+  packs[] }` across the user's active (non-completed/archived) packs.
 - `link-document` / `link-file` accept `{ "document": <id> }` / `{ "file": <id> }`,
   verify ownership (`404` otherwise), set the link, and flip a `missing`
   requirement to `attached`. Both also append a bundle-scoped activity event.

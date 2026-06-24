@@ -3054,7 +3054,14 @@ class BundleRequirementLinkFileView(_RequirementActionMixin, APIView):
 
 
 class BundleReadinessView(APIView):
-    """GET a fresh readiness breakdown for an owner-owned bundle."""
+    """
+    GET a fresh, structured readiness breakdown for an owner-owned bundle.
+
+    Returns the deterministic Application Pack Readiness V1 payload — score +
+    label, per-requirement status, expiry warnings, share readiness, and next
+    actions — a superset of the original readiness fields. Deterministic: no AI
+    call, no AI credits, no R2 access, no private file URLs.
+    """
 
     permission_classes = [IsAuthenticated]
 
@@ -3062,12 +3069,30 @@ class BundleReadinessView(APIView):
         bundle = get_object_or_404(
             DocumentBundle, pk=bundle_id, owner=request.user
         )
-        readiness = bundle_readiness(bundle)
-        # Keep the cached score fresh on read, too.
-        if bundle.readiness_score != readiness.score:
-            bundle.readiness_score = readiness.score
+        from .pack_readiness import build_pack_readiness
+
+        payload = build_pack_readiness(bundle, request.user)
+        # Keep the cached base score fresh on read, too (Life Radar reads it).
+        if bundle.readiness_score != payload["base_score"]:
+            bundle.readiness_score = payload["base_score"]
             bundle.save(update_fields=["readiness_score", "updated_at"])
-        return Response(BundleReadinessSerializer(readiness).data)
+        return Response(payload)
+
+
+class BundleReadinessSummaryView(APIView):
+    """
+    GET a deterministic readiness snapshot across the user's active packs.
+
+    Owner-scoped; excludes completed/archived bundles. No AI / no R2 / no file
+    URLs. Powers the packs list and dashboard readiness rollups.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from .pack_readiness import build_pack_readiness_summary
+
+        return Response(build_pack_readiness_summary(request.user))
 
 
 # ---- Timeline ---------------------------------------------------------------

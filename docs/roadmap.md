@@ -917,6 +917,7 @@ backend/document-vault-maturity        frontend/document-vault-maturity        (
 feature/document-onboarding-trust      onboarding/trust/data launch polish     (done)
 backend/storage-plan-limits            Free/Pro product limits enforced        (done)
 product/life-radar-v1                  Deterministic readiness dashboard       (done)
+product/application-pack-readiness-v1  Structured pack readiness workflow      (done)
 ```
 
 `backend/storage-plan-limits` is **implemented**: storage (100 MB Free / 10 GB
@@ -933,17 +934,30 @@ documents, emergency access, suggested actions). It is **deterministic and makes
 no AI call / consumes no AI credits / never touches R2** — fast, free, and
 available to Free and Pro alike. Suggested actions are plan-aware (e.g. a
 storage-upgrade nudge near the Free limit). AI-enhanced suggestions are future
-work (`product/life-radar-ai-insights`); deeper pack readiness is next.
+work (`product/life-radar-ai-insights`).
 
-**Next recommended branch: `product/application-pack-readiness-v1`**
+`product/application-pack-readiness-v1` is **implemented**: a deterministic pack
+readiness service (`apps/documents/pack_readiness.py`, `build_pack_readiness` /
+`build_pack_readiness_summary`) that turns a bundle + its requirements into a
+structured readiness payload — score + label, per-requirement status
+(satisfied / missing / expired / expiring_soon / needs_review), expiry warnings
+on attached documents, a share-readiness verdict, and next actions. It **extends
+the existing** `GET /api/v1/document-bundles/{id}/readiness/` endpoint (superset;
+old keys preserved) and adds `GET /api/v1/document-bundles/readiness-summary/`.
+Fully **deterministic — no AI call, no AI credits, no R2, no file URLs**.
+Missing documents come only from real requirement rows (never invented). The
+base score/counts still come from `bundle_readiness()`, so **Life Radar is
+unchanged**. AI requirement extraction is the next branch.
+
+**Next recommended branch: `ai/requirement-link-to-checklist`**
 
 Suggested sequencing:
 
 ```txt
 backend/storage-plan-limits            (done)
 product/life-radar-v1                  (done)
-product/application-pack-readiness-v1  (next)
-ai/requirement-link-to-checklist
+product/application-pack-readiness-v1  (done)
+ai/requirement-link-to-checklist       (next)
 product/application-tracker-v1
 product/smart-profile-v1
 b2b/portals-mvp

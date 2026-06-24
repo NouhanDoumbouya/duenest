@@ -23,6 +23,7 @@ import { BundleActivityTab } from "@/components/bundles/bundle-activity-tab";
 import { BundleFilesSection } from "@/components/bundles/bundle-files-section";
 import { BundleReviewTab } from "@/components/bundles/bundle-review-tab";
 import { ReadinessRing } from "@/components/bundles/readiness-ring";
+import { PackReadinessPanel } from "@/components/bundles/pack-readiness-panel";
 import { BundleShareReadiness } from "@/components/bundles/bundle-share-readiness";
 import { useFeature } from "@/components/features/feature-flags-provider";
 import { DocumentAppointments } from "@/components/documents/document-appointments";
@@ -668,6 +669,9 @@ export default function BundleDetailPage() {
               hint="Owner-only handoff files"
             />
           </div>
+
+          {/* Application Pack Readiness V1: deterministic warnings + next steps. */}
+          <PackReadinessPanel bundleId={bundleId} refreshKey={bundle.updated_at} />
 
           <SegmentedControl
             label="Pack workspace"
