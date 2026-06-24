@@ -141,6 +141,14 @@ class DocumentQAEndpointTests(APITestCase):
         self.user = User.objects.create_user(
             username="api", email="api@x.com", password="StrongPassword123!DN"
         )
+        # Whole-vault Q&A is multi-document (Pro-only). Grant Pro so the path
+        # under test isn't blocked by the AI plan gate.
+        from apps.billing.models import Plan, UserSubscription
+
+        UserSubscription.objects.create(
+            user=self.user, plan=Plan.objects.get(key="pro"),
+            provider="manual", status="active", billing_interval="month",
+        )
         self.client.force_authenticate(self.user)
         AiPreference.objects.create(user=self.user, ai_enabled=True)
         self.url = reverse("document-ask")

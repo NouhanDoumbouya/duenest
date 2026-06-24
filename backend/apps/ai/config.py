@@ -23,9 +23,13 @@ from typing import Callable
 
 Getter = Callable[[str, str], str]
 
-# Default to the latest, most capable Claude model. Operators can override per
-# deployment with AI_MODEL without touching code.
-DEFAULT_MODEL = "claude-opus-4-8"
+# Default to a fast, low-cost Haiku-class model — NOT Opus. Opus is never the
+# default for normal Free/Pro usage (see apps.ai.routing); it is reserved for
+# founder/admin or deliberate operator override via AI_MODEL. Operators can set
+# AI_MODEL / AI_MODEL_HAIKU / AI_MODEL_SONNET per deployment without code changes.
+DEFAULT_MODEL = "claude-haiku-4-5-20251001"
+DEFAULT_MODEL_HAIKU = "claude-haiku-4-5-20251001"
+DEFAULT_MODEL_SONNET = "claude-sonnet-4-6"
 DEFAULT_MAX_TOKENS = 4096
 
 # --- Cost-control defaults (conservative; meant for a small credit balance) ---
@@ -110,6 +114,8 @@ def resolve_ai_settings(get: Getter) -> dict:
     provider = (get("AI_PROVIDER", "anthropic") or "anthropic").strip().lower()
     api_key = (get("ANTHROPIC_API_KEY", "") or "").strip()
     model = (get("AI_MODEL", "") or "").strip() or DEFAULT_MODEL
+    model_haiku = (get("AI_MODEL_HAIKU", "") or "").strip() or DEFAULT_MODEL_HAIKU
+    model_sonnet = (get("AI_MODEL_SONNET", "") or "").strip() or DEFAULT_MODEL_SONNET
     max_tokens = _as_int(get("AI_MAX_TOKENS", ""), DEFAULT_MAX_TOKENS)
 
     configured = provider == "anthropic" and bool(api_key)
@@ -118,6 +124,12 @@ def resolve_ai_settings(get: Getter) -> dict:
         "AI_PROVIDER": provider,
         "ANTHROPIC_API_KEY": api_key,
         "AI_MODEL": model,
+        # Plan-tier models used by apps.ai.routing.resolve_allowed_ai_model.
+        # Free → Haiku only; Pro → Haiku, Sonnet only for heavier features when
+        # AI_PRO_SONNET_ENABLED. Opus stays founder/operator-override only.
+        "AI_MODEL_HAIKU": model_haiku,
+        "AI_MODEL_SONNET": model_sonnet,
+        "AI_PRO_SONNET_ENABLED": _as_bool(get("AI_PRO_SONNET_ENABLED", ""), False),
         "AI_MAX_TOKENS": max_tokens,
         "AI_CONFIGURED": configured,
         # Cost controls (see apps/ai/metering.py). Conservative by default.

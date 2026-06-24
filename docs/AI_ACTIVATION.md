@@ -70,10 +70,31 @@ the digest (Notification preferences). Then either run on a schedule:
 - `ENABLE_CELERY_BEAT=true` (Mon 08:00 UTC), or
 - a platform cron: `python manage.py send_ai_digests` (use `--dry-run` first).
 
+## Plan credits
+
+AI usage is now metered with **monthly AI credits** (not per-day actions):
+- **Free:** 10 credits/month, 3 AI-indexed documents, basic features only (summary,
+  single-doc Q&A, deadline extraction, reminder suggestion, extraction).
+- **Pro:** 200 credits/month, 300 AI-indexed documents, all features including
+  multi-doc Q&A, drafting, pack copilot, readiness checks.
+
+Credits cost 1–5 per feature call (see `docs/BILLING.md` "AI plan limits" for the
+full table). A credit is spent only after a genuinely successful AI call — blocked,
+failed, or consent-missing calls never consume a credit.
+
+## Model routing
+
+- **Free:** Haiku only (set via `AI_MODEL_HAIKU`).
+- **Pro:** Haiku by default; Sonnet for heavier features when `AI_PRO_SONNET_ENABLED=true`.
+- **Opus:** founder/admin or explicit `AI_MODEL` override only. Opus is not the
+  default model for normal Free/Pro AI.
+
 ## Cost & privacy notes
 
 - $5 of credit is a demo budget — fine for piloting with a handful of users.
-  Use `AI_MODEL=claude-haiku-4-5` to stretch it; switch to Opus for quality.
+  `AI_MODEL_HAIKU` (Haiku-class) is the default; `AI_MODEL` is the operator
+  override (set to Opus for founder-level work). Do not set Opus as the default
+  on a small balance.
 - The AI paths send the relevant document **text** to Anthropic; this is
   disclosed in-app, off by default, and opt-in per user. Privacy Mode redacts
   obvious identifiers first. Local OCR/keyword paths never leave the box.

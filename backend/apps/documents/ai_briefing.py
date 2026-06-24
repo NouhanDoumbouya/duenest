@@ -99,10 +99,13 @@ def build_briefing(user) -> dict:
 
     candidates = _attention_candidates(user)
     if not candidates:
-        # Nothing needs attention — a positive briefing, no model call needed.
+        # Nothing needs attention — a positive briefing, computed deterministically
+        # with NO model call, so it must not consume an AI credit (model_called
+        # False signals that to the credit-spend gate in the view layer).
         return {
             "available": True,
             "reason": "ok",
+            "model_called": False,
             "summary": "You're all caught up — nothing needs your attention right now.",
             "items": [],
             "attention_count": 0,
@@ -133,6 +136,7 @@ def build_briefing(user) -> dict:
     return {
         "available": True,
         "reason": "ok",
+        "model_called": True,  # a real Claude call produced this briefing
         "summary": (result.data.get("summary") or "").strip(),
         "items": items,
         "attention_count": len(candidates),

@@ -250,22 +250,61 @@ def increment_usage(user, feature_key: str, amount: int = 1) -> None:
         FeatureUsageCounter.objects.filter(pk=row.pk).update(count=F("count") + amount)
 
 
-# ---- AI plan entitlements (constants prepared for backend/ai-plan-gating) ---
+# ---- AI plan entitlements (monthly AI credits model) -----------------------
 #
 # These are PRODUCT entitlements (per-plan AI allowances). They sit ALONGSIDE the
 # infrastructure AI budget guard (settings.AI_DAILY_TOKEN_CAP_* /
 # AI_MONTHLY_COST_LIMIT_USD), never replacing it: the budget guard protects spend
-# globally; these cap what each plan can do. Seeded in migration 0010.
+# globally; these cap what each plan can do.
+#
+# AI is metered in **monthly credits**, not "AI actions per day" — different AI
+# features cost different amounts (a single-doc summary is cheap; a multi-document
+# Q&A or pack copilot run is much heavier). The monthly allowance lives in the
+# ``ai_credits_per_month`` entitlement; consumption is tracked in a
+# ``FeatureUsageCounter`` row keyed ``ai_credits`` (monthly period). Seeded in
+# migration 0012. The legacy ``ai_actions_per_day`` entitlement (migration 0010)
+# is retained for backward compatibility but is NO LONGER used for enforcement.
 
-AI_ACTIONS_PER_DAY = "ai_actions_per_day"
+AI_CREDITS_PER_MONTH = "ai_credits_per_month"  # plan allowance entitlement key
+AI_CREDITS_USAGE_KEY = "ai_credits"  # FeatureUsageCounter key (monthly period)
 AI_INDEXED_DOCUMENTS = "ai_indexed_documents"
 
-# Map a short AI feature name -> the per-plan boolean entitlement flag.
-_AI_FEATURE_FLAGS = {
-    "multi_document_qa": "multi_document_qa_enabled",
-    "document_drafting": "document_drafting_enabled",
-    "pack_copilot": "pack_copilot_enabled",
-    "readiness": "readiness_enabled",
+# Legacy (no longer enforced — kept so old data/imports don't break abruptly).
+AI_ACTIONS_PER_DAY = "ai_actions_per_day"
+
+# A short, stable AI feature name -> its per-plan boolean entitlement flag.
+# Features NOT listed here are treated as "basic" AI (allowed on every plan that
+# has AI, still metered by credits). Free has only the basic flags enabled.
+AI_FEATURE_PLAN_FLAGS = {
+    "document_summary": "ai_document_summary",
+    "document_qa": "ai_document_qa",
+    "multi_document_qa": "ai_multi_document_qa",
+    "deadline_extraction": "ai_deadline_extraction",
+    "reminder_suggestion": "ai_reminder_suggestion",
+    "document_extraction": "ai_document_extraction",
+    "document_draft": "ai_document_draft",
+    "pack_copilot": "ai_pack_copilot",
+    "share_readiness": "ai_readiness_checks",
+    "bundle_readiness": "ai_readiness_checks",
+    "requirement_link_checklist": "ai_requirement_checklist",
+}
+
+# Feature-based credit costs. Heavier / multi-document features cost more. An
+# unconfigured feature defaults to a safe 1 credit.
+DEFAULT_AI_CREDIT_COST = 1
+AI_FEATURE_CREDIT_COSTS = {
+    "document_summary": 1,
+    "document_qa": 1,
+    "deadline_extraction": 1,
+    "reminder_suggestion": 1,
+    "document_extraction": 1,
+    "share_readiness": 2,
+    "bundle_readiness": 2,
+    "pack_copilot": 3,
+    "document_draft": 3,
+    "requirement_link_checklist": 5,  # future feature
+    "multi_document_qa": 5,
+    "long_application_review": 5,  # future feature
 }
 
 
@@ -274,24 +313,82 @@ def get_plan_limits(user) -> dict:
     return get_user_entitlements(user)
 
 
-def remaining_ai_actions_today(user):
-    """Remaining AI actions allowed on the user's plan today (None = unlimited)."""
-    return check_usage_limit(user, AI_ACTIONS_PER_DAY)["remaining"]
+# -- Monthly AI credit accounting --------------------------------------------
+
+
+def get_ai_credit_limit(user):
+    """The user's monthly AI credit allowance (``None`` = unlimited / not capped)."""
+    return get_feature_limit(user, AI_CREDITS_PER_MONTH)
+
+
+def get_ai_credits_used_this_month(user) -> int:
+    """AI credits the user has spent in the current calendar month."""
+    return get_usage_count(user, AI_CREDITS_USAGE_KEY)  # period defaults to month
+
+
+def get_ai_credits_remaining(user):
+    """Remaining AI credits this month (``None`` when the plan is uncapped)."""
+    limit = get_ai_credit_limit(user)
+    if limit is None:
+        return None
+    return max(int(limit) - get_ai_credits_used_this_month(user), 0)
+
+
+def get_ai_feature_credit_cost(feature: str) -> int:
+    """Credit cost for an AI feature (unknown features default to a safe 1)."""
+    return int(AI_FEATURE_CREDIT_COSTS.get(feature, DEFAULT_AI_CREDIT_COST))
 
 
 def can_use_ai_feature(user, feature: str) -> bool:
     """
-    Whether the user's plan allows an AI feature right now.
+    Whether the user's *plan* allows an AI feature at all (ignores credit balance).
 
-    A named premium feature (``multi_document_qa`` / ``document_drafting`` /
-    ``pack_copilot`` / ``readiness``) checks the plan flag; any other value is
-    treated as a generic AI action and checked against the per-day plan cap.
+    Premium features (e.g. ``multi_document_qa``, ``pack_copilot``,
+    ``document_draft``) check the plan's boolean flag. Basic features not in
+    :data:`AI_FEATURE_PLAN_FLAGS` are always plan-allowed (still credit-metered).
     Pairs with — never replaces — the infrastructure AI budget guard.
     """
-    flag = _AI_FEATURE_FLAGS.get(feature)
-    if flag is not None:
-        return has_feature(user, flag)
-    return check_usage_limit(user, AI_ACTIONS_PER_DAY)["allowed"]
+    flag = AI_FEATURE_PLAN_FLAGS.get(feature)
+    if flag is None:
+        return True
+    return has_feature(user, flag)
+
+
+def can_spend_ai_credits(user, feature: str) -> bool:
+    """Whether the user has enough monthly AI credits left for ``feature``."""
+    remaining = get_ai_credits_remaining(user)
+    if remaining is None:
+        return True  # uncapped plan
+    return remaining >= get_ai_feature_credit_cost(feature)
+
+
+def spend_ai_credits(user, feature: str, amount: int | None = None) -> int:
+    """
+    Deduct AI credits for a *successful* feature use and return the amount spent.
+
+    Call this ONLY after the AI action succeeded (so a blocked / failed / refused
+    call never costs the user a credit). No-ops for uncapped plans and for a
+    zero/negative cost. The current-month counter is bumped atomically.
+    """
+    if get_ai_credit_limit(user) is None:
+        return 0  # uncapped plan: nothing to meter against
+    cost = int(amount) if amount is not None else get_ai_feature_credit_cost(feature)
+    if cost <= 0:
+        return 0
+    increment_usage(user, AI_CREDITS_USAGE_KEY, amount=cost)
+    return cost
+
+
+def remaining_ai_actions_today(user):
+    """Deprecated: AI is now metered in monthly credits. Kept for compatibility.
+
+    Returns the remaining monthly AI credits (``None`` when uncapped) so any
+    lingering caller degrades sensibly instead of reading the retired daily cap.
+    """
+    return get_ai_credits_remaining(user)
+
+
+# -- Indexed-document cap -----------------------------------------------------
 
 
 def can_index_document_for_ai(user) -> bool:
@@ -299,7 +396,7 @@ def can_index_document_for_ai(user) -> bool:
     Whether the user can index ANOTHER document for AI under their plan's
     ``ai_indexed_documents`` cap (None = unlimited). Counts the distinct
     documents that already have chunks for this user. Never hard-blocks on a
-    counting error — the gating branch refines enforcement.
+    counting error.
     """
     limit = get_feature_limit(user, AI_INDEXED_DOCUMENTS)
     if limit is None:
@@ -318,6 +415,102 @@ def can_index_document_for_ai(user) -> bool:
     except Exception:  # noqa: BLE001 — never block on a counting hiccup
         return True
     return indexed < limit
+
+
+# -- Friendly gate payloads for AI endpoints ---------------------------------
+#
+# AI endpoints degrade gracefully (HTTP 200 + ``{available: false, reason: ...}``)
+# rather than throwing the 403 ``plan_limit_exceeded`` paywall used by hard CRUD
+# limits — so the AI UI can show inline upgrade copy in-flow. These helpers build
+# that blocked payload; an endpoint returns it as-is when not None.
+
+
+def ai_feature_gate(user, feature: str) -> dict | None:
+    """
+    Return a friendly "blocked" payload when the user's plan/credits disallow
+    ``feature``, else ``None`` (clear to proceed). Checked BEFORE any model call,
+    so a block never costs a credit.
+    """
+    if not can_use_ai_feature(user, feature):
+        return {
+            "available": False,
+            "reason": "ai_feature_not_in_plan",
+            "message": "This AI feature is available on Pro.",
+            "upgrade": True,
+        }
+    if not can_spend_ai_credits(user, feature):
+        pro = is_pro(user)
+        if pro:
+            message = (
+                "You've used your Pro AI credits for this month. "
+                "They reset at the start of next month."
+            )
+        else:
+            message = (
+                "You've used your Free AI credits for this month. "
+                "Upgrade to Pro for 200 AI credits/month."
+            )
+        return {
+            "available": False,
+            "reason": "ai_credits_exhausted",
+            "message": message,
+            "credits": {
+                "limit": get_ai_credit_limit(user),
+                "used": get_ai_credits_used_this_month(user),
+                "remaining": get_ai_credits_remaining(user),
+            },
+            "upgrade": not pro,
+        }
+    return None
+
+
+def ai_index_gate(user) -> dict | None:
+    """
+    Return a friendly "blocked" payload when the user is at their AI indexing cap,
+    else ``None``. Callers should skip this for documents that are already indexed
+    (re-indexing must never be blocked by the cap).
+    """
+    if can_index_document_for_ai(user):
+        return None
+    limit = get_feature_limit(user, AI_INDEXED_DOCUMENTS)
+    pro = is_pro(user)
+    if pro:
+        message = (
+            f"You've reached your plan's AI indexing limit of {limit} documents."
+        )
+    else:
+        message = (
+            "Free includes AI indexing for up to 3 documents. "
+            "Upgrade to Pro for 300 indexed documents."
+        )
+    return {
+        "available": False,
+        "reason": "ai_index_limit_exceeded",
+        "message": message,
+        "limit": limit,
+        "upgrade": not pro,
+    }
+
+
+def ai_call_succeeded(result: dict) -> bool:
+    """Whether an AI service result reflects a real, successful model call.
+
+    The AI services share a ``{available, reason, ...}`` contract; a genuine model
+    success is ``available=True`` AND ``reason="ok"``. Everything else (budget
+    pause, provider error, refusal, not-configured, no-context, validation) is a
+    non-success and must NOT be charged a credit.
+
+    A deterministic / no-provider-call path that still answers "ok" (e.g. an
+    all-clear briefing with nothing to do) sets ``model_called=False`` to opt out
+    of being charged — no real AI value was produced. Results that omit the field
+    default to charged, since elsewhere ``reason="ok"`` is only ever returned after
+    a successful Claude call.
+    """
+    return (
+        bool(result.get("available"))
+        and result.get("reason") == "ok"
+        and result.get("model_called", True)
+    )
 
 
 # ---- Scanner plan rules ----------------------------------------------------

@@ -108,6 +108,19 @@ def suggest_fields(raw_text: str, *, user) -> dict | None:
     if not ai_extraction_enabled(user):
         return None
 
+    # Plan gate: AI extraction is credit-metered. If the plan disallows it or the
+    # monthly credits are exhausted, fall back to the regex parser gracefully —
+    # never raise or block the extraction pipeline / upload.
+    try:
+        from apps.billing import entitlements as billing_ent
+
+        if not billing_ent.can_use_ai_feature(
+            user, "document_extraction"
+        ) or not billing_ent.can_spend_ai_credits(user, "document_extraction"):
+            return None
+    except Exception:  # noqa: BLE001 — gating must never break extraction
+        pass
+
     prompt = (
         "Extract the document's fields from this text. Return only fields that "
         "appear verbatim.\n\n--- DOCUMENT TEXT ---\n"
@@ -124,7 +137,16 @@ def suggest_fields(raw_text: str, *, user) -> dict | None:
     if not result.ok or not isinstance(result.data, dict):
         return None
 
-    return _clean(result.data) or None
+    cleaned = _clean(result.data) or None
+    if cleaned is not None:
+        # Charge a credit only after a genuinely successful extraction.
+        try:
+            from apps.billing import entitlements as billing_ent
+
+            billing_ent.spend_ai_credits(user, "document_extraction")
+        except Exception:  # noqa: BLE001 — metering must never break extraction
+            pass
+    return cleaned
 
 
 def _clean(data: dict) -> dict:

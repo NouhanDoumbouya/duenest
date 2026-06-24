@@ -1419,3 +1419,18 @@ for example WebRTC-based nearby session pairing, Bluetooth/NFC pairing where
 platform support allows, OS-level share-sheet integration, or verified
 same-room/session-based pairing. Until then it stays here as a roadmap note
 only.
+
+---
+
+## Future: B2B shared AI credit pools (`backend/ai-org-credit-pools`)
+
+Organization-level AI credit pools, admin-set per-organization credit limits,
+shared credit consumption across organization members, and paid credit top-ups
+or overages are **not implemented** in the current branch.
+
+This is deferred to a future branch: **`backend/ai-org-credit-pools`**.
+
+The current implementation covers only personal (per-user) monthly AI credits.
+Free users receive 10 credits/month; Pro users receive 200 credits/month. These
+are personal credits — one user's balance is never shared with or consumed by
+another user's activity.

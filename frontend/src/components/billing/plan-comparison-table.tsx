@@ -31,7 +31,7 @@ const ROWS: Row[] = [
   { key: "scanner_hd_export", label: "HD PDF export", kind: "static", values: { free: "Limited", pro: "Included" } },
   { key: "scanner_advanced_enhancement", label: "Advanced enhancement", kind: "static", values: { free: "Limited", pro: "Included" } },
   { key: "ocr_searchable", label: "OCR / searchable text", kind: "static", values: { free: "Limited by AI plan", pro: "Within AI limits" } },
-  { key: "ai_extraction_scans", label: "AI extraction from scans", kind: "static", values: { free: "3 AI actions/day", pro: "30 AI actions/day" } },
+  { key: "ai_extraction_scans", label: "AI credits", kind: "static", values: { free: "10 AI credits/month", pro: "200 AI credits/month" } },
   { key: "auto_reminders_scans", label: "Auto reminders from scans", kind: "static", values: { free: "Limited", pro: "Included" } },
 ];
 

@@ -820,9 +820,8 @@ sequenceDiagram
 ### AI surface (all via `apps.ai.generate`, all assistive + flag-gated)
 
 Every Claude feature goes through the single `apps.ai.client.generate` wrapper
-(model `claude-opus-4-8`, structured JSON, never raises — degrades to
-`not_configured` with no key) and is gated by the `ai_features` master flag plus a
-per-feature flag:
+(structured JSON, never raises — degrades to `not_configured` with no key) and is
+gated by the `ai_features` master flag plus a per-feature flag:
 
 - **Document extraction** (`ai_document_extraction`) — suggest fields from a
   document's text for review.
@@ -835,6 +834,37 @@ per-feature flag:
   a required item is missing. Endpoint `POST /document-bundles/:id/share-readiness/`.
 
 All AI surfaces are **assistive** — the UI labels AI output and the user confirms.
+
+### AI plan credits vs infrastructure budget guard
+
+Two independent layers control AI spend:
+
+1. **Infrastructure budget guard** (`AI_DAILY_TOKEN_CAP_USER`, `AI_DAILY_TOKEN_CAP_GLOBAL`,
+   `AI_MONTHLY_COST_LIMIT_USD`): server-level hard caps on token/cost spend. Fails closed
+   — a cap breach blocks the call regardless of plan. Internal cap values are never
+   exposed to users.
+
+2. **Plan credits** (product limits): monthly AI credits tracked via `FeatureUsageCounter`
+   (key `"ai_credits"`, monthly period). Free: 10/month; Pro: 200/month. Feature flags
+   additionally gate premium features per plan. Credits are spent only on successful calls.
+   New blocked reasons: `ai_feature_not_in_plan`, `ai_credits_exhausted`,
+   `ai_index_limit_exceeded`.
+
+Both layers are checked at the `apps.ai.client.generate` chokepoint. Either can block a
+call independently.
+
+### Model routing (`apps/ai/routing.py`)
+
+Model selection is enforced at `resolve_allowed_ai_model`, called from the
+`apps.ai.client.generate` chokepoint — never taken from client input:
+
+- **Free:** Haiku only (`AI_MODEL_HAIKU`).
+- **Pro:** Haiku by default; Sonnet (`AI_MODEL_SONNET`) for heavier features when
+  `AI_PRO_SONNET_ENABLED=true` (default off).
+- **Opus:** founder/admin or explicit `AI_MODEL` operator override only, and for
+  system (user=None) calls. Opus is **not** the default.
+
+The default model (`DEFAULT_MODEL`) is now a Haiku-class model.
 
 ---
 

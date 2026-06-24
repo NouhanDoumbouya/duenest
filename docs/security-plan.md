@@ -724,21 +724,52 @@ misconfiguration, a runaway loop, or abuse.
   tokens, an estimated cost, status (`success` / `error` / `blocked`), a machine
   reason code, and an optional safe provider request id. **No raw prompts, document
   text, model responses, API keys, share/access codes, or payment data are stored.**
-- **Budget guard.** Before any paid call the guard checks three conservative caps —
-  per-user daily tokens (`AI_DAILY_TOKEN_CAP_USER`), global daily tokens
-  (`AI_DAILY_TOKEN_CAP_GLOBAL`), and global monthly estimated cost
+- **Infrastructure budget guard.** Before any paid call the guard checks three
+  conservative caps — per-user daily tokens (`AI_DAILY_TOKEN_CAP_USER`), global daily
+  tokens (`AI_DAILY_TOKEN_CAP_GLOBAL`), and global monthly estimated cost
   (`AI_MONTHLY_COST_LIMIT_USD`). Over a cap, the call is **not** sent to Anthropic; a
-  `blocked` usage row is recorded and the user sees a graceful "AI is paused for
-  today to protect usage limits" message (internal limits are never revealed).
+  `blocked` usage row is recorded and the user sees a graceful paused message (internal
+  limits are never revealed). The budget guard is **separate from plan credits** (see
+  below) and remains fully active regardless of plan.
 - **Fail-closed.** If the usage tables can't be read during a budget check, the call
   is blocked rather than allowed to spend unmetered.
 - **Non-fatal metering.** A metering write failure is logged and swallowed — it never
   breaks the AI action it measures (same philosophy as transactional email).
-- **Low-cost model for testing.** On a small balance, set `AI_MODEL` to the lowest-cost
-  Haiku-class model in the Anthropic console rather than Opus.
 
-Per-user usage (own daily tokens, own cap, paused flag) is exposed on the existing
-`GET /api/v1/ai/preferences/` response. Global spend is never exposed to normal users.
+### Implemented: AI plan credits (product limits)
+
+In addition to the infrastructure budget guard, AI usage is controlled by
+**monthly plan credits** — a product-level limit distinct from the infrastructure caps:
+
+- **Free plan:** 10 AI credits/month, 3 AI-indexed documents, basic features only.
+- **Pro plan:** 200 AI credits/month, 300 AI-indexed documents, all features.
+- Credits are spent **only** after a genuinely successful AI call; blocked, failed,
+  budget-paused, or consent-missing calls never consume a credit.
+- Plan feature flags gate premium features (`multi_document_qa`, `document_draft`,
+  `pack_copilot`, etc.) independently of the credit balance.
+- The `ai_actions_per_day` entitlement (migration 0010) is retained for backward
+  compatibility but is **no longer used for enforcement**.
+
+**Security layering:** plan credits and the infrastructure budget guard are
+independent layers. Both must pass for a paid AI call to proceed. The budget guard
+fails closed; plan credit checks also fail closed. Neither layer exposes internal cap
+values to users.
+
+### Model routing security
+
+- **Default model is Haiku-class**, not Opus — minimizing cost exposure on a shared
+  balance.
+- **Opus is never the default** for Free or Pro users. It is reserved for
+  founder/admin use or an explicit `AI_MODEL` operator override, and for system
+  (user=None) calls.
+- Free users are always served Haiku. Pro users get Haiku by default; Sonnet is
+  permitted only for heavier features when `AI_PRO_SONNET_ENABLED=true` (default off).
+- Model selection is enforced at the `apps.ai.routing.resolve_allowed_ai_model`
+  chokepoint — never taken from client input.
+
+Per-user AI credit usage (`limit`, `used`, `remaining`, `period`) is exposed on
+`GET /api/v1/ai/preferences/` (see api-spec.md §13B.13). Global spend is never
+exposed to normal users.
 
 > TODO (founder console): aggregate cross-user AI spend/usage views for the admin
 > console once it has a clean place for them.

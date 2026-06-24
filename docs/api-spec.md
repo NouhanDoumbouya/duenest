@@ -1894,8 +1894,12 @@ Response shape:
 }
 ```
 
-`reason` is one of `ok` / `not_configured` / `no_documents` / `empty_question` /
-`budget` / `error`. `answered` is `false` when the answer wasn't found.
+`reason` is one of `ok` / `not_configured` / `consent_required` /
+`no_documents` / `empty_question` / `budget` / `ai_feature_not_in_plan` /
+`ai_credits_exhausted` / `error`. `answered` is `false` when the answer wasn't found.
+Single-document Q&A (with `document_id`) uses the `document_qa` feature key (1 credit,
+available on Free). Whole-vault Q&A (no `document_id`) uses `multi_document_qa` (5
+credits, Pro-only).
 
 **Chunk-level RAG (v1).** When the relevant document(s) have been indexed (see
 13B.6a), retrieval grounds on slices of the document's extracted **body text**
@@ -2180,6 +2184,67 @@ rate limited (`ai_intake`).
 ```
 
 `reason` is `ok` / `not_configured` / `error`.
+
+---
+
+## 13B.13 AI: Preferences, consent & plan credits
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/v1/ai/preferences/` | Read AI consent state, privacy mode, and monthly credit usage |
+| `PATCH` | `/api/v1/ai/preferences/` | Update AI consent (`ai_enabled`) and privacy-mode settings |
+
+Authentication required.
+
+### GET /api/v1/ai/preferences/ — response shape
+
+```json
+{
+  "ai_enabled": true,
+  "privacy_mode": false,
+  "credits": {
+    "limit": 10,
+    "used": 3,
+    "remaining": 7,
+    "period": "month"
+  }
+}
+```
+
+`credits.limit` and `credits.remaining` are `null` for uncapped plans. `period`
+is always `"month"`. The credit values reflect the current calendar month.
+
+### AI blocked reason codes
+
+All AI action endpoints return `200` with `available: false` when a call cannot
+proceed. The `reason` field identifies why:
+
+| Reason | Meaning |
+| --- | --- |
+| `ok` | Call succeeded |
+| `not_configured` | No `ANTHROPIC_API_KEY` is set |
+| `consent_required` | User has not turned on AI (AiPreference.ai_enabled is off) |
+| `budget` | Infrastructure budget guard triggered (token/cost cap reached) |
+| `ai_feature_not_in_plan` | The requested feature is not available on the user's plan |
+| `ai_credits_exhausted` | User has used all monthly AI credits |
+| `ai_index_limit_exceeded` | Indexing this document would exceed the plan's AI-indexed document cap |
+| `error` | Provider or internal error |
+
+Each blocked response also includes a human-readable `message` and an `upgrade`
+boolean (true when upgrading to Pro would unlock the action):
+
+```json
+{
+  "available": false,
+  "reason": "ai_credits_exhausted",
+  "message": "You have used all 10 AI credits for this month. Upgrade to Pro for 200 credits/month.",
+  "upgrade": true
+}
+```
+
+Credits are spent **only** after a genuinely successful AI call (`available: true,
+reason: "ok"`). Blocked, failed, budget-paused, or consent-missing calls never
+consume a credit.
 
 ---
 

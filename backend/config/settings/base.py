@@ -300,6 +300,14 @@ AI_MODEL = _ai["AI_MODEL"]
 AI_MAX_TOKENS = _ai["AI_MAX_TOKENS"]
 AI_CONFIGURED = _ai["AI_CONFIGURED"]
 
+# Plan-tier model routing (apps/ai/routing.py). Free → Haiku only; Pro → Haiku by
+# default, Sonnet only for heavier features when AI_PRO_SONNET_ENABLED is on. Opus
+# is never used for normal Free/Pro AI — it stays a founder/admin or deliberate
+# operator override (set AI_MODEL) only.
+AI_MODEL_HAIKU = _ai["AI_MODEL_HAIKU"]
+AI_MODEL_SONNET = _ai["AI_MODEL_SONNET"]
+AI_PRO_SONNET_ENABLED = _ai["AI_PRO_SONNET_ENABLED"]
+
 # Cost controls — usage metering + budget guard (apps/ai/metering.py). Caps are
 # conservative by default so a small Anthropic credit can't be drained; raise per
 # deployment once spend is trusted. Set AI_MODEL to a low-cost Haiku-class model

@@ -18,6 +18,7 @@ import { ApiError } from "@/lib/api";
 import {
   getAiPreferences,
   updateAiPreferences,
+  type AiCredits,
   type AiPreferences,
 } from "@/lib/ai";
 import { cn } from "@/lib/utils";
@@ -119,6 +120,10 @@ export default function AiSettingsPage() {
             onChange={(v) => update({ redact_sensitive: v }, "redact_sensitive")}
           />
 
+          {prefs.credits && (
+            <CreditsCard credits={prefs.credits} />
+          )}
+
           {prefs.usage && prefs.usage.daily_token_cap > 0 && (
             <UsageCard usage={prefs.usage} />
           )}
@@ -184,6 +189,53 @@ function UsageCard({
             AI is paused for today to protect usage limits. It resumes
             automatically.
           </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function CreditsCard({ credits }: { credits: AiCredits }) {
+  const used = Math.max(0, credits.used);
+  const limit = credits.limit;
+  const remaining = credits.remaining;
+  const pct =
+    limit != null && limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
+  const limitLabel = limit != null ? limit.toLocaleString() : "Unlimited";
+  const remainingLabel =
+    remaining != null ? remaining.toLocaleString() : "Unlimited";
+  return (
+    <Card>
+      <CardContent className="space-y-3">
+        <div className="flex items-start gap-3">
+          <Sparkles className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
+          <div className="min-w-0 flex-1">
+            <p className="font-medium">AI credits</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {used.toLocaleString()} / {limitLabel} used this month
+              {remaining != null && (
+                <> &mdash; {remainingLabel} remaining</>
+              )}
+            </p>
+          </div>
+        </div>
+        {limit != null && limit > 0 && (
+          <div
+            className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+            role="progressbar"
+            aria-valuenow={pct}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label="Monthly AI credits used"
+          >
+            <div
+              className={cn(
+                "h-full rounded-full transition-all",
+                pct >= 90 ? "bg-brand-amber" : "bg-primary",
+              )}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
         )}
       </CardContent>
     </Card>

@@ -2494,9 +2494,30 @@ class BundleShareReadinessView(APIView):
         bundle = get_object_or_404(
             DocumentBundle, pk=bundle_id, owner=request.user
         )
-        from .ai_readiness import build_readiness_report
+        from .ai_readiness import build_readiness_report, deterministic_report
 
-        return Response(build_readiness_report(bundle, user=request.user))
+        # The deterministic readiness facts are FREE (no model call). Only the
+        # AI-assisted review is plan-gated — when it isn't allowed or credits are
+        # exhausted, still return the deterministic report (never hide it).
+        block = _ai_plan_block(request.user, "share_readiness")
+        if block is not None:
+            report = deterministic_report(bundle)
+            report.update(
+                {
+                    "ai": False,
+                    "ai_reason": block["reason"],
+                    "ai_message": block.get("message", ""),
+                    "upgrade": block.get("upgrade", False),
+                }
+            )
+            return Response(report)
+
+        result = build_readiness_report(bundle, user=request.user)
+        if result.get("ai") is True:
+            from apps.billing import entitlements as billing_ent
+
+            billing_ent.spend_ai_credits(request.user, "share_readiness")
+        return Response(result)
 
 
 class DocumentBundleFilesView(APIView):
@@ -5560,6 +5581,31 @@ class CalendarIcsExportView(APIView):
         return response
 
 
+# --- AI plan gating helpers -------------------------------------------------
+#
+# AI endpoints layer plan-based limits on top of the existing key/flag/consent
+# gates and the infrastructure AI budget guard. Flow per call: feature-flag gate
+# -> consent -> plan feature allowed? -> enough monthly credits? -> (index cap) ->
+# budget guard (inside generate) -> model call -> spend a credit only on success.
+# Blocks are returned as the AI endpoints' graceful 200 ``{available:false,
+# reason, message}`` so the UI shows inline upgrade copy in-flow.
+
+
+def _ai_plan_block(user, feature: str):
+    """Return a friendly block payload if plan/credits disallow ``feature``, else None."""
+    from apps.billing import entitlements as billing_ent
+
+    return billing_ent.ai_feature_gate(user, feature)
+
+
+def _spend_ai_credit_if_ok(user, feature: str, result: dict) -> None:
+    """Charge one feature's credit cost iff the AI call genuinely succeeded."""
+    from apps.billing import entitlements as billing_ent
+
+    if billing_ent.ai_call_succeeded(result):
+        billing_ent.spend_ai_credits(user, feature)
+
+
 class DocumentQAView(APIView):
     """
     "Ask your documents" — grounded natural-language Q&A over the owner's vault.
@@ -5609,9 +5655,17 @@ class DocumentQAView(APIView):
             except (TypeError, ValueError):
                 document_id = None
 
+        # Single-document Q&A is basic (Free); whole-vault Q&A is multi-document
+        # (Pro). Plan-gate on the right feature so Free keeps single-doc Q&A only.
+        ai_feature = "document_qa" if document_id is not None else "multi_document_qa"
+        block = _ai_plan_block(request.user, ai_feature)
+        if block is not None:
+            return Response(block, status=status.HTTP_200_OK)
+
         from .ai_qa import answer_question
 
         result = answer_question(request.user, question, document_id=document_id)
+        _spend_ai_credit_if_ok(request.user, ai_feature, result)
         _track_product_event(
             request,
             "document_qa_asked",
@@ -5658,6 +5712,19 @@ class DocumentAIIndexView(APIView):
             Document, pk=pk, owner=request.user, is_trashed=False
         )
         force = str(request.data.get("force", "")).lower() in {"1", "true", "yes"}
+
+        # Plan cap on the number of AI-indexed documents. Re-indexing a document
+        # that already has chunks is always allowed (it doesn't grow the count);
+        # only indexing a NEW document can hit the cap.
+        from .models import DocumentChunk
+
+        already_indexed = DocumentChunk.objects.filter(document=document).exists()
+        if not already_indexed:
+            from apps.billing import entitlements as billing_ent
+
+            index_block = billing_ent.ai_index_gate(request.user)
+            if index_block is not None:
+                return Response(index_block, status=status.HTTP_200_OK)
 
         from .ai_indexing import index_document_for_rag
 
@@ -5743,6 +5810,10 @@ class DocumentDraftView(APIView):
                 continue
         tone = (request.data.get("tone") or "").strip().lower()
 
+        block = _ai_plan_block(request.user, "document_draft")
+        if block is not None:
+            return Response(block, status=status.HTTP_200_OK)
+
         from .ai_draft import draft
 
         result = draft(
@@ -5751,6 +5822,7 @@ class DocumentDraftView(APIView):
             document_ids=clean_ids,
             tone=tone,
         )
+        _spend_ai_credit_if_ok(request.user, "document_draft", result)
         _track_product_event(
             request,
             "document_draft_created",
@@ -5802,11 +5874,16 @@ class PackCopilotView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        block = _ai_plan_block(request.user, "pack_copilot")
+        if block is not None:
+            return Response(block, status=status.HTTP_200_OK)
+
         from .ai_pack_copilot import analyze
 
         result = analyze(
             request.user, goal=goal, deadline=request.data.get("deadline")
         )
+        _spend_ai_credit_if_ok(request.user, "pack_copilot", result)
         _track_product_event(
             request,
             "pack_copilot_analyzed",
@@ -5903,9 +5980,14 @@ class AiBriefingView(APIView):
                 status=status.HTTP_200_OK,
             )
 
+        block = _ai_plan_block(request.user, "briefing")
+        if block is not None:
+            return Response(block, status=status.HTTP_200_OK)
+
         from .ai_briefing import build_briefing
 
         result = build_briefing(request.user)
+        _spend_ai_credit_if_ok(request.user, "briefing", result)
         _track_product_event(
             request,
             "ai_briefing_generated",
@@ -5959,9 +6041,14 @@ class AiChatView(APIView):
         if not isinstance(history, list):
             history = []
 
+        block = _ai_plan_block(request.user, "ai_chat")
+        if block is not None:
+            return Response(block, status=status.HTTP_200_OK)
+
         from .ai_chat import chat
 
         result = chat(request.user, message=message, history=history)
+        _spend_ai_credit_if_ok(request.user, "ai_chat", result)
         _track_product_event(
             request,
             "ai_chat_message",
@@ -6005,9 +6092,14 @@ class FileIntakeView(APIView):
 
         file = get_object_or_404(_owned_file_queryset(request.user), pk=pk)
 
+        block = _ai_plan_block(request.user, "intake")
+        if block is not None:
+            return Response(block, status=status.HTTP_200_OK)
+
         from .ai_intake import suggest_intake
 
         result = suggest_intake(request.user, file)
+        _spend_ai_credit_if_ok(request.user, "intake", result)
         _track_product_event(
             request,
             "file_intake_suggested",
