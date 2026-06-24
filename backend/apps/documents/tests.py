@@ -993,7 +993,10 @@ class DocumentReminderRuleTests(APITestCase):
         )
         self.authenticate(self.alice)
         listed = self.client.get(reminder_rules_url(self.alice_doc.id))
-        self.assertEqual(len(listed.data["results"]), 1)
+        # This endpoint opts out of the global pagination (pagination_class=None):
+        # a document's reminder rules are returned as a plain array, which the
+        # frontend consumes directly. So assert on the list, not a {results} wrapper.
+        self.assertEqual(len(listed.data), 1)
 
         updated = self.client.patch(
             reminder_rule_detail_url(self.alice_doc.id, rule.id),
