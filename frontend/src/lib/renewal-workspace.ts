@@ -23,6 +23,9 @@ import type {
   PackReadiness,
   PackReadinessAction,
   PackReadinessSummary,
+  RequirementImportResult,
+  RequirementImportSelection,
+  RequirementImportApplyResult,
   ShareReadinessReport,
   BundleRequirement,
   Checklist,
@@ -235,6 +238,29 @@ export function getPackReadinessSummary(): Promise<PackReadinessSummary> {
   return apiFetch<PackReadinessSummary>(
     `/document-bundles/readiness-summary/`,
     { auth: true },
+  );
+}
+
+/** Requirement Link import — extract step (safe fetch + AI extraction). */
+export function importRequirementsFromLink(
+  bundleId: number,
+  url: string,
+): Promise<RequirementImportResult> {
+  return apiFetch<RequirementImportResult>(
+    `/document-bundles/${bundleId}/requirements/import-link/`,
+    { method: "POST", body: { url }, auth: true },
+  );
+}
+
+/** Requirement Link import — apply a reviewed selection to the pack. */
+export function applyRequirementImport(
+  bundleId: number,
+  draftId: number,
+  selection: RequirementImportSelection,
+): Promise<RequirementImportApplyResult> {
+  return apiFetch<RequirementImportApplyResult>(
+    `/document-bundles/${bundleId}/requirements/import-link/${draftId}/apply/`,
+    { method: "POST", body: selection, auth: true },
   );
 }
 

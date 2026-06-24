@@ -65,3 +65,27 @@ on top of consent and rate limiting:
 
 - Retrieval is lexical by default with an embeddings seam (semantic ranking only when an
   embeddings key is configured). AI can be wrong — review important details.
+
+## Safe URL fetch (requirement link import)
+
+The Requirement Link → Checklist feature fetches a single user-provided URL
+server-side. Security controls applied:
+
+- **Scheme allowlist** — `http`/`https` only; `file://`, `ftp://`, `javascript:`,
+  `data:`, etc. are rejected.
+- **SSRF guard** — the host is DNS-resolved before connecting; private, loopback,
+  link-local, reserved, multicast, and unspecified IP ranges are blocked.
+- **Redirect cap** — max 3 hops; each hop is re-validated against scheme and IP rules.
+- **Timeout** — 10 s per request.
+- **Size cap** — responses larger than 2 MB are rejected.
+- **Content guard** — only `text/html` and `text/plain` are accepted.
+- **No crawling** — exactly the one user-supplied URL is fetched; no link-following.
+- **No raw HTML stored** — only the structured extraction result and short source
+  snippets are persisted in `RequirementExtractionDraft`; no R2 calls.
+- **Existing gates reused** — consent, plan entitlement (Pro-only), monthly credits
+  (5 per success), and the infrastructure budget guard all apply normally.
+- **V1 limitation** — DNS-rebinding (TOCTOU) is not fully mitigated; the IP check
+  is at resolution time, not at connection time. This covers the common SSRF case
+  for a user-pasted URL in a personal vault.
+
+See `docs/security-plan.md` §18 and `docs/api-spec.md` §13B.8a for details.

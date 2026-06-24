@@ -2155,6 +2155,145 @@ against the owner's vault, so a foreign id is silently dropped. Gated by
 
 ---
 
+## 13B.8a AI: Requirement Link → Checklist (import requirements from a URL)
+
+Paste a scholarship, visa, university, job, grant, school, or permit page URL
+into an application pack; the backend safely fetches **only that one page**,
+Claude extracts a structured requirements checklist, the user reviews it, then
+selects items to apply to the pack. The flow is strictly **Extract → Review →
+Apply** — nothing is added to the pack until the user approves.
+
+### Gating
+
+- **Rollout flag:** `ai_requirement_import` (default `founder_only`) **and**
+  `ai_features` master gate. Returns `503` when either flag is off for the caller.
+- **AI consent required:** `AiPreference.ai_enabled` must be on; otherwise returns
+  `200 { "available": false, "reason": "consent_required" }`.
+- **Plan:** Pro-only. The entitlement flag `ai_requirement_checklist` is disabled
+  on Free. Free users receive `200 { "available": false, "reason": "ai_feature_not_in_plan" }`
+  with upgrade copy.
+- **Cost:** 5 AI credits per successful extraction (feature key
+  `requirement_link_checklist`). Credits are charged **only** after a genuine
+  model-backed success (`ai_call_succeeded`). Failed fetch, validation,
+  budget-block, AI error, or AI refusal charges **0 credits**. The Apply step
+  consumes no credits.
+
+### Step 1 — Extract (POST import-link)
+
+```http
+POST /api/v1/document-bundles/{bundle_id}/requirements/import-link/
+```
+
+Authentication required. Owner-scoped: the bundle must belong to the
+authenticated user.
+
+#### Request
+
+```json
+{ "url": "https://www.example.edu/scholarships/apply" }
+```
+
+#### Response: `200 OK` — extraction succeeded
+
+```json
+{
+  "draft_id": "abc123",
+  "status": "extracted",
+  "credits_charged": 5,
+  "title": "Merit Scholarship 2026",
+  "summary": "Annual merit scholarship for undergraduates.",
+  "confidence": 0.87,
+  "source_url": "https://www.example.edu/scholarships/apply",
+  "page_title": "Merit Scholarship — Apply Now",
+  "required_documents": [
+    { "title": "Official transcript", "notes": "Current academic year.", "source_snippet": "…official transcript for the current academic year…" }
+  ],
+  "optional_documents": [
+    { "title": "Recommendation letter", "notes": "Optional but encouraged.", "source_snippet": "…optional recommendation…" }
+  ],
+  "deadlines": [
+    { "label": "Application deadline", "date": "2026-09-15", "source_snippet": "…deadline: 15 September 2026…" }
+  ],
+  "eligibility_notes": ["Must be enrolled full-time."],
+  "submission_instructions": ["Submit via the online portal."],
+  "warnings": []
+}
+```
+
+#### Response: `200 OK` — fetch or AI blocked (no draft created, no credit charged)
+
+```json
+{
+  "available": false,
+  "reason": "timeout",
+  "message": "The page did not respond in time. Try again or check the URL."
+}
+```
+
+`reason` is one of the AI blocked reason codes (see §13B.13) or a fetch-specific
+code:
+
+| Reason | Meaning |
+| --- | --- |
+| `consent_required` | User has not turned on AI |
+| `ai_feature_not_in_plan` | Pro required |
+| `ai_credits_exhausted` | Monthly credits exhausted |
+| `budget` | Infrastructure budget guard triggered |
+| `invalid_url` | URL failed basic validation |
+| `unsupported_scheme` | Non-http/https scheme (e.g. `file://`, `ftp://`) |
+| `blocked_address` | Host resolved to a private, loopback, or reserved IP (SSRF guard) |
+| `too_many_redirects` | More than 3 redirects followed |
+| `timeout` | Request timed out (10 s) |
+| `too_large` | Response exceeded 2 MB |
+| `not_readable` | Content is not HTML or plain text |
+| `fetch_error` | Other network or connection error |
+
+### Step 2 — Apply (POST import-link/apply)
+
+```http
+POST /api/v1/document-bundles/{bundle_id}/requirements/import-link/{draft_id}/apply/
+```
+
+Authentication required. Owner-scoped. No AI call; no credits consumed.
+
+#### Request
+
+```json
+{
+  "selected_required_documents": ["Official transcript"],
+  "selected_optional_documents": ["Recommendation letter"],
+  "selected_deadlines": [0],
+  "create_reminders": false
+}
+```
+
+`selected_required_documents` and `selected_optional_documents` are lists of
+titles from the draft. `selected_deadlines` is a list of zero-based indices
+into the draft's `deadlines` array. When `create_reminders` is `true` and a
+selected deadline has an unambiguous ISO date, the pack's `target_date` is set.
+
+#### Response: `200 OK`
+
+```json
+{
+  "applied": true,
+  "created_requirements": 2,
+  "created_reminders": 1,
+  "target_date_set": true,
+  "pack_readiness": { "score": 20, "label": "Needs attention", "..." : "..." }
+}
+```
+
+**Apply behavior:** creates `DocumentBundleRequirement` rows for the selected
+items (required/optional status preserved), deduplicates by normalized
+(case-insensitive, whitespace-collapsed) title against existing requirements,
+and never deletes or overwrites existing requirements. A selected unambiguous
+deadline sets the pack's `target_date`; `created_reminders` reflects that count.
+The `pack_readiness` payload is the same deterministic Pack Readiness V1 shape
+(see §13B.3) so missing documents and next actions appear immediately.
+
+---
+
 ## 13B.9 AI: Share readiness (is this pack ready to send?)
 
 ```txt

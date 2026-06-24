@@ -9,6 +9,8 @@ from .views import (
     BundleProofRecordListView,
     BundleReadinessView,
     BundleReadinessSummaryView,
+    RequirementLinkImportView,
+    RequirementLinkImportApplyView,
     BundleRequirementLinkDocumentView,
     BundleRequirementLinkFileView,
     ChecklistTemplateDetailView,
@@ -564,6 +566,18 @@ urlpatterns = [
         "document-bundles/<int:bundle_id>/requirements/",
         DocumentBundleRequirementCreateView.as_view(),
         name="document-bundle-requirements",
+    ),
+    # Requirement Link import (static "import-link" segments declared before the
+    # <int:requirement_id> routes so they are never captured as a requirement id).
+    path(
+        "document-bundles/<int:bundle_id>/requirements/import-link/",
+        RequirementLinkImportView.as_view(),
+        name="document-bundle-requirements-import-link",
+    ),
+    path(
+        "document-bundles/<int:bundle_id>/requirements/import-link/<int:draft_id>/apply/",
+        RequirementLinkImportApplyView.as_view(),
+        name="document-bundle-requirements-import-link-apply",
     ),
     path(
         "document-bundles/<int:bundle_id>/add-documents/",

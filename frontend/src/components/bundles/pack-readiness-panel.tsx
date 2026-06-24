@@ -7,13 +7,20 @@ import {
   ArrowRight,
   CheckCircle2,
   ClipboardList,
+  Link2,
   ShieldCheck,
 } from "lucide-react";
 
+import { RequirementImportModal } from "@/components/bundles/requirement-import-modal";
+import { useFeature } from "@/components/features/feature-flags-provider";
+import { Button } from "@/components/ui/button";
 import { SectionCard } from "@/components/ui/section-card";
 import { getPackReadiness, packActionHref } from "@/lib/renewal-workspace";
 import { cn } from "@/lib/utils";
-import type { PackReadiness } from "@/types/renewal-workspace";
+import type {
+  PackReadiness,
+  RequirementImportApplyResult,
+} from "@/types/renewal-workspace";
 
 /**
  * Application Pack Readiness V1 — additive, deterministic readiness detail for a
@@ -31,6 +38,10 @@ export function PackReadinessPanel({
   refreshKey?: number | string;
 }) {
   const [data, setData] = useState<PackReadiness | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  // Founder/beta rollout gate for the whole feature surface; the Pro plan gate
+  // is enforced by the backend (the modal surfaces its upgrade copy).
+  const importEnabled = useFeature("ai_requirement_import");
 
   useEffect(() => {
     let active = true;
@@ -46,20 +57,49 @@ export function PackReadinessPanel({
     };
   }, [bundleId, refreshKey]);
 
+  function handleApplied(applied: RequirementImportApplyResult) {
+    // Reflect the freshly-applied requirements without a round-trip.
+    setData(applied.pack_readiness);
+  }
+
+  const importControls = importEnabled ? (
+    <>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => setImportOpen(true)}
+        className="gap-1.5"
+      >
+        <Link2 className="size-4" aria-hidden /> Import from link
+      </Button>
+      {importOpen && (
+        <RequirementImportModal
+          bundleId={bundleId}
+          open
+          onClose={() => setImportOpen(false)}
+          onApplied={handleApplied}
+        />
+      )}
+    </>
+  ) : null;
+
   if (!data) return null;
 
   if (!data.has_checklist) {
     return (
       <SectionCard title="Pack readiness">
-        <div className="flex items-start gap-3 rounded-xl border border-dashed border-border bg-muted/30 px-4 py-4">
-          <ClipboardList className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden />
-          <div className="text-sm">
-            <p className="font-medium">Add required documents to measure readiness</p>
-            <p className="mt-0.5 text-muted-foreground">
-              Turn this pack into a readiness checklist to track what&apos;s ready,
-              what&apos;s missing, and what to do next.
-            </p>
+        <div className="flex flex-col gap-3">
+          <div className="flex items-start gap-3 rounded-xl border border-dashed border-border bg-muted/30 px-4 py-4">
+            <ClipboardList className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden />
+            <div className="text-sm">
+              <p className="font-medium">Add required documents to measure readiness</p>
+              <p className="mt-0.5 text-muted-foreground">
+                Turn this pack into a readiness checklist to track what&apos;s ready,
+                what&apos;s missing, and what to do next.
+              </p>
+            </div>
           </div>
+          {importControls && <div>{importControls}</div>}
         </div>
       </SectionCard>
     );
@@ -89,14 +129,16 @@ export function PackReadinessPanel({
       }
     >
       <div className="flex flex-col gap-4">
-        <p className="text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">
-            {summary.satisfied_count} of {summary.required_count} required documents ready
-          </span>{" "}
-          · {label}
-          {summary.missing_count > 0 &&
-            ` · ${summary.missing_count} missing`}
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">
+              {summary.satisfied_count} of {summary.required_count} required documents ready
+            </span>{" "}
+            · {label}
+            {summary.missing_count > 0 && ` · ${summary.missing_count} missing`}
+          </p>
+          {importControls}
+        </div>
 
         {warnings.length > 0 && (
           <div className="flex flex-col gap-2">

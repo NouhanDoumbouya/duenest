@@ -813,6 +813,57 @@ not just their metadata, via chunk-level retrieval-augmented generation.
 > (per-owner vault sizes). **pgvector** remains the future option when corpus
 > size demands it; not part of v1.
 
+### Implemented: safe URL fetch for requirement link import
+
+The Requirement Link → Checklist feature (`apps/ai/requirement_links.py`,
+`fetch_requirement_page`) allows a user to paste an external URL into an
+application pack. Because the server fetches a user-supplied URL, this path
+includes a dedicated SSRF guard and is intentionally constrained.
+
+**Scheme allowlist.** Only `http` and `https` are accepted. `file://`, `ftp://`,
+`javascript:`, `data:`, and all other schemes are rejected immediately with the
+`unsupported_scheme` reason. No credit is charged.
+
+**Private-IP rejection (SSRF guard).** The host is resolved via DNS before
+connecting. Addresses in private, loopback, link-local, reserved, multicast, or
+unspecified ranges are rejected (`blocked_address` reason). This prevents the
+server from being used as a proxy to reach internal services.
+
+**Redirect cap.** Redirects are followed manually (not via automatic
+`allow_redirects`). A maximum of 3 hops is allowed; each hop is re-validated
+against the scheme and IP rules before following.
+
+**Request timeout.** Each HTTP request times out at 10 seconds.
+
+**Response size cap.** The response body is read up to a hard cap of 2 MB.
+Responses exceeding that limit are rejected (`too_large`).
+
+**Content type guard.** Only `text/html` and `text/plain` responses are accepted
+(`not_readable` for anything else). Binary, JSON, XML, and image responses are
+rejected.
+
+**No raw HTML stored.** Only the structured extracted payload is stored in the
+`RequirementExtractionDraft` model: the page title, source URL, extracted
+requirement fields, and short verbatim source snippets for citation. No full HTML
+body, no private file paths, no R2 calls.
+
+**No crawling.** Exactly the one user-provided URL is fetched. No link-following,
+no site crawling.
+
+**Existing AI gates reused, not bypassed.** The fetch and extraction paths go
+through the same AI consent check (`AiPreference.ai_enabled`), plan entitlement
+(`ai_requirement_checklist`, Pro-only), monthly credit balance
+(`requirement_link_checklist`, 5 credits), and infrastructure budget guard as
+every other AI feature. Credits are charged only on `ai_call_succeeded`; any
+block or failure charges 0 credits.
+
+**Known V1 limitation.** DNS-rebinding (TOCTOU) is not fully mitigated: the IP
+check is performed at resolution time, not at connection time, so a host that
+resolves to a public IP initially but switches to a private IP after the check
+could bypass the guard. This covers the common SSRF case for a user-pasted URL
+in a personal SaaS vault but should be hardened in a future version if the
+feature is opened to higher-volume or untrusted-input paths.
+
 ---
 
 ## 19. Reminder and Notification Security

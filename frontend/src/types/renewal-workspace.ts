@@ -276,6 +276,71 @@ export interface PackReadinessSummary {
   packs: PackReadinessSummaryRow[];
 }
 
+// ---- Requirement Link → Checklist import -----------------------------------
+
+export interface RequirementImportDoc {
+  title: string;
+  description: string;
+  required: boolean;
+  source_snippet: string;
+  source_url: string;
+}
+
+export interface RequirementImportDeadline {
+  title: string;
+  date: string | null;
+  description: string;
+  source_snippet: string;
+}
+
+export interface RequirementImportNote {
+  text: string;
+  source_snippet: string;
+}
+
+export interface RequirementImportWarning {
+  type: string;
+  message: string;
+}
+
+/** Response from POST .../requirements/import-link/ (extract step). */
+export interface RequirementImportResult {
+  available?: boolean;
+  reason?: string;
+  message?: string;
+  draft_id?: number;
+  status?: string;
+  credits_charged?: number;
+  title?: string;
+  summary?: string;
+  confidence?: "high" | "medium" | "low";
+  source_url?: string;
+  page_title?: string;
+  required_documents?: RequirementImportDoc[];
+  optional_documents?: RequirementImportDoc[];
+  deadlines?: RequirementImportDeadline[];
+  eligibility_notes?: RequirementImportNote[];
+  submission_instructions?: RequirementImportNote[];
+  warnings?: RequirementImportWarning[];
+  upgrade?: boolean;
+}
+
+export interface RequirementImportSelection {
+  selected_required_documents: string[];
+  selected_optional_documents: string[];
+  selected_deadlines: number[];
+  create_reminders: boolean;
+}
+
+/** Response from POST .../import-link/{draftId}/apply/ (apply step). */
+export interface RequirementImportApplyResult {
+  applied: boolean;
+  created_requirements: number;
+  created_reminders: number;
+  target_date_set: string | null;
+  pack_readiness: PackReadiness;
+}
+
 export type ReadinessSeverity = "blocker" | "warning" | "suggestion";
 export type ReadinessOverall = "ready" | "issues" | "blocked";
 

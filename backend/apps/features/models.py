@@ -124,6 +124,7 @@ FEATURE_DEFINITIONS: list[dict] = [
     {"key": "ai_briefing", "name": "AI — proactive briefing", "default": Visibility.FOUNDER_ONLY, "description": "A prioritized 'what to do now' briefing across the vault. Statuses/dates are the real computed health; Claude prioritizes and phrases the suggested actions. Read-only suggestions; nothing is changed automatically."},
     {"key": "ai_chat", "name": "AI — conversational assistant", "default": Visibility.FOUNDER_ONLY, "description": "A chat assistant grounded in the user's documents that proposes confirm-gated actions (draft / pack / open document / briefing). The chat performs no writes or shares itself."},
     {"key": "ai_intake", "name": "AI — smart intake", "default": Visibility.FOUNDER_ONLY, "description": "Understand a newly-added file (summary + suggested fields) and propose confirm-gated next actions (create document / set reminder / add to pack / draft). Reuses extraction; performs no writes itself."},
+    {"key": "ai_requirement_import", "name": "AI — requirement link import", "default": Visibility.FOUNDER_ONLY, "description": "Paste a scholarship/visa/job/school/grant/permit URL; the backend safely fetches only that page (SSRF-guarded, no crawling) and Claude extracts a requirements checklist (required/optional documents, deadlines, eligibility, instructions) with source snippets. Extract -> review -> apply: nothing is added to the pack until the user approves. Pro-only; 5 AI credits per successful extraction."},
 ]
 
 FEATURE_KEYS = [d["key"] for d in FEATURE_DEFINITIONS]
