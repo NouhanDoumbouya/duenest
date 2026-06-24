@@ -44,11 +44,15 @@ class DocumentRequestError(ValueError):
 # ---- Create -----------------------------------------------------------------
 
 
-def create_document_request(owner, payload: dict) -> DocumentRequestLink:
+def create_document_request(owner, payload: dict, *, enforce_limit: bool = True) -> DocumentRequestLink:
     """
     Create an owner-scoped request + mint a public upload token. Validates that
     any linked pack/application/requirement belongs to the owner. Enforces the
     active document-request-links plan limit. No AI.
+
+    ``enforce_limit=False`` skips the personal per-user request-link limit — used
+    by the B2B portal, which governs requests by ORGANIZATION limits instead of
+    the owner's personal plan (personal default stays True for normal use).
     """
     title = (payload.get("requested_document_title") or "").strip()
     if not title:
@@ -63,7 +67,8 @@ def create_document_request(owner, payload: dict) -> DocumentRequestLink:
     if requirement is not None and bundle is None:
         bundle = requirement.bundle
 
-    enforce_plan_limit(owner, user_plans.RESOURCE_DOCUMENT_REQUEST_LINKS)
+    if enforce_limit:
+        enforce_plan_limit(owner, user_plans.RESOURCE_DOCUMENT_REQUEST_LINKS)
 
     return DocumentRequestLink.objects.create(
         owner=owner,

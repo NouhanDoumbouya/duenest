@@ -106,18 +106,69 @@ returns `403 plan_limit_exceeded`). The feature is gated behind the founder-only
 feature flag `redaction_watermarking`, and the flow is deterministic — no AI, no
 AI credits (see `docs/api-spec.md` §36).
 
-**B2B Portals MVP (`organizations/{org_id}/portal/`)** adds **no new plan
+**B2B Portals MVP (`organizations/{org_id}/portal/`)** adds **no new personal plan
 resource**. The whole portal is gated behind the founder-only feature flag
 `b2b_portals` (a `503` when off), so it currently reaches only founders/beta
 testers; Stripe/billing is **untouched**. The portal **orchestrates existing
 primitives** — a case's checklist (`DocumentBundle`), workspace (`SharingRoom`),
-and document collection (`DocumentRequestLink`) — which stay **User-owned** by the
-case's creating member. **Known limitation:** these portal-created primitives
-count against the **creating member's personal plan limits** (Free: 1 pack / 3
-rooms / 5 request links). A **Teams-tier plan** that lifts these for organization
-workspaces is **future work** (`b2b/portals-teams-plan`); see `docs/b2b-portals.md`.
-The portal itself is deterministic — no AI, no AI credits (see `docs/api-spec.md`
-§38).
+and document collection (`DocumentRequestLink`). As of **Teams Plan + Portal
+Limits V1** (below), a case's room/request are owned by the **organization owner**
+and governed by the **org plan** rather than the creating member's personal Free/Pro
+limits. The portal itself is deterministic — no AI, no AI credits (see
+`docs/api-spec.md` §38–§39).
+
+### Teams Plan + Portal Limits V1 (organization-level entitlement)
+
+B2B portals are governed by an **organization-level entitlement**, separate from
+the personal `User.plan` limits above. A new `OrganizationPlanProfile`
+(`apps/organizations/models.py`, migration
+`organizations/0006_organizationplanprofile`; OneToOne → `Organization`) carries
+`plan` (`free` / `pro` / `teams_beta` / `teams` / `enterprise`), `status`
+(`active` / `trialing` / `disabled` / `cancelled`), `portal_enabled`, and optional
+per-org override caps (null = use the plan default). An org **with no profile has
+portals disabled**.
+
+**Central limit table** — `apps/organizations/portal_limits.py`
+(`ORG_PORTAL_PLAN_LIMITS`; `None` = unlimited; one place to change):
+
+| Plan | portal_enabled | members | portal_people | active_portal_cases | active_document_requests | active_sharing_rooms |
+| --- | --- | --- | --- | --- | --- | --- |
+| free / pro | no | 0 | 0 | 0 | 0 | 0 |
+| teams_beta | yes | 5 | 100 | 50 | 200 | 50 |
+| teams | yes | 10 | 500 | 250 | 1000 | 250 |
+| enterprise | yes | unlimited | unlimited | unlimited | unlimited | unlimited |
+
+Portals are a **Teams feature** — free/pro orgs cannot use them. Over-limit portal
+creates return `403 { code: "organization_plan_limit_exceeded", resource, limit,
+used, plan, message }`, which is **distinct** from the personal
+`plan_limit_exceeded` and keyed by the frontend on a separate org paywall. A
+non-Teams org hits `403 portal_not_enabled` first. The member-seat cap is enforced
+on org invites (active members + pending invites) when the org is on a Teams plan.
+
+**Personal-limit fix.** Portal-created rooms/requests are now owned by the
+**organization owner** and created with `enforce_limit=False`, so they **no longer
+consume the acting staff member's personal Free/Pro limits**; the org plan caps are
+enforced instead. **Still counts against the org-owner account (known limitation):**
+a case's pack (`DocumentBundle`) and uploaded files draw down the org-owner's
+personal storage/file limits until org-owned storage is built (future work).
+
+**Activation (founder/beta only — no live Stripe).** A plan is activated by the
+management command, **not** by checkout:
+
+```bash
+python manage.py set_organization_plan --org-id <id> --plan teams_beta \
+  [--portal-enabled true|false] [--status active|trialing|disabled|cancelled]
+```
+
+This creates/updates the profile and records audit events
+(`organization_plan_profile_created`, `organization_plan_changed`,
+`organization_portal_enabled`, `organization_portal_disabled`,
+`organization_portal_limit_reached`). **No live Stripe checkout/prices** exist in
+this branch. The billing `Plan` model already has a seeded `organization` tier and
+org-seat Stripe price env keys, but **no checkout is wired** — **Teams billing
+checkout, per-seat Stripe, and invoices are future work**
+(`b2b/teams-billing-checkout`). UI reads org entitlement + usage from
+`GET /api/v1/organizations/{org_id}/portal/limits/` (see `docs/api-spec.md` §39).
 
 **Storage quota method:** storage used is the sum of stored `DocumentFile.file_size`
 values for the user's non-trashed files, computed from the database. Cloudflare R2
@@ -461,4 +512,6 @@ billing history. Collect billing country via the provider checkout/portal.
   enforced today via the existing `plan_usage`). Wiring monthly meters is a
   follow-up.
 - Referral credits, family/org seat checkout, and storage/OCR add-ons are
-  model-ready but not fully implemented in the UI.
+  model-ready but not fully implemented in the UI. Teams **portal entitlements**
+  exist (org-level limits, founder activation command — see the Teams Plan section
+  above), but **live Teams checkout / per-seat Stripe / invoices are not wired**.

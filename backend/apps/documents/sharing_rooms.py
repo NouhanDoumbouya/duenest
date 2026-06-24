@@ -49,9 +49,13 @@ class SharingRoomError(ValueError):
 # ---- Create -----------------------------------------------------------------
 
 
-def create_sharing_room(owner, payload: dict) -> SharingRoom:
+def create_sharing_room(owner, payload: dict, *, enforce_limit: bool = True) -> SharingRoom:
     """Create an owner-scoped room + mint a public token. Validates linked
-    pack/application ownership. Enforces the active-rooms plan limit. No AI."""
+    pack/application ownership. Enforces the active-rooms plan limit. No AI.
+
+    ``enforce_limit=False`` skips the personal per-user room limit — used by the
+    B2B portal, which governs rooms by ORGANIZATION limits instead of the owner's
+    personal plan (the personal default stays True for normal personal use)."""
     title = (payload.get("title") or "").strip()
     if not title:
         raise SharingRoomError("A room title is required.")
@@ -61,7 +65,8 @@ def create_sharing_room(owner, payload: dict) -> SharingRoom:
     if application is not None and bundle is None and application.linked_bundle_id:
         bundle = application.linked_bundle
 
-    enforce_plan_limit(owner, user_plans.RESOURCE_SHARING_ROOMS)
+    if enforce_limit:
+        enforce_plan_limit(owner, user_plans.RESOURCE_SHARING_ROOMS)
 
     return SharingRoom.objects.create(
         owner=owner,
@@ -76,7 +81,8 @@ def create_sharing_room(owner, payload: dict) -> SharingRoom:
     )
 
 
-def create_room_from_pack(bundle: DocumentBundle, owner, *, payload: dict | None = None) -> SharingRoom:
+def create_room_from_pack(bundle: DocumentBundle, owner, *, payload: dict | None = None,
+                          enforce_limit: bool = True) -> SharingRoom:
     """Create a room linked to a pack and auto-add its attached files/documents +
     its missing requirements' Document Request Links (if any)."""
     if bundle.owner_id != owner.id:
@@ -85,7 +91,7 @@ def create_room_from_pack(bundle: DocumentBundle, owner, *, payload: dict | None
     payload.setdefault("title", f"{bundle.title} Room")
     payload.setdefault("room_type", SharingRoom.RoomType.PACK)
     payload["linked_bundle"] = bundle.id
-    room = create_sharing_room(owner, payload)
+    room = create_sharing_room(owner, payload, enforce_limit=enforce_limit)
     _populate_from_bundle(room, bundle, owner)
     return room
 

@@ -26,7 +26,9 @@ import {
   ClipboardList,
   Inbox,
   Loader2,
+  Mail,
   ShieldAlert,
+  Sparkles,
   UserPlus,
   Users,
   X,
@@ -50,6 +52,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Toast, type ToastState } from "@/components/ui/toast";
+import {
+  LimitWarningBanners,
+  PlanUsageCard,
+} from "@/components/features/portals/plan-usage-card";
 import { useFeature } from "@/components/features/feature-flags-provider";
 import { ApiError } from "@/lib/api";
 import { formatDate } from "@/lib/documents";
@@ -69,9 +75,12 @@ import {
   createPortalCase,
   createPortalPerson,
   getPortalCases,
+  getPortalLimits,
   getPortalPeople,
   getPortalReviewQueue,
   getPortalSummary,
+  isOrgLimitError,
+  isPortalNotEnabledError,
   progressPercent,
 } from "@/lib/portals";
 import { cn } from "@/lib/utils";
@@ -80,6 +89,7 @@ import type {
   PortalCase,
   PortalCasePriority,
   PortalCaseType,
+  PortalLimits,
   PortalPerson,
   PortalPersonType,
   PortalReviewItem,
@@ -95,13 +105,32 @@ interface PortalState {
   reviewItems: PortalReviewItem[];
 }
 
-/** Distinguish the disabled-feature (503) and permission (403) blocks. */
-type BlockKind = "coming_soon" | "view_only" | null;
+/**
+ * Distinguish the page-level blocks:
+ * - `coming_soon`: the `b2b_portals` feature flag is off (503 feature_disabled).
+ * - `paywall`: the org has no Teams entitlement (403 portal_not_enabled).
+ * - `view_only`: the user is a member but not an admin (403).
+ */
+type BlockKind = "coming_soon" | "paywall" | "view_only" | null;
 
 const TABS: Array<{ value: PortalTab; label: string }> = [
   { value: "people", label: "People" },
   { value: "cases", label: "Cases" },
 ];
+
+/**
+ * Pick the best message for a create-form error. An `organization_plan_limit_exceeded`
+ * error carries a clear, human `message` from the backend — surface that. Any
+ * other ApiError uses its message; everything else uses the fallback.
+ */
+function orgLimitMessage(err: unknown, fallback: string): string {
+  if (isOrgLimitError(err)) {
+    const message = (err.data as Record<string, unknown>).message;
+    if (typeof message === "string" && message) return message;
+  }
+  if (err instanceof ApiError) return err.message;
+  return fallback;
+}
 
 export default function OrganizationPortalPage({
   params,
@@ -114,6 +143,7 @@ export default function OrganizationPortalPage({
 
   const [org, setOrg] = useState<Organization | null>(null);
   const [data, setData] = useState<PortalState | null>(null);
+  const [limits, setLimits] = useState<PortalLimits | null>(null);
   const [tab, setTab] = useState<PortalTab>("cases");
   const [loading, setLoading] = useState(true);
   const [block, setBlock] = useState<BlockKind>(null);
@@ -143,28 +173,47 @@ export default function OrganizationPortalPage({
     async (message?: string) => {
       const next = await loadPortal();
       setData(next);
+      // Keep the plan/usage card in sync after a create/archive. Best-effort:
+      // a failure here must not break the refresh.
+      getPortalLimits(orgId)
+        .then((nextLimits) => setLimits(nextLimits))
+        .catch(() => {});
       if (message) setToast({ message, kind: "success" });
     },
-    [loadPortal],
+    [loadPortal, orgId],
   );
 
   useEffect(() => {
     let active = true;
 
-    // Load the org first (gives us the role for write-gating), then the portal.
+    // Load the org first (gives us the role for write-gating). Then read the
+    // portal LIMITS — which any member can read even when the portal is not
+    // enabled — to decide between the live portal and the Teams paywall. Only
+    // load the live portal data when `portal_enabled` is true.
     getOrganization(orgId)
       .then((organization) => {
-        if (!active) return organization;
-        setOrg(organization);
-        return organization;
+        if (active) setOrg(organization);
       })
-      .then(() => loadPortal())
-      .then((next) => {
+      .then(() => getPortalLimits(orgId))
+      .then(async (nextLimits) => {
         if (!active) return;
-        setData(next);
+        setLimits(nextLimits);
+        if (!nextLimits.portal_enabled) {
+          setBlock("paywall");
+          return;
+        }
+        const next = await loadPortal();
+        if (active) setData(next);
       })
-      .catch((err) => {
+      .catch(async (err) => {
         if (!active) return;
+        // The limits endpoint should not 403 with portal_not_enabled, but if
+        // it does (or any portal call does), show the paywall rather than a
+        // generic error.
+        if (isPortalNotEnabledError(err)) {
+          setBlock("paywall");
+          return;
+        }
         if (err instanceof ApiError) {
           if (err.status === 503) {
             setBlock("coming_soon");
@@ -172,8 +221,7 @@ export default function OrganizationPortalPage({
           }
           if (err.status === 403) {
             // A 403 here means either not-an-admin (writes blocked) or
-            // not-a-member. We can't always tell apart from the status alone,
-            // but the org load succeeding tells us they're a member.
+            // not-a-member. The org load succeeding tells us they're a member.
             setBlock("view_only");
             return;
           }
@@ -235,6 +283,47 @@ export default function OrganizationPortalPage({
           ))}
         </div>
         <Skeleton className="h-64 w-full rounded-xl" />
+      </PageContainer>
+    );
+  }
+
+  if (block === "paywall") {
+    return (
+      <PageContainer width="wide">
+        {backLink}
+        <PageHeader
+          eyebrow={org ? org.name : "Organization"}
+          title="Portal"
+        />
+        <section className="rounded-2xl border border-border bg-card p-6 shadow-card sm:p-8">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+            <Sparkles className="size-3.5" aria-hidden />
+            Teams
+          </span>
+          <h2 className="mt-3 font-heading text-xl font-semibold">
+            B2B Portals are available on Teams.
+          </h2>
+          <p className="mt-2 max-w-prose text-sm text-muted-foreground">
+            Portals let your team manage the people you serve and the documents
+            each of them needs — request, review, and get every case ready in
+            one calm, trackable place. This organization isn&apos;t on a Teams
+            plan yet.
+          </p>
+          <div className="mt-5 flex flex-wrap items-center gap-2">
+            <a
+              href="mailto:hello@certanest.com?subject=Request%20Teams%20access%20for%20Portals"
+              className={cn(buttonVariants({}), "w-fit")}
+            >
+              <Mail className="size-4" /> Request access
+            </a>
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            No checkout yet — a CertaNest founder enables Teams for your
+            organization. Nothing changes until then.
+          </p>
+        </section>
+
+        {limits && <PlanUsageCard data={limits} />}
       </PageContainer>
     );
   }
@@ -308,6 +397,8 @@ export default function OrganizationPortalPage({
         </TrustNotice>
       )}
 
+      {limits && <LimitWarningBanners data={limits} />}
+
       {/* Summary tiles — the 7 portal counts. */}
       <section
         aria-label="Portal summary"
@@ -370,7 +461,10 @@ export default function OrganizationPortalPage({
           )}
         </div>
 
-        <ReviewQueuePanel orgId={orgId} items={data.reviewItems} />
+        <div className="space-y-6">
+          {limits && <PlanUsageCard data={limits} />}
+          <ReviewQueuePanel orgId={orgId} items={data.reviewItems} />
+        </div>
       </div>
 
       {addingPerson && canManage && (
@@ -734,9 +828,7 @@ function AddPersonModal({
       });
       await onCreated();
     } catch (err) {
-      setError(
-        err instanceof ApiError ? err.message : "Could not add this person.",
-      );
+      setError(orgLimitMessage(err, "Could not add this person."));
       setSubmitting(false);
     }
   }
@@ -915,9 +1007,7 @@ function CreateCaseModal({
       });
       await onCreated();
     } catch (err) {
-      setError(
-        err instanceof ApiError ? err.message : "Could not create this case.",
-      );
+      setError(orgLimitMessage(err, "Could not create this case."));
       setSubmitting(false);
     }
   }

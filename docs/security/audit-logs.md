@@ -42,6 +42,11 @@ reads are **not** logged.
   portal_case_pack_created, portal_case_room_created, portal_case_request_created.
   Recorded under category `system`, owner = the organization's owner user, actor =
   the acting member, with `metadata.org_id` for scoping.
+- **Teams Plan + Portal Limits:** organization_plan_profile_created,
+  organization_plan_changed, organization_portal_enabled,
+  organization_portal_disabled, organization_portal_limit_reached. Recorded under
+  category `system`, owner = the organization's owner user, with `metadata.org_id`
+  for scoping. No plan secrets or billing tokens are stored.
 
 Public-route events are recorded with `actor_type` `public_link` (an anonymous
 visitor), via `record_public_link_event`.

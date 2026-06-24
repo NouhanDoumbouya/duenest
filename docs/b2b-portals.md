@@ -75,21 +75,70 @@ A portal **case** is a thin coordinator over the per-user document primitives:
 So a case **points at** a bundle, a room, and a set of request links — it does not
 re-implement any of them.
 
-## Ownership model and the known plan-limit limitation
+## Ownership model and organization-governed limits
 
-The document primitives stay **User-owned** (no organization FK). A case's
-pack / room / request are owned by the case's **creating member** (`created_by`),
-so the existing owner-scoped services and ownership checks apply unchanged.
-Organization access to a case is gated by **membership**, not by primitive
-ownership.
+The document primitives stay **User-owned** (no organization FK). Organization
+access to a case is gated by **membership**, not by primitive ownership.
 
-> **Known MVP limitation.** Because portal-created primitives are owned by the
-> creating member, they currently count against that **member's personal plan
-> limits** (Free: 1 pack / 3 rooms / 5 request links). A **Teams-tier plan** that
-> lifts these limits for organization workspaces is **future work**
-> (`b2b/portals-teams-plan`). Since the portal is founder/beta-gated, this only
-> affects beta testers today. No new plan resource was added and Stripe/billing is
-> untouched (see `docs/BILLING.md`).
+As of **Teams Plan + Portal Limits V1** (see below), a case's **room / request**
+are owned by **one consistent user — the organization owner** (`_case_owner`
+resolves to the org owner) and created with `enforce_limit=False`. So they
+**no longer count against the creating member's personal plan limits** — the
+acting member is still recorded as `created_by` / audit actor, but the resources
+are governed by the **organization's plan**. This fixes the prior MVP's
+personal-limit leak.
+
+> **Remaining limitation.** A case's **pack** (`DocumentBundle`) and its uploaded
+> files are still owned by the org-owner account and counted under that account's
+> personal storage/file limits — org-owned storage is future work.
+
+### Teams Plan + Portal Limits V1 (delivered 2026-06-24)
+
+Portal resources (member seats, people, cases, document requests, sharing rooms)
+are now governed by the **organization's plan**, via a new
+`OrganizationPlanProfile` (`apps/organizations/models.py`, migration
+`organizations/0006_organizationplanprofile`; OneToOne → `Organization`):
+`plan` (`free` / `pro` / `teams_beta` / `teams` / `enterprise`), `status`,
+`portal_enabled`, and optional per-org override caps (null = use the plan
+default). **An org with no profile has portals disabled.** **Deterministic — no
+AI. No live Stripe** (a plan is activated by a founder/beta command, not by
+checkout).
+
+Plan defaults live in one place — `apps/organizations/portal_limits.py`
+(`ORG_PORTAL_PLAN_LIMITS`; `None` = unlimited):
+
+| Plan | portal_enabled | members | portal_people | active_portal_cases | active_document_requests | active_sharing_rooms |
+| --- | --- | --- | --- | --- | --- | --- |
+| free / pro | no | 0 | 0 | 0 | 0 | 0 |
+| teams_beta | yes | 5 | 100 | 50 | 200 | 50 |
+| teams | yes | 10 | 500 | 250 | 1000 | 250 |
+| enterprise | yes | unlimited | unlimited | unlimited | unlimited | unlimited |
+
+**Two gates:** the `b2b_portals` feature flag controls **beta exposure** (`503
+feature_disabled` when off); the org entitlement controls **actual usage** (`403
+portal_not_enabled` when the org isn't on a Teams plan). Over-limit creates return
+`403 organization_plan_limit_exceeded` (distinct from the personal
+`plan_limit_exceeded`), enforced via `enforce_organization_portal_limit(org,
+resource)` before each create; the member-seat cap is enforced on org invites
+(active members + pending invites) when the org is on a Teams plan.
+
+**Limits endpoint:** `GET /api/v1/organizations/{org_id}/portal/limits/` →
+`{plan, portal_enabled, limits, usage, remaining}`, readable by **any member**
+even when disabled (so the UI can show the paywall). Usage is org-wide but
+portal-scoped only (never a member's unrelated personal rooms/requests); terminal
+/ archived states free a slot.
+
+**Activation (founder/beta — no Stripe):**
+
+```bash
+python manage.py set_organization_plan --org-id <id> --plan teams_beta \
+  [--portal-enabled true|false] [--status active|trialing|disabled|cancelled]
+```
+
+This creates/updates the profile and records audit events. No new plan resource
+on the personal billing layer was added and Stripe/billing is untouched — Teams
+billing checkout / per-seat Stripe / invoices are future work
+(`b2b/teams-billing-checkout`). See `docs/api-spec.md` §39 and `docs/BILLING.md`.
 
 ## Organization permission behaviour
 
@@ -126,6 +175,7 @@ feature-gated; writes require admin/owner). Full request/response shapes are in
 | `POST` | `/cases/{id}/create-request/` | Create a `DocumentRequestLink` |
 | `GET` | `/cases/{id}/progress/` | Deterministic per-case progress |
 | `GET` | `/review-queue/` | Case requests with an upload awaiting review |
+| `GET` | `/limits/` | Org plan, `portal_enabled`, limits / usage / remaining (any member, even when disabled) |
 
 The dashboard `summary` returns `people_total`, `active_cases`,
 `people_waiting_for_documents`, `uploads_needing_review`, `overdue_cases`,
@@ -177,8 +227,10 @@ people + cases + review queue + case detail/actions). There is **no public UI**.
 
 ## Future work
 
-- **Teams-tier plan + lifted limits** (`b2b/portals-teams-plan`) so portal-created
-  packs / rooms / requests no longer draw down the creating member's personal plan.
+- **Teams billing checkout + per-seat Stripe + invoices** and **org-owned storage**
+  (`b2b/teams-billing-checkout`) so a case's pack and uploaded files no longer draw
+  down the org-owner's personal storage. (Org entitlement + portal limits are
+  **delivered** — see "Teams Plan + Portal Limits V1" above.)
 - A portal **review / approval workflow** (multi-step review states, approvals).
 - **Bulk reminders** across people / cases.
 - **Organization document templates** (reusable case/checklist templates).
@@ -189,7 +241,12 @@ people + cases + review queue + case detail/actions). There is **no public UI**.
 ## See also
 
 - `docs/api-spec.md` §38 — endpoint contract, models, progress/summary shapes.
-- `docs/BILLING.md` — feature-flag gate and the plan-limit limitation.
-- `docs/security-plan.md` — membership-scoped access and org isolation.
-- `docs/security/audit-logs.md` — the `portal_*` event catalog.
-- `docs/roadmap.md` — "B2B Portals MVP — delivered (2026-06-24)".
+- `docs/api-spec.md` §39 — Teams Plan + Portal Limits V1 (entitlement model, limit
+  table, error codes, limits endpoint).
+- `docs/BILLING.md` — feature-flag gate, org entitlement, and the Teams limit table.
+- `docs/security-plan.md` — membership-scoped access, org isolation, and the org
+  entitlement gate.
+- `docs/security/audit-logs.md` — the `portal_*` and `organization_plan_*` event
+  catalog.
+- `docs/roadmap.md` — "B2B Portals MVP" and "Teams Plan + Portal Limits V1"
+  delivered sections.

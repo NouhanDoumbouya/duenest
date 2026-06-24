@@ -11,7 +11,7 @@
 // routes (`/room/{token}`, `/document-request/{token}`) — safe to display and
 // copy. Nothing here is a raw storage URL.
 
-import { apiFetch } from "./api";
+import { ApiError, apiFetch } from "./api";
 import type {
   CreateCasePackBody,
   CreateCaseRequestBody,
@@ -24,6 +24,8 @@ import type {
   PortalCaseStatus,
   PortalCaseType,
   PortalCasesResponse,
+  PortalLimitResource,
+  PortalLimits,
   PortalPeopleResponse,
   PortalPerson,
   PortalPersonStatus,
@@ -38,6 +40,18 @@ import type { StatusTone } from "./status-badge";
 /** Build the base path for a portal sub-resource. */
 function base(orgId: number, suffix = ""): string {
   return `/organizations/${orgId}/portal/${suffix}`;
+}
+
+// ---- Plan + limits ----------------------------------------------------------
+
+/**
+ * Read the org's portal plan, limits, usage, and remaining headroom. Readable
+ * by any org member even when the portal is not enabled (so the paywall can
+ * render). Use `portal_enabled` to decide between the live portal and the
+ * Teams paywall.
+ */
+export function getPortalLimits(orgId: number): Promise<PortalLimits> {
+  return apiFetch<PortalLimits>(base(orgId, "limits/"));
 }
 
 // ---- Summary ----------------------------------------------------------------
@@ -354,6 +368,95 @@ export function progressPercent(progress: PortalCaseProgress): number {
   const ratio = progress.satisfied_requirements / total;
   const clamped = Math.max(0, Math.min(1, ratio));
   return Math.round(clamped * 100);
+}
+
+// ---- Plan + limit helpers ---------------------------------------------------
+
+/** Human-readable labels for each capacity-limited portal resource. */
+export const PORTAL_LIMIT_RESOURCE_LABELS: Record<PortalLimitResource, string> =
+  {
+    members: "Team members",
+    portal_people: "People",
+    active_portal_cases: "Active cases",
+    active_document_requests: "Active requests",
+    active_sharing_rooms: "Active rooms",
+  };
+
+/** Friendly plan names for display. */
+export const PORTAL_PLAN_LABELS: Record<string, string> = {
+  free: "Free",
+  pro: "Pro",
+  teams_beta: "Teams (beta)",
+  teams: "Teams",
+  enterprise: "Enterprise",
+};
+
+/** Human label for a limit resource, falling back to the raw key. */
+export function limitLabel(resource: PortalLimitResource): string {
+  return PORTAL_LIMIT_RESOURCE_LABELS[resource] ?? resource;
+}
+
+/** Friendly plan label, falling back to the raw plan string. */
+export function planLabel(plan: string): string {
+  return PORTAL_PLAN_LABELS[plan] ?? plan;
+}
+
+/**
+ * Percentage of a limit currently used, clamped to 0–100 and rounded. An
+ * unlimited limit (`null`) reads as 0% (there is no bar to fill). A zero limit
+ * reads as 100% if anything is used, else 0% — never NaN or Infinity.
+ */
+export function usagePercent(used: number, limit: number | null): number {
+  if (limit === null) return 0;
+  if (limit <= 0) return used > 0 ? 100 : 0;
+  const ratio = used / limit;
+  const clamped = Math.max(0, Math.min(1, ratio));
+  return Math.round(clamped * 100);
+}
+
+/**
+ * Whether usage is at or beyond `threshold` (default 80%) of the limit.
+ * Unlimited limits (`null`) are never "near" a limit. A zero limit counts as
+ * near when anything is used.
+ */
+export function isNearLimit(
+  used: number,
+  limit: number | null,
+  threshold = 0.8,
+): boolean {
+  if (limit === null) return false;
+  if (limit <= 0) return used > 0;
+  return used / limit >= threshold;
+}
+
+/**
+ * True when `err` is the org plan-limit error a create call returns: an
+ * ApiError with status 403 and `data.code === "organization_plan_limit_exceeded"`.
+ */
+export function isOrgLimitError(err: unknown): err is ApiError {
+  return (
+    err instanceof ApiError &&
+    err.status === 403 &&
+    typeof err.data === "object" &&
+    err.data !== null &&
+    (err.data as Record<string, unknown>).code ===
+      "organization_plan_limit_exceeded"
+  );
+}
+
+/**
+ * True when `err` is the portal-not-enabled error the portal endpoints return
+ * for orgs without a Teams entitlement: an ApiError with status 403 and
+ * `data.code === "portal_not_enabled"`.
+ */
+export function isPortalNotEnabledError(err: unknown): err is ApiError {
+  return (
+    err instanceof ApiError &&
+    err.status === 403 &&
+    typeof err.data === "object" &&
+    err.data !== null &&
+    (err.data as Record<string, unknown>).code === "portal_not_enabled"
+  );
 }
 
 /**

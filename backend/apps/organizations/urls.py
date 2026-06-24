@@ -14,6 +14,7 @@ from .portal_views import (
     PortalPersonDetailView,
     PortalReviewQueueView,
     PortalSummaryView,
+    PortalLimitsView,
 )
 from .views import (
     OrganizationInviteTokenView,
@@ -31,6 +32,7 @@ urlpatterns = [
     *router.urls,
     # B2B Portals MVP — org-scoped, feature-gated (b2b_portals).
     path(f"{_PORTAL}/summary/", PortalSummaryView.as_view(), name="portal-summary"),
+    path(f"{_PORTAL}/limits/", PortalLimitsView.as_view(), name="portal-limits"),
     path(f"{_PORTAL}/people/", PortalPeopleView.as_view(), name="portal-people"),
     path(f"{_PORTAL}/people/<int:person_id>/", PortalPersonDetailView.as_view(), name="portal-person-detail"),
     path(f"{_PORTAL}/people/<int:person_id>/archive/", PortalPersonArchiveView.as_view(), name="portal-person-archive"),

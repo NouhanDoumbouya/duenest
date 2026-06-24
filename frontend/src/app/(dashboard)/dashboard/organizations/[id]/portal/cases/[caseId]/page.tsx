@@ -61,11 +61,27 @@ import {
   createCaseRequest,
   createCaseRoom,
   getPortalCase,
+  isOrgLimitError,
+  isPortalNotEnabledError,
   progressPercent,
 } from "@/lib/portals";
 import { cn } from "@/lib/utils";
 import type { Organization } from "@/types/organizations";
 import type { PortalCase, PortalCaseRequest } from "@/types/portals";
+
+/**
+ * Pick the best message for an action error. An `organization_plan_limit_exceeded`
+ * error carries a clear, human `message` from the backend — surface that.
+ * Any other ApiError uses its message; everything else uses the fallback.
+ */
+function orgLimitMessage(err: unknown, fallback: string): string {
+  if (isOrgLimitError(err)) {
+    const message = (err.data as Record<string, unknown>).message;
+    if (typeof message === "string" && message) return message;
+  }
+  if (err instanceof ApiError) return err.message;
+  return fallback;
+}
 
 export default function PortalCaseDetailPage({
   params,
@@ -80,13 +96,18 @@ export default function PortalCaseDetailPage({
   const [org, setOrg] = useState<Organization | null>(null);
   const [portalCase, setPortalCase] = useState<PortalCase | null>(null);
   const [loading, setLoading] = useState(true);
-  const [block, setBlock] = useState<"coming_soon" | "view_only" | null>(null);
+  const [block, setBlock] = useState<
+    "coming_soon" | "paywall" | "view_only" | null
+  >(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [packModal, setPackModal] = useState(false);
   const [requestModal, setRequestModal] = useState(false);
+  // Inline limit/validation errors surfaced inside the create modals.
+  const [packError, setPackError] = useState<string | null>(null);
+  const [requestError, setRequestError] = useState<string | null>(null);
 
   const canManage = org ? canManageOrganization(org.user_role) : false;
 
@@ -109,6 +130,7 @@ export default function PortalCaseDetailPage({
       })
       .catch((err) => {
         if (!active) return;
+        if (isPortalNotEnabledError(err)) return setBlock("paywall");
         if (err instanceof ApiError) {
           if (err.status === 503) return setBlock("coming_soon");
           if (err.status === 403) return setBlock("view_only");
@@ -154,8 +176,7 @@ export default function PortalCaseDetailPage({
       setToast({ message: "Sharing room created.", kind: "success" });
     } catch (err) {
       setToast({
-        message:
-          err instanceof ApiError ? err.message : "Could not create the room.",
+        message: orgLimitMessage(err, "Could not create the room."),
         kind: "error",
       });
     } finally {
@@ -195,6 +216,19 @@ export default function PortalCaseDetailPage({
         <PageHeader eyebrow="Portal" title="Case" />
         <InlineAlert tone="warn">
           Portals aren&apos;t enabled for your account yet.
+        </InlineAlert>
+      </PageContainer>
+    );
+  }
+
+  if (block === "paywall") {
+    return (
+      <PageContainer width="wide">
+        {backLink}
+        <PageHeader eyebrow="Portal" title="Case" />
+        <InlineAlert tone="secure">
+          B2B Portals are available on Teams. This organization isn&apos;t on a
+          Teams plan yet — open the portal to request access.
         </InlineAlert>
       </PageContainer>
     );
@@ -505,9 +539,14 @@ export default function PortalCaseDetailPage({
 
       {packModal && canManage && (
         <CreatePackModal
-          onClose={() => setPackModal(false)}
+          error={packError}
+          onClose={() => {
+            setPackModal(false);
+            setPackError(null);
+          }}
           onConfirm={async (requirements) => {
             setBusy(true);
+            setPackError(null);
             try {
               await createCasePack(orgId, caseIdNum, {
                 requirements: requirements.length ? requirements : undefined,
@@ -516,13 +555,8 @@ export default function PortalCaseDetailPage({
               setPackModal(false);
               setToast({ message: "Application pack created.", kind: "success" });
             } catch (err) {
-              setToast({
-                message:
-                  err instanceof ApiError
-                    ? err.message
-                    : "Could not create the pack.",
-                kind: "error",
-              });
+              // Limit errors stay inline in the form; other failures too.
+              setPackError(orgLimitMessage(err, "Could not create the pack."));
             } finally {
               setBusy(false);
             }
@@ -535,22 +569,23 @@ export default function PortalCaseDetailPage({
         <CreateRequestModal
           defaultRecipientName={portalCase.person.full_name}
           defaultRecipientEmail={portalCase.person.email}
-          onClose={() => setRequestModal(false)}
+          error={requestError}
+          onClose={() => {
+            setRequestModal(false);
+            setRequestError(null);
+          }}
           onConfirm={async (body) => {
             setBusy(true);
+            setRequestError(null);
             try {
               await createCaseRequest(orgId, caseIdNum, body);
               await reload();
               setRequestModal(false);
               setToast({ message: "Document request created.", kind: "success" });
             } catch (err) {
-              setToast({
-                message:
-                  err instanceof ApiError
-                    ? err.message
-                    : "Could not create the request.",
-                kind: "error",
-              });
+              setRequestError(
+                orgLimitMessage(err, "Could not create the request."),
+              );
             } finally {
               setBusy(false);
             }
@@ -680,10 +715,12 @@ function CreatePackModal({
   onClose,
   onConfirm,
   busy,
+  error,
 }: {
   onClose: () => void;
   onConfirm: (requirements: string[]) => void;
   busy: boolean;
+  error: string | null;
 }) {
   const [text, setText] = useState("");
   const requirements = useMemo(
@@ -723,6 +760,7 @@ function CreatePackModal({
             {requirements.length === 1 ? "" : "s"}.
           </p>
         </div>
+        {error && <InlineAlert>{error}</InlineAlert>}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>
             Cancel
@@ -743,6 +781,7 @@ function CreateRequestModal({
   onClose,
   onConfirm,
   busy,
+  error,
 }: {
   defaultRecipientName: string;
   defaultRecipientEmail: string;
@@ -755,6 +794,7 @@ function CreateRequestModal({
     due_date?: string;
   }) => void;
   busy: boolean;
+  error: string | null;
 }) {
   const [docTitle, setDocTitle] = useState("");
   const [instructions, setInstructions] = useState("");
@@ -856,6 +896,7 @@ function CreateRequestModal({
           />
         </div>
 
+        {error && <InlineAlert>{error}</InlineAlert>}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>
             Cancel

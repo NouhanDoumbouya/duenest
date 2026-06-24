@@ -48,6 +48,9 @@ def create_portal_person(organization, user, payload: dict) -> PortalPerson:
     full_name = (payload.get("full_name") or "").strip()
     if not full_name:
         raise PortalError("A full name is required.")
+    from .portal_limits import enforce_organization_portal_limit
+
+    enforce_organization_portal_limit(organization, "portal_people")
     person = PortalPerson.objects.create(
         organization=organization,
         created_by=user,
@@ -83,6 +86,9 @@ def create_portal_case(organization, user, person: PortalPerson, payload: dict) 
     title = (payload.get("title") or "").strip()
     if not title:
         raise PortalError("A case title is required.")
+    from .portal_limits import enforce_organization_portal_limit
+
+    enforce_organization_portal_limit(organization, "active_portal_cases")
     case = PortalCase.objects.create(
         organization=organization,
         person=person,
@@ -169,14 +175,19 @@ def create_case_room(case: PortalCase, user):
     Sharing Room primitive."""
     from apps.documents.sharing_rooms import create_room_from_pack, create_sharing_room
 
+    from .portal_limits import enforce_organization_portal_limit
+
     if case.linked_room_id:
         return case.linked_room
+    enforce_organization_portal_limit(case.organization, "active_sharing_rooms")
     owner = _case_owner(case)
     payload = {"title": case.title, "room_type": "client"}
+    # enforce_limit=False: the portal governs rooms by ORG limits (enforced above),
+    # not by the owner's personal sharing-room limit.
     if case.linked_bundle_id:
-        room = create_room_from_pack(case.linked_bundle, owner, payload=payload)
+        room = create_room_from_pack(case.linked_bundle, owner, payload=payload, enforce_limit=False)
     else:
-        room = create_sharing_room(owner, payload)
+        room = create_sharing_room(owner, payload, enforce_limit=False)
     case.linked_room = room
     case.save(update_fields=["linked_room", "updated_at"])
     record_portal_audit_event(case.organization, user, "portal_case_room_created",
@@ -194,6 +205,9 @@ def create_case_document_request(case: PortalCase, user, *, requirement=None, pa
     from apps.documents.document_requests import DocumentRequestError, create_document_request
     from apps.documents.models import DocumentBundleRequirement
 
+    from .portal_limits import enforce_organization_portal_limit
+
+    enforce_organization_portal_limit(case.organization, "active_document_requests")
     payload = dict(payload or {})
     owner = _case_owner(case)
     person = case.person
@@ -223,7 +237,8 @@ def create_case_document_request(case: PortalCase, user, *, requirement=None, pa
         req_payload["linked_bundle"] = requirement_obj.bundle_id
 
     try:
-        link = create_document_request(owner, req_payload)
+        # enforce_limit=False: governed by the ORG request limit (enforced above).
+        link = create_document_request(owner, req_payload, enforce_limit=False)
     except DocumentRequestError as exc:
         raise PortalError(str(exc))
 
@@ -453,7 +468,11 @@ def record_portal_audit_event(organization, user, event_type, *, obj=None,
 
 
 def _case_owner(case: PortalCase):
-    return case.created_by or _org_owner_user(case.organization)
+    # Portal-created primitives are owned by ONE consistent user — the organization
+    # owner — so org-level limits govern them (not a random staff member's personal
+    # plan). The acting member is recorded separately as created_by/actor. Falls
+    # back to the case creator only if the org has no resolvable owner.
+    return _org_owner_user(case.organization) or case.created_by
 
 
 def _org_owner_user(organization):
