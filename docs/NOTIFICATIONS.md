@@ -94,6 +94,8 @@ the existing notification and does not send the email again once
 - category switches for documents, subscriptions, checklists/bundles,
   organizations, emergency access, security alerts, and activity notifications;
 - future digest toggle;
+- the Weekly Radar email opt-in (`weekly_radar_email_enabled`, default off — see
+  below);
 - default lead days;
 - timezone.
 
@@ -110,6 +112,53 @@ notes, or document contents.
 
 Action URLs are restricted to internal paths and are reset to `/dashboard` if
 they look unsafe.
+
+## Weekly Radar Email
+
+The **Weekly Radar email** (`apps/notifications/weekly_radar.py`) is a
+deterministic, owner-scoped weekly email that brings users back with what needs
+attention: expiring documents, upcoming/overdue deadlines, incomplete packs,
+applications needing attention, Magic Inbox items to review, emergency-access
+state, and storage warnings. It is built entirely from the **Life Radar** service
+(`build_life_radar`) as the single source of truth, so it **makes no AI call and
+consumes no AI credits**.
+
+Content: a header ("Your CertaNest Weekly Radar" / "Ready when life asks."), a
+readiness score + label, up to five prioritized attention items (title + short
+detail), one clear next action mapped to an app route, compact detail sections,
+and a footer preferences link. HTML + plain-text both extend `emails/base.html` /
+`base.txt`. Subject: `N things need attention in CertaNest` when there are urgent
+items, otherwise `Your CertaNest Weekly Radar`.
+
+Privacy: it reuses the safe Life Radar payload (no file URLs) and never includes
+document contents, private file URLs, attachments, passport/ID numbers, raw OCR
+text, or notes — only titles, counts, dates, and internal app routes.
+
+Eligibility (enforced per user in `should_send_weekly_radar`): active user, valid
+email, opted in (`weekly_radar_email_enabled`) with `email_enabled` on, and no
+Weekly Radar sent in the last 6 days (deduped via `EmailLog`, so a weekly beat
+plus an accidental rerun won't double-send). Suppression + one-click unsubscribe
+are enforced inside `send_branded_email` (category `lifecycle`); a per-recipient
+failure never aborts the batch.
+
+Service entry points: `build_weekly_radar_context`, `should_send_weekly_radar`,
+`render_weekly_radar_email`, `send_weekly_radar_email(user, dry_run=, force=)`,
+and `send_weekly_radar_batch(dry_run=, limit=)`.
+
+Delivery command:
+
+```bash
+python manage.py send_weekly_radar_emails [--dry-run] [--limit N] \
+    [--user-id ID] [--force] [--dedupe-days N]
+```
+
+A Celery beat schedule (`apps.notifications.tasks.send_weekly_radar_emails`,
+weekly Monday 07:00 UTC, queue `notifications`) runs it where the beat process is
+enabled (`ENABLE_CELERY_BEAT`); otherwise run the command from cron. It no-ops
+gracefully unless email is configured and users have opted in. Preference field:
+`weekly_radar_email_enabled` (migration
+`notifications/0009_notificationpreference_weekly_radar_email_enabled`), exposed
+on `GET/PATCH /api/v1/notifications/preferences/`.
 
 ## Scheduled Delivery
 

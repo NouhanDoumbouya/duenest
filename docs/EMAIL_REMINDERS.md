@@ -6,6 +6,8 @@ provider configuration powers all transactional email — not just reminders:
 - **Invite** and **waitlist confirmation** (founder / private-beta flow)
 - **Password reset** and **email verification** (account recovery)
 - **Reminder** summaries (notification service)
+- **Weekly Radar** email (deterministic, opt-in lifecycle mail — see
+  `docs/NOTIFICATIONS.md`)
 
 All of these render from shared, branded templates in `backend/templates/emails/`
 (each extends `base.html` / `base.txt`) via `common.email.send_branded_email`.

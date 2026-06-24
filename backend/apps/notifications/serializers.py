@@ -50,6 +50,7 @@ class NotificationPreferenceSerializer(serializers.ModelSerializer):
             "activity_notifications_enabled",
             "reminder_digest_enabled",
             "ai_briefing_digest_enabled",
+            "weekly_radar_email_enabled",
             "default_reminder_lead_days",
             "timezone",
             "created_at",

@@ -86,6 +86,13 @@ app.conf.beat_schedule = {
         "schedule": crontab(day_of_week=1, hour=8, minute=0),
         "options": {"queue": "files"},
     },
+    "send-weekly-radar-emails": {
+        "task": "apps.notifications.tasks.send_weekly_radar_emails",
+        # Weekly — Monday 07:00 UTC. Deterministic (no AI). No-ops unless email is
+        # configured and users have opted in (eligibility is enforced per user).
+        "schedule": crontab(day_of_week=1, hour=7, minute=0),
+        "options": {"queue": "notifications"},
+    },
 }
 
 

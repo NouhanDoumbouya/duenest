@@ -995,7 +995,8 @@ provides a deterministic profile+application+pack context for **future** AI
 document generation (not called here, not a public endpoint in V1). Available to
 Free and Pro; founder-only rollout flag `smart_profile` until launched.
 
-**Next recommended branch: `product/magic-inbox-v1`**
+**Next recommended branch: `sharing/document-request-links-v1`** (Magic Inbox V1
+and Weekly Radar Email V1 are now done — see the done sections below)
 
 Smart Profile was built mainly to power CV/résumé, motivation letters,
 application emails, SOPs, and form filling — the AI Application Document
@@ -1014,8 +1015,8 @@ product/application-tracker-v1         (done)
 product/smart-profile-v1               (done)
 ai/application-document-generator      (done — CVs/letters/emails/SOPs from Smart Profile)
 product/magic-inbox-v1                 (done — capture → analyze → review → apply)
-notifications/weekly-radar-email
-sharing/document-request-links-v1
+notifications/weekly-radar-email       (done — deterministic Life-Radar weekly email)
+sharing/document-request-links-v1      ← next
 b2b/portals-mvp
 integrations/inbox-mailbox-import      (future — Gmail/Drive/Outlook import into Magic Inbox)
 backend/ai-org-credit-pools            (future)
@@ -1636,7 +1637,47 @@ is on the future roadmap (`integrations/inbox-mailbox-import`). See `docs/api-sp
 for the endpoint contract.
 
 Upcoming planned branches (in order):
-1. `notifications/weekly-radar-email` ← **next**
-2. `sharing/document-request-links-v1`
+1. `notifications/weekly-radar-email` — **delivered** (2026-06-24, see below)
+2. `sharing/document-request-links-v1` ← **next**
 3. `b2b/portals-mvp`
 4. `integrations/inbox-mailbox-import` (future — Gmail/Drive/Outlook import)
+
+## Weekly Radar Email V1 — delivered (2026-06-24)
+
+`notifications/weekly-radar-email` is **implemented** (backend complete +
+tested). A **deterministic, opt-in** weekly email that brings users back to
+CertaNest with what needs attention — expiring documents, upcoming/overdue
+deadlines, incomplete packs, applications needing attention, Magic Inbox items to
+review, emergency-access state, and storage warnings.
+
+Key facts:
+
+* **Single source of truth:** built entirely from the existing **Life Radar**
+  service (`build_life_radar`). It makes **no AI call and consumes no AI
+  credits** — fully deterministic.
+* **Content:** header ("Your CertaNest Weekly Radar" / "Ready when life asks."),
+  readiness score + label, up to five prioritized attention items (title + short
+  detail), one clear next action mapped to an app route, compact detail sections,
+  and a footer preferences link. HTML + plain-text both extend the existing
+  `emails/base.html` / `base.txt`. Subject: `N things need attention in
+  CertaNest` when there are urgent items, otherwise `Your CertaNest Weekly Radar`.
+* **Privacy:** owner-scoped; reuses the safe Life Radar payload (no file URLs).
+  Never includes document contents, private file URLs, attachments, passport/ID
+  numbers, raw OCR text, or notes — only titles, counts, dates, and app routes.
+* **Opt-in preference:** `NotificationPreference.weekly_radar_email_enabled`
+  (default **off**), exposed on `GET/PATCH /api/v1/notifications/preferences/`
+  with a frontend toggle (migration
+  `notifications/0009_notificationpreference_weekly_radar_email_enabled`).
+* **Eligibility/dedupe:** sent only to active users with a valid email who opted
+  in (with `email_enabled` on) and have **not** received a Weekly Radar in the
+  last 6 days (deduped via `EmailLog`). Suppression + one-click unsubscribe are
+  enforced in the shared `send_branded_email` (category `lifecycle`); a
+  per-recipient failure never aborts the batch.
+* **Command + schedule:** `python manage.py send_weekly_radar_emails [--dry-run]
+  [--limit N] [--user-id ID] [--force] [--dedupe-days N]`. Celery task
+  `apps.notifications.tasks.send_weekly_radar_emails`, beat schedule weekly Monday
+  07:00 UTC (queue `notifications`); requires the existing Celery beat
+  (`ENABLE_CELERY_BEAT`) — otherwise run the command via cron. No-ops gracefully
+  unless email is configured and users have opted in.
+
+See `docs/NOTIFICATIONS.md` and `docs/api-spec.md` §18.7 for details.
