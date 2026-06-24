@@ -18,6 +18,7 @@ import {
   Share2,
   ShieldCheck,
   Trash2,
+  Wand2,
 } from "lucide-react";
 
 import { BundleActivityTab } from "@/components/bundles/bundle-activity-tab";
@@ -27,6 +28,7 @@ import { ReadinessRing } from "@/components/bundles/readiness-ring";
 import { PackReadinessPanel } from "@/components/bundles/pack-readiness-panel";
 import { BundleShareReadiness } from "@/components/bundles/bundle-share-readiness";
 import { useFeature } from "@/components/features/feature-flags-provider";
+import { GenerateDocumentModal } from "@/components/documents/generate-document-modal";
 import { DocumentAppointments } from "@/components/documents/document-appointments";
 import { DocumentPayments } from "@/components/documents/document-payments";
 import { DocumentProofRecords } from "@/components/documents/document-proof-records";
@@ -419,7 +421,10 @@ export default function BundleDetailPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [activeTab, setActiveTab] = useState<BundleTab>(initialBundleTab);
+  const [generateOpen, setGenerateOpen] = useState(false);
 
+  // Founder/beta rollout gate; the Pro plan gate is enforced by the backend.
+  const generateEnabled = useFeature("application_document_generation");
   const timelineEnabled = useFeature("application_pack_timeline");
   const scanToBundleEnabled = useFeature("scan_to_bundle");
   const safeSendEnabled = useFeature("application_pack_safesend");
@@ -671,6 +676,25 @@ export default function BundleDetailPage() {
               hint="Owner-only handoff files"
             />
           </div>
+
+          {generateEnabled && (
+            <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-card sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">AI document generator</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Draft a letter or CV for this pack. Review before saving — you
+                  stay in control.
+                </p>
+              </div>
+              <Button
+                className="shrink-0"
+                onClick={() => setGenerateOpen(true)}
+              >
+                <Wand2 className="size-4" />
+                Generate document
+              </Button>
+            </div>
+          )}
 
           {/* Application Pack Readiness V1: deterministic warnings + next steps. */}
           <PackReadinessPanel bundleId={bundleId} refreshKey={bundle.updated_at} />
@@ -1155,6 +1179,21 @@ export default function BundleDetailPage() {
           </Button>
         </aside>
       </div>
+
+      {generateEnabled && generateOpen && (
+        <GenerateDocumentModal
+          open
+          onClose={() => setGenerateOpen(false)}
+          bundleId={bundleId}
+          defaultTargetOrganization={
+            bundle.authority_or_provider || bundle.title
+          }
+          onSaved={() => {
+            // A saved-to-pack export changes readiness; re-fetch the bundle.
+            refreshReadiness();
+          }}
+        />
+      )}
 
       <ConfirmDialog
         open={confirmDelete}

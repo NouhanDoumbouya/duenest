@@ -2667,3 +2667,107 @@ class TrackedApplication(models.Model):
 
     def __str__(self):
         return f"TrackedApplication(owner={self.owner_id}, title={self.title!r})"
+
+
+class GeneratedApplicationDocument(models.Model):
+    """
+    A reviewable AI-generated application document (CV / letter / email / SOP).
+
+    The model generates STRUCTURED CONTENT first (review-before-export). Real
+    PDF/DOCX files are produced only on an explicit export step and stored as
+    encrypted owner-scoped ``DocumentFile`` rows (never raw storage URLs). Nothing
+    is auto-saved to the pack/vault without the user's action. Owner-scoped.
+    """
+
+    class DocumentType(models.TextChoices):
+        ATS_RESUME = "ats_resume", "ATS resume"
+        ACADEMIC_CV = "academic_cv", "Academic CV"
+        SCHOLARSHIP_CV = "scholarship_cv", "Scholarship CV"
+        COVER_LETTER = "cover_letter", "Cover letter"
+        MOTIVATION_LETTER = "motivation_letter", "Motivation letter"
+        STATEMENT_OF_PURPOSE = "statement_of_purpose", "Statement of purpose"
+        RECOMMENDATION_REQUEST_EMAIL = "recommendation_request_email", "Recommendation request email"
+        APPLICATION_EMAIL = "application_email", "Application email"
+        MISSING_DOCUMENT_EXPLANATION = "missing_document_explanation", "Missing document explanation"
+        VISA_EXPLANATION_LETTER = "visa_explanation_letter", "Visa explanation letter"
+        OTHER = "other", "Other"
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        REVIEWED = "reviewed", "Reviewed"
+        EXPORTED = "exported", "Exported"
+        SAVED_TO_PACK = "saved_to_pack", "Saved to pack"
+        ARCHIVED = "archived", "Archived"
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="generated_application_documents",
+    )
+    application = models.ForeignKey(
+        TrackedApplication,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="generated_documents",
+    )
+    bundle = models.ForeignKey(
+        DocumentBundle,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="generated_application_documents",
+    )
+    document_type = models.CharField(
+        max_length=40, choices=DocumentType.choices, default=DocumentType.OTHER
+    )
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.DRAFT
+    )
+    title = models.CharField(max_length=255)
+    target_organization = models.CharField(max_length=255, blank=True)
+    template_key = models.CharField(max_length=40, blank=True)
+    content_style = models.CharField(max_length=40, blank=True)
+    structured_content = models.JSONField(default=dict, blank=True)
+    plain_text_preview = models.TextField(blank=True)
+    ats_score = models.PositiveSmallIntegerField(null=True, blank=True)
+    quality_score = models.PositiveSmallIntegerField(null=True, blank=True)
+    warnings = models.JSONField(default=list, blank=True)
+    ai_model = models.CharField(max_length=128, blank=True)
+    credits_charged = models.PositiveIntegerField(default=0)
+    # Real exported files (encrypted DocumentFile rows) — never raw URLs.
+    exported_pdf_file = models.ForeignKey(
+        DocumentFile,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="generated_pdf_for",
+    )
+    exported_docx_file = models.ForeignKey(
+        DocumentFile,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="generated_docx_for",
+    )
+    # When saved as a real Vault document.
+    created_document = models.ForeignKey(
+        Document,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="generated_application_documents",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+        indexes = [
+            models.Index(fields=["owner", "-updated_at"]),
+            models.Index(fields=["owner", "bundle"]),
+            models.Index(fields=["owner", "application"]),
+        ]
+
+    def __str__(self):
+        return f"GeneratedApplicationDocument(owner={self.owner_id}, type={self.document_type})"

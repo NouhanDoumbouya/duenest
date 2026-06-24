@@ -128,6 +128,9 @@ Seeded by migration `0012` (after `0010`/`0011`):
 | `requirement_link_checklist` | 5 (future) |
 | `multi_document_qa` | 5 |
 | `long_application_review` | 5 (future) |
+| `application_document_generation` — email types (`recommendation_request_email`, `application_email`) | **3** |
+| `application_document_generation` — letter types (`cover_letter`, `motivation_letter`, `missing_document_explanation`, `visa_explanation_letter`) | **5** |
+| `application_document_generation` — SOP + CV/resume types (`statement_of_purpose`, `ats_resume`, `academic_cv`, `scholarship_cv`) | **8** |
 
 Credits are tracked via a `FeatureUsageCounter` row keyed `"ai_credits"` (monthly
 period). The plan allowance is the `"ai_credits_per_month"` entitlement. **Credits
@@ -137,6 +140,15 @@ credit.
 
 **Single-document Q&A** (with `document_id`) uses the `document_qa` key (basic, Free).
 **Whole-vault Q&A** (no `document_id`) uses `multi_document_qa` (Pro-only).
+
+**AI Application Document Generator** (`application_document_generation`) is
+**Pro-only** — Free users receive a `200 { available: false, reason: "ai_feature_not_in_plan" }` response with upgrade copy (not an error). Credit cost is
+variable by document type (3 / 5 / 8, see table above) and is charged only after
+a successful model-backed generation; every other path (consent missing, plan
+blocked, provider error, budget block, validation failure) charges 0 credits.
+**Export (PDF/DOCX) and save-to-pack make no AI call and consume no AI credits**;
+they do consume file count and storage quota under the normal Free/Pro plan
+limits (Free: 30 files / 100 MB; Pro: 1 000 files / 10 GB).
 
 These are **product entitlements**. They sit alongside — and never replace — the
 **infrastructure AI budget guard** (`AI_DAILY_TOKEN_CAP_USER`,

@@ -1518,3 +1518,39 @@ addresses, and emergency contact). Security posture:
 * **Deletion.** All Smart Profile rows use `on_delete=CASCADE` to the user, so
   they are removed automatically by the existing account-deletion flow
   (`AccountDeletionRequest`). No new deletion hook is required.
+
+### AI Application Document Generator V1 — security
+
+* **Encrypted at rest.** Exported files (PDF and DOCX) are stored as
+  `DocumentFile` records with the same AES-256-GCM field-level encryption that
+  protects all vault files. No new storage path or encryption scheme is
+  introduced.
+* **Private-only download.** Files are served exclusively through
+  `/api/v1/files/{id}/download/` (authenticated, owner-scoped). Raw R2 or
+  storage URLs are never returned to the client.
+* **No passport/ID numbers in model context.**
+  `build_application_context_from_profile` explicitly excludes passport numbers
+  and national-ID numbers before passing any context to the AI provider. This
+  matches the Smart Profile privacy guarantee.
+* **No-hallucination policy.** The model is instructed to use only the supplied
+  Smart Profile, application, and pack data. Missing information is surfaced in
+  `quality_checks.missing_information`; the model must never invent degrees,
+  employers, dates, skills, awards, or metrics.
+* **Review-before-save.** The generate endpoint returns structured content for
+  user review. Nothing is written to the vault until the user explicitly calls
+  export or save-to-pack. There is no auto-save path.
+* **Existing consent + credits + budget guard reused.** `AiPreference.ai_enabled`
+  consent check, monthly AI credit metering, and the infrastructure budget guard
+  (`AI_DAILY_TOKEN_CAP_USER`, `AI_DAILY_TOKEN_CAP_GLOBAL`,
+  `AI_MONTHLY_COST_LIMIT_USD`) all apply normally. No second metering system is
+  introduced.
+* **Pro-only plan gate.** `ai_application_document_generation` entitlement is
+  `off` for Free — a Free user hitting the generate endpoint receives a graceful
+  `200 { available: false, reason: "ai_feature_not_in_plan" }`, not a server
+  error, and 0 credits are consumed.
+* **Export respects plan limits.** Export and save-to-pack enforce the standard
+  Free/Pro file count and storage quota; exceeding either returns `403
+  { code: "plan_limit_exceeded" }`. No AI call is made on the export path.
+* **No new dependency exposes secrets.** `python-docx==1.1.2` is a pure-Python
+  OOXML library with no system or LibreOffice dependencies. PDFs use the
+  existing `fpdf2` library. Neither library makes network calls.

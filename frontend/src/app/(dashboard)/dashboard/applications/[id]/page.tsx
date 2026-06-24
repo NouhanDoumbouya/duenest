@@ -12,9 +12,11 @@ import {
   ShieldCheck,
   Sparkles,
   Trash2,
+  Wand2,
 } from "lucide-react";
 
 import { ReadinessRing } from "@/components/bundles/readiness-ring";
+import { GenerateDocumentModal } from "@/components/documents/generate-document-modal";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Label } from "@/components/ui/label";
@@ -172,6 +174,11 @@ export default function ApplicationDetailPage() {
   const [savingDates, setSavingDates] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
   const [archiving, setArchiving] = useState(false);
+  const [generateOpen, setGenerateOpen] = useState(false);
+
+  // Founder/beta rollout gate; the Pro plan gate is enforced by the backend
+  // (the modal surfaces its upgrade copy).
+  const generateEnabled = useFeature("application_document_generation");
 
   useEffect(() => {
     if (!validId) return;
@@ -354,6 +361,27 @@ export default function ApplicationDetailPage() {
               <p className="text-sm text-muted-foreground">
                 This application isn&apos;t linked to a pack yet. Linking a pack
                 shows exactly which documents are still missing.
+              </p>
+            </SectionCard>
+          )}
+
+          {generateEnabled && (
+            <SectionCard
+              title="AI document generator"
+              description="Draft a professional letter or CV from your Smart Profile and this application's context."
+              action={
+                <Button
+                  size="sm"
+                  onClick={() => setGenerateOpen(true)}
+                >
+                  <Wand2 className="size-4" />
+                  Generate document
+                </Button>
+              }
+            >
+              <p className="text-sm text-muted-foreground">
+                Review before saving. You stay in control — nothing is exported
+                or saved to a pack until you confirm.
               </p>
             </SectionCard>
           )}
@@ -576,6 +604,24 @@ export default function ApplicationDetailPage() {
           </Button>
         </aside>
       </div>
+
+      {generateEnabled && generateOpen && (
+        <GenerateDocumentModal
+          open
+          onClose={() => setGenerateOpen(false)}
+          applicationId={app.id}
+          bundleId={app.linked_pack?.id}
+          defaultTargetOrganization={app.organization_name ?? undefined}
+          onSaved={() => {
+            // Refresh so a newly saved pack document reflects in readiness.
+            getApplication(appId)
+              .then((fresh) => setApp(fresh))
+              .catch(() => {
+                /* non-fatal: the export already succeeded */
+              });
+          }}
+        />
+      )}
 
       <ConfirmDialog
         open={confirmArchive}

@@ -89,3 +89,42 @@ server-side. Security controls applied:
   for a user-pasted URL in a personal vault.
 
 See `docs/security-plan.md` §18 and `docs/api-spec.md` §13B.8a for details.
+
+## Application document generator (V1)
+
+The AI Application Document Generator introduces a generate → review → export →
+save-to-pack flow. The following security controls apply:
+
+- **Review-before-save.** The `POST .../generate/` endpoint returns structured
+  content only; nothing is written to the vault automatically. The user must
+  explicitly call export or save-to-pack to persist a file.
+- **Encrypted at rest.** Exported PDF and DOCX files are stored as
+  `DocumentFile` records with the same AES-256-GCM encryption used for all vault
+  files. No new encryption scheme or storage path is introduced.
+- **Private-only download.** The `download_url` in the export response is always
+  `/api/v1/files/{id}/download/` — an authenticated, owner-only route. Raw
+  R2/storage URLs are never returned.
+- **No passport/ID in model context.** `build_application_context_from_profile`
+  strips passport numbers and national-ID numbers before passing any context to
+  the AI provider. This is enforced at the service layer, not just the view.
+- **No-hallucination policy enforced at the prompt level.** The model is
+  instructed to use only the supplied Smart Profile, application, and pack data.
+  Missing information surfaces in `quality_checks.missing_information`, never
+  invented. This reduces the risk of fabricated credentials or dates.
+- **Existing gates reused.** Consent (`AiPreference.ai_enabled`), rollout flags
+  (`application_document_generation` + `ai_features`), plan entitlement
+  (`ai_application_document_generation`, Pro-only), monthly AI credit metering,
+  and the infrastructure budget guard all apply to the generate step. No second
+  metering or bypass path exists.
+- **0 credits on any failure.** Blocked plan, consent missing, provider error,
+  validation failure, AI refusal, and budget guard all charge 0 credits. Credits
+  are consumed only after `ai_call_succeeded`.
+- **Export and save-to-pack make no AI call.** They re-use the stored
+  `structured_content`; no provider is contacted and no credits are consumed.
+  They do enforce the standard file count and storage plan limits.
+- **New dependency audit.** `python-docx==1.1.2` is pure-Python OOXML, no
+  system or LibreOffice dependencies, no network calls. PDFs use the existing
+  `fpdf2` library. Neither library introduces a new secret or credential surface.
+
+See `docs/security-plan.md` (AI Application Document Generator V1 subsection)
+and `docs/api-spec.md` §32 for the full spec.

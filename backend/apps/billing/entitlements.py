@@ -287,6 +287,7 @@ AI_FEATURE_PLAN_FLAGS = {
     "share_readiness": "ai_readiness_checks",
     "bundle_readiness": "ai_readiness_checks",
     "requirement_link_checklist": "ai_requirement_checklist",
+    "application_document_generation": "ai_application_document_generation",
 }
 
 # Feature-based credit costs. Heavier / multi-document features cost more. An
@@ -305,6 +306,10 @@ AI_FEATURE_CREDIT_COSTS = {
     "requirement_link_checklist": 5,  # future feature
     "multi_document_qa": 5,
     "long_application_review": 5,  # future feature
+    # Application document generation cost VARIES by document type (email 3 /
+    # letter 5 / SOP & CV 8); the generator passes the exact amount to
+    # spend_ai_credits(). This default is a safe fallback only.
+    "application_document_generation": 8,
 }
 
 
