@@ -4506,8 +4506,8 @@ POST   /api/v1/organizations/:id/document-requests/:request_id/approve/
 POST   /api/v1/organizations/:id/document-requests/:request_id/reject/
 POST   /api/v1/organizations/:id/document-requests/:request_id/request-changes/
 POST   /api/v1/organizations/:id/document-requests/:request_id/remind/
-GET    /api/v1/public/document-requests/:token/
-POST   /api/v1/public/document-requests/:token/upload/
+GET    /api/v1/public/document-request-links/:token/
+POST   /api/v1/public/document-request-links/:token/upload/
 ```
 
 Internal members submit with authentication. Public upload links submit only to
@@ -5209,4 +5209,149 @@ Radar keys/shape are unchanged.
 
 Magic Inbox V1 is **in-app upload/paste only**. It does **not** integrate
 Gmail/Outlook or any external mailbox. Gmail/Drive/Outlook import is future work.
+
+## 34 — Document Request Links V1 (`document-requests/`)
+
+Secure collection of **one document from another person**. An authenticated owner
+creates a request; CertaNest mints an **unguessable public upload link**; a
+recipient uploads a single file **without a CertaNest account**; the owner
+**reviews and accepts / rejects / asks for a replacement**; an accepted file can
+be **saved to the vault and/or attached to a pack requirement**. The entire flow
+is **deterministic — no AI call, no AI credits.** This is the bridge toward B2B
+Portals; full portals/staff/bulk/multi-recipient are not in V1.
+
+Backing model: `DocumentRequestLink` (`apps/documents/models.py`), migration
+`documents/0035_documentrequestlink`. Owner endpoints are authenticated and
+owner-scoped; another user's request returns `404 Not Found`. Public endpoints are
+`AllowAny` and resolved strictly by exact token match.
+
+**Workflow:** Request → Upload → Review → Accept / Reject / Needs-replacement →
+Attach / Save. **Nothing is auto-accepted** — the owner must review each upload.
+
+**Statuses:** `draft`, `requested`, `opened`, `uploaded`, `under_review`,
+`accepted`, `rejected`, `needs_replacement`, `expired`, `cancelled`.
+
+### Owner endpoints (authenticated, owner-scoped)
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/v1/document-requests/` | List the owner's requests (`{requests, count}`; optional `?status=`) |
+| `POST` | `/api/v1/document-requests/` | Create a request and mint a token (optional `send_email`) |
+| `GET` | `/api/v1/document-requests/{id}/` | Retrieve one request |
+| `PATCH` | `/api/v1/document-requests/{id}/` | Update editable metadata only (state changes go through actions) |
+| `POST` | `/api/v1/document-requests/{id}/send/` | Email the secure upload link to the recipient |
+| `POST` | `/api/v1/document-requests/{id}/cancel/` | Cancel the request |
+| `POST` | `/api/v1/document-requests/{id}/review/` | `{action: accept\|reject\|needs_replacement, reason?}` |
+| `POST` | `/api/v1/document-requests/{id}/accept/` | Accept the uploaded file |
+| `POST` | `/api/v1/document-requests/{id}/reject/` | Reject (optional `reason`) |
+| `POST` | `/api/v1/document-requests/{id}/needs-replacement/` | Ask for a replacement (optional `reason`) — re-opens upload |
+| `POST` | `/api/v1/document-requests/{id}/save-to-vault/` | Save the accepted file as a `Document` |
+| `POST` | `/api/v1/document-requests/{id}/attach-to-pack/` | Attach the accepted file to the linked pack requirement |
+
+### Public endpoints (no auth, token only)
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/v1/public/document-request-links/{token}/` | Minimal upload metadata; marks the request opened |
+| `POST` | `/api/v1/public/document-request-links/{token}/upload/` | Upload one file (`multipart/form-data`, field `file`) |
+
+Throttles: `public_access_code` (metadata `GET`) and `public_document_upload`
+(upload `POST`).
+
+### Model
+
+`DocumentRequestLink` fields: `owner`; unguessable 256-bit `token`
+(`secrets.token_urlsafe`, unique indexed, same pattern as the app's other share
+links); `status`; `requested_document_title`; `requested_document_type`;
+`instructions`; `recipient_name`; `recipient_email`; `recipient_message`;
+`due_date`; `expires_at`; `max_uploads` (=1) / `upload_count`; nullable FKs
+`uploaded_file` (`DocumentFile`), `created_document` (`Document`), `linked_bundle`
+(`DocumentBundle`), `linked_application` (`TrackedApplication`),
+`linked_requirement` (`DocumentBundleRequirement`); `rejection_reason`;
+`owner_note`; lifecycle timestamps (`opened_at`, `uploaded_at`, `reviewed_at`,
+`accepted_at`, `rejected_at`, `created_at`, `updated_at`).
+
+### Create
+
+`POST /api/v1/document-requests/`
+
+Body: `{ "requested_document_title" (required), "requested_document_type"?,
+"instructions"?, "recipient_name"?, "recipient_email"?, "recipient_message"?,
+"due_date"?, "expires_at"?, "owner_note"?, "linked_bundle"?, "linked_application"?,
+"linked_requirement"?, "send_email"? }`. Any linked pack/application/requirement
+must belong to the owner. Returns the owner serializer (`201`).
+
+Set `send_email: true` to email the upload link on create (only when a
+`recipient_email` is present); otherwise the owner copies `upload_url` manually.
+
+### Owner serializer
+
+Returns request metadata plus `token`, `upload_url` (`{APP_BASE_URL}/document-request/{token}`),
+`is_expired`, `can_upload`, and — once a file is uploaded — `uploaded_file_info`
+(`{id, original_filename, content_type, file_size, download_url}`). The
+`download_url` is the **owner-only** private route `/api/v1/files/{id}/download/`;
+it is never a raw/public storage URL and is never returned to the recipient.
+
+### Public metadata (`GET`)
+
+Returns **only** the fields a recipient needs to upload —
+`requested_document_title`, `requested_document_type`, `instructions`,
+`recipient_name`, `recipient_message`, `due_date`, `expires_at`, `status`,
+`can_upload`, `from_name` (a safe owner display name), `app_name` (`"CertaNest"`),
+and a `state` discriminator. It **never** exposes the owner's email, vault, notes,
+the uploaded file, or any file URL. Unknown/invalid tokens return `404` with a
+neutral message.
+
+### Public upload (`POST`)
+
+Accepts `multipart/form-data` with a single `file`. Allowed **only** when the
+request is not expired/cancelled/accepted/rejected and within the upload allowance
+(`needs_replacement` re-opens upload). The file is validated
+(extension/type/magic-bytes), malware-scanned, and stored encrypted-at-rest as an
+**owner-owned** `DocumentFile` through the standard private-storage chain. The
+upload also enforces the **owner's** file + storage plan limits (the file lands in
+their vault), returning `403 plan_limit_exceeded` when exceeded. On success returns
+`{ "ok": true, "detail": "Your file was uploaded securely. Thank you." }` (`201`)
+— never a download URL.
+
+### Review & attach
+
+- `review` / `accept` / `reject` / `needs-replacement` set the corresponding
+  status; `reject` and `needs_replacement` may carry a `reason`. `needs_replacement`
+  lets the recipient upload again.
+- `save-to-vault` creates a `Document` from the accepted file (enforces the
+  `documents` plan limit); returns `{ document_id, request }`.
+- `attach-to-pack` satisfies the linked requirement (or adds one) and recomputes
+  pack readiness; returns `{ requirement_id, bundle_id, readiness_score, request }`.
+  Save/attach run **only after acceptance**.
+
+### Plan limit
+
+New resource `document_request_links` — Free **5**, Pro **100** **active** links.
+Only active statuses count (`draft`/`requested`/`opened`/`uploaded`/`under_review`/
+`needs_replacement`); terminal states free a slot. Over the limit returns
+`403 { code: "plan_limit_exceeded", resource: "document_request_links" }`. See
+`docs/BILLING.md`.
+
+### Life Radar
+
+The Life Radar `summary` gains additive keys `pending_document_requests`,
+`uploaded_document_requests`, `needs_replacement_document_requests`, and
+`overdue_document_requests` (existing shape preserved). The Weekly Radar email
+benefits automatically since it reads the Life Radar summary.
+
+### Email
+
+Optional and **owner-triggered only** (create with `send_email` or the explicit
+`send` action). Uses the shared branded-email path (`send_branded_email`, template
+`document_request_link`, transactional, suppression + `EmailLog`) and carries only
+the request details + the public upload link — no owner documents, attachments, or
+private file URLs. No email is ever sent automatically.
+
+### Frontend
+
+Owner page `/dashboard/document-requests` (list + create + detail with copy-link,
+accept/reject/needs-replacement, save-to-vault/attach-to-pack) and a **public**
+`/document-request/{token}` upload page (no login); a "Requests" nav item. Security details
+in `docs/security-plan.md` and `docs/PUBLIC_LINK_SECURITY.md`.
 

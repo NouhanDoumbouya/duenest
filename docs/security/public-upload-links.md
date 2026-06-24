@@ -1,7 +1,8 @@
 # Security — Public Upload Links
 
 Covers the token-based public upload flows: personal **Document Requests**
-(`apps/share_requests`) and **Portal** document requests (`apps/organizations`).
+(`apps/share_requests`), **Document Request Links V1** (`apps/documents`,
+`DocumentRequestLink`), and **Portal** document requests (`apps/organizations`).
 
 ## Principles
 
@@ -30,7 +31,25 @@ Covers the token-based public upload flows: personal **Document Requests**
   internal document metadata or other requests.
 - Uploaded files go only to the requester/organization.
 
+## Document Request Links V1 (`DocumentRequestLink`)
+
+Single-recipient, single-document collection. See `docs/security-plan.md` for the
+full subsection. Key points:
+
+- Unguessable 256-bit `secrets.token_urlsafe` token; public `GET` reveals only
+  the upload metadata (requested title/type, instructions, due/expiry, recipient
+  name, a safe `from_name` + "CertaNest", status, `can_upload`) — **never** the
+  owner's email, vault, notes, or any file URL.
+- Upload allowed only when not expired/cancelled/accepted/rejected and within the
+  upload allowance (`needs_replacement` re-opens upload). The file is stored as an
+  **encrypted, owner-owned `DocumentFile`** and served only via the authenticated
+  owner route `/api/v1/files/{id}/download/`; it is never returned to the
+  recipient. Public upload also enforces the **owner's** file/storage plan limits.
+- **Nothing is auto-accepted** — the owner must review (accept / reject /
+  needs-replacement). Throttles: `public_access_code` (metadata) +
+  `public_document_upload` (upload). Deterministic — no AI.
+
 ## Honest limits
 
-- Anyone with the link can upload until it is revoked or expires — owners should revoke
-  when collection is complete (the UI surfaces revoke).
+- Anyone with the link can upload until it is revoked/cancelled or expires —
+  owners should cancel when collection is complete (the UI surfaces cancel).

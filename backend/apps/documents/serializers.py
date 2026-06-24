@@ -2465,3 +2465,66 @@ class MagicInboxItemSerializer(serializers.ModelSerializer):
             "file_size": f.file_size,
             "download_url": f"/api/v1/files/{f.id}/download/",
         }
+
+
+from .models import DocumentRequestLink  # noqa: E402
+
+
+class DocumentRequestLinkSerializer(serializers.ModelSerializer):
+    """
+    Owner-facing serializer for a document request. Exposes the public token +
+    upload URL (the owner needs it to share the link) and a minimal file descriptor
+    for any uploaded file — served ONLY via the private owner download route, never
+    a raw storage URL. All state transitions happen through the service, so the
+    write surface is just the editable request metadata.
+    """
+
+    owner = serializers.PrimaryKeyRelatedField(read_only=True)
+    uploaded_file_info = serializers.SerializerMethodField()
+    upload_url = serializers.SerializerMethodField()
+    is_expired = serializers.BooleanField(read_only=True)
+    can_upload = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = DocumentRequestLink
+        fields = [
+            "id", "owner", "status", "token", "upload_url",
+            "requested_document_title", "requested_document_type", "instructions",
+            "recipient_name", "recipient_email", "recipient_message",
+            "due_date", "expires_at", "max_uploads", "upload_count",
+            "linked_bundle", "linked_application", "linked_requirement",
+            "uploaded_file", "uploaded_file_info", "created_document",
+            "rejection_reason", "owner_note",
+            "is_expired", "can_upload",
+            "opened_at", "uploaded_at", "reviewed_at", "accepted_at", "rejected_at",
+            "created_at", "updated_at",
+        ]
+        read_only_fields = [
+            "id", "owner", "status", "token", "upload_url", "upload_count",
+            "uploaded_file", "uploaded_file_info", "created_document",
+            "rejection_reason", "is_expired", "can_upload",
+            "opened_at", "uploaded_at", "reviewed_at", "accepted_at", "rejected_at",
+            "created_at", "updated_at",
+        ]
+
+    def get_uploaded_file_info(self, obj):
+        f = obj.uploaded_file
+        if f is None:
+            return None
+        # Owner-only private download route — never a storage URL, never given to
+        # the recipient.
+        return {
+            "id": f.id,
+            "original_filename": f.original_filename,
+            "content_type": f.content_type,
+            "file_size": f.file_size,
+            "download_url": f"/api/v1/files/{f.id}/download/",
+        }
+
+    def get_upload_url(self, obj):
+        from django.conf import settings
+
+        base = (getattr(settings, "DUENEST_APP_BASE_URL", "") or "").rstrip("/")
+        # Public recipient page route (distinct from the share_requests /request
+        # route, which is a different feature).
+        return f"{base}/document-request/{obj.token}"

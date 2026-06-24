@@ -21,6 +21,7 @@ import {
   ClipboardCheck,
   ClipboardList,
   Clock,
+  FileUp,
   CreditCard,
   DoorClosed,
   FileText,
@@ -317,6 +318,14 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
         href: "/dashboard/requests",
         icon: ClipboardList,
         featureKey: "share_requests",
+      },
+      {
+        // Document Request Links V1: ask someone to upload one document via a
+        // secure public link. No confirmed backend feature flag yet, so this is
+        // shown unconditionally (apiFetch still enforces plan limits server-side).
+        label: "Request a document",
+        href: "/dashboard/document-requests",
+        icon: FileUp,
       },
       {
         label: "Secure rooms",

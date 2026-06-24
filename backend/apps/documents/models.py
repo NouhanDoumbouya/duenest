@@ -2867,3 +2867,130 @@ class MagicInboxItem(models.Model):
 
     def __str__(self):
         return f"MagicInboxItem(owner={self.owner_id}, type={self.item_type}, status={self.status})"
+
+
+class DocumentRequestLink(models.Model):
+    """
+    A secure request for ONE document from someone else (a student, applicant,
+    referee…). The owner creates the request; CertaNest mints an unguessable
+    public upload link; the recipient uploads a single file without an account;
+    the owner reviews and accepts / rejects / asks for a replacement; an accepted
+    file can be saved to the vault and/or attached to a pack requirement.
+
+    Owner-scoped. The uploaded file is stored as an encrypted, owner-owned
+    ``DocumentFile`` (reusing the standard private-storage chain) and is only ever
+    served through the authenticated owner download route — never a raw/public
+    storage URL, and never exposed back to the recipient. The recipient sees only
+    the request metadata needed to upload. Nothing is auto-accepted.
+
+    This is the bridge toward B2B Portals; V1 is a single-recipient, single-file,
+    deterministic flow (no AI).
+    """
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        REQUESTED = "requested", "Requested"
+        OPENED = "opened", "Opened"
+        UPLOADED = "uploaded", "Uploaded"
+        UNDER_REVIEW = "under_review", "Under review"
+        ACCEPTED = "accepted", "Accepted"
+        REJECTED = "rejected", "Rejected"
+        NEEDS_REPLACEMENT = "needs_replacement", "Needs replacement"
+        EXPIRED = "expired", "Expired"
+        CANCELLED = "cancelled", "Cancelled"
+
+    # Statuses that count toward the active plan limit (open work). Terminal
+    # states (accepted/rejected/expired/cancelled) do not count.
+    ACTIVE_STATUSES = (
+        Status.DRAFT, Status.REQUESTED, Status.OPENED, Status.UPLOADED,
+        Status.UNDER_REVIEW, Status.NEEDS_REPLACEMENT,
+    )
+    # Statuses the recipient may upload against (token must also be unexpired).
+    UPLOADABLE_STATUSES = (Status.REQUESTED, Status.OPENED, Status.NEEDS_REPLACEMENT)
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="document_request_links",
+    )
+    # Unguessable, URL-safe public token (256-bit) — same pattern as the app's
+    # other share links. Resolved by exact token match on the public route only.
+    token = models.CharField(
+        max_length=128, unique=True, db_index=True, default=generate_share_token
+    )
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.REQUESTED
+    )
+
+    requested_document_title = models.CharField(max_length=255)
+    requested_document_type = models.CharField(max_length=100, blank=True)
+    instructions = models.TextField(blank=True)
+    recipient_name = models.CharField(max_length=255, blank=True)
+    recipient_email = models.EmailField(blank=True)
+    recipient_message = models.TextField(blank=True)
+
+    due_date = models.DateField(null=True, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    max_uploads = models.PositiveSmallIntegerField(default=1)
+    upload_count = models.PositiveIntegerField(default=0)
+
+    # Links; SET_NULL so deleting the target never destroys the request record.
+    uploaded_file = models.ForeignKey(
+        DocumentFile, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="document_request_links",
+    )
+    created_document = models.ForeignKey(
+        Document, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="document_request_links",
+    )
+    linked_bundle = models.ForeignKey(
+        DocumentBundle, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="document_request_links",
+    )
+    linked_application = models.ForeignKey(
+        TrackedApplication, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="document_request_links",
+    )
+    linked_requirement = models.ForeignKey(
+        DocumentBundleRequirement, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="document_request_links",
+    )
+
+    rejection_reason = models.TextField(blank=True)
+    owner_note = models.TextField(blank=True)
+
+    opened_at = models.DateTimeField(null=True, blank=True)
+    uploaded_at = models.DateTimeField(null=True, blank=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    rejected_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+        indexes = [
+            models.Index(fields=["owner", "status", "-updated_at"]),
+            models.Index(fields=["owner", "due_date"]),
+        ]
+
+    def __str__(self):
+        return f"DocumentRequestLink(owner={self.owner_id}, status={self.status})"
+
+    @property
+    def is_expired(self) -> bool:
+        from django.utils import timezone
+
+        return bool(self.expires_at and self.expires_at <= timezone.now())
+
+    @property
+    def can_upload(self) -> bool:
+        """Whether the recipient may currently upload (status + expiry + count)."""
+        if self.status not in self.UPLOADABLE_STATUSES or self.is_expired:
+            return False
+        # A needs-replacement request was explicitly re-opened by the owner, so a
+        # fresh upload is always allowed regardless of the prior upload count.
+        if self.status == self.Status.NEEDS_REPLACEMENT:
+            return True
+        return self.upload_count < max(self.max_uploads, 1)

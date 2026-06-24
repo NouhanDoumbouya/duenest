@@ -995,8 +995,9 @@ provides a deterministic profile+application+pack context for **future** AI
 document generation (not called here, not a public endpoint in V1). Available to
 Free and Pro; founder-only rollout flag `smart_profile` until launched.
 
-**Next recommended branch: `sharing/document-request-links-v1`** (Magic Inbox V1
-and Weekly Radar Email V1 are now done — see the done sections below)
+**Next recommended branch: `b2b/portals-mvp`** (Magic Inbox V1, Weekly Radar
+Email V1, and Document Request Links V1 are now done — see the done sections
+below)
 
 Smart Profile was built mainly to power CV/résumé, motivation letters,
 application emails, SOPs, and form filling — the AI Application Document
@@ -1016,8 +1017,8 @@ product/smart-profile-v1               (done)
 ai/application-document-generator      (done — CVs/letters/emails/SOPs from Smart Profile)
 product/magic-inbox-v1                 (done — capture → analyze → review → apply)
 notifications/weekly-radar-email       (done — deterministic Life-Radar weekly email)
-sharing/document-request-links-v1      ← next
-b2b/portals-mvp
+sharing/document-request-links-v1      (done — secure single-document collection via public token upload)
+b2b/portals-mvp                        ← next
 integrations/inbox-mailbox-import      (future — Gmail/Drive/Outlook import into Magic Inbox)
 backend/ai-org-credit-pools            (future)
 product/life-radar-ai-insights         (future — AI-enhanced Life Radar)
@@ -1638,8 +1639,8 @@ for the endpoint contract.
 
 Upcoming planned branches (in order):
 1. `notifications/weekly-radar-email` — **delivered** (2026-06-24, see below)
-2. `sharing/document-request-links-v1` ← **next**
-3. `b2b/portals-mvp`
+2. `sharing/document-request-links-v1` — **delivered** (2026-06-24, see below)
+3. `b2b/portals-mvp` ← **next**
 4. `integrations/inbox-mailbox-import` (future — Gmail/Drive/Outlook import)
 
 ## Weekly Radar Email V1 — delivered (2026-06-24)
@@ -1681,3 +1682,62 @@ Key facts:
   unless email is configured and users have opted in.
 
 See `docs/NOTIFICATIONS.md` and `docs/api-spec.md` §18.7 for details.
+
+## Document Request Links V1 — delivered (2026-06-24)
+
+`sharing/document-request-links-v1` is **implemented** (backend complete +
+tested). Secure collection of **one document from another person**: an
+authenticated owner creates a request; CertaNest mints an **unguessable public
+upload link**; a recipient uploads a single file **without a CertaNest account**;
+the owner **reviews and accepts / rejects / asks for a replacement**; an accepted
+file can be **saved to the vault and/or attached to a pack requirement**. Fully
+**deterministic — no AI call, no AI credits.** This is the **bridge toward B2B
+Portals**; full portals (staff, bulk, multi-recipient, multi-file) are **not** in
+V1.
+
+Key facts:
+
+* **Workflow:** Request → Upload → Review → Accept / Reject / Needs-replacement →
+  Attach / Save. **Nothing is auto-accepted** — the owner must review every
+  upload. Statuses: `draft`, `requested`, `opened`, `uploaded`, `under_review`,
+  `accepted`, `rejected`, `needs_replacement`, `expired`, `cancelled`.
+* **Data model:** new `DocumentRequestLink` (`apps/documents/models.py`, migration
+  `documents/0035_documentrequestlink`) — owner; unguessable 256-bit
+  `token` (`secrets.token_urlsafe`, unique indexed column, same pattern as the
+  app's other share links); status; requested document title/type; instructions;
+  recipient name/email/message; due date; expiry; `max_uploads` (=1) / upload
+  count; nullable FKs to the uploaded `DocumentFile`, the created `Document`, and
+  a linked `DocumentBundle` / `TrackedApplication` /
+  `DocumentBundleRequirement`; rejection reason; owner note; lifecycle timestamps.
+* **Token / privacy:** the public `GET` reveals **only** the metadata needed to
+  upload (requested title/type, instructions, due/expiry, recipient name, a safe
+  `from_name` + "CertaNest", status, `can_upload`) — **never** the owner's email,
+  vault, notes, or any file URL. The uploaded file is stored as an **encrypted,
+  owner-owned `DocumentFile`** (standard private-storage chain: extension/type/
+  magic-byte validation + malware scan + encrypt-at-rest) and is served **only**
+  through the authenticated owner download route (`/api/v1/files/{id}/download/`)
+  — never a raw/public storage URL and never returned to the recipient. R2 stays
+  private.
+* **Plan limits:** new resource `document_request_links` — Free **5**, Pro **100**
+  **active** links. Only active statuses count (`draft`/`requested`/`opened`/
+  `uploaded`/`under_review`/`needs_replacement`); terminal states free a slot.
+  Over the limit returns `403 {code:"plan_limit_exceeded",
+  resource:"document_request_links"}`. Public upload also enforces the **owner's**
+  file + storage limits (the file lands in their vault).
+* **Email:** optional and owner-triggered only (create with `send_email` or the
+  explicit send action). Uses the shared branded-email path (`send_branded_email`,
+  template `document_request_link`, transactional, suppression + `EmailLog`) and
+  carries only the request details + public upload link — no owner documents,
+  attachments, or private file URLs. **No email is ever sent automatically**; with
+  no recipient email the owner copies the link manually.
+* **Life Radar:** additive summary keys `pending_document_requests`,
+  `uploaded_document_requests`, `needs_replacement_document_requests`,
+  `overdue_document_requests` (existing shape preserved); Weekly Radar benefits
+  automatically since it reads the Life Radar summary.
+* **Frontend:** owner page `/dashboard/document-requests` (list + create + detail
+  with copy-link, accept/reject/needs-replacement, save-to-vault/attach-to-pack)
+  and a **public** `/document-request/{token}` upload page (no login); a "Requests" nav
+  item.
+
+See `docs/api-spec.md`, `docs/BILLING.md`, and `docs/security-plan.md` for
+contract, plan-limit, and security details.

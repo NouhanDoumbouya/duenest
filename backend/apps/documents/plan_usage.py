@@ -86,6 +86,14 @@ def count_resource(user, resource: str) -> int:
         return TrackedApplication.objects.filter(
             owner=user, is_archived=False
         ).count()
+    if resource == plans.RESOURCE_DOCUMENT_REQUEST_LINKS:
+        # Only active (open-work) request links count: a terminal state
+        # (accepted/rejected/expired/cancelled) frees a slot.
+        from .models import DocumentRequestLink
+
+        return DocumentRequestLink.objects.filter(
+            owner=user, status__in=DocumentRequestLink.ACTIVE_STATUSES
+        ).count()
     if resource == plans.RESOURCE_SHARE_LINKS:
         # Active single-file share links plus active Quick Share QR sessions.
         from apps.quick_share.models import QuickShareSession
