@@ -20,7 +20,10 @@ export type AiReason =
   | "empty_message"
   | "budget"
   | "consent_required"
-  | "error";
+  | "error"
+  | "ai_feature_not_in_plan"
+  | "ai_credits_exhausted"
+  | "ai_index_limit_exceeded";
 
 export interface DocumentCitation {
   document_id: number;
@@ -54,6 +57,9 @@ export interface AskResult {
   sources?: AnswerSource[];
   retrieval_mode?: RetrievalMode;
   indexed?: boolean;
+  /** Plan-gating fields — present on blocked (available: false) responses. */
+  message?: string;
+  upgrade?: boolean;
 }
 
 /** Friendly, non-technical label for where an answer came from. */
@@ -98,6 +104,9 @@ export interface DraftResult {
   subject: string;
   body: string;
   used_document_ids: number[];
+  /** Plan-gating fields — present on blocked (available: false) responses. */
+  message?: string;
+  upgrade?: boolean;
 }
 
 export interface DraftInput {
@@ -144,6 +153,9 @@ export interface PackResult {
   document_count: number;
   have_count: number;
   missing_count: number;
+  /** Plan-gating fields — present on blocked (available: false) responses. */
+  message?: string;
+  upgrade?: boolean;
 }
 
 /**
@@ -206,6 +218,9 @@ export interface BriefingResult {
   summary: string;
   items: BriefingItem[];
   attention_count: number;
+  /** Plan-gating fields — present on blocked (available: false) responses. */
+  message?: string;
+  upgrade?: boolean;
 }
 
 /** A prioritized "what to do now" briefing across the user's vault. */
@@ -228,6 +243,9 @@ export interface ChatResult {
   reason: AiReason;
   reply: string;
   actions: ChatAction[];
+  /** Plan-gating fields — present on blocked (available: false) responses. */
+  message?: string;
+  upgrade?: boolean;
 }
 
 export interface ChatTurn {
@@ -271,6 +289,9 @@ export interface IntakeResult {
   summary: string;
   suggested_fields: IntakeSuggestedFields;
   suggestions: IntakeSuggestion[];
+  /** Plan-gating fields — present on blocked (available: false) responses. */
+  message?: string;
+  upgrade?: boolean;
 }
 
 /** Understand an uploaded file and get confirm-gated next-action suggestions. */
@@ -343,12 +364,21 @@ export interface AiUsageSummary {
   paused: boolean;
 }
 
+/** Monthly AI credits for the user's plan. limit/remaining are null when uncapped. */
+export interface AiCredits {
+  limit: number | null;
+  used: number;
+  remaining: number | null;
+  period: string;
+}
+
 export interface AiPreferences {
   ai_enabled: boolean;
   redact_sensitive: boolean;
   ai_available?: boolean;
   disclosure?: AiDisclosure;
   usage?: AiUsageSummary;
+  credits?: AiCredits;
 }
 
 /** The current user's AI consent + privacy settings (with the data stance). */

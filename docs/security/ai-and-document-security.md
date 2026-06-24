@@ -6,8 +6,11 @@ Covers the AI features (`apps/ai`, and `apps/documents/ai_*`): Smart Intake, Ask
 ## Key-gated by design
 
 - AI is **off until configured.** `apps/ai/config.py` resolves `AI_CONFIGURED` from
-  `ANTHROPIC_API_KEY` (provider `anthropic`, default model `claude-opus-4-8`). With no key,
-  features degrade to a clear **"not configured"** result — they never fake an answer.
+  `ANTHROPIC_API_KEY`. With no key, features degrade to a clear **"not configured"**
+  result — they never fake an answer.
+- The default model is a **Haiku-class model** (`AI_MODEL_HAIKU`), not Opus. Opus is
+  reserved for founder/admin or an explicit `AI_MODEL` operator override, and for
+  system (user=None) calls. This keeps costs bounded by default.
 - The `anthropic` SDK is imported lazily, so lean installs without it still run.
 
 ## Owner-scoped grounding
@@ -24,9 +27,26 @@ Covers the AI features (`apps/ai`, and `apps/documents/ai_*`): Smart Intake, Ask
   `ai_intake`, `ai_chat`, `ai_document_qa`, `ai_document_drafting`) gate access (503 when
   paused).
 
+## Plan credits (product limits)
+
+AI usage is also governed by **monthly plan credits** — a separate, product-level layer
+on top of consent and rate limiting:
+
+- Free: 10 credits/month, basic features only (single-doc Q&A, summary, extraction,
+  deadline extraction, reminder suggestion). Haiku model only.
+- Pro: 200 credits/month, all features. Haiku by default; Sonnet allowed for heavier
+  features when `AI_PRO_SONNET_ENABLED=true`.
+- Credits are consumed only after a successful call. Blocked or failed calls never spend.
+- New blocked reasons: `ai_feature_not_in_plan`, `ai_credits_exhausted`,
+  `ai_index_limit_exceeded` — all return graceful `200` with `upgrade: true` where
+  applicable.
+
 ## Cost control
 
 - **User-triggered only** — no automatic/background/bulk AI processing.
+- **Infrastructure budget guard** (`AI_DAILY_TOKEN_CAP_USER`, `AI_DAILY_TOKEN_CAP_GLOBAL`,
+  `AI_MONTHLY_COST_LIMIT_USD`) remains fully active and independent of plan credits.
+  Both layers must pass; either can block a call.
 - `AI_MAX_TOKENS` / model are env-configured; timeouts and provider errors surface as
   honest UI states ("AI request failed. Try again.").
 - Automated tests mock the provider — **no live AI calls in the test suite.**

@@ -37,6 +37,15 @@ class ShareReadinessBaseTest(APITestCase):
         self.alice = User.objects.create_user(
             username="alice", email="a@x.com", password="StrongPassword123!DN"
         )
+        # AI-assisted readiness review is a Pro AI feature. Grant Pro so the AI
+        # path under test isn't blocked by the plan gate (the deterministic
+        # report stays available on any plan and is covered separately).
+        from apps.billing.models import Plan, UserSubscription
+
+        UserSubscription.objects.create(
+            user=self.alice, plan=Plan.objects.get(key="pro"),
+            provider="manual", status="active", billing_interval="month",
+        )
         self.bob = User.objects.create_user(
             username="bob", email="b@x.com", password="StrongPassword123!DN"
         )

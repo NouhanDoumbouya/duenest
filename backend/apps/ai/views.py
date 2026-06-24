@@ -12,6 +12,25 @@ from .privacy import AI_DISCLOSURE, get_ai_preference
 from .serializers import AiPreferenceSerializer
 
 
+def _ai_credits(user) -> dict:
+    """The user's monthly AI credit allowance snapshot (product limit).
+
+    ``limit``/``remaining`` are ``None`` when the plan is uncapped. Fails safe to
+    an empty/zeroed snapshot so the AI settings endpoint never errors.
+    """
+    try:
+        from apps.billing import entitlements as billing_ent
+
+        return {
+            "limit": billing_ent.get_ai_credit_limit(user),
+            "used": billing_ent.get_ai_credits_used_this_month(user),
+            "remaining": billing_ent.get_ai_credits_remaining(user),
+            "period": "month",
+        }
+    except Exception:  # noqa: BLE001 — status must never break the endpoint
+        return {"limit": None, "used": 0, "remaining": None, "period": "month"}
+
+
 class AiPreferenceView(APIView):
     """
     GET / PUT the current user's AI consent + privacy settings.
@@ -36,6 +55,9 @@ class AiPreferenceView(APIView):
         # Safe per-user usage only (own daily tokens + own cap + paused flag).
         # Never global spend — that's founder-console territory (see TODO in docs).
         data["usage"] = usage_summary(request.user)
+        # Monthly AI credit allowance for the user's plan (product limit, distinct
+        # from the infrastructure token budget above).
+        data["credits"] = _ai_credits(request.user)
         return Response(data)
 
     def put(self, request):

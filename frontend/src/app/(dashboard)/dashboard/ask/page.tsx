@@ -342,6 +342,54 @@ function AnswerBubble({ result }: { result: AskResult }) {
         </AssistantRow>
       );
     }
+    if (result.reason === "ai_credits_exhausted") {
+      const msg =
+        result.message ??
+        "You've used all your AI credits for this month. Upgrade to Pro for more.";
+      return (
+        <AssistantRow>
+          <div className="inline-flex items-start gap-2 rounded-2xl rounded-tl-sm border border-brand-amber/30 bg-brand-amber/10 px-4 py-2.5 text-sm text-foreground">
+            <PauseCircle className="mt-0.5 size-4 shrink-0 text-brand-amber" />
+            <span>{msg}</span>
+          </div>
+        </AssistantRow>
+      );
+    }
+    if (result.reason === "ai_feature_not_in_plan") {
+      const msg =
+        result.message ?? "This AI feature is available on Pro.";
+      return (
+        <AssistantRow>
+          <div className="rounded-2xl rounded-tl-sm border border-border bg-card px-4 py-3 text-sm">
+            <p>{msg}</p>
+            <Link
+              href="/dashboard/billing"
+              className={`${buttonVariants({ variant: "outline", size: "sm" })} mt-3`}
+            >
+              <Sparkles className="size-4" /> Upgrade to Pro
+            </Link>
+          </div>
+        </AssistantRow>
+      );
+    }
+    if (result.reason === "ai_index_limit_exceeded") {
+      const msg =
+        result.message ??
+        "You've reached the AI indexing limit for your plan. Upgrade to Pro for more.";
+      return (
+        <AssistantRow>
+          <div className="rounded-2xl rounded-tl-sm border border-border bg-card px-4 py-3 text-sm">
+            <p>{msg}</p>
+            <Link
+              href="/dashboard/billing"
+              className={`${buttonVariants({ variant: "outline", size: "sm" })} mt-3`}
+            >
+              <Sparkles className="size-4" /> Upgrade to Pro
+            </Link>
+          </div>
+        </AssistantRow>
+      );
+    }
     if (result.reason === "consent_required") {
       return (
         <AssistantRow>

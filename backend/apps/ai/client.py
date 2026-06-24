@@ -91,7 +91,12 @@ def generate(
     no SDK, budget cap, refusal, transport error) — inspect ``result.ok`` /
     ``result.reason`` instead.
     """
-    model = model or getattr(settings, "AI_MODEL", "claude-opus-4-8")
+    # Plan-aware model routing at the single chokepoint: Free → Haiku, Pro →
+    # Haiku (Sonnet only for heavier features when enabled), Opus only for
+    # founder/admin or operator-configured system calls. Never raises.
+    from .routing import resolve_allowed_ai_model
+
+    model = resolve_allowed_ai_model(user, feature=feature, requested_model=model)
     max_tokens = max_tokens or getattr(settings, "AI_MAX_TOKENS", 4096)
 
     if not ai_available():

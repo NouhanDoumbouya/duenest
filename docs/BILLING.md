@@ -62,23 +62,70 @@ full. Adjusting the enforced numeric limits to these targets (and hard storage-
 quota enforcement now that R2 is live) is the **`backend/storage-plan-limits`**
 follow-up — this branch keeps the current enforced limits stable.
 
-### AI plan limits (prepared, not yet enforced)
+### AI plan limits (monthly credits — enforced)
 
-`0010` seeds per-plan AI entitlements as constants for the **`backend/ai-plan-gating`**
-branch:
+Seeded by migration `0012` (after `0010`/`0011`):
 
 | | Free | Pro |
 | --- | --- | --- |
-| `ai_actions_per_day` | 3/day | 30/day |
+| `ai_credits_per_month` | **10 credits/month** | **200 credits/month** |
 | `ai_indexed_documents` | 3 | 300 |
-| Multi-doc Q&A / drafting / pack copilot / readiness | off | on |
+| Basic AI features (summary, Q&A, deadline extraction, reminder suggestion, extraction) | on | on |
+| Premium AI features (multi-doc Q&A, document draft, pack copilot, readiness checks, requirement checklist) | **off** | on |
+
+**Credit costs per feature** (defaults; unknown features default to 1):
+
+| Feature key | Credits |
+| --- | --- |
+| `document_summary` | 1 |
+| `document_qa` | 1 |
+| `deadline_extraction` | 1 |
+| `reminder_suggestion` | 1 |
+| `document_extraction` | 1 |
+| `share_readiness` | 2 |
+| `bundle_readiness` | 2 |
+| `pack_copilot` | 3 |
+| `document_draft` | 3 |
+| `requirement_link_checklist` | 5 (future) |
+| `multi_document_qa` | 5 |
+| `long_application_review` | 5 (future) |
+
+Credits are tracked via a `FeatureUsageCounter` row keyed `"ai_credits"` (monthly
+period). The plan allowance is the `"ai_credits_per_month"` entitlement. **Credits
+are spent only after a genuinely successful AI call** (`available && reason=="ok"`);
+blocked, failed, refused, budget-paused, or consent-missing calls never consume a
+credit.
+
+**Single-document Q&A** (with `document_id`) uses the `document_qa` key (basic, Free).
+**Whole-vault Q&A** (no `document_id`) uses `multi_document_qa` (Pro-only).
 
 These are **product entitlements**. They sit alongside — and never replace — the
 **infrastructure AI budget guard** (`AI_DAILY_TOKEN_CAP_USER`,
-`AI_DAILY_TOKEN_CAP_GLOBAL`, `AI_MONTHLY_COST_LIMIT_USD`), which stays fully
-active. Helpers are ready: `entitlements.can_use_ai_feature(user, feature)`,
-`remaining_ai_actions_today(user)`, `can_index_document_for_ai(user)` — wired into
-endpoints in the gating branch.
+`AI_DAILY_TOKEN_CAP_GLOBAL`, `AI_MONTHLY_COST_LIMIT_USD`), which stays fully active
+and fails closed. Entitlement helpers: `entitlements.can_use_ai_feature(user, feature)`,
+`remaining_ai_credits(user)`, `can_index_document_for_ai(user)`.
+
+**Backward-compatibility note:** the `ai_actions_per_day` entitlement (seeded in
+migration `0010`) is retained in the database for backward compatibility but is **no
+longer used for enforcement**. All enforcement is based on `ai_credits_per_month`.
+
+### Model routing
+
+- **Free users:** Haiku only.
+- **Pro users:** Haiku by default; Sonnet for heavier features when
+  `AI_PRO_SONNET_ENABLED=true` (default off).
+- **Opus:** reserved for founder/admin or a deliberate `AI_MODEL` operator override,
+  and for system (user=None) calls. Opus is **never** the default model for normal
+  Free/Pro AI.
+
+New env vars: `AI_MODEL_HAIKU`, `AI_MODEL_SONNET`, `AI_PRO_SONNET_ENABLED` (default
+false). The existing `AI_MODEL` remains the operator/founder override.
+
+### B2B shared AI credit pools
+
+Organization-level credit pools, admin-set limits, and paid top-ups/overages are
+**future work** — not implemented in this branch. Planned branch:
+**`backend/ai-org-credit-pools`**.
 
 ### Scanner plan rules
 
@@ -96,7 +143,7 @@ document workflows.
 | HD PDF export | Limited | Included |
 | Advanced enhancement (denoise/sharpen/magic/perspective) | Limited | Included |
 | OCR / searchable text | Limited by AI plan | Within AI limits |
-| AI extraction from scans | 3 AI actions/day | 30 AI actions/day |
+| AI extraction from scans | Within AI credits (Free: 10/mo) | Within AI credits (Pro: 200/mo) |
 | Auto reminders from scans | Limited | Included (within AI limits) |
 
 Seeded by migration `0011_scanner_plan_limits`:
@@ -112,7 +159,7 @@ Seeded by migration `0011_scanner_plan_limits`:
   `can_use_scanner_advanced_enhancement(user)`, `scanner_max_pages(user)`).
 
 OCR / AI extraction / auto-reminders from scans are governed by the AI plan
-entitlements above (`ai_actions_per_day` / `ai_indexed_documents`) and the AI
+entitlements above (`ai_credits_per_month` / `ai_indexed_documents`) and the AI
 budget guard — they are not separately metered here.
 
 > **Follow-up: `scanner/plan-limits-enforcement`** — gate HD export + advanced

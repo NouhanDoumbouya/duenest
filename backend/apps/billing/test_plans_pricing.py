@@ -87,26 +87,40 @@ class AiEntitlementTests(TestCase):
     def test_free_ai_limits(self):
         free = Plan.objects.get(key="free")
         ents = {e.feature_key: e for e in free.entitlements.all()}
-        self.assertEqual(ents["ai_actions_per_day"].limit_value, 3)
-        self.assertEqual(ents["ai_actions_per_day"].limit_period, "day")
+        # Monthly AI credits (the new metering unit) — Free gets 10/month.
+        self.assertEqual(ents["ai_credits_per_month"].limit_value, 10)
+        self.assertEqual(ents["ai_credits_per_month"].limit_period, "month")
         self.assertEqual(ents["ai_indexed_documents"].limit_value, 3)
-        self.assertFalse(ents["multi_document_qa_enabled"].is_enabled)
+        # Basic AI flags on for Free; premium AI flags off.
+        self.assertTrue(ents["ai_document_qa"].is_enabled)
+        self.assertTrue(ents["ai_document_summary"].is_enabled)
+        self.assertFalse(ents["ai_multi_document_qa"].is_enabled)
+        self.assertFalse(ents["ai_pack_copilot"].is_enabled)
 
     def test_pro_ai_limits(self):
         pro = Plan.objects.get(key="pro")
         ents = {e.feature_key: e for e in pro.entitlements.all()}
-        self.assertEqual(ents["ai_actions_per_day"].limit_value, 30)
+        self.assertEqual(ents["ai_credits_per_month"].limit_value, 200)
+        self.assertEqual(ents["ai_credits_per_month"].limit_period, "month")
         self.assertEqual(ents["ai_indexed_documents"].limit_value, 300)
-        self.assertTrue(ents["multi_document_qa_enabled"].is_enabled)
+        self.assertTrue(ents["ai_multi_document_qa"].is_enabled)
+        self.assertTrue(ents["ai_pack_copilot"].is_enabled)
 
-    def test_helper_remaining_actions_and_feature_gates(self):
-        self.assertEqual(entitlements.remaining_ai_actions_today(self.user), 3)
-        self.assertEqual(entitlements.remaining_ai_actions_today(self.pro_user), 30)
+    def test_helper_credits_and_feature_gates(self):
+        # Monthly credit allowances.
+        self.assertEqual(entitlements.get_ai_credit_limit(self.user), 10)
+        self.assertEqual(entitlements.get_ai_credit_limit(self.pro_user), 200)
+        self.assertEqual(entitlements.get_ai_credits_remaining(self.user), 10)
+        self.assertEqual(entitlements.get_ai_credits_remaining(self.pro_user), 200)
         # Premium AI feature: off on Free, on for Pro.
-        self.assertFalse(entitlements.can_use_ai_feature(self.user, "multi_document_qa"))
+        self.assertFalse(
+            entitlements.can_use_ai_feature(self.user, "multi_document_qa")
+        )
         self.assertTrue(
             entitlements.can_use_ai_feature(self.pro_user, "multi_document_qa")
         )
+        # Basic AI feature: allowed on both.
+        self.assertTrue(entitlements.can_use_ai_feature(self.user, "document_qa"))
         # Indexing allowed initially (no indexed docs yet) under both caps.
         self.assertTrue(entitlements.can_index_document_for_ai(self.user))
         self.assertTrue(entitlements.can_index_document_for_ai(self.pro_user))
