@@ -90,6 +90,8 @@ _LETTER_SCHEMA = {
             "type": "object",
             "additionalProperties": False,
             "properties": {
+                "subject": {"type": "string"},
+                "salutation": {"type": "string"},
                 "sections": {
                     "type": "array",
                     "items": {
@@ -102,6 +104,7 @@ _LETTER_SCHEMA = {
                     },
                 },
                 "closing": {"type": "string"},
+                "signature": {"type": "string"},
             },
         },
         "plain_text": {"type": "string"},
@@ -111,15 +114,27 @@ _LETTER_SCHEMA = {
 }
 
 _SYSTEM = (
-    "You write serious, professional application documents (CVs/résumés, letters, "
-    "and emails). You are given ONLY the applicant's own Smart Profile and "
-    "application/pack context. CRITICAL: never invent or exaggerate facts — no "
-    "fake degrees, employers, dates, skills, awards, or metrics. Use only the "
-    "supplied data. When important information is missing, DO NOT fabricate it — "
-    "leave it out and add a clear entry to quality_checks.missing_information "
-    "instead. Keep the tone professional and avoid exaggerated claims. Tailor the "
-    "content to the target application/organization and the requested style. "
-    "Return the requested JSON only."
+    "You write serious, professional, application-aware documents (CVs/résumés, "
+    "letters, and emails) for real submissions. You are given ONLY the applicant's "
+    "own Smart Profile and application/pack context.\n"
+    "NEVER invent or exaggerate facts — no fake degrees, employers, job titles, "
+    "dates, citizenship, skills, awards, organizations, or measurable results. Use "
+    "ONLY the supplied data. When important information is missing, DO NOT "
+    "fabricate it: leave it out and add a clear quality_checks.missing_information "
+    "entry instead.\n"
+    "Avoid generic filler. Do NOT use phrases like 'I am passionate about…', 'I "
+    "believe I am a good fit…', 'throughout my journey…', or 'I am writing to "
+    "express my interest…' unless the context genuinely supports them. Prefer "
+    "concrete structure: why this application -> relevant background -> proof/"
+    "achievement -> fit with the requirement -> a clear closing next step.\n"
+    "For CVs/résumés, write bullets as action + impact + evidence; if no "
+    "measurable impact exists, write clean factual bullets and add a "
+    "missing_information note asking the user to add metrics. Letters must read "
+    "formal and natural, never robotic. Embassy/visa documents must be plain, "
+    "direct, factual, and non-emotional. Scholarship documents emphasise academic "
+    "fit, leadership, impact, goals, and alignment. Corporate documents emphasise "
+    "role fit, skills, evidence, and concise outcomes. Return the requested JSON "
+    "only."
 )
 
 
@@ -171,9 +186,13 @@ def _prompt(context: dict, *, document_type: str, content_style: str,
     type_label = templates.DOCUMENT_TYPES.get(
         document_type, templates.DOCUMENT_TYPES["other"]
     )["label"]
+    preset = templates.get_document_preset(document_type)
     lines = [
         f"DOCUMENT TYPE: {type_label} ({document_type})",
         f"WRITING STYLE: {content_style}",
+        f"LENGTH GUIDANCE: {preset['length_guidance']}",
+        "QUALITY RULES:",
+        *[f"  - {rule}" for rule in preset["quality_rules"]],
     ]
     if target_organization:
         lines.append(f"TARGET ORGANIZATION: {target_organization}")
@@ -230,7 +249,13 @@ def _clean_letter_content(content: dict) -> dict:
         if not body:
             continue
         sections.append({"heading": str(s.get("heading", ""))[:200], "body": body[:4000]})
-    return {"sections": sections, "closing": str(content.get("closing", ""))[:600]}
+    return {
+        "subject": str(content.get("subject", ""))[:255],
+        "salutation": str(content.get("salutation", ""))[:200],
+        "sections": sections,
+        "closing": str(content.get("closing", ""))[:600],
+        "signature": str(content.get("signature", ""))[:200],
+    }
 
 
 def _clean_quality(q: dict) -> dict:
@@ -316,13 +341,11 @@ def generate_application_document(user, payload: dict) -> dict:
     if not templates.get_template(template_key):
         template_key = templates.recommend_template(document_type)
 
-    ats_score = None
-    warnings = list(quality.get("risk_warnings", []))
-    if is_cv:
-        ats = templates.validate_ats_structure(content, template_key)
-        ats_score = ats["score"]
-        warnings = warnings + ats["warnings"]
-    warnings = warnings + quality.get("missing_information", [])
+    warnings, ats_score = _assemble_warnings(
+        content, document_type=document_type, template_key=template_key,
+        quality=quality, context=context, target_org=target_org,
+    )
+    quality_score = templates.compute_quality_score(content, warnings)
 
     title = str(data.get("title", "")).strip()[:255] or (
         f"{templates.DOCUMENT_TYPES[document_type]['label']}"
@@ -342,7 +365,7 @@ def generate_application_document(user, payload: dict) -> dict:
         structured_content=content,
         plain_text_preview=plain_text,
         ats_score=ats_score,
-        quality_score=None,
+        quality_score=quality_score,
         warnings=warnings[:30],
         ai_model=result.model or "",
         credits_charged=0,
@@ -362,9 +385,54 @@ def generate_application_document(user, payload: dict) -> dict:
         "structured_content": content,
         "quality_checks": quality,
         "ats_score": ats_score,
+        "quality_score": quality_score,
         "warnings": gad.warnings,
         "available_exports": templates.get_template(template_key)["export_formats"],
     }
+
+
+def _assemble_warnings(content, *, document_type, template_key, quality,
+                       context, target_org):
+    """Merge AI quality flags + deterministic ATS + content-quality checks into a
+    single structured warning list ``[{type, severity, message}]``. Returns
+    ``(warnings, ats_score)``."""
+    warnings: list[dict] = []
+    for msg in quality.get("risk_warnings", []):
+        warnings.append({"type": "risk", "severity": "medium", "message": msg})
+    for msg in quality.get("missing_information", []):
+        warnings.append({"type": "missing_information", "severity": "low", "message": msg})
+
+    ats_score = None
+    if templates.is_cv_type(document_type):
+        ats = templates.validate_ats_structure(content, template_key)
+        ats_score = ats["score"]
+        warnings = ats["warnings"] + warnings
+    warnings = warnings + templates.build_content_quality_warnings(
+        content, document_type=document_type, context=context,
+        target_organization=target_org,
+    )
+    return warnings[:30], ats_score
+
+
+def recompute_document_quality(gad) -> None:
+    """Refresh ats_score/quality_score/warnings after a user edit (no AI).
+
+    Used by the PATCH/review path so the displayed warnings reflect the edited
+    content. Deterministic; never calls the model or charges credits.
+    """
+    quality = {"risk_warnings": [], "missing_information": []}
+    warnings, ats_score = _assemble_warnings(
+        gad.structured_content or {},
+        document_type=gad.document_type,
+        template_key=gad.template_key or templates.recommend_template(gad.document_type),
+        quality=quality,
+        context={},
+        target_org=gad.target_organization or "",
+    )
+    gad.ats_score = ats_score
+    gad.quality_score = templates.compute_quality_score(gad.structured_content or {}, warnings)
+    gad.warnings = warnings[:30]
+    gad.save(update_fields=["ats_score", "quality_score", "warnings", "updated_at"])
 
 
 # ---- Export (deterministic; NO AI, NO credits) ------------------------------
@@ -528,6 +596,15 @@ def _cv_sections(content: dict):
 def _render_pdf(gad, template_key: str) -> bytes:
     from fpdf import FPDF
 
+    preview = (templates.get_template(template_key) or {}).get("preview", {})
+    tone = preview.get("tone", "compact")
+    divider = bool(preview.get("divider"))
+    # Per-template typographic spacing (tasteful differentiation, never noisy).
+    body_size = 10.5
+    sect_gap = {"compact": 1.5, "spacious": 3.0, "academic": 2.5,
+                "refined": 2.5, "official": 2.5, "premium": 3.0}.get(tone, 2.0)
+    line_h = 5.4 if tone in ("spacious", "premium", "refined") else 5.0
+
     pdf = FPDF(unit="mm", format="A4")
     pdf.set_auto_page_break(auto=True, margin=18)
     pdf.set_margins(18, 18, 18)
@@ -535,31 +612,52 @@ def _render_pdf(gad, template_key: str) -> bytes:
     content = gad.structured_content or {}
 
     def _cell(text, h):
-        # new_x/new_y keep the cursor at the left margin on the next line so the
-        # following multi_cell always has the full printable width (fpdf2 2.8).
         pdf.multi_cell(0, h, _latin(text), new_x="LMARGIN", new_y="NEXT")
 
+    def _page_left() -> float:
+        return pdf.h - pdf.b_margin - pdf.get_y()
+
     def heading(text):
+        # Avoid an orphan heading at the very bottom of a page.
+        if _page_left() < 18:
+            pdf.add_page()
         pdf.set_font("Helvetica", "B", 12)
         _cell(text, 6)
-        pdf.ln(1)
+        if divider:
+            y = pdf.get_y()
+            pdf.set_draw_color(190, 190, 190)
+            pdf.line(pdf.l_margin, y, pdf.w - pdf.r_margin, y)
+            pdf.ln(1.5)
+        else:
+            pdf.ln(1)
 
     def body(text, bullet=False):
-        pdf.set_font("Helvetica", size=10.5)
-        prefix = "-  " if bullet else ""
-        _cell(prefix + text, 5)
+        pdf.set_font("Helvetica", size=body_size)
+        if bullet:
+            # Hanging-indent bullet for clean wrapping.
+            x0 = pdf.get_x()
+            pdf.cell(5, line_h, _latin("-"))
+            pdf.multi_cell(0, line_h, _latin(str(text)), new_x="LMARGIN", new_y="NEXT")
+            pdf.set_x(x0)
+        else:
+            _cell(text, line_h)
 
     if templates.is_cv_type(gad.document_type):
         header = content.get("header") or {}
-        pdf.set_font("Helvetica", "B", 18)
-        _cell(header.get("name") or gad.title, 9)
+        name = header.get("name") or gad.title
+        pdf.set_font("Helvetica", "B", 19 if tone in ("refined", "academic") else 18)
+        _cell(name, 9)
         contact = " | ".join(
             x for x in [header.get("email"), header.get("phone"), header.get("location")] if x
         )
         if contact:
             pdf.set_font("Helvetica", size=10)
             _cell(contact, 5)
-        pdf.ln(2)
+        if divider:
+            y = pdf.get_y() + 1
+            pdf.set_draw_color(150, 150, 150)
+            pdf.line(pdf.l_margin, y, pdf.w - pdf.r_margin, y)
+        pdf.ln(sect_gap + 1)
         for label, value in _cv_sections(content):
             heading(label)
             if isinstance(value, list):
@@ -567,33 +665,79 @@ def _render_pdf(gad, template_key: str) -> bytes:
                     body(str(item), bullet=True)
             else:
                 body(str(value))
-            pdf.ln(2)
+            pdf.ln(sect_gap)
     else:
-        pdf.set_font("Helvetica", "B", 15)
-        _cell(gad.title, 8)
-        pdf.ln(3)
-        for section in (content.get("sections") or []):
-            if section.get("heading"):
-                heading(section["heading"])
-            body(section.get("body", ""))
-            pdf.ln(2)
-        if content.get("closing"):
-            pdf.ln(2)
-            body(content["closing"])
-        if not content.get("sections") and gad.plain_text_preview:
-            body(gad.plain_text_preview)
+        _render_letter_pdf(pdf, gad, content, tone=tone, divider=divider,
+                           line_h=line_h, body=body, heading=heading, cell=_cell)
 
     return bytes(pdf.output())
 
 
+def _render_letter_pdf(pdf, gad, content, *, tone, divider, line_h, body, heading, cell):
+    """Letter layout: optional letterhead, sender, date, recipient, subject,
+    body, closing, signature. ``premium_letter`` gets a refined letterhead rule."""
+    import datetime
+
+    sender = (gad.structured_content or {}).get("header") or {}
+    # Premium letterhead: name + thin rule.
+    if tone == "premium":
+        pdf.set_font("Helvetica", "B", 16)
+        cell(content.get("signature") or gad.title, 8)
+        y = pdf.get_y() + 1
+        pdf.set_draw_color(150, 150, 150)
+        pdf.line(pdf.l_margin, y, pdf.w - pdf.r_margin, y)
+        pdf.ln(4)
+    else:
+        pdf.set_font("Helvetica", "B", 15)
+        cell(gad.title, 8)
+        pdf.ln(2)
+
+    # Date (today, consistent format) for official letters.
+    if tone in ("official", "premium"):
+        pdf.set_font("Helvetica", size=10)
+        cell(datetime.date.today().strftime("%d %B %Y"), line_h)
+    if gad.target_organization and tone in ("official", "premium"):
+        pdf.set_font("Helvetica", size=10)
+        cell(gad.target_organization, line_h)
+    if content.get("subject"):
+        pdf.set_font("Helvetica", "B", 11)
+        cell("Subject: " + str(content["subject"]), line_h)
+        pdf.ln(1)
+    if content.get("salutation"):
+        pdf.set_font("Helvetica", size=10.5)
+        cell(str(content["salutation"]), line_h)
+        pdf.ln(1)
+
+    for section in (content.get("sections") or []):
+        if section.get("heading"):
+            heading(section["heading"])
+        body(section.get("body", ""))
+        pdf.ln(2)
+    if not content.get("sections") and gad.plain_text_preview:
+        body(gad.plain_text_preview)
+    if content.get("closing"):
+        pdf.ln(2)
+        body(content["closing"])
+    if content.get("signature"):
+        pdf.ln(2)
+        pdf.set_font("Helvetica", "B", 10.5)
+        cell(str(content["signature"]), line_h)
+
+
 def _render_docx(gad, template_key: str) -> bytes:
+    import datetime
+
     from docx import Document as Docx
-    from docx.shared import Pt
+    from docx.shared import Cm, Pt
 
     doc = Docx()
     style = doc.styles["Normal"]
     style.font.name = "Calibri"
     style.font.size = Pt(11)
+    # Clean, standard margins (ATS-friendly).
+    for section in doc.sections:
+        section.top_margin = section.bottom_margin = Cm(2.0)
+        section.left_margin = section.right_margin = Cm(2.0)
     content = gad.structured_content or {}
 
     if templates.is_cv_type(gad.document_type):
@@ -613,18 +757,69 @@ def _render_docx(gad, template_key: str) -> bytes:
                 doc.add_paragraph(str(value))
     else:
         doc.add_heading(gad.title, level=0)
+        if gad.target_organization:
+            doc.add_paragraph(datetime.date.today().strftime("%d %B %Y"))
+            doc.add_paragraph(gad.target_organization)
+        if content.get("subject"):
+            p = doc.add_paragraph()
+            run = p.add_run("Subject: " + str(content["subject"]))
+            run.bold = True
+        if content.get("salutation"):
+            doc.add_paragraph(str(content["salutation"]))
         for section in (content.get("sections") or []):
             if section.get("heading"):
                 doc.add_heading(section["heading"], level=1)
             doc.add_paragraph(section.get("body", ""))
-        if content.get("closing"):
-            doc.add_paragraph(content["closing"])
         if not content.get("sections") and gad.plain_text_preview:
             doc.add_paragraph(gad.plain_text_preview)
+        if content.get("closing"):
+            doc.add_paragraph(content["closing"])
+        if content.get("signature"):
+            p = doc.add_paragraph()
+            p.add_run(str(content["signature"])).bold = True
 
     buffer = io.BytesIO()
     doc.save(buffer)
     return buffer.getvalue()
+
+
+def plain_text_from_content(content: dict, document_type: str) -> str:
+    """Deterministic plain-text rebuild from structured content (for the preview
+    after an edit). No AI."""
+    content = content if isinstance(content, dict) else {}
+    lines: list[str] = []
+    if templates.is_cv_type(document_type):
+        header = content.get("header") or {}
+        if header.get("name"):
+            lines.append(str(header["name"]))
+        contact = " | ".join(
+            x for x in [header.get("email"), header.get("phone"), header.get("location")] if x
+        )
+        if contact:
+            lines.append(contact)
+        for label, value in _cv_sections(content):
+            lines.append("")
+            lines.append(label.upper())
+            if isinstance(value, list):
+                lines.extend(f"- {item}" for item in value)
+            else:
+                lines.append(str(value))
+    else:
+        if content.get("subject"):
+            lines.append("Subject: " + str(content["subject"]))
+        if content.get("salutation"):
+            lines.append(str(content["salutation"]))
+        for section in (content.get("sections") or []):
+            lines.append("")
+            if section.get("heading"):
+                lines.append(str(section["heading"]))
+            lines.append(str(section.get("body", "")))
+        if content.get("closing"):
+            lines.append("")
+            lines.append(str(content["closing"]))
+        if content.get("signature"):
+            lines.append(str(content["signature"]))
+    return "\n".join(lines).strip()[:20000]
 
 
 def _latin(text: str) -> str:

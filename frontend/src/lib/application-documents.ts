@@ -7,6 +7,8 @@
 import { apiFetch } from "./api";
 import { getInboxFileDownloadBlob, saveBlob } from "./document-files";
 import type {
+  DocumentTemplate,
+  DocumentWarning,
   ExportFormat,
   ExportRequest,
   ExportResult,
@@ -16,6 +18,7 @@ import type {
   SaveToPackResult,
   TemplateRegistry,
   UpdateGeneratedDocumentRequest,
+  WarningSeverity,
 } from "@/types/application-documents";
 
 /** Fetch the document types, content styles, and templates registry. */
@@ -135,4 +138,54 @@ export function creditNotice(
   const cost = meta?.credit_cost ?? 0;
   const unit = cost === 1 ? "credit" : "credits";
   return `Uses ${cost} AI ${unit} after successful generation.`;
+}
+
+// ---- Warning grouping ------------------------------------------------------
+
+/** Severity order, highest first — drives grouped display. */
+export const WARNING_SEVERITY_ORDER: WarningSeverity[] = [
+  "high",
+  "medium",
+  "low",
+];
+
+/** Friendly label for a warning severity bucket. */
+export const WARNING_SEVERITY_LABELS: Record<WarningSeverity, string> = {
+  high: "Needs attention",
+  medium: "Worth reviewing",
+  low: "Minor notes",
+};
+
+/**
+ * Group structured warnings by severity, ordered high → medium → low. Empty
+ * buckets are omitted so callers can render only what exists.
+ */
+export function groupWarningsBySeverity(
+  warnings: DocumentWarning[] | undefined,
+): { severity: WarningSeverity; items: DocumentWarning[] }[] {
+  if (!warnings || warnings.length === 0) return [];
+  return WARNING_SEVERITY_ORDER.map((severity) => ({
+    severity,
+    items: warnings.filter((w) => w.severity === severity),
+  })).filter((group) => group.items.length > 0);
+}
+
+// ---- Template / format helpers ---------------------------------------------
+
+/** Whether a template can produce a given export format. */
+export function templateSupportsFormat(
+  template: DocumentTemplate | null | undefined,
+  format: ExportFormat,
+): boolean {
+  return Boolean(template?.export_formats.includes(format));
+}
+
+/** Short, calm reason copy when a template can't produce a format. */
+export function unsupportedFormatReason(
+  template: DocumentTemplate | null | undefined,
+  format: ExportFormat,
+): string {
+  const label = EXPORT_FORMAT_LABELS[format];
+  if (!template) return `Pick a template to export ${label}.`;
+  return `${template.label} doesn't produce ${label}.`;
 }

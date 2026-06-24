@@ -167,7 +167,8 @@ class GenerateGatingTests(APITestCase):
             resp = self.client.post(
                 GENERATE_URL, {"document_type": "motivation_letter"}, format="json"
             )
-        self.assertIn("No GPA on file", resp.data["warnings"])
+        messages = [w["message"] for w in resp.data["warnings"]]
+        self.assertIn("No GPA on file", messages)
 
     def test_cannot_generate_from_another_users_application(self):
         other = User.objects.create_user(username="o", email="o@x.com", password="StrongPass123!DN")
@@ -305,11 +306,128 @@ class AtsValidatorTests(APITestCase):
         result = templates.validate_ats_structure(good, "ats_classic")
         self.assertTrue(result["ats_safe"])
         self.assertGreaterEqual(result["score"], 90)
+        # Warnings are structured {type, severity, message}.
+        for w in result["warnings"]:
+            self.assertEqual(set(w), {"type", "severity", "message"})
 
         thin = {"summary": "x"}
         bad = templates.validate_ats_structure(thin, "ats_classic")
         self.assertLess(bad["score"], 90)
-        self.assertTrue(any("Education" in w for w in bad["warnings"]))
+        self.assertFalse(bad["ats_safe"])  # missing education = high severity
+        self.assertTrue(any(w["type"] == "missing_education" for w in bad["warnings"]))
 
+        # A non-ATS template flagged as not ATS-safe.
         premium = templates.validate_ats_structure(good, "premium_letter")
-        self.assertTrue(any("portals" in w for w in premium["warnings"]))
+        self.assertFalse(premium["ats_safe"])
+        self.assertTrue(any(w["type"] == "non_ats_template" for w in premium["warnings"]))
+
+
+@override_settings(**_CONFIGURED)
+class EditReviewTests(APITestCase):
+    """PATCH the reviewed draft: no AI, no credits; edited content flows into the
+    plain-text preview, the recomputed warnings, and the exported file."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="ed", email="ed@x.com", password="StrongPass123!DN"
+        )
+        _grant_pro(self.user)
+        self.gad = GeneratedApplicationDocument.objects.create(
+            owner=self.user, document_type="ats_resume", title="Jane Doe CV",
+            template_key="ats_classic", content_style="corporate",
+            structured_content=_CV_RESULT.data["content"],
+            plain_text_preview="old preview", status="draft",
+            ats_score=90, quality_score=80, warnings=[],
+        )
+        self.detail_url = f"/api/v1/application-documents/{self.gad.id}/"
+        self.export_url = f"/api/v1/application-documents/{self.gad.id}/export/"
+        self.client.force_authenticate(self.user)
+
+    def _used(self):
+        return entitlements.get_ai_credits_used_this_month(self.user)
+
+    def test_edit_updates_preview_and_recomputes_no_ai_no_credits(self):
+        edited = dict(_CV_RESULT.data["content"])
+        edited["summary"] = "Edited senior data scientist summary, 5 years."
+        with _flags(True), mock.patch("apps.ai.client.generate") as g:
+            resp = self.client.patch(
+                self.detail_url, {"structured_content": edited}, format="json"
+            )
+        self.assertEqual(resp.status_code, 200, resp.data)
+        g.assert_not_called()
+        self.assertEqual(self._used(), 0)
+        self.gad.refresh_from_db()
+        self.assertIn("Edited senior data scientist summary", self.gad.plain_text_preview)
+        self.assertNotEqual(self.gad.plain_text_preview, "old preview")
+        # Warnings re-derived as structured dicts.
+        for w in self.gad.warnings:
+            self.assertEqual(set(w), {"type", "severity", "message"})
+
+    def test_edited_content_is_used_in_export(self):
+        edited = dict(_CV_RESULT.data["content"])
+        edited["summary"] = "UNIQUEMARKER42 distinctive summary text."
+        with _flags(True):
+            self.client.patch(
+                self.detail_url, {"structured_content": edited}, format="json"
+            )
+            self.client.post(self.export_url, {"format": "docx"}, format="json")
+        self.gad.refresh_from_db()
+        import io
+        import zipfile
+
+        from apps.documents.file_encryption import read_plaintext
+
+        plaintext = read_plaintext(self.gad.exported_docx_file)
+        self.assertTrue(plaintext.startswith(b"PK"))
+        # The edited text lives in the (compressed) document XML inside the zip.
+        with zipfile.ZipFile(io.BytesIO(plaintext)) as zf:
+            body = zf.read("word/document.xml").decode("utf-8")
+        self.assertIn("UNIQUEMARKER42", body)  # edit is in the rendered DOCX
+
+    def test_cannot_edit_another_users_draft(self):
+        other = User.objects.create_user(
+            username="z", email="z@x.com", password="StrongPass123!DN"
+        )
+        self.client.force_authenticate(other)
+        with _flags(True):
+            resp = self.client.patch(
+                self.detail_url, {"title": "Hacked"}, format="json"
+            )
+        self.assertEqual(resp.status_code, 404)
+
+
+class PresetsAndRegistryTests(APITestCase):
+    def test_presets_exist_for_core_types(self):
+        for dtype in ("ats_resume", "cover_letter", "scholarship_cv",
+                      "visa_explanation_letter", "statement_of_purpose"):
+            preset = templates.get_document_preset(dtype)
+            self.assertIn("recommended_style", preset)
+            self.assertIn("length_guidance", preset)
+            self.assertIn("best_for", preset)
+            self.assertTrue(preset["quality_rules"])
+
+    def test_registry_includes_export_formats_and_best_for(self):
+        registry = templates.build_template_registry()
+        for tmpl in registry["templates"]:
+            self.assertIn("export_formats", tmpl)
+            self.assertIn("best_for", tmpl)
+            self.assertIn("preview", tmpl)
+
+
+class ContentQualityTests(APITestCase):
+    def test_generic_language_flagged(self):
+        content = {"sections": [
+            {"heading": "Intro", "body": "I am writing to express my interest. "
+             "I am passionate about this and believe I am a good fit."}
+        ]}
+        warnings = templates.build_content_quality_warnings(
+            content, document_type="cover_letter", context={}, target_organization="Acme"
+        )
+        self.assertTrue(any(w["type"] == "generic_language" for w in warnings))
+
+    def test_missing_target_org_flagged(self):
+        content = {"sections": [{"heading": "Intro", "body": "Concrete specific text."}]}
+        warnings = templates.build_content_quality_warnings(
+            content, document_type="cover_letter", context={}, target_organization=""
+        )
+        self.assertTrue(any(w["type"] == "missing_target_organization" for w in warnings))

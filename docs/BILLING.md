@@ -146,9 +146,13 @@ credit.
 variable by document type (3 / 5 / 8, see table above) and is charged only after
 a successful model-backed generation; every other path (consent missing, plan
 blocked, provider error, budget block, validation failure) charges 0 credits.
-**Export (PDF/DOCX) and save-to-pack make no AI call and consume no AI credits**;
-they do consume file count and storage quota under the normal Free/Pro plan
-limits (Free: 30 files / 100 MB; Pro: 1 000 files / 10 GB).
+**Editing the draft (`PATCH`), export (PDF/DOCX), and save-to-pack make no AI
+call and consume no AI credits**; editing exists so users can review and refine
+before export. The structured `warnings` and the `quality_score`/`ats_score`
+shown on a draft are **deterministic, AI-free recomputes** — re-running them by
+editing content is always free. Export and save-to-pack do consume file count and
+storage quota under the normal Free/Pro plan limits (Free: 30 files / 100 MB;
+Pro: 1 000 files / 10 GB).
 
 These are **product entitlements**. They sit alongside — and never replace — the
 **infrastructure AI budget guard** (`AI_DAILY_TOKEN_CAP_USER`,

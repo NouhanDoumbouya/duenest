@@ -1568,6 +1568,28 @@ Key facts:
   `POST .../generate/`, `GET/PATCH .../{id}/`, `POST .../{id}/export/`,
   `POST .../{id}/save-to-pack/`. Distinct `application-documents/` prefix (not
   the legacy `generated-documents/`).
+
+### Document Template Polish V1 — (delivered, 2026-06-24)
+
+A polish pass on the generator above. Shipped:
+
+* **Editable review before export.** `PATCH .../{id}/` now supports edits to
+  `structured_content` (plus title/status/template/style/preview); the backend
+  deterministically rebuilds the preview and recomputes ATS + quality scores and
+  warnings — **no AI call, no credits**. Flow is now Generate → Review → Edit →
+  Choose Template → Export → Save to Pack.
+* **Structured ATS + quality warnings.** `warnings` is now a list of
+  `{ type, severity, message }` objects (capped at 30), and a new deterministic
+  `quality_score` (0–100) sits alongside `ats_score` on the response and model.
+* **Richer templates registry.** Per-document-type presets add
+  `recommended_style`, `length_guidance`, `best_for`, `description`, and
+  `export_formats`; templates add `best_for` and a UI-only `preview` hint.
+* **Template differentiation + real exports.** Improved prompt (anti-generic
+  filler, per-style rules, action+impact+evidence bullets), per-template
+  PDF/DOCX spacing/dividers, letter structure, and `premium_letter` letterhead.
+  PDFs remain selectable text via fpdf2 (latin-1 with graceful replacement; full
+  Unicode embedding is future work); DOCX stays editable + ATS-safe.
+
 * **Next recommended branch:** `product/magic-inbox-v1`
 
 Upcoming planned branches (in order):
