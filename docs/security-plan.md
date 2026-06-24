@@ -1804,3 +1804,54 @@ V1 is append-only and keeps entries **indefinitely** (no automatic purge). A
 retention/export policy, B2B audit exports, and broader event coverage are future
 work. See `docs/security/audit-logs.md` and `docs/api-spec.md` §37 for the full
 event catalog and API contract.
+
+## B2B Portals MVP
+
+An organization-facing portal workspace for managing people and document **cases**
+(`organizations/{org_id}/portal/`). It is an MVP that **orchestrates existing
+primitives** — it does **not** add a second upload, sharing-room, or request
+system, and it is **deterministic — no AI, no AI credits**. The three new models
+(`PortalPerson`, `PortalCase`, `PortalCaseDocumentRequest`, migration
+`organizations/0005_*`) carry only workspace metadata, never files.
+
+### Membership-scoped access, admin-only writes
+
+* Every portal endpoint requires **authentication** and **membership** of the
+  target organization. Reads are open to any member; **writes require an
+  admin/owner role** (`require_role(ADMIN_ROLES)`).
+* **Org isolation:** a member only ever sees and acts on their **own
+  organization's** people and cases — there is no cross-organization read or write.
+* A **founder-only feature flag** `b2b_portals` gates the entire surface (a `503`
+  when off), so the portal currently reaches only founders/beta testers.
+
+### Ownership and reused primitives
+
+The document primitives stay **User-owned** (no org FK). A case's checklist
+(`DocumentBundle`), workspace (`SharingRoom`), and document collection
+(`DocumentRequestLink`) are owned by the case's **creating member** (`created_by`),
+so the existing owner-scoped ownership and permission checks apply unchanged;
+organization access is gated by **membership**, not by primitive ownership. The
+older/parallel org systems (`OrganizationSecureRoom`, `OrganizationDocument`, the
+org-side `DocumentRequest`/campaigns, the personal `ShareRoom`) are **left
+untouched** — no duplicate upload/room/request systems were introduced.
+
+### No public portal surface
+
+The portal adds **no new public route**. Recipients continue through the existing
+**Document Request Link** (`/document-request/{token}`) and **Sharing Room**
+(`/room/{token}`) public pages, which keep their own token security, private
+file-serving proxies, and review/accept flows. The portal therefore exposes **no
+private file URLs** and never creates a public portal page.
+
+### Audit and privacy
+
+Portal actions are recorded via the unified Audit Logs (`record_audit_event`,
+category `system`, owner = the org's owner user, actor = the acting member,
+`metadata.org_id` for scoping): `portal_person_created`, `portal_person_archived`,
+`portal_case_created`, `portal_case_status_changed`, `portal_case_archived`,
+`portal_case_pack_created`, `portal_case_room_created`,
+`portal_case_request_created`. No document contents, tokens, or file URLs are
+stored (the same privacy rules as Audit Logs V1 above).
+
+See `docs/b2b-portals.md`, `docs/api-spec.md` §38, and
+`docs/security/audit-logs.md` for the full contract and event catalog.

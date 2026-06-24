@@ -106,6 +106,19 @@ returns `403 plan_limit_exceeded`). The feature is gated behind the founder-only
 feature flag `redaction_watermarking`, and the flow is deterministic — no AI, no
 AI credits (see `docs/api-spec.md` §36).
 
+**B2B Portals MVP (`organizations/{org_id}/portal/`)** adds **no new plan
+resource**. The whole portal is gated behind the founder-only feature flag
+`b2b_portals` (a `503` when off), so it currently reaches only founders/beta
+testers; Stripe/billing is **untouched**. The portal **orchestrates existing
+primitives** — a case's checklist (`DocumentBundle`), workspace (`SharingRoom`),
+and document collection (`DocumentRequestLink`) — which stay **User-owned** by the
+case's creating member. **Known limitation:** these portal-created primitives
+count against the **creating member's personal plan limits** (Free: 1 pack / 3
+rooms / 5 request links). A **Teams-tier plan** that lifts these for organization
+workspaces is **future work** (`b2b/portals-teams-plan`); see `docs/b2b-portals.md`.
+The portal itself is deterministic — no AI, no AI credits (see `docs/api-spec.md`
+§38).
+
 **Storage quota method:** storage used is the sum of stored `DocumentFile.file_size`
 values for the user's non-trashed files, computed from the database. Cloudflare R2
 is never queried for quota calculation — these are product limits, separate from

@@ -37,6 +37,11 @@ reads are **not** logged.
 - **Protected Copies:** created, generated, failed, added_to_room, archived.
 - **Applications / Packs:** application_created, application_status_changed,
   pack_created, pack_requirement_satisfied.
+- **B2B Portals:** portal_person_created, portal_person_archived,
+  portal_case_created, portal_case_status_changed, portal_case_archived,
+  portal_case_pack_created, portal_case_room_created, portal_case_request_created.
+  Recorded under category `system`, owner = the organization's owner user, actor =
+  the acting member, with `metadata.org_id` for scoping.
 
 Public-route events are recorded with `actor_type` `public_link` (an anonymous
 visitor), via `record_public_link_event`.

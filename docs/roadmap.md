@@ -995,9 +995,11 @@ provides a deterministic profile+application+pack context for **future** AI
 document generation (not called here, not a public endpoint in V1). Available to
 Free and Pro; founder-only rollout flag `smart_profile` until launched.
 
-**Next recommended branch: `b2b/portals-mvp`** (Magic Inbox V1, Weekly Radar
-Email V1, Document Request Links V1, and Sharing Rooms V1 are now done — see the
-done sections below)
+**Next recommended branch: `b2b/portals-teams-plan`** (Magic Inbox V1, Weekly
+Radar Email V1, Document Request Links V1, Sharing Rooms V1, and the B2B Portals
+MVP are now done — see the done sections below). The B2B Portals MVP currently
+reuses the creating member's personal plan limits; a Teams-tier plan that lifts
+them is the sensible follow-up, alongside a portal review/approval workflow.
 
 Smart Profile was built mainly to power CV/résumé, motivation letters,
 application emails, SOPs, and form filling — the AI Application Document
@@ -1021,7 +1023,8 @@ sharing/document-request-links-v1      (done — secure single-document collecti
 sharing/rooms-v1                       (done — secure shared room workspaces: selected items + request links behind one token)
 security/redaction-watermarking-v1     (done — secure server-side protected copies: redaction + watermark, original never modified)
 security/audit-logs-v1                 (done — owner-scoped security/document event log, hashed fingerprints, owner-only, no AI)
-b2b/portals-mvp                        ← next
+b2b/portals-mvp                        (done — org portal workspace: people + cases orchestrating existing primitives, founder-gated, deterministic)
+b2b/portals-teams-plan                 ← next (Teams plan + lifted limits, portal review/approval workflow)
 integrations/inbox-mailbox-import      (future — Gmail/Drive/Outlook import into Magic Inbox)
 backend/ai-org-credit-pools            (future)
 product/life-radar-ai-insights         (future — AI-enhanced Life Radar)
@@ -1644,8 +1647,9 @@ Upcoming planned branches (in order):
 1. `notifications/weekly-radar-email` — **delivered** (2026-06-24, see below)
 2. `sharing/document-request-links-v1` — **delivered** (2026-06-24, see below)
 3. `sharing/rooms-v1` — **delivered** (2026-06-24, see below)
-4. `b2b/portals-mvp` ← **next**
-5. `integrations/inbox-mailbox-import` (future — Gmail/Drive/Outlook import)
+4. `b2b/portals-mvp` — **delivered** (2026-06-24, see below)
+5. `b2b/portals-teams-plan` ← **next** (Teams plan + lifted limits, portal review/approval workflow)
+6. `integrations/inbox-mailbox-import` (future — Gmail/Drive/Outlook import)
 
 ## Weekly Radar Email V1 — delivered (2026-06-24)
 
@@ -1941,3 +1945,77 @@ visitors) can never read audit logs.
 
 See `docs/security/audit-logs.md`, `docs/api-spec.md`, and `docs/security-plan.md`
 for the event catalog, privacy rules, and API contract.
+
+## B2B Portals MVP — delivered (2026-06-24)
+
+`b2b/portals-mvp` is **implemented** (backend complete + tested). An
+organization-facing **portal workspace** to manage people
+(clients/students/applicants/employees) and document **cases**. It is an MVP that
+**orchestrates existing primitives** — it does **not** create a second upload,
+sharing-room, or request system. Fully **deterministic — no AI, no AI credits.**
+
+**Convergence decision (the core of this MVP).** B2B Portals **reuses** what
+already exists rather than building parallel systems:
+
+* The existing `Organization` + `OrganizationMembership` (roles
+  owner/admin/member/viewer) provide the workspace and permissions.
+* The per-user document primitives from `apps.documents` do the real work — a
+  case's checklist/progress is a `DocumentBundle` + requirements
+  (`bundle_readiness`), a case's secure workspace is a `SharingRoom`, each
+  document is collected via a `DocumentRequestLink` (recipient defaults to the
+  case person; satisfies a pack requirement on acceptance), plus
+  `TrackedApplication` and the unified `AuditLogEntry`.
+* It **adds only three minimal new models** in `apps/organizations`:
+  `PortalPerson`, `PortalCase`, and `PortalCaseDocumentRequest` (a join).
+  Migration `organizations/0005_*`.
+* The older/parallel org systems — `OrganizationSecureRoom`,
+  `OrganizationDocument`, the org-side `DocumentRequest`/campaigns, and the older
+  personal `ShareRoom` — are **left untouched** (parallel/legacy; not migrated or
+  deleted in this branch).
+
+Key facts:
+
+* **Ownership model.** The document primitives stay **User-owned** (no org FK). A
+  case's pack/room/request are owned by the case's creating member (`created_by`),
+  so the existing owner-scoped services apply unchanged; organization access is
+  gated by **membership**, not by primitive ownership.
+* **Known MVP limitation.** Portal-created primitives currently count against the
+  **creating member's personal plan limits** (Free: 1 pack / 3 rooms / 5 request
+  links). A Teams plan that lifts these is future work; the feature is
+  founder/beta-gated so this only affects beta testers.
+* **Permissions.** Authenticated organization **members** can read the portal;
+  **writes require an admin/owner role** (`require_role(ADMIN_ROLES)`). Org
+  isolation: a member only sees their own organization's people/cases.
+* **No public portal surface.** Recipients continue through the existing Document
+  Request Link (`/document-request/{token}`) and Sharing Room (`/room/{token}`)
+  public pages — the portal adds no new public route.
+* **Feature gate.** New feature flag `b2b_portals` (FOUNDER_ONLY default) gates the
+  whole portal (a `503` when off). No new plan resource was added; Stripe/billing
+  untouched.
+* **Progress / review (deterministic).** Per-case progress is computed from the
+  linked pack's requirements (total/satisfied/missing/readiness_score via
+  `bundle_readiness`) and the case's document-request statuses
+  (total/uploaded/accepted/needs_replacement/uploads_needing_review), plus a
+  `suggested_status`. A review queue lists case requests with an upload awaiting
+  review.
+* **Audit.** Portal events flow through the unified Audit Logs
+  (`record_audit_event`, owner = the org's owner, actor = the acting member,
+  `metadata.org_id` for scoping): `portal_person_created/archived`,
+  `portal_case_created/status_changed/archived`, and
+  `portal_case_pack_created/room_created/request_created`. No document contents,
+  tokens, or URLs stored.
+* **Endpoints (all `/api/v1/organizations/{org_id}/portal/...`, authenticated +
+  member-scoped + feature-gated):** `GET /summary/`; People CRUD + `archive`;
+  Cases CRUD + `archive` + `create-pack` / `create-room` / `create-request` /
+  `progress`; and `GET /review-queue/`.
+* **Frontend:** owner/staff page `/dashboard/organizations/[orgId]/portal`
+  (dashboard summary + people + cases + review queue + case detail/actions). No
+  public UI.
+
+**Deferred (future work):** a Teams-tier plan with lifted limits, a portal
+review/approval workflow, bulk reminders, organization document templates, an
+analytics dashboard, and broader/advanced RBAC and approval chains.
+
+See `docs/b2b-portals.md`, `docs/api-spec.md`, `docs/BILLING.md`,
+`docs/security-plan.md`, and `docs/security/audit-logs.md` for the full contract,
+convergence detail, plan limits, and security model.

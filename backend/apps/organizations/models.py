@@ -743,3 +743,185 @@ class OrganizationReadinessReport(models.Model):
 
     def __str__(self):
         return self.title
+
+
+# ---- B2B Portals MVP --------------------------------------------------------
+#
+# Portal People + Cases are a thin, org-scoped ORCHESTRATION layer over the
+# existing per-user primitives (apps.documents: DocumentBundle/requirements,
+# SharingRoom, DocumentRequestLink, TrackedApplication, AuditLogEntry). They do
+# NOT duplicate uploads/rooms/requests — a case creates and links those existing
+# objects. The legacy parallel org systems (OrganizationSecureRoom,
+# OrganizationDocument, the org-side DocumentRequest/campaigns) are left untouched.
+
+
+class PortalPerson(models.Model):
+    """
+    A client / student / applicant / employee an organization manages in its
+    portal. Org-scoped; NOT a CertaNest user account. Stores only contact + status
+    metadata — never their document contents.
+    """
+
+    class PersonType(models.TextChoices):
+        CLIENT = "client", "Client"
+        STUDENT = "student", "Student"
+        APPLICANT = "applicant", "Applicant"
+        EMPLOYEE = "employee", "Employee"
+        FAMILY_MEMBER = "family_member", "Family member"
+        OTHER = "other", "Other"
+
+    class Status(models.TextChoices):
+        ACTIVE = "active", "Active"
+        WAITING_FOR_DOCUMENTS = "waiting_for_documents", "Waiting for documents"
+        UNDER_REVIEW = "under_review", "Under review"
+        COMPLETED = "completed", "Completed"
+        ARCHIVED = "archived", "Archived"
+
+    organization = models.ForeignKey(
+        Organization, on_delete=models.CASCADE, related_name="portal_people"
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+        related_name="portal_people_created",
+    )
+    full_name = models.CharField(max_length=255)
+    email = models.EmailField(blank=True)
+    phone = models.CharField(max_length=40, blank=True)
+    person_type = models.CharField(
+        max_length=20, choices=PersonType.choices, default=PersonType.CLIENT
+    )
+    status = models.CharField(
+        max_length=24, choices=Status.choices, default=Status.ACTIVE
+    )
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    archived_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+        indexes = [
+            models.Index(fields=["organization", "status", "-updated_at"]),
+        ]
+
+    def __str__(self):
+        return f"PortalPerson(org={self.organization_id}, name={self.full_name!r})"
+
+
+class PortalCase(models.Model):
+    """
+    A document case for a portal person — the unit of work an org tracks. Links to
+    the existing primitives: a pack (checklist/progress), an application, and a
+    Sharing Room (secure workspace). Document requests are linked through
+    ``PortalCaseDocumentRequest``. Org-scoped.
+    """
+
+    class CaseType(models.TextChoices):
+        VISA = "visa", "Visa"
+        SCHOLARSHIP = "scholarship", "Scholarship"
+        ADMISSION = "admission", "Admission"
+        EMPLOYEE_ONBOARDING = "employee_onboarding", "Employee onboarding"
+        COMPLIANCE = "compliance", "Compliance"
+        CLIENT_FILE = "client_file", "Client file"
+        GENERAL = "general", "General"
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        COLLECTING_DOCUMENTS = "collecting_documents", "Collecting documents"
+        WAITING_FOR_REVIEW = "waiting_for_review", "Waiting for review"
+        READY = "ready", "Ready"
+        SUBMITTED = "submitted", "Submitted"
+        COMPLETED = "completed", "Completed"
+        BLOCKED = "blocked", "Blocked"
+        ARCHIVED = "archived", "Archived"
+
+    class Priority(models.TextChoices):
+        LOW = "low", "Low"
+        NORMAL = "normal", "Normal"
+        HIGH = "high", "High"
+        URGENT = "urgent", "Urgent"
+
+    # Statuses that count as "active" (shown in active queues / not archived).
+    ACTIVE_STATUSES = (
+        Status.DRAFT, Status.COLLECTING_DOCUMENTS, Status.WAITING_FOR_REVIEW,
+        Status.READY, Status.SUBMITTED, Status.BLOCKED,
+    )
+
+    organization = models.ForeignKey(
+        Organization, on_delete=models.CASCADE, related_name="portal_cases"
+    )
+    person = models.ForeignKey(
+        PortalPerson, on_delete=models.CASCADE, related_name="cases"
+    )
+    # The org member who created the case. Their CertaNest user owns the linked
+    # primitives (pack/room/request) so the existing per-user services apply.
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+        related_name="portal_cases_created",
+    )
+    title = models.CharField(max_length=255)
+    case_type = models.CharField(
+        max_length=24, choices=CaseType.choices, default=CaseType.GENERAL
+    )
+    status = models.CharField(
+        max_length=24, choices=Status.choices, default=Status.DRAFT
+    )
+    priority = models.CharField(
+        max_length=8, choices=Priority.choices, default=Priority.NORMAL
+    )
+    due_date = models.DateField(null=True, blank=True)
+
+    # Links to existing primitives (SET_NULL — deleting a primitive never destroys
+    # the case record). These belong to apps.documents.
+    linked_bundle = models.ForeignKey(
+        "documents.DocumentBundle", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="portal_cases",
+    )
+    linked_application = models.ForeignKey(
+        "documents.TrackedApplication", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="portal_cases",
+    )
+    linked_room = models.ForeignKey(
+        "documents.SharingRoom", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="portal_cases",
+    )
+
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    archived_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+        indexes = [
+            models.Index(fields=["organization", "status", "-updated_at"]),
+            models.Index(fields=["organization", "person"]),
+        ]
+
+    def __str__(self):
+        return f"PortalCase(org={self.organization_id}, title={self.title!r})"
+
+
+class PortalCaseDocumentRequest(models.Model):
+    """Links a case to a reused ``DocumentRequestLink`` (and optionally the pack
+    requirement it satisfies). No second request system — this is just the join."""
+
+    case = models.ForeignKey(
+        PortalCase, on_delete=models.CASCADE, related_name="case_requests"
+    )
+    document_request = models.ForeignKey(
+        "documents.DocumentRequestLink", on_delete=models.CASCADE,
+        related_name="portal_case_links",
+    )
+    requirement = models.ForeignKey(
+        "documents.DocumentBundleRequirement", on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="portal_case_requests",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["case", "-created_at"])]
+
+    def __str__(self):
+        return f"PortalCaseDocumentRequest(case={self.case_id}, req={self.document_request_id})"
