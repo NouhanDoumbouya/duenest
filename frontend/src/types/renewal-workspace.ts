@@ -190,6 +190,92 @@ export interface BundleReadiness {
   missing_required_titles: string[];
 }
 
+/** Application Pack Readiness V1 — rich deterministic payload from
+ *  `GET /document-bundles/{id}/readiness/` (a superset of BundleReadiness). */
+export type PackRequirementStatus =
+  | "satisfied"
+  | "missing"
+  | "expired"
+  | "expiring_soon"
+  | "needs_review";
+
+export interface PackRequirement {
+  requirement_id: number;
+  title: string;
+  description: string;
+  requirement_type: string;
+  is_required: boolean;
+  expected_document_type: string | null;
+  status: PackRequirementStatus;
+  document_id: number | null;
+  document_title: string | null;
+  expiry_date: string | null;
+  days_until_expiry: number | null;
+}
+
+export interface PackReadinessWarning {
+  type: "expired" | "expiring_soon" | "needs_review";
+  severity: "critical" | "warning";
+  message: string;
+  document_id: number | null;
+  requirement_id: number;
+  action: { type: string; label: string };
+}
+
+export interface PackReadinessAction {
+  type: string;
+  label: string;
+  description: string;
+  priority: "high" | "medium" | "low";
+  bundle_id: number;
+  requirement_id?: number;
+  document_id?: number;
+}
+
+export interface PackReadiness extends BundleReadiness {
+  pack_id: number;
+  name: string;
+  base_score: number;
+  label: string;
+  has_checklist: boolean;
+  is_ready_to_share: boolean;
+  target_date: string | null;
+  status: string;
+  summary: {
+    required_count: number;
+    satisfied_count: number;
+    missing_count: number;
+    warning_count: number;
+    expired_count: number;
+    expiring_soon_count: number;
+  };
+  required_documents: PackRequirement[];
+  satisfied_requirements: PackRequirement[];
+  missing_requirements: PackRequirement[];
+  attached_documents: PackRequirement[];
+  warnings: PackReadinessWarning[];
+  next_actions: PackReadinessAction[];
+}
+
+export interface PackReadinessSummaryRow {
+  pack_id: number;
+  name: string;
+  score: number;
+  label: string;
+  is_ready_to_share: boolean;
+  summary: PackReadiness["summary"];
+  target_date: string | null;
+  status: string;
+}
+
+export interface PackReadinessSummary {
+  total_packs: number;
+  ready_packs: number;
+  needs_attention_packs: number;
+  total_missing_required: number;
+  packs: PackReadinessSummaryRow[];
+}
+
 export type ReadinessSeverity = "blocker" | "warning" | "suggestion";
 export type ReadinessOverall = "ready" | "issues" | "blocked";
 

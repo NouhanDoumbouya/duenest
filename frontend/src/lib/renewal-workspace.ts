@@ -20,6 +20,9 @@ import type {
   BundleExportType,
   BundleFilesResponse,
   BundleReadiness,
+  PackReadiness,
+  PackReadinessAction,
+  PackReadinessSummary,
   ShareReadinessReport,
   BundleRequirement,
   Checklist,
@@ -217,6 +220,35 @@ export function getBundleReadiness(
     `/document-bundles/${bundleId}/readiness/`,
     { auth: true },
   );
+}
+
+/** Application Pack Readiness V1 — rich deterministic readiness (no AI). */
+export function getPackReadiness(bundleId: number): Promise<PackReadiness> {
+  return apiFetch<PackReadiness>(
+    `/document-bundles/${bundleId}/readiness/`,
+    { auth: true },
+  );
+}
+
+/** Deterministic readiness rollup across the user's active packs. */
+export function getPackReadinessSummary(): Promise<PackReadinessSummary> {
+  return apiFetch<PackReadinessSummary>(
+    `/document-bundles/readiness-summary/`,
+    { auth: true },
+  );
+}
+
+/** In-app destination for a pack-readiness next action. */
+export function packActionHref(action: PackReadinessAction): string {
+  switch (action.type) {
+    case "replace_expired_document":
+    case "create_reminder":
+      return action.document_id
+        ? `/dashboard/documents/${action.document_id}`
+        : `/dashboard/bundles/${action.bundle_id}`;
+    default:
+      return `/dashboard/bundles/${action.bundle_id}`;
+  }
 }
 
 /** AI-assisted "is this pack ready to send?" review (deterministic when AI is off). */

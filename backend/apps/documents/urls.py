@@ -8,6 +8,7 @@ from .views import (
     BundleExportListCreateView,
     BundleProofRecordListView,
     BundleReadinessView,
+    BundleReadinessSummaryView,
     BundleRequirementLinkDocumentView,
     BundleRequirementLinkFileView,
     ChecklistTemplateDetailView,
@@ -496,6 +497,13 @@ urlpatterns = [
         "document-bundles/",
         DocumentBundleListCreateView.as_view(),
         name="document-bundles",
+    ),
+    # Pack Readiness V1 summary across the user's active packs (static segment
+    # before the <int:bundle_id> routes so it is never captured as an id).
+    path(
+        "document-bundles/readiness-summary/",
+        BundleReadinessSummaryView.as_view(),
+        name="document-bundle-readiness-summary",
     ),
     path(
         "document-bundles/<int:bundle_id>/",
