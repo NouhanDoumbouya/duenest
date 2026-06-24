@@ -69,3 +69,13 @@ emergency viewer also ships a `robots: noindex` route layout.
 Invalid / disabled / expired / revoked / wrong-code / trashed-item → safe error
 (`410`/`403`/`404`), no content leaked. See `test_emergency_public.py`,
 `test_share_rooms.py`, `quick_share/tests.py`, `apps/core/test_security.py`.
+
+## Audit logging (owner-side accountability)
+Public-link opens, uploads, previews, and downloads on the newer flows (Document
+Request Links, Sharing Rooms) are recorded in the **owner's** Audit Log
+(`AuditLogEntry`, Audit Logs V1) as anonymous **`public_link`** actor events. This
+improves accountability without exposing the visitor's identity: the raw IP and
+user-agent are stored **only** as a salted SHA-256 hash (never plaintext), and no
+raw token, file URL, or content is stored. The audit log is **owner-only** — a
+public visitor can never read it. See `docs/security/audit-logs.md` and
+`docs/api-spec.md` §37.

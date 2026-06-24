@@ -73,6 +73,17 @@ new public upload system**:
   never exposed unless the owner separately adds it — and it streams through the
   same authenticated decrypt-in-memory proxy (no raw storage URL).
 
+## Audit logging (owner-side accountability)
+
+Public-link **opens** and **uploads** on Document Request Links — and **opens /
+previews / downloads** on Sharing Rooms — are recorded in the **owner's** Audit
+Log (`AuditLogEntry`, Audit Logs V1) as anonymous **`public_link`** actor events,
+so an owner can later see who interacted with a request or room. The visitor's
+identity is never exposed: IP and user-agent are stored **only** as a salted
+SHA-256 hash (never plaintext), and no raw token, file URL, or content is kept.
+The audit log is **owner-only** — recipients can never read it. See
+`docs/security/audit-logs.md` and `docs/api-spec.md` §37.
+
 ## Honest limits
 
 - Anyone with the link can upload until it is revoked/cancelled or expires —

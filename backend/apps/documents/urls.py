@@ -52,6 +52,9 @@ from .views import (
     ProtectedCopyGenerateView,
     ProtectedCopyArchiveView,
     ProtectedCopyAddToRoomView,
+    AuditLogListView,
+    AuditLogDetailView,
+    AuditLogSummaryView,
     BundleRequirementLinkDocumentView,
     BundleRequirementLinkFileView,
     ChecklistTemplateDetailView,
@@ -754,6 +757,22 @@ urlpatterns = [
         "protected-copies/<int:pk>/add-to-room/",
         ProtectedCopyAddToRoomView.as_view(),
         name="protected-copy-add-to-room",
+    ),
+    # Audit Logs V1 — owner-scoped security/document event history.
+    path(
+        "audit-logs/",
+        AuditLogListView.as_view(),
+        name="audit-logs",
+    ),
+    path(
+        "audit-logs/summary/",
+        AuditLogSummaryView.as_view(),
+        name="audit-logs-summary",
+    ),
+    path(
+        "audit-logs/<int:pk>/",
+        AuditLogDetailView.as_view(),
+        name="audit-log-detail",
     ),
     path(
         "document-bundles/",

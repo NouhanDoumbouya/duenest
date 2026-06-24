@@ -2627,3 +2627,25 @@ class SharingRoomSerializer(serializers.ModelSerializer):
 
     def get_request_count(self, obj):
         return obj.items.filter(item_type=SharingRoomItem.ItemType.REQUEST).count()
+
+
+from .models import AuditLogEntry  # noqa: E402
+
+
+class AuditLogEntrySerializer(serializers.ModelSerializer):
+    """
+    Owner-facing audit entry. Returns ONLY safe fields — never the salted ip/
+    user-agent hashes, never raw tokens/URLs/storage keys/content (the metadata is
+    already sanitized at write time). Read-only.
+    """
+
+    class Meta:
+        model = AuditLogEntry
+        fields = [
+            "id", "event_type", "category", "severity",
+            "actor_type", "actor_label",
+            "object_type", "object_id", "object_label",
+            "related_object_type", "related_object_id", "related_object_label",
+            "country_code", "metadata", "created_at",
+        ]
+        read_only_fields = fields

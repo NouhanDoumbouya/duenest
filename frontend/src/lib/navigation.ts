@@ -35,6 +35,7 @@ import {
   PenLine,
   QrCode,
   ScanLine,
+  ScrollText,
   IdCard,
   Settings,
   ShieldAlert,
@@ -354,6 +355,14 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
         href: "/dashboard/emergency",
         icon: LifeBuoy,
         featureKey: "emergency_access",
+      },
+      {
+        // Audit Logs V1: read-only history of important document and sharing
+        // events. Owner-only; apiFetch enforces access server-side. Shown
+        // unconditionally (no confirmed feature flag yet).
+        label: "Audit Logs",
+        href: "/dashboard/security/audit",
+        icon: ScrollText,
       },
     ],
   },

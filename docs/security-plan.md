@@ -1740,3 +1740,67 @@ endpoints are owner-scoped and gated behind the founder-only feature flag
   consumes no AI credits; there is **no automatic PII detection** in V1.
 * **Future work (out of scope):** automatic PII detection and audit logs for
   protected-copy generation.
+
+## Audit Logs V1
+
+A unified, **owner-scoped** audit log (`AuditLogEntry`, `apps/documents`,
+migration `documents/0038_auditlogentry`) records security-relevant document and
+sharing events so an owner can answer *"who uploaded/opened/downloaded this, who
+accepted a request, when was a room revoked?"* It is **append-only**,
+**deterministic — no AI call and no AI credits**, and built as a **new** model
+distinct from the existing per-feature activity trails (`DocumentFileActivity`,
+`RoomActivity`, `DocumentActivity`, `QuickShareActivity`, `ProductEvent`), which
+are unchanged. The service is `apps/documents/audit.py`.
+
+### What is logged vs never logged
+
+Logged are security-relevant **access/change** events only: Document Requests,
+Sharing Rooms, Protected Copies, and Applications/Packs lifecycle actions
+(create, accept/reject, open, preview, download, upload, item add/remove, revoke,
+archive, status change, requirement satisfied). Read-only dashboard reads are
+**not** logged.
+
+The log **never stores** document contents, extracted text, private file URLs,
+raw storage keys, raw public tokens, passwords/secrets, passport/ID numbers, AI
+prompts/responses, or raw email bodies.
+
+### Salted-hash network fingerprints
+
+IP address and user-agent are stored **only** as a salted SHA-256 hash
+(`hash_request_fingerprint`, using the new `AUDIT_LOG_HASH_SALT` setting —
+env-backed with a development fallback) — **never in plaintext**. The model has
+no raw IP or user-agent columns at all, and the API serializer **excludes the
+hashes entirely** (they exist only for server-side correlation). `country_code`
+comes from a **CDN edge header** (no IP geolocation), so it is safe to store.
+
+### Metadata sanitization
+
+Event metadata is sanitized at write time by `safe_audit_metadata`: any key whose
+name looks sensitive (url / token / storage / key / content / password / etc.) is
+dropped via a forbidden-substring filter with a small exact-match allow-list, and
+sizes/counts are capped. Allowed metadata is limited to safe values such as
+`status_from` / `status_to`, file name/title, request/room/pack/application
+titles, `due_date`, `result`, and `reason_category`.
+
+### Owner-only access
+
+All endpoints (`GET /api/v1/audit-logs/`, `/{id}/`, `/summary/`) require
+authentication and return only the requesting user's own entries. Public actors
+(anonymous token visitors) can **never** read audit logs — there is no public
+route. Public-route access is itself *recorded* as an anonymous `public_link`
+actor (`record_public_link_event`) so the owner gains accountability without the
+visitor's identity ever being stored. The owner-only UI is
+`/dashboard/security/audit`.
+
+### Best-effort / non-breaking
+
+`record_audit_event` is wrapped in try/except: a logging failure logs a
+server-side warning and returns `None` — it **never raises**, so it can never
+break the user action it records (same philosophy as transactional email).
+
+### Append-only and future work
+
+V1 is append-only and keeps entries **indefinitely** (no automatic purge). A
+retention/export policy, B2B audit exports, and broader event coverage are future
+work. See `docs/security/audit-logs.md` and `docs/api-spec.md` §37 for the full
+event catalog and API contract.

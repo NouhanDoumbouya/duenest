@@ -351,6 +351,15 @@ AI_RAG_AUTO_INDEX_ON_UPLOAD = config(
 # the endpoint (503) so a misconfigured deploy can't accept unsigned events.
 RESEND_WEBHOOK_SECRET = config("RESEND_WEBHOOK_SECRET", default="")
 
+# Server-side salt for hashing audit-log network fingerprints (IP + user-agent).
+# Audit Logs V1 NEVER stores raw IPs/user-agents — only a salted SHA-256 hash, so a
+# leaked audit table can't be trivially correlated to a person. Set a strong random
+# value in production; a dev fallback keeps local/test runs working.
+AUDIT_LOG_HASH_SALT = config(
+    "AUDIT_LOG_HASH_SALT",
+    default="dev-audit-salt-not-for-production",
+)
+
 # Public URLs. FRONTEND_APP_URL is the canonical name; DUENEST_APP_BASE_URL is
 # kept as a backward-compatible alias (used in existing email link building).
 # FRONTEND_URL is also accepted because it's the key the production deploy

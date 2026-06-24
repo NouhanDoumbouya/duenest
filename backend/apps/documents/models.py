@@ -3277,3 +3277,95 @@ class ProtectedDocumentCopy(models.Model):
         return self.protection_type in (
             self.ProtectionType.WATERMARK, self.ProtectionType.REDACTION_WATERMARK
         )
+
+
+class AuditLogEntry(models.Model):
+    """
+    A unified, owner-scoped security/document audit event: who did what to which of
+    the owner's resources, and when. Append-only. Surfaces a trustworthy history
+    (uploads, downloads, room opens, request reviews, protected copies, pack/
+    application changes) WITHOUT exposing sensitive content.
+
+    Privacy: this model NEVER stores document contents, private file URLs, raw
+    storage keys, raw public tokens, or raw IP/user-agent. Network fingerprints are
+    stored only as a salted SHA-256 hash (see ``apps.documents.audit``). Only the
+    owning user can read their entries; public actors (token visitors) can never
+    read audit logs. Deterministic — no AI.
+    """
+
+    class ActorType(models.TextChoices):
+        OWNER = "owner", "Owner"
+        AUTHENTICATED_USER = "authenticated_user", "Authenticated user"
+        PUBLIC_LINK = "public_link", "Public link visitor"
+        SYSTEM = "system", "System"
+
+    class Category(models.TextChoices):
+        DOCUMENT = "document", "Document"
+        FILE = "file", "File"
+        DOCUMENT_REQUEST = "document_request", "Document request"
+        SHARING_ROOM = "sharing_room", "Sharing room"
+        PROTECTED_COPY = "protected_copy", "Protected copy"
+        APPLICATION = "application", "Application"
+        PACK = "pack", "Pack"
+        SECURITY = "security", "Security"
+        SYSTEM = "system", "System"
+
+    class Severity(models.TextChoices):
+        INFO = "info", "Info"
+        WARNING = "warning", "Warning"
+        CRITICAL = "critical", "Critical"
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="audit_log_entries",
+    )
+    # The authenticated user who performed the action (null for public-link or
+    # system actors). SET_NULL so deleting an actor account never drops history.
+    actor_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="audit_actions_performed",
+    )
+    actor_type = models.CharField(
+        max_length=20, choices=ActorType.choices, default=ActorType.OWNER
+    )
+    actor_label = models.CharField(max_length=80, blank=True)
+
+    event_type = models.CharField(max_length=64, db_index=True)
+    category = models.CharField(max_length=20, choices=Category.choices)
+    severity = models.CharField(
+        max_length=10, choices=Severity.choices, default=Severity.INFO
+    )
+
+    object_type = models.CharField(max_length=60, blank=True)
+    object_id = models.CharField(max_length=64, blank=True)
+    object_label = models.CharField(max_length=255, blank=True)
+    related_object_type = models.CharField(max_length=60, blank=True)
+    related_object_id = models.CharField(max_length=64, blank=True)
+    related_object_label = models.CharField(max_length=255, blank=True)
+
+    # Salted SHA-256 hashes only — never raw IP/user-agent. ``country_code`` comes
+    # from a CDN edge header (no IP geolocation), so it is safe to store.
+    ip_hash = models.CharField(max_length=64, blank=True)
+    user_agent_hash = models.CharField(max_length=64, blank=True)
+    country_code = models.CharField(max_length=2, blank=True)
+
+    # Sanitized, non-sensitive context only (see audit.safe_audit_metadata).
+    metadata = models.JSONField(default=dict, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["owner", "-created_at"]),
+            models.Index(fields=["owner", "category", "-created_at"]),
+            models.Index(fields=["owner", "event_type", "-created_at"]),
+            models.Index(fields=["owner", "object_type", "object_id"]),
+        ]
+
+    def __str__(self):
+        return f"AuditLogEntry(owner={self.owner_id}, event={self.event_type})"
