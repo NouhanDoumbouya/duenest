@@ -371,6 +371,140 @@ export interface OrganizationDashboard {
   generated_at: string;
 }
 
+// ---- Bulk reminder emails ---------------------------------------------------
+
+/**
+ * The kind of reminder a bulk batch nudges recipients about. Each maps to a
+ * preview query and a subject line the backend owns; the six values are the
+ * only ones the reminder preview/batch endpoints accept.
+ */
+export type ReminderType =
+  | "missing_documents"
+  | "overdue_requests"
+  | "needs_replacement"
+  | "rejected_documents"
+  | "due_soon_cases"
+  | "collecting_documents";
+
+/**
+ * A single potential recipient in a reminder preview. `action_url` may carry a
+ * recipient's own public upload link (a token-bearing route) — it is the
+ * recipient's link, NOT something to render in the staff UI. Do not display it.
+ * `eligible` decides whether the row can be selected/sent; `skip_reason`
+ * explains why an ineligible row is held back.
+ */
+export interface ReminderCandidate {
+  candidate_id: string;
+  reminder_type: ReminderType;
+  case_id: number;
+  case_title: string;
+  person_id: number | null;
+  person_name: string;
+  case_request_id: number | null;
+  document_request_id: number | null;
+  recipient_email: string;
+  recipient_name: string;
+  document_title: string;
+  missing_titles: string[];
+  due_date: string | null;
+  status: string;
+  reason: string;
+  /** Recipient's own link (may contain a token). NEVER render this in the UI. */
+  action_url: string;
+  has_email: boolean;
+  recently_reminded: boolean;
+  eligible: boolean;
+  skip_reason: "" | "no_email" | "recently_reminded";
+}
+
+/** The preview of who a reminder batch would reach, before anything is sent. */
+export interface ReminderPreview {
+  reminder_type: ReminderType;
+  /** Read-only subject line the backend will use. Safe to display. */
+  subject: string;
+  count: number;
+  eligible_count: number;
+  candidates: ReminderCandidate[];
+}
+
+/** Lifecycle status of a reminder batch. */
+export type ReminderBatchStatus =
+  | "draft"
+  | "sending"
+  | "sent"
+  | "partially_failed"
+  | "failed"
+  | "cancelled";
+
+/** A recipient that was skipped when a batch was sent (email + a reason key). */
+export interface ReminderSkip {
+  email: string;
+  reason: string;
+}
+
+/**
+ * A reminder batch as returned on create/send/detail. `skipped` lists who was
+ * held back and why; `recipients` is the per-recipient breakdown (present on
+ * detail). No raw tokens or upload URLs are carried here.
+ */
+export interface ReminderBatch {
+  batch_id: number;
+  reminder_type: ReminderType;
+  reminder_label: string;
+  status: ReminderBatchStatus;
+  subject: string;
+  message_intro: string;
+  case_id: number | null;
+  recipient_count: number;
+  sent_count: number;
+  skipped_count: number;
+  failed_count: number;
+  created_by: string;
+  created_at: string;
+  sent_at: string | null;
+  skipped: ReminderSkip[];
+  recipients?: ReminderBatchRecipient[];
+}
+
+/** One recipient row inside a batch detail. Safe display fields only. */
+export interface ReminderBatchRecipient {
+  recipient_email: string;
+  recipient_name: string;
+  case_id: number | null;
+  case_title: string;
+  document_title: string;
+  status: string;
+}
+
+/** Response from listing reminder batches. */
+export interface ReminderBatchesResponse {
+  batches: ReminderBatch[];
+  count: number;
+}
+
+/** Query for the reminder preview endpoint. */
+export interface ReminderPreviewQuery {
+  reminder_type: ReminderType;
+  case_id?: number;
+  person_id?: number;
+  include_recently_reminded?: boolean;
+}
+
+/** Body for creating a reminder batch. */
+export interface CreateReminderBatchBody {
+  reminder_type: ReminderType;
+  selected_candidate_ids?: string[];
+  message_intro?: string;
+  case_id?: number;
+  send_now?: boolean;
+  override_recent_reminders?: boolean;
+}
+
+/** Body for sending a draft reminder batch. */
+export interface SendReminderBatchBody {
+  override_recent_reminders?: boolean;
+}
+
 // ---- Plan + limits ----------------------------------------------------------
 
 /** The org's billing/entitlement plan as it relates to portal capacity. */

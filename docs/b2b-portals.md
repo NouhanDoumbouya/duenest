@@ -354,6 +354,80 @@ tokens, private file URLs, or storage keys. The uploaded-file proxy routes are
 non-members are denied; both the `b2b_portals` flag and the org Teams entitlement
 still gate it. Full response shape is in `docs/api-spec.md` §41.
 
+## Bulk Reminder Emails (delivered 2026-06-25)
+
+`b2b/bulk-reminder-emails` lets staff turn the dashboard's operational queues into a
+**controlled batch of branded reminder emails** to the recipients who must upload,
+replace, or complete documents. It builds directly on the dashboard queues and
+**Document Request Links** — it **reuses, never duplicates** the existing primitives
+(`PortalPerson` / `PortalCase` / `PortalCaseDocumentRequest` / `DocumentRequestLink`,
+the shared `send_branded_email` helper, and the unified Audit Log) and adds **no new
+upload / request-link / sharing-room / email system**. Fully **deterministic — no AI,
+no AI credits.** Service: `apps/organizations/portal_reminders.py`.
+
+### Reminder types
+
+* **`missing_documents`** — active cases with unsatisfied required pack requirements
+  → the case person; includes up to **5** short missing requirement **titles** (titles
+  only).
+* **`overdue_requests`** — case requests whose `DocumentRequestLink` is still active
+  and past `due_date` / `expires_at` → the request recipient (or case person); action
+  link = the public upload page.
+* **`needs_replacement`** — link status `needs_replacement` → the recipient; reopened
+  upload link; includes a sanitized review reason.
+* **`rejected_documents`** — link status `rejected` → the recipient; includes a
+  sanitized reason.
+* **`due_soon_cases`** — active cases due within **7 days** (excluding ready /
+  submitted) → the case person.
+* **`collecting_documents`** — active cases with missing required requirements **and**
+  an active request → the case person.
+
+### Preview → send flow
+
+1. **Preview** (`GET …/portal/reminders/preview/?reminder_type=…`) returns recipient
+   candidates with safe context plus `recently_reminded` / `eligible` / `skip_reason`
+   (`""` | `no_email` | `recently_reminded`). Recipients with no email are ineligible.
+2. **Create a batch** (`POST …/portal/reminders/batches/`) from the selected
+   `candidate_id`s — the candidates are **recomputed server-side** (the client only
+   echoes ids). With `send_now` it sends immediately; otherwise it stays a `draft` for
+   `/send/`. Batches can also be listed, fetched with per-recipient outcomes, sent,
+   and cancelled.
+3. **Recipient selection** is via `selected_candidate_ids` (omit to select all current
+   candidates); the batch is capped at **200** recipients.
+
+Action links are recipient-facing only: the public upload page
+(`/document-request/{token}`, only when the link can still accept an upload) or the
+case Sharing Room page (`/room/{token}`, only when the room is open) — never a private
+file URL or storage key. When no safe link exists, the email says the requester will
+follow up.
+
+### Cooldown
+
+The same `reminder_type` is **not re-sent to the same recipient for the same
+case/request within 3 days** (`COOLDOWN_DAYS`); those recipients are skipped with
+reason `recently_reminded`. Staff may override with `override_recent_reminders=true`.
+The cooldown is **re-checked at send time**, not only at preview, using
+`PortalReminderRecipient` history as the source of truth.
+
+### Email privacy rules
+
+The branded `portal_bulk_reminder` email (category `transactional`) carries only
+CertaNest branding, the organization/requester name, the reason, the requested
+document(s) / case context, the due date, an action button **only when a safe public
+link exists**, an optional staff `message_intro`, and a privacy note. It **never**
+includes private file URLs, storage keys, document contents, or internal staff notes.
+It respects `SuppressedEmail` + one-click unsubscribe and is logged in `EmailLog`.
+Sending is best-effort per recipient — one suppressed/failed recipient never fails the
+batch (`sent` / `partially_failed` / `failed`).
+
+### Permissions
+
+Preview / list / detail = any **active org member**; create / send / cancel =
+**OWNER/ADMIN** only; non-members denied. Both the `b2b_portals` flag and the org
+Teams entitlement still gate it. No public endpoint. New models
+`PortalReminderBatch` / `PortalReminderRecipient` (new org migration). Full contract
+and the five `portal_reminder_*` audit events are in `docs/api-spec.md` §42.
+
 ## Frontend
 
 Owner/staff page `/dashboard/organizations/[orgId]/portal` (dashboard summary +
@@ -369,7 +443,10 @@ people + cases + review queue + case detail/actions). There is **no public UI**.
   workflow (see "Review + Approval" above): multi-level approval chains, reviewer
   assignment, SLA / due-date tracking, bulk review actions, and AI-assisted
   document validation.
-- **Bulk reminders** across people / cases.
+- **Recurring reminder campaigns** and **drip sequences**, **WhatsApp / SMS**
+  channels, **organization-owned email templates**, advanced delivery analytics,
+  marketing newsletters, and per-recipient custom editing. (Single-batch **Bulk
+  Reminder Emails** are **delivered** — see "Bulk Reminder Emails" above.)
 - **Organization document templates** (reusable case/checklist templates).
 - An **analytics dashboard** for the organization.
 - **Broader / advanced RBAC** and approval chains beyond the current
@@ -384,7 +461,10 @@ people + cases + review queue + case detail/actions). There is **no public UI**.
   fields + `PortalCaseReviewDecision`, statuses/rules, org-scoped file proxy).
 - `docs/api-spec.md` §41 — Organization Dashboard V1 (read-only metrics + action
   queues + plan usage; response shape, caps, privacy guarantees).
-- `docs/NOTIFICATIONS.md` — the `portal_review_decision` recipient email.
+- `docs/api-spec.md` §42 — Bulk Reminder Emails V1 (reminder types, preview/send,
+  cooldown, batch shapes, audit events).
+- `docs/NOTIFICATIONS.md` — the `portal_review_decision` and `portal_bulk_reminder`
+  recipient emails.
 - `docs/BILLING.md` — feature-flag gate, org entitlement, and the Teams limit table.
 - `docs/security-plan.md` — membership-scoped access, org isolation, and the org
   entitlement gate.

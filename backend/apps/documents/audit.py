@@ -44,6 +44,10 @@ _ALLOWED_KEYS = {
     "title", "name", "filename", "room_title", "request_title", "pack_title",
     "application_title", "due_date", "count", "page_count", "protection_type",
     "room_type", "item_type", "format", "saved_to_pack", "action", "severity",
+    # B2B Bulk Reminder Emails V1 — explicit operational counts/labels.
+    # ("recipient_count" is allow-listed because "recipient" contains "ip".)
+    "reminder_type", "recipient_count", "sent_count", "skipped_count",
+    "failed_count", "case_id", "org_id",
 }
 
 _MAX_STR = 255

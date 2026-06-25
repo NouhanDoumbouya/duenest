@@ -16,6 +16,9 @@ import {
   PORTAL_PERSON_STATUS_TONE,
   PORTAL_PERSON_TYPE_LABELS,
   PORTAL_PERSON_TYPE_ORDER,
+  REMINDER_TYPE_DESCRIPTIONS,
+  REMINDER_TYPE_LABELS,
+  REMINDER_TYPE_ORDER,
   REVIEW_STATUS_LABELS,
   REVIEW_STATUS_ORDER,
   REVIEW_STATUS_TONE,
@@ -34,12 +37,18 @@ import {
   reviewNotifyDefault,
   reviewQueueCount,
   reviewStatusCounts,
+  reminderSkipLabel,
+  reminderTypeLabel,
+  selectableCandidates,
   usagePercent,
 } from "./portals";
 import type {
   DashboardActivityItem,
   PortalCaseProgress,
   PortalReviewStatus,
+  ReminderCandidate,
+  ReminderPreview,
+  ReminderType,
 } from "@/types/portals";
 
 function makeProgress(
@@ -517,5 +526,137 @@ describe("groupReviewItemsByStatus", () => {
 
   it("returns an empty array for no items", () => {
     expect(groupReviewItemsByStatus([])).toEqual([]);
+  });
+});
+
+// ---- Bulk reminder helpers --------------------------------------------------
+
+const REMINDER_TYPES: ReminderType[] = [
+  "missing_documents",
+  "overdue_requests",
+  "needs_replacement",
+  "rejected_documents",
+  "due_soon_cases",
+  "collecting_documents",
+];
+
+function reminderCandidate(
+  overrides: Partial<ReminderCandidate> = {},
+): ReminderCandidate {
+  return {
+    candidate_id: "c1",
+    reminder_type: "missing_documents",
+    case_id: 1,
+    case_title: "Visa file",
+    person_id: 2,
+    person_name: "Amina Diallo",
+    case_request_id: null,
+    document_request_id: null,
+    recipient_email: "amina@example.com",
+    recipient_name: "Amina Diallo",
+    document_title: "Passport copy",
+    missing_titles: [],
+    due_date: null,
+    status: "pending",
+    reason: "",
+    action_url: "/document-request/secret-token",
+    has_email: true,
+    recently_reminded: false,
+    eligible: true,
+    skip_reason: "",
+    ...overrides,
+  };
+}
+
+describe("reminder-type label + order maps", () => {
+  it("labels and describes every reminder type in the order list", () => {
+    for (const type of REMINDER_TYPE_ORDER) {
+      expect(REMINDER_TYPE_LABELS[type]).toBeTruthy();
+      expect(REMINDER_TYPE_DESCRIPTIONS[type]).toBeTruthy();
+    }
+  });
+
+  it("covers all six reminder types with no duplicates in the order", () => {
+    expect(REMINDER_TYPE_ORDER).toHaveLength(6);
+    expect(new Set(REMINDER_TYPE_ORDER).size).toBe(6);
+  });
+
+  it("includes every backend reminder type in the order", () => {
+    for (const type of REMINDER_TYPES) {
+      expect(REMINDER_TYPE_ORDER).toContain(type);
+    }
+  });
+
+  it("uses calm wording for a couple of types", () => {
+    expect(REMINDER_TYPE_LABELS.missing_documents).toBe("Missing documents");
+    expect(REMINDER_TYPE_LABELS.due_soon_cases).toBe("Due soon");
+  });
+
+  it("reminderTypeLabel falls back to the raw key for an unknown type", () => {
+    expect(reminderTypeLabel("missing_documents")).toBe("Missing documents");
+    expect(reminderTypeLabel("unknown_type" as ReminderType)).toBe(
+      "unknown_type",
+    );
+  });
+});
+
+describe("reminderSkipLabel", () => {
+  it("maps no_email to a clear reason", () => {
+    expect(reminderSkipLabel("no_email")).toBe("No email on file");
+  });
+
+  it("maps recently_reminded to a clear reason", () => {
+    expect(reminderSkipLabel("recently_reminded")).toBe(
+      "Reminded in the last 3 days",
+    );
+  });
+
+  it("returns an empty string for an empty or unknown reason", () => {
+    expect(reminderSkipLabel("")).toBe("");
+    expect(reminderSkipLabel("something_else")).toBe("");
+  });
+});
+
+describe("selectableCandidates", () => {
+  function preview(candidates: ReminderCandidate[]): ReminderPreview {
+    return {
+      reminder_type: "missing_documents",
+      subject: "Reminder: documents needed",
+      count: candidates.length,
+      eligible_count: candidates.filter((c) => c.eligible).length,
+      candidates,
+    };
+  }
+
+  it("returns only eligible candidates", () => {
+    const eligible = reminderCandidate({ candidate_id: "a", eligible: true });
+    const skippedNoEmail = reminderCandidate({
+      candidate_id: "b",
+      eligible: false,
+      has_email: false,
+      skip_reason: "no_email",
+    });
+    const skippedRecent = reminderCandidate({
+      candidate_id: "c",
+      eligible: false,
+      recently_reminded: true,
+      skip_reason: "recently_reminded",
+    });
+    const result = selectableCandidates(
+      preview([eligible, skippedNoEmail, skippedRecent]),
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0].candidate_id).toBe("a");
+  });
+
+  it("returns an empty array when nothing is eligible", () => {
+    const result = selectableCandidates(
+      preview([reminderCandidate({ eligible: false })]),
+    );
+    expect(result).toEqual([]);
+  });
+
+  it("returns an empty array for an empty preview", () => {
+    expect(selectableCandidates(preview([]))).toEqual([]);
   });
 });

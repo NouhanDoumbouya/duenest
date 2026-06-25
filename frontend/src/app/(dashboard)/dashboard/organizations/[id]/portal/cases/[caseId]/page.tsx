@@ -30,6 +30,7 @@ import {
   ExternalLink,
   FileUp,
   Loader2,
+  Mail,
   Package,
   RotateCcw,
   ShieldAlert,
@@ -51,6 +52,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Toast, type ToastState } from "@/components/ui/toast";
 import { FilePreviewDialog } from "@/components/ui/file-preview-dialog";
+import { ReminderModal } from "@/components/features/portals/reminder-modal";
 import { useFeature } from "@/components/features/feature-flags-provider";
 import { ApiError } from "@/lib/api";
 import { formatFileSize } from "@/lib/document-files";
@@ -90,6 +92,7 @@ import type {
   PortalCase,
   PortalCaseRequest,
   PortalReviewDecision,
+  ReminderType,
 } from "@/types/portals";
 
 /**
@@ -128,6 +131,7 @@ export default function PortalCaseDetailPage({
   const [copied, setCopied] = useState<string | null>(null);
   const [packModal, setPackModal] = useState(false);
   const [requestModal, setRequestModal] = useState(false);
+  const [reminderOpen, setReminderOpen] = useState(false);
   // Inline limit/validation errors surfaced inside the create modals.
   const [packError, setPackError] = useState<string | null>(null);
   const [requestError, setRequestError] = useState<string | null>(null);
@@ -398,6 +402,12 @@ export default function PortalCaseDetailPage({
 
   const progress = portalCase.progress;
   const percent = progressPercent(progress);
+  // Default the case-scoped reminder to whatever is most actionable: a pending
+  // replacement first, otherwise missing documents.
+  const reminderDefault: ReminderType =
+    progress.requests_needs_replacement > 0
+      ? "needs_replacement"
+      : "missing_documents";
 
   return (
     <PageContainer width="wide">
@@ -407,6 +417,16 @@ export default function PortalCaseDetailPage({
         title={portalCase.title}
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            {canManage && portalCase.status !== "archived" && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setReminderOpen(true)}
+                disabled={busy}
+              >
+                <Mail className="size-4" /> Send reminder
+              </Button>
+            )}
             <StatusBadge
               tone={PORTAL_CASE_STATUS_TONE[portalCase.status]}
               withDot={false}
@@ -785,6 +805,20 @@ export default function PortalCaseDetailPage({
                   : "Could not record this decision.",
               );
             }
+          }}
+        />
+      )}
+
+      {reminderOpen && canManage && (
+        <ReminderModal
+          orgId={orgId}
+          caseId={caseIdNum}
+          defaultType={reminderDefault}
+          onClose={() => setReminderOpen(false)}
+          onSent={async () => {
+            setReminderOpen(false);
+            await reload();
+            setToast({ message: "Reminders sent.", kind: "success" });
           }}
         />
       )}

@@ -22,6 +22,11 @@ from .portal_views import (
     PortalCaseRequestDecisionsView,
     PortalCaseRequestFilePreviewView,
     PortalCaseRequestFileDownloadView,
+    PortalReminderPreviewView,
+    PortalReminderBatchesView,
+    PortalReminderBatchDetailView,
+    PortalReminderBatchSendView,
+    PortalReminderBatchCancelView,
 )
 from .views import (
     OrganizationInviteTokenView,
@@ -53,6 +58,12 @@ urlpatterns = [
     path(f"{_PORTAL}/cases/<int:case_id>/create-request/", PortalCaseCreateRequestView.as_view(), name="portal-case-create-request"),
     path(f"{_PORTAL}/cases/<int:case_id>/progress/", PortalCaseProgressView.as_view(), name="portal-case-progress"),
     path(f"{_PORTAL}/review-queue/", PortalReviewQueueView.as_view(), name="portal-review-queue"),
+    # B2B Bulk Reminder Emails V1.
+    path(f"{_PORTAL}/reminders/preview/", PortalReminderPreviewView.as_view(), name="portal-reminder-preview"),
+    path(f"{_PORTAL}/reminders/batches/", PortalReminderBatchesView.as_view(), name="portal-reminder-batches"),
+    path(f"{_PORTAL}/reminders/batches/<int:batch_id>/", PortalReminderBatchDetailView.as_view(), name="portal-reminder-batch-detail"),
+    path(f"{_PORTAL}/reminders/batches/<int:batch_id>/send/", PortalReminderBatchSendView.as_view(), name="portal-reminder-batch-send"),
+    path(f"{_PORTAL}/reminders/batches/<int:batch_id>/cancel/", PortalReminderBatchCancelView.as_view(), name="portal-reminder-batch-cancel"),
     # B2B Review + Approval Workflow V1.
     path(f"{_PORTAL}/cases/<int:case_id>/review-items/", PortalCaseReviewItemsView.as_view(), name="portal-case-review-items"),
     path(f"{_PORTAL}/cases/<int:case_id>/requests/<int:case_request_id>/start-review/", PortalCaseRequestStartReviewView.as_view(), name="portal-case-request-start-review"),

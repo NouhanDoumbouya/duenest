@@ -177,6 +177,30 @@ as a `portal_recipient_notified` audit event. This is the same deterministic,
 no-AI path as the rest of B2B Portals. See `docs/b2b-portals.md`,
 `docs/api-spec.md` §40, and `docs/security/audit-logs.md`.
 
+## Portal Bulk Reminder Email (B2B)
+
+Staff in a B2B portal can turn the dashboard's operational queues into a controlled
+**batch** of branded reminder emails to recipients who must upload, replace, or
+complete documents (`apps/organizations/portal_reminders.py`). Each send goes through
+the shared branded-email path (`send_branded_email`, template `portal_bulk_reminder`,
+category **transactional**). It is the same deterministic, **no-AI** path as the rest
+of B2B Portals.
+
+The email carries only the organization/requester name, the reason, the requested
+document(s) / case context, the due date, an action button **only when a safe public
+link exists** (the recipient's own upload page or an open case room), an optional
+staff intro, and a privacy note — **never** a private file URL, storage key, raw
+token, document content, or internal staff note. It respects **`SuppressedEmail`**
+(all-scope) and adds **one-click unsubscribe** headers via the shared helper, and is
+logged in **`EmailLog`** like every other branded send.
+
+A **3-day cooldown** prevents reminder spam: the same reminder type is not re-sent to
+the same recipient for the same case/request within 3 days (skipped with reason
+`recently_reminded`, source of truth = `PortalReminderRecipient` history). Staff may
+override per batch. Sending is best-effort per recipient — one suppressed/failed
+recipient never fails the batch. See `docs/b2b-portals.md`, `docs/api-spec.md` §42,
+and `docs/security/audit-logs.md`.
+
 ## Scheduled Delivery
 
 Celery tasks and a beat schedule are defined (`config/celery.py`,

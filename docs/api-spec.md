@@ -6176,3 +6176,170 @@ no write and records no audit event.
 See `docs/b2b-portals.md`, `docs/security-plan.md`, `docs/security/audit-logs.md`,
 and `docs/roadmap.md`.
 
+## 42 — B2B Bulk Reminder Emails V1 (`organizations/{org_id}/portal/reminders/...`)
+
+Staff turn the dashboard's operational queues (§41) into a **controlled batch of
+branded reminder emails** to the recipients who must upload, replace, or complete
+documents. It **reuses, never duplicates** existing primitives — `PortalPerson` /
+`PortalCase` / `PortalCaseDocumentRequest` / `DocumentRequestLink`, the shared
+`send_branded_email` helper (with `EmailLog` suppression + one-click unsubscribe),
+and the unified Audit Log (§37). No new upload / request-link / sharing-room / email
+system. **Deterministic — no AI, no AI credits.**
+
+Service: `apps/organizations/portal_reminders.py`. New models
+`PortalReminderBatch` / `PortalReminderRecipient` (new org migration).
+
+### Endpoints
+
+| Method | Path | Role | Description |
+| --- | --- | --- | --- |
+| `GET` | `/reminders/preview/` | member | Recipient candidates for a `reminder_type` |
+| `GET` | `/reminders/batches/` | member | Recent reminder batches (up to 50) |
+| `POST` | `/reminders/batches/` | owner/admin | Create a draft batch (optionally send now) |
+| `GET` | `/reminders/batches/{id}/` | member | A batch with per-recipient outcomes |
+| `POST` | `/reminders/batches/{id}/send/` | owner/admin | Send a draft batch |
+| `POST` | `/reminders/batches/{id}/cancel/` | owner/admin | Cancel a draft batch |
+
+### Permissions & gating
+
+* **Authentication required.** Preview / list / detail = any **active member** of
+  `{org_id}`. Create / send / cancel = **OWNER/ADMIN** only. Non-members denied.
+* **Two gates** (same as the rest of the portal): the `b2b_portals` feature flag
+  (`503` when off) and the org Teams entitlement (`403 portal_not_enabled`).
+* **No public endpoint.**
+
+### Reminder types (`reminder_type`)
+
+| Value | Built from | Recipient | Extra context |
+| --- | --- | --- | --- |
+| `missing_documents` | Active cases with unsatisfied required pack requirements | Case person | Up to 5 missing requirement **titles** (titles only) |
+| `overdue_requests` | Case requests whose `DocumentRequestLink` is still active and past `due_date` / `expires_at` | Request recipient (else case person) | Action link = public upload page |
+| `needs_replacement` | Link status `needs_replacement` | Request recipient (else case person) | Sanitized review reason; reopened upload link |
+| `rejected_documents` | Link status `rejected` | Request recipient (else case person) | Sanitized review reason |
+| `due_soon_cases` | Active cases due within **7 days** (excluding ready / submitted) | Case person | — |
+| `collecting_documents` | Active cases with missing required requirements **and** an active request | Case person | — |
+
+Action links are recipient-facing only: the public document-request upload page
+(`/document-request/{token}`, only when the link can still accept an upload) or the
+case Sharing Room public page (`/room/{token}`, only when the room is open) — never a
+private file URL or storage key. When no safe link exists the email says the
+requester will follow up.
+
+### Preview — `GET .../reminders/preview/`
+
+Query: `reminder_type` (required), `case_id`, `person_id`,
+`include_recently_reminded` (`true`/`false`).
+
+```json
+{
+  "reminder_type": "needs_replacement",
+  "subject": "Replacement needed for your submitted document",
+  "count": 4,
+  "eligible_count": 3,
+  "candidates": [
+    {
+      "candidate_id": "cr:12",
+      "reminder_type": "needs_replacement",
+      "case_id": 7, "case_title": "Visa application",
+      "person_id": 3, "person_name": "Jordan Lee",
+      "case_request_id": 12, "document_request_id": 21,
+      "recipient_email": "jordan@example.com", "recipient_name": "Jordan Lee",
+      "document_title": "Bank statement", "missing_titles": [],
+      "due_date": "2026-06-20", "status": "needs_replacement",
+      "reason": "Statement was for the wrong month", "action_url": "...",
+      "has_email": true,
+      "recently_reminded": false, "eligible": true, "skip_reason": ""
+    }
+  ]
+}
+```
+
+`skip_reason` is `""` | `no_email` | `recently_reminded`. Recipients with no email
+are ineligible (`no_email`). `candidate_id` is the stable selection key the client
+echoes back on create (recomputed server-side).
+
+### Create batch — `POST .../reminders/batches/`
+
+Body:
+
+```json
+{
+  "reminder_type": "needs_replacement",
+  "selected_candidate_ids": ["cr:12", "cr:15"],
+  "message_intro": "Quick note before your deadline...",
+  "case_id": 7,
+  "send_now": true,
+  "override_recent_reminders": false
+}
+```
+
+All fields besides `reminder_type` are optional. The candidates are **recomputed
+server-side** (the client only echoes `candidate_id`s); omitting
+`selected_candidate_ids` selects all current candidates. The batch is capped at
+**200** recipients (`MAX_BATCH_RECIPIENTS`). If `send_now` is true it sends
+immediately; otherwise it stays a `draft` until `/send/`.
+
+### Batch / send response shape
+
+```json
+{
+  "batch_id": 9, "reminder_type": "needs_replacement",
+  "reminder_label": "Needs replacement", "status": "partially_failed",
+  "subject": "Replacement needed for your submitted document",
+  "message_intro": "", "case_id": 7,
+  "recipient_count": 3, "sent_count": 2, "skipped_count": 0, "failed_count": 1,
+  "created_by": "Avery", "created_at": "2026-06-25T12:00:00+00:00",
+  "sent_at": "2026-06-25T12:00:05+00:00",
+  "skipped": [{ "email": "x@example.com", "reason": "recently_reminded" }],
+  "recipients": [
+    { "id": 31, "recipient_name": "Jordan Lee",
+      "recipient_email": "jordan@example.com", "case_id": 7, "case_request_id": 12,
+      "status": "sent", "skip_reason": "", "sent_at": "2026-06-25T12:00:04+00:00" }
+  ]
+}
+```
+
+`recipients` is included on create / detail / send (not on the list). Batch status
+is one of `draft` / `sending` / `sent` / `partially_failed` / `failed` / `cancelled`.
+
+### Sending behavior
+
+Sending is **synchronous and best-effort per recipient**: one suppressed or failed
+recipient never fails the batch. The batch ends `sent` (all delivered / skipped),
+`partially_failed` (some sent, some failed), or `failed` (none sent, some failed).
+Per-recipient outcome (`pending` / `sent` / `skipped` / `failed`, with
+`skip_reason` / `error_message`) lives on `PortalReminderRecipient` — `EmailLog` is
+**not** FK-linked.
+
+### Cooldown / duplicate suppression
+
+The same `reminder_type` is **not re-sent to the same recipient for the same
+case/request within 3 days** (`COOLDOWN_DAYS`); such recipients are skipped with
+reason `recently_reminded`. The source of truth is `PortalReminderRecipient` history
+(matched on org + reminder_type + recipient_email + case_request/case within the
+window). Staff may override with `override_recent_reminders=true` on create or send.
+The cooldown is **re-checked at send time**, not only at preview.
+
+### Email & privacy
+
+The branded `portal_bulk_reminder` email (category `transactional`) carries only
+CertaNest branding, the organization/requester name, the reason, the requested
+document(s) / case context, the due date (if any), a public upload/action button
+**only when a safe public link exists**, the optional staff `message_intro`, and a
+privacy note. It **never** includes private file URLs, storage keys, document
+contents, or internal staff notes. It respects `SuppressedEmail` (all-scope) and adds
+one-click unsubscribe headers via the shared helper, and is logged in `EmailLog`.
+
+### Audit
+
+`portal_reminder_batch_created`, `portal_reminder_batch_sent`,
+`portal_reminder_recipient_sent`, `portal_reminder_recipient_skipped`,
+`portal_reminder_recipient_failed` — recorded via the unified owner-scoped Audit Log
+(§37, `metadata.org_id`). Metadata is limited to safe keys (`reminder_type`,
+`recipient_count`, `sent_count`, `skipped_count`, `failed_count`, `case_id`, reason
+category, result) — never a raw token, private file URL, storage key, document
+content, or full email body.
+
+See `docs/b2b-portals.md`, `docs/NOTIFICATIONS.md`, `docs/security-plan.md`,
+`docs/security/audit-logs.md`, and `docs/roadmap.md`.
+
