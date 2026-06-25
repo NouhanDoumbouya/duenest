@@ -112,6 +112,11 @@ export default function FounderOrganizationsPage() {
                     ) : (
                       <Badge variant="outline">Portal off</Badge>
                     )}
+                    {org.has_demo_workspace && (
+                      <Badge variant="outline" className="border-primary/40 text-primary">
+                        Demo
+                      </Badge>
+                    )}
                     {org.is_archived && <Badge variant="outline">Archived</Badge>}
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">

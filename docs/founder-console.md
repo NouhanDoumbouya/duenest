@@ -214,3 +214,11 @@ Two complementary readiness surfaces:
   never sends email, calls AI, or calls Google. The command is read-only and safe
   to run on any environment. See `docs/FOUNDER_BETA_RUNBOOK.md`,
   `docs/BETA_TESTER_GUIDE.md`, and `docs/qa/PRIVATE_BETA_QA.md`.
+
+## Demo workspace awareness (Onboarding & Demo Workspaces V1)
+
+The founder Organizations list and detail now show a **Demo** badge for any org
+that has created a sample demo workspace (`has_demo_workspace`), so demo data is
+easy to tell apart from real beta activity. This is read-only; founders cannot
+create or remove an org's demo workspace from the console (that lives in the org's
+own portal Overview, admin-gated).

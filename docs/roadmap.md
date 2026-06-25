@@ -2983,3 +2983,66 @@ org/case destinations.
 
 See `docs/integrations-google-calendar.md` and `docs/api-spec.md` (Google Calendar
 Import V1).
+
+## Onboarding & Demo Workspaces V1 — delivered (2026-06-25)
+
+`onboarding/demo-workspaces-v1` makes the B2B portal easy to understand and
+demonstrate. A beta org can now experience the whole workflow — template →
+person → case → requests → review → folders — **without real applicants or
+sensitive files**.
+
+**Reuse first.** Personal onboarding + personal demo data already existed
+(`UserOnboardingState`, `/onboarding/*`, `SetupChecklistCard`,
+`createDocumentDemoData`). The gap was the **organization** path, so this branch
+adds only that, reusing the existing org services so demo behaviour can never
+drift from real behaviour.
+
+What shipped:
+
+* **`OrganizationOnboarding`** model (migration `0011`) — stores only what isn't
+  derivable: whether an admin dismissed the guide, and a record of the optional
+  demo workspace (`demo_refs` = safe object ids, for cleanup).
+* **Deterministic setup guide** (`organizations/onboarding.py`) — an 8-step
+  checklist (template → person → case → request → review → organize → reminder →
+  activity) **derived from the org's real data** (no AI), with the single next
+  best action. `GET /organizations/<id>/portal/onboarding/` (members) +
+  `POST .../onboarding/dismiss/` (admin).
+* **Safe demo workspace** (`organizations/demo.py`,
+  `POST .../portal/demo/` + `.../demo/cleanup/`, admin) — idempotent; reuses the
+  template / custom-field / custom-status / person / case-from-template / folder
+  services to build a **"Scholarship Application Demo"** with a "Demo Applicant",
+  placeholder requirements ("Passport copy (placeholder)", …), sample fields
+  (Intake month / Program / Priority), sample statuses (Collecting / In review /
+  Ready to submit), and a People / Demo Applicant / Scholarship Application folder
+  tree. **Sends no email** (the person has no address; requests use
+  `send_request_emails=False`), **calls no AI**, creates **no real-looking
+  identity data or files**, and is fully **cleaned up by tracked ids** (including
+  the underlying request links + pack).
+* **Frontend** — an `OrgOnboardingCard` on the portal Overview shows the live
+  checklist, progress, next action, a "Try a demo workspace" CTA + remove-demo,
+  and dismiss. The founder Organizations list/detail show a **Demo** badge for
+  orgs with a demo workspace.
+
+**Safety:** every demo object is tagged `[Demo]`; payloads expose only safe ids
+and booleans — never document contents, file URLs, R2 keys, or raw tokens. All
+endpoints follow the existing portal gating (b2b_portals flag + Teams entitlement;
+member read, admin write).
+
+**Known limitation:** demo data are real portal records, so they count toward the
+org's plan limits until removed (kept minimal: one template/person/case). Cleanup
+removes them.
+
+**Tests.** 8 new backend tests (derived checklist, membership/admin gating, demo
+idempotency, no-email, no-files, no-tokens/URLs, cleanup) + 5 frontend
+(OrgOnboardingCard). Full backend regression (organizations + founder 298,
+documents 794) and frontend (`tsc`/`eslint`/`vitest` 486/`build`) all green; no
+migration drift.
+
+**Deferred:** AI onboarding assistant, product-tour vendor, public template
+gallery, advanced demo scenarios, import-from-Google during onboarding, tutorial
+videos.
+
+**Next recommended branch: `b2b/teams-billing-checkout`** — real Teams checkout /
+per-seat Stripe billing + invoices, and org-owned storage.
+
+See `docs/b2b-portals.md` (Onboarding & Demo) and `docs/api-spec.md`.

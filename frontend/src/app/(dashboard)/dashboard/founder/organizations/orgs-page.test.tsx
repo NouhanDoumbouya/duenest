@@ -15,6 +15,7 @@ const orgs: FounderOrgListItem[] = [
     owner: { id: 9, email: "owner@acme.com" },
     plan: "teams_beta",
     portal_enabled: true,
+    has_demo_workspace: false,
     members: 3,
     people: 12,
     active_cases: 4,

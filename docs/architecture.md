@@ -1652,3 +1652,24 @@ Stripe test-vs-live, Google OAuth, DEBUG/KEK/audit-salt/hosts, unresolved-critic
 and scheduled-job counts). It is read-only and emits no secret value. Surfaced via
 `GET /api/v1/founder/beta-readiness/` and `manage.py beta_readiness_check`. No new
 model or migration; see `docs/FOUNDER_BETA_RUNBOOK.md`.
+
+## 39. Onboarding & Demo Workspaces Architecture
+
+Personal onboarding + personal demo data already live in `apps/users`
+(`UserOnboardingState`, `/onboarding/*`, `create_document_demo_data`). V1 adds the
+ORGANIZATION path in `apps/organizations`, reusing the existing portal services so
+demo behaviour can't drift from real behaviour:
+
+- `OrganizationOnboarding` (migration `0011`) stores only the dismissed flag + a
+  record of the optional demo workspace (`demo_refs` = safe ids for cleanup).
+- `organizations/onboarding.py` derives the 8-step checklist + next action from
+  real data (deterministic, no AI).
+- `organizations/demo.py` builds/cleans a safe sample workspace by calling the
+  real template / custom-field / status / person / case-from-template / folder
+  services — idempotent, no email (`send_request_emails=False`), no AI, no files.
+- Endpoints live under `.../portal/onboarding/` and `.../portal/demo/` (same
+  gating as the rest of the portal). The frontend `OrgOnboardingCard` renders on
+  the portal Overview; the founder console surfaces a `has_demo_workspace` badge.
+
+Deferred: AI onboarding assistant, product-tour vendor, public template gallery,
+import-from-Google during onboarding.

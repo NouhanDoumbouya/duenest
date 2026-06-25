@@ -1463,3 +1463,41 @@ class OrganizationCaseStatusDefinition(models.Model):
 
     def __str__(self):
         return f"OrganizationCaseStatusDefinition(org={self.organization_id}, key={self.key})"
+
+
+class OrganizationOnboarding(models.Model):
+    """
+    Per-organization onboarding state for the B2B portal setup guide.
+
+    The checklist itself is DERIVED from the org's real data (does it have a
+    template / person / case / request / review / folder / reminder?), so this
+    model only stores what isn't derivable: whether an admin dismissed the guide,
+    and a record of the optional DEMO workspace (so it can be cleaned up).
+    ``demo_refs`` holds only safe object ids of the demo data this created — never
+    document contents, tokens, or private URLs.
+    """
+
+    organization = models.OneToOneField(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="onboarding",
+    )
+    dismissed_at = models.DateTimeField(null=True, blank=True)
+    demo_created_at = models.DateTimeField(null=True, blank=True)
+    demo_created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_org_demo_workspaces",
+    )
+    demo_refs = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"OrganizationOnboarding(org={self.organization_id})"
+
+    @property
+    def has_demo(self) -> bool:
+        return self.demo_created_at is not None

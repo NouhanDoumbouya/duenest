@@ -78,6 +78,8 @@ import type {
   ReviewDecisionsResponse,
   UpdatePortalCaseBody,
   UpdatePortalPersonBody,
+  OrgOnboarding,
+  OrgDemoResult,
 } from "@/types/portals";
 import type { StatusTone } from "./status-badge";
 
@@ -1728,4 +1730,34 @@ export function slugifyKey(label: string): string {
     .trim()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
+}
+
+// ---- Onboarding & Demo Workspaces V1 ---------------------------------------
+
+/** The org portal setup guide (derived checklist + next action). */
+export function getOrgOnboarding(orgId: number): Promise<OrgOnboarding> {
+  return apiFetch<OrgOnboarding>(base(orgId, "onboarding/"));
+}
+
+/** Dismiss (or restore) the setup guide. Admin/owner only. */
+export function dismissOrgOnboarding(
+  orgId: number,
+  dismissed = true,
+): Promise<OrgOnboarding> {
+  return apiFetch<OrgOnboarding>(base(orgId, "onboarding/dismiss/"), {
+    method: "POST",
+    body: { dismissed },
+  });
+}
+
+/** Create the safe sample demo workspace (idempotent). Admin/owner only. */
+export function createOrgDemo(orgId: number): Promise<OrgDemoResult> {
+  return apiFetch<OrgDemoResult>(base(orgId, "demo/"), { method: "POST" });
+}
+
+/** Remove the demo workspace. Admin/owner only. */
+export function cleanupOrgDemo(orgId: number): Promise<OrgDemoResult> {
+  return apiFetch<OrgDemoResult>(base(orgId, "demo/cleanup/"), {
+    method: "POST",
+  });
 }

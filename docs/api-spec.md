@@ -6981,3 +6981,16 @@ Google Calendar; no automatic sync; no AI.
 
 No new env: reuses the OAuth foundation's `GOOGLE_OAUTH_*` config and the
 `calendar.readonly` scope. Frontend: `/dashboard/settings/integrations/google-calendar`.
+
+## Organization onboarding & demo (B2B portal)
+
+Org-scoped, behind the `b2b_portals` flag + Teams entitlement. Members read;
+admin/owner write. Safe payloads only (ids/booleans/counts — no contents, file
+URLs, or tokens).
+
+- `GET /api/v1/organizations/{org_id}/portal/onboarding/` → `{ mode, steps[{key,title,description,done}], completed_count, total_count, percent, next_action, dismissed, has_demo, demo_created_at }`. The checklist is derived from the org's real data (deterministic, no AI).
+- `POST /api/v1/organizations/{org_id}/portal/onboarding/dismiss/` — body `{ "dismissed": bool }` (default true). Admin only.
+- `POST /api/v1/organizations/{org_id}/portal/demo/` — create the safe sample workspace (idempotent). Admin only. Returns `{ created, demo_created_at, refs, onboarding }`. Sends no email, calls no AI, creates no files.
+- `POST /api/v1/organizations/{org_id}/portal/demo/cleanup/` — remove the demo workspace by tracked ids. Admin only. Returns `{ removed, onboarding }`.
+
+The founder organization payloads now include `has_demo_workspace` (boolean).

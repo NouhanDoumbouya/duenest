@@ -1036,3 +1036,33 @@ export interface UpdateCaseStatusBody {
   maps_to_system_status?: string;
   is_active?: boolean;
 }
+
+// ---- Onboarding & Demo Workspaces V1 ---------------------------------------
+
+export interface OrgOnboardingStep {
+  key: string;
+  title: string;
+  description: string;
+  done: boolean;
+}
+
+export interface OrgOnboarding {
+  mode: "organization";
+  organization_id: number;
+  steps: OrgOnboardingStep[];
+  completed_count: number;
+  total_count: number;
+  percent: number;
+  next_action: { key: string; title: string; hint: string } | null;
+  dismissed: boolean;
+  has_demo: boolean;
+  demo_created_at: string | null;
+}
+
+export interface OrgDemoResult {
+  created: boolean;
+  removed?: boolean;
+  demo_created_at: string | null;
+  refs?: Record<string, unknown>;
+  onboarding: OrgOnboarding;
+}

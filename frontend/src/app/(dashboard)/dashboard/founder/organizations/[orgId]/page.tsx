@@ -107,6 +107,13 @@ export default function FounderOrganizationDetailPage({
         eyebrow="Organization"
         title={org.name}
         description={`${org.owner?.email ?? "no owner"} · ${org.plan}${org.portal_enabled ? " · portal on" : ""}`}
+        actions={
+          org.has_demo_workspace ? (
+            <Badge variant="outline" className="border-primary/40 text-primary">
+              Demo data
+            </Badge>
+          ) : undefined
+        }
       />
 
       {/* Safe plan/portal action */}
