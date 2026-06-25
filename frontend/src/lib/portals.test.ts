@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { ApiError } from "./api";
 import {
+  CASE_TYPE_LABELS,
+  CASE_TYPE_ORDER,
   DASHBOARD_ACTIVITY_LABELS,
   PORTAL_CASE_PRIORITY_LABELS,
   PORTAL_CASE_PRIORITY_ORDER,
@@ -22,6 +24,7 @@ import {
   REVIEW_STATUS_LABELS,
   REVIEW_STATUS_ORDER,
   REVIEW_STATUS_TONE,
+  caseTypeLabel,
   canDecideStatus,
   dashboardActivityLabel,
   groupReviewItemsByStatus,
@@ -39,10 +42,13 @@ import {
   reviewStatusCounts,
   reminderSkipLabel,
   reminderTypeLabel,
+  renderTemplateTitlePreview,
   selectableCandidates,
+  templateWarningLabel,
   usagePercent,
 } from "./portals";
 import type {
+  CaseType,
   DashboardActivityItem,
   PortalCaseProgress,
   PortalReviewStatus,
@@ -658,5 +664,97 @@ describe("selectableCandidates", () => {
 
   it("returns an empty array for an empty preview", () => {
     expect(selectableCandidates(preview([]))).toEqual([]);
+  });
+});
+
+// ---- Organization case template helpers -------------------------------------
+
+const ALL_CASE_TYPES: CaseType[] = [
+  "visa",
+  "scholarship",
+  "admission",
+  "employee_onboarding",
+  "compliance",
+  "client_file",
+  "insurance_claim",
+  "grant",
+  "internship",
+  "general",
+];
+
+describe("template case-type label + order maps", () => {
+  it("labels every case type in the order list", () => {
+    for (const type of CASE_TYPE_ORDER) {
+      expect(CASE_TYPE_LABELS[type]).toBeTruthy();
+    }
+  });
+
+  it("covers all ten case types with no duplicates in the order", () => {
+    expect(CASE_TYPE_ORDER).toHaveLength(10);
+    expect(new Set(CASE_TYPE_ORDER).size).toBe(10);
+  });
+
+  it("includes every backend case type in the order", () => {
+    for (const type of ALL_CASE_TYPES) {
+      expect(CASE_TYPE_ORDER).toContain(type);
+    }
+  });
+
+  it("uses human wording for compound types", () => {
+    expect(CASE_TYPE_LABELS.employee_onboarding).toBe("Employee onboarding");
+    expect(CASE_TYPE_LABELS.insurance_claim).toBe("Insurance claim");
+    expect(CASE_TYPE_LABELS.client_file).toBe("Client file");
+  });
+
+  it("caseTypeLabel falls back to the raw key for an unknown type", () => {
+    expect(caseTypeLabel("visa")).toBe("Visa");
+    expect(caseTypeLabel("mystery" as CaseType)).toBe("mystery");
+  });
+});
+
+describe("templateWarningLabel", () => {
+  it("maps each known warning to clear copy", () => {
+    expect(templateWarningLabel("room_limit_reached")).toBe(
+      "Sharing-room limit reached — room not created",
+    );
+    expect(templateWarningLabel("request_limit_reached")).toBe(
+      "Document-request limit reached — some requests not created",
+    );
+    expect(templateWarningLabel("room_not_created")).toBe(
+      "Sharing room could not be created",
+    );
+  });
+
+  it("humanizes an unknown warning key", () => {
+    expect(templateWarningLabel("something_unexpected")).toBe(
+      "Something unexpected",
+    );
+  });
+});
+
+describe("renderTemplateTitlePreview", () => {
+  it("replaces every {person_name} placeholder with a trimmed name", () => {
+    expect(
+      renderTemplateTitlePreview("{person_name} — Visa", "  Amina Diallo  "),
+    ).toBe("Amina Diallo — Visa");
+    expect(
+      renderTemplateTitlePreview("{person_name} ({person_name})", "Sam"),
+    ).toBe("Sam (Sam)");
+  });
+
+  it("leaves the placeholder visible for a blank name", () => {
+    expect(renderTemplateTitlePreview("{person_name} — Visa", "")).toBe(
+      "{person_name} — Visa",
+    );
+    expect(renderTemplateTitlePreview("{person_name} — Visa", "   ")).toBe(
+      "{person_name} — Visa",
+    );
+  });
+
+  it("returns a pattern with no placeholder unchanged", () => {
+    expect(renderTemplateTitlePreview("Onboarding pack", "Amina")).toBe(
+      "Onboarding pack",
+    );
+    expect(renderTemplateTitlePreview("", "Amina")).toBe("");
   });
 });

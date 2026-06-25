@@ -428,6 +428,104 @@ Teams entitlement still gate it. No public endpoint. New models
 `PortalReminderBatch` / `PortalReminderRecipient` (new org migration). Full contract
 and the five `portal_reminder_*` audit events are in `docs/api-spec.md` §42.
 
+## Organization Templates (delivered 2026-06-25)
+
+`b2b/organization-templates` lets an org define a **reusable case workflow once** and
+create a portal case from it **in one step** — saving staff from re-entering the same
+case type, title, priority, due offset, checklist, and pack/room/request choices every
+time. Applying a template is **pure orchestration** over the existing primitives: it
+reuses `create_portal_case` / `create_case_pack` / `create_case_room` /
+`create_case_document_request` and adds **no second pack, room, request, or upload
+system**. Templates are **configuration only** — they store **no document contents,
+files, tokens, or recipient data**. Fully **deterministic — no AI, no AI credits.**
+Service: `apps/organizations/portal_templates.py`.
+
+### Data model
+
+Two new models (`apps/organizations/models.py`, migration `organizations/0009_*`):
+
+- **`OrganizationCaseTemplate`** — `organization`, `created_by`, `name`,
+  `description`, `case_type`, `default_case_title` (supports the `{person_name}`
+  placeholder), `default_priority`, `default_due_days`, `auto_create_pack`
+  (default `true`), `auto_create_room` (default `true`), `auto_create_requests`
+  (default `false`), `default_room_title`, `default_room_description`, `status`
+  (`active` / `archived`), `archived_at`, timestamps.
+- **`OrganizationCaseTemplateRequirement`** — `template`, `title`, `instructions`,
+  `required`, `sort_order`, `request_message`, `due_days_offset`,
+  `accepted_file_types` (an **advisory** JSON list, **not enforced in V1**),
+  timestamps.
+
+The same migration also **adds three `PortalCase.CaseType` values** —
+`insurance_claim`, `grant`, `internship` — so those template case types round-trip;
+an unknown `case_type` falls back to `general` on apply.
+
+### Create-case-from-template workflow
+
+`POST …/portal/templates/{id}/create-case/` with body `{person_id, title?, due_date?,
+create_pack?, create_room?, create_requests?, send_request_emails?,
+selected_requirement_ids?}` (omitted toggles fall back to the template's
+`auto_create_*` defaults). The service:
+
+1. **Validates** membership/role + the template is active + the template and person
+   both belong to the org.
+2. **Creates the `PortalCase`** — title from `default_case_title` (with
+   `{person_name}` substituted) or the override; due date from the `due_date`
+   override or the `default_due_days` offset; `case_type` + `priority` from the
+   template. This step **enforces the active-case org limit** and is the only **hard
+   blocker** (it raises the structured `organization_plan_limit_exceeded` 403 before
+   anything is created).
+3. **Optional pack** — reuses `create_case_pack`, then **enriches** each created
+   requirement with its instructions / due date / sort order (which
+   `create_case_pack` does not carry).
+4. **Optional sharing room** — reuses `create_case_room`, applying the template's
+   room title/description.
+5. **Optional document requests** — one `DocumentRequestLink` per selected
+   requirement (recipient = the case person, instructions = `request_message` or
+   `instructions`, due = `due_days_offset` offset), linked to the matching pack
+   requirement via `PortalCaseDocumentRequest`.
+
+The result is `{case, pack_created, room_created, created_requests_count,
+skipped_requirements, warnings, progress}`.
+
+### Limits → warnings (best-effort optional resources)
+
+Only the **active-case limit** is a hard blocker (see step 2). The **sharing-room**
+and **document-request** org limits are **best-effort**: if a room/request hits its
+limit it is **skipped and the case is still created**, with a `warnings` entry
+(`room_limit_reached` / `request_limit_reached`).
+
+> **Same pack-ownership limitation as the rest of B2B Portals.** The template pack's
+> underlying `DocumentBundle` is owned by the **org-owner user**, so it still counts
+> against that account until org-owned storage/pack entitlement exists. Packs are not
+> separately org-limited in V1.
+
+### Optional request emails
+
+Requests created from a template **do not send email by default**. With
+`send_request_emails=true`, each recipient is notified by **reusing** the shared
+`send_branded_email` helper + the existing `portal_bulk_reminder` template (no new
+email system). The email carries only the **public upload link** + safe context —
+**never** a private file URL, raw token, or document content — and respects
+suppression / unsubscribe.
+
+### Permissions
+
+List / detail = any **active org member**; create / edit / archive / duplicate /
+create-case = **OWNER/ADMIN** only (the same policy as manual case creation). Org
+isolation, the `b2b_portals` flag, and the org Teams entitlement all still apply.
+
+### Audit
+
+Seven events through the unified Audit Log (category `system`, owner = the org owner,
+actor = the acting member, `metadata.org_id`): `organization_template_created`,
+`organization_template_updated`, `organization_template_archived`,
+`portal_case_created_from_template`, `portal_template_pack_created`,
+`portal_template_room_created`, `portal_template_requests_created`. Metadata is
+limited to safe keys (template_id, template_name, case_id, case_type,
+requirements_count, created_requests_count, result) — never tokens, private file URLs,
+storage keys, document contents, or email bodies. Endpoints and shapes are in
+`docs/api-spec.md` §43.
+
 ## Frontend
 
 Owner/staff page `/dashboard/organizations/[orgId]/portal` (dashboard summary +
@@ -447,7 +545,10 @@ people + cases + review queue + case detail/actions). There is **no public UI**.
   channels, **organization-owned email templates**, advanced delivery analytics,
   marketing newsletters, and per-recipient custom editing. (Single-batch **Bulk
   Reminder Emails** are **delivered** — see "Bulk Reminder Emails" above.)
-- **Organization document templates** (reusable case/checklist templates).
+- **Template versioning, bulk case creation, CSV import, conditional/branching
+  requirements, a public template marketplace, cross-org template sharing, and
+  AI template generation.** (Single-org reusable case **templates** are
+  **delivered** — see "Organization Templates" above.)
 - An **analytics dashboard** for the organization.
 - **Broader / advanced RBAC** and approval chains beyond the current
   member-read / admin-write split.
@@ -463,6 +564,8 @@ people + cases + review queue + case detail/actions). There is **no public UI**.
   queues + plan usage; response shape, caps, privacy guarantees).
 - `docs/api-spec.md` §42 — Bulk Reminder Emails V1 (reminder types, preview/send,
   cooldown, batch shapes, audit events).
+- `docs/api-spec.md` §43 — Organization Templates V1 (template + requirement shapes,
+  CRUD/duplicate/archive, create-case body/result, limit→warning behavior).
 - `docs/NOTIFICATIONS.md` — the `portal_review_decision` and `portal_bulk_reminder`
   recipient emails.
 - `docs/BILLING.md` — feature-flag gate, org entitlement, and the Teams limit table.

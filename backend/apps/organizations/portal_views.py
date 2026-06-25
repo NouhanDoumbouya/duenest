@@ -419,6 +419,109 @@ class PortalReminderBatchCancelView(_PortalBase):
         return Response(portal_reminders.build_reminder_batch_payload(batch))
 
 
+class PortalTemplatesView(_PortalBase):
+    """GET → org case templates (member). POST → create a template (admin/owner)."""
+
+    def get(self, request, org_id):
+        from . import portal_templates
+
+        org = self.get_org(request, org_id)
+        include_archived = request.query_params.get("include_archived") == "true"
+        data = portal_templates.build_case_template_list_payload(
+            org, include_archived=include_archived
+        )
+        return Response({"templates": data, "count": len(data)})
+
+    def post(self, request, org_id):
+        from . import portal_templates
+
+        org = self.get_org(request, org_id, write=True)
+        try:
+            template = portal_templates.create_case_template(org, request.user, request.data)
+        except portals.PortalError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            portal_templates.build_case_template_payload(template),
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class PortalTemplateDetailView(_PortalBase):
+    """GET → a template with its requirements (member). PATCH → edit (admin/owner)."""
+
+    def _get_template(self, org, template_id):
+        from .models import OrganizationCaseTemplate
+
+        return get_object_or_404(OrganizationCaseTemplate, pk=template_id, organization=org)
+
+    def get(self, request, org_id, template_id):
+        from . import portal_templates
+
+        org = self.get_org(request, org_id)
+        template = self._get_template(org, template_id)
+        return Response(portal_templates.build_case_template_payload(template))
+
+    def patch(self, request, org_id, template_id):
+        from . import portal_templates
+
+        org = self.get_org(request, org_id, write=True)
+        template = self._get_template(org, template_id)
+        try:
+            portal_templates.update_case_template(template, request.user, request.data)
+        except portals.PortalError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(portal_templates.build_case_template_payload(template))
+
+
+class PortalTemplateArchiveView(_PortalBase):
+    """POST → archive a template (admin/owner)."""
+
+    def post(self, request, org_id, template_id):
+        from . import portal_templates
+        from .models import OrganizationCaseTemplate
+
+        org = self.get_org(request, org_id, write=True)
+        template = get_object_or_404(OrganizationCaseTemplate, pk=template_id, organization=org)
+        portal_templates.archive_case_template(template, request.user)
+        return Response(portal_templates.build_case_template_payload(template))
+
+
+class PortalTemplateDuplicateView(_PortalBase):
+    """POST → duplicate a template into a new editable copy (admin/owner)."""
+
+    def post(self, request, org_id, template_id):
+        from . import portal_templates
+        from .models import OrganizationCaseTemplate
+
+        org = self.get_org(request, org_id, write=True)
+        template = get_object_or_404(OrganizationCaseTemplate, pk=template_id, organization=org)
+        copy = portal_templates.duplicate_case_template(template, request.user)
+        return Response(
+            portal_templates.build_case_template_payload(copy),
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class PortalTemplateCreateCaseView(_PortalBase):
+    """POST → create a portal case from a template (admin/owner — same policy as
+    manual case creation). Optionally creates the pack / room / requests."""
+
+    def post(self, request, org_id, template_id):
+        from . import portal_templates
+        from .models import OrganizationCaseTemplate
+
+        org = self.get_org(request, org_id, write=True)
+        template = get_object_or_404(OrganizationCaseTemplate, pk=template_id, organization=org)
+        person = self.get_person(org, request.data.get("person_id"))
+        try:
+            result = portal_templates.create_case_from_template(
+                org, request.user, template, person, request.data
+            )
+        except portals.PortalError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(result, status=status.HTTP_201_CREATED)
+
+
 class PortalDashboardView(_PortalBase):
     """GET → the Organization Dashboard V1 payload (operational metrics + bounded
     action queues + plan usage). Read-only; any active org member may read. No

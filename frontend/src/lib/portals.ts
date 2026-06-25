@@ -14,10 +14,17 @@
 import { ApiError, apiFetch } from "./api";
 import { fetchBlob, saveBlob } from "./document-files";
 import type {
+  CaseType,
+  CreateCaseFromTemplateBody,
+  CreateCaseFromTemplateResult,
+  CreateCaseFromTemplateWarning,
   CreateCasePackBody,
   CreateCaseRequestBody,
   CreatePortalCaseBody,
   CreatePortalPersonBody,
+  OrgCaseTemplate,
+  OrgCaseTemplateBody,
+  OrgCaseTemplatesResponse,
   DashboardActivityItem,
   OrganizationDashboard,
   PortalCase,
@@ -438,6 +445,93 @@ export function cancelReminderBatch(
   return apiFetch<ReminderBatch>(
     base(orgId, `reminders/batches/${batchId}/cancel/`),
     { method: "POST" },
+  );
+}
+
+// ---- Organization case templates --------------------------------------------
+
+/**
+ * List the org's case templates. Any member may read. Archived templates are
+ * hidden unless `include_archived` is true.
+ */
+export function getPortalTemplates(
+  orgId: number,
+  options: { include_archived?: boolean } = {},
+): Promise<OrgCaseTemplatesResponse> {
+  const query = options.include_archived ? "?include_archived=true" : "";
+  return apiFetch<OrgCaseTemplatesResponse>(base(orgId, `templates/${query}`));
+}
+
+/** Create a template. Admin/owner only (members get a 403). */
+export function createPortalTemplate(
+  orgId: number,
+  body: OrgCaseTemplateBody,
+): Promise<OrgCaseTemplate> {
+  return apiFetch<OrgCaseTemplate>(base(orgId, "templates/"), {
+    method: "POST",
+    body,
+  });
+}
+
+/** Read a single template with its full ordered requirements. Any member. */
+export function getPortalTemplate(
+  orgId: number,
+  templateId: number,
+): Promise<OrgCaseTemplate> {
+  return apiFetch<OrgCaseTemplate>(base(orgId, `templates/${templateId}/`));
+}
+
+/**
+ * Edit a template. Admin/owner only. Include `requirements` in the body to
+ * replace the full requirement set; omit it to leave them untouched.
+ */
+export function updatePortalTemplate(
+  orgId: number,
+  templateId: number,
+  body: OrgCaseTemplateBody,
+): Promise<OrgCaseTemplate> {
+  return apiFetch<OrgCaseTemplate>(base(orgId, `templates/${templateId}/`), {
+    method: "PATCH",
+    body,
+  });
+}
+
+/** Archive a template so it leaves the active list. Admin/owner only. */
+export function archivePortalTemplate(
+  orgId: number,
+  templateId: number,
+): Promise<OrgCaseTemplate> {
+  return apiFetch<OrgCaseTemplate>(
+    base(orgId, `templates/${templateId}/archive/`),
+    { method: "POST" },
+  );
+}
+
+/** Duplicate a template into a fresh copy. Admin/owner only. */
+export function duplicatePortalTemplate(
+  orgId: number,
+  templateId: number,
+): Promise<OrgCaseTemplate> {
+  return apiFetch<OrgCaseTemplate>(
+    base(orgId, `templates/${templateId}/duplicate/`),
+    { method: "POST" },
+  );
+}
+
+/**
+ * Create a case from a template. Admin/owner only. Omitted `create_*` toggles
+ * fall back to the template's `auto_create_*` defaults. A case-limit hit comes
+ * back as a 403 `organization_plan_limit_exceeded`; room/request limits are NOT
+ * errors — they appear in the result's `warnings`.
+ */
+export function createCaseFromTemplate(
+  orgId: number,
+  templateId: number,
+  body: CreateCaseFromTemplateBody,
+): Promise<CreateCaseFromTemplateResult> {
+  return apiFetch<CreateCaseFromTemplateResult>(
+    base(orgId, `templates/${templateId}/create-case/`),
+    { method: "POST", body },
   );
 }
 
@@ -928,6 +1022,76 @@ export function selectableCandidates(
   preview: ReminderPreview,
 ): ReminderCandidate[] {
   return preview.candidates.filter((candidate) => candidate.eligible);
+}
+
+// ---- Organization case template helpers -------------------------------------
+
+/** Order the 10 template case types appear in the type picker. */
+export const CASE_TYPE_ORDER: CaseType[] = [
+  "visa",
+  "scholarship",
+  "admission",
+  "employee_onboarding",
+  "compliance",
+  "client_file",
+  "insurance_claim",
+  "grant",
+  "internship",
+  "general",
+];
+
+/** Friendly labels for all 10 template case types. */
+export const CASE_TYPE_LABELS: Record<CaseType, string> = {
+  visa: "Visa",
+  scholarship: "Scholarship",
+  admission: "Admission",
+  employee_onboarding: "Employee onboarding",
+  compliance: "Compliance",
+  client_file: "Client file",
+  insurance_claim: "Insurance claim",
+  grant: "Grant",
+  internship: "Internship",
+  general: "General",
+};
+
+/** Human label for a template case type, falling back to the raw key. */
+export function caseTypeLabel(type: CaseType): string {
+  return CASE_TYPE_LABELS[type] ?? type;
+}
+
+/**
+ * Friendly copy for a non-blocking create-from-template warning. Room/request
+ * limit hits don't fail the case — they explain what was skipped so the team can
+ * follow up. Unknown keys fall back to a humanized version of the key.
+ */
+export function templateWarningLabel(
+  warning: CreateCaseFromTemplateWarning | string,
+): string {
+  switch (warning) {
+    case "room_limit_reached":
+      return "Sharing-room limit reached — room not created";
+    case "request_limit_reached":
+      return "Document-request limit reached — some requests not created";
+    case "room_not_created":
+      return "Sharing room could not be created";
+    default:
+      return humanizeEventType(warning);
+  }
+}
+
+/**
+ * Expand a template's title pattern for a given person, replacing every
+ * `{person_name}` placeholder with the name (trimmed). An empty/blank name
+ * leaves the placeholder visible so the preview reads as a template, not a
+ * broken title. A pattern with no placeholder is returned unchanged.
+ */
+export function renderTemplateTitlePreview(
+  pattern: string,
+  personName: string,
+): string {
+  const name = personName.trim();
+  if (!name) return pattern;
+  return pattern.replace(/\{person_name\}/g, name);
 }
 
 /**

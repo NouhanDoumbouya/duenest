@@ -173,6 +173,18 @@ The read-only **Organization Dashboard** (`GET …/portal/dashboard/`, §41) reu
 **same** `build_organization_limit_payload` (plan / `portal_enabled` / limits /
 usage / remaining) for its plan-usage card — no billing/Stripe changes.
 
+**Organization Templates V1 — limit interaction (no billing change).**
+Create-case-from-template (`POST …/portal/templates/{id}/create-case/`, §43) routes
+through the **same** org limit enforcement: the **active-case** limit is the only
+**hard** blocker (raises `403 organization_plan_limit_exceeded` before anything is
+created), while the **sharing-room** and **document-request** limits are **soft** — if
+hit, the room/requests are skipped and the case is still created, surfaced as a
+`warnings` entry (`room_limit_reached` / `request_limit_reached`). The template
+**pack's** `DocumentBundle` is owned by the **org-owner user** and is **not** separately
+org-limited in V1, so it still draws down that account's personal storage until
+org-owned pack entitlement exists (same known limitation as above). **No Stripe /
+billing change.**
+
 **Storage quota method:** storage used is the sum of stored `DocumentFile.file_size`
 values for the user's non-trashed files, computed from the database. Cloudflare R2
 is never queried for quota calculation — these are product limits, separate from

@@ -1033,6 +1033,8 @@ b2b/portals-mvp                        (done — org portal workspace: people + 
 b2b/teams-plan-and-portal-limits       (done — org-level entitlement governs portals; central limit table; personal-limit leak fixed; founder activation command; no Stripe)
 b2b/review-approval-workflow           (done — staff accept/reject/needs-replacement on portal uploads; org-scoped file proxy)
 b2b/organization-dashboard-v1          (done — read-only operational command center: metrics + action queues + plan usage; no audit-on-view)
+b2b/bulk-reminder-emails               (done — staff batch branded reminder emails from dashboard queues; cooldown; reuses Document Request Links + branded helper)
+b2b/organization-templates             (done — reusable case workflows; create-case-from-template orchestrates pack/room/requests; limits→warnings; no AI)
 b2b/teams-billing-checkout             ← next (Teams checkout / per-seat Stripe / invoices, org-owned storage)
 integrations/inbox-mailbox-import      (future — Gmail/Drive/Outlook import into Magic Inbox)
 backend/ai-org-credit-pools            (future)
@@ -1659,8 +1661,11 @@ Upcoming planned branches (in order):
 4. `b2b/portals-mvp` — **delivered** (2026-06-24, see below)
 5. `b2b/portals-teams-plan` — **delivered** (2026-06-24, Teams plan + lifted limits — see below)
 6. `b2b/review-approval-workflow` — **delivered** (2026-06-25, staff accept/reject/needs-replacement queue — see below)
-7. `b2b/teams-billing-checkout` ← **next** (real Teams checkout / per-seat Stripe / invoices + org-owned storage)
-8. `integrations/inbox-mailbox-import` (future — Gmail/Drive/Outlook import)
+7. `b2b/organization-dashboard-v1` — **delivered** (2026-06-25, read-only operational command center — see below)
+8. `b2b/bulk-reminder-emails` — **delivered** (2026-06-25, staff batch branded reminder emails from dashboard queues — see below)
+9. `b2b/organization-templates` — **delivered** (2026-06-25, reusable case workflows + create-case-from-template — see below)
+10. `b2b/teams-billing-checkout` ← **next** (real Teams checkout / per-seat Stripe / invoices + org-owned storage)
+11. `integrations/inbox-mailbox-import` (future — Gmail/Drive/Outlook import)
 
 ## Weekly Radar Email V1 — delivered (2026-06-24)
 
@@ -2311,3 +2316,69 @@ B2B Portals now implies next).
 
 See `docs/b2b-portals.md`, `docs/api-spec.md`, `docs/NOTIFICATIONS.md`,
 `docs/security-plan.md`, and `docs/security/audit-logs.md`.
+
+## Organization Templates V1 — delivered (2026-06-25)
+
+`b2b/organization-templates` is **implemented** (backend complete + tested). An org
+defines a **reusable case workflow once** — case type, title pattern, priority, due
+offset, a checklist of requirements, and auto-create toggles for the pack / sharing
+room / document requests — and staff **create a portal case from it in one step**.
+Fully **deterministic — no AI, no AI credits.**
+
+**Reuse, no duplication.** Applying a template is **pure orchestration** over the
+existing primitives — it reuses `create_portal_case` / `create_case_pack` /
+`create_case_room` / `create_case_document_request` and adds **no second pack / room /
+request / upload system**. Templates are **configuration only** — they store no
+document contents, files, tokens, or recipient data. Service:
+`apps/organizations/portal_templates.py`.
+
+Key facts:
+
+* **Data model.** `OrganizationCaseTemplate` +
+  `OrganizationCaseTemplateRequirement` (migration `organizations/0009_*`). The same
+  migration **adds three `PortalCase.CaseType` values** — `insurance_claim`, `grant`,
+  `internship` — so those template case types round-trip; an unknown `case_type` falls
+  back to `general`. `default_case_title` supports a `{person_name}` placeholder;
+  `accepted_file_types` is **advisory, not enforced in V1**.
+* **Template CRUD.** List (archived excluded by default) / create / detail (with
+  requirements) / edit (pass `requirements` to replace them) / archive / duplicate
+  (editable `"<name> (copy)"`).
+* **Create-case-from-template.** `POST …/templates/{id}/create-case/` with
+  `{person_id, title?, due_date?, create_pack?, create_room?, create_requests?,
+  send_request_emails?, selected_requirement_ids?}` (omitted toggles use the template's
+  `auto_create_*` defaults). It creates the `PortalCase` then the optional pack
+  (enriched with each requirement's instructions / due date / sort order), room
+  (template title/description), and one `DocumentRequestLink` per selected requirement,
+  returning `{case, pack_created, room_created, created_requests_count,
+  skipped_requirements, warnings, progress}`.
+* **Limits → warnings.** The **active-case** org limit is the only **hard** blocker
+  (raises `403 organization_plan_limit_exceeded` before anything is created); the
+  **sharing-room** and **document-request** limits are **soft** — if hit, the
+  room/requests are skipped and the case is still created with a `warnings` entry
+  (`room_limit_reached` / `request_limit_reached`). The template pack's `DocumentBundle`
+  is owned by the **org-owner user** and is not separately org-limited in V1 (still
+  counts against that account until org-owned storage exists).
+* **Optional request emails.** Requests do **not** email by default;
+  `send_request_emails=true` reuses the shared `send_branded_email` helper + the
+  existing `portal_bulk_reminder` template (no new email system), carrying only the
+  public upload link + safe context, respecting suppression / unsubscribe.
+* **Permissions / gates.** List / detail = any **active org member**; create / edit /
+  archive / duplicate / create-case = **OWNER/ADMIN** only (same policy as manual case
+  creation). Gated by both the `b2b_portals` feature flag and the org Teams entitlement;
+  org-isolated. No public endpoint.
+* **Audit events.** `organization_template_created`, `organization_template_updated`,
+  `organization_template_archived`, `portal_case_created_from_template`,
+  `portal_template_pack_created`, `portal_template_room_created`,
+  `portal_template_requests_created` — recorded via the unified owner-scoped Audit Log
+  (`metadata.org_id`), with sanitized metadata only.
+
+**Deferred (future work):** a public template marketplace, cross-org template sharing,
+AI template generation, template versioning, bulk case creation, CSV import,
+conditional / branching requirements, Teams billing, and org-owned storage.
+
+**Next recommended branch: `b2b/teams-billing-checkout`** — wire real Teams checkout /
+per-seat Stripe billing and invoices, and begin org-owned storage (so a case's pack and
+uploaded files no longer draw down the org-owner's personal storage).
+
+See `docs/b2b-portals.md`, `docs/api-spec.md` §43, `docs/security-plan.md`,
+`docs/BILLING.md`, and `docs/security/audit-logs.md`.

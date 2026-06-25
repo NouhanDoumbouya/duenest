@@ -27,6 +27,11 @@ from .portal_views import (
     PortalReminderBatchDetailView,
     PortalReminderBatchSendView,
     PortalReminderBatchCancelView,
+    PortalTemplatesView,
+    PortalTemplateDetailView,
+    PortalTemplateArchiveView,
+    PortalTemplateDuplicateView,
+    PortalTemplateCreateCaseView,
 )
 from .views import (
     OrganizationInviteTokenView,
@@ -46,6 +51,12 @@ urlpatterns = [
     path(f"{_PORTAL}/summary/", PortalSummaryView.as_view(), name="portal-summary"),
     # Organization Dashboard V1 — operational command center (read-only).
     path(f"{_PORTAL}/dashboard/", PortalDashboardView.as_view(), name="portal-dashboard"),
+    # Organization Templates V1 — reusable case workflows.
+    path(f"{_PORTAL}/templates/", PortalTemplatesView.as_view(), name="portal-templates"),
+    path(f"{_PORTAL}/templates/<int:template_id>/", PortalTemplateDetailView.as_view(), name="portal-template-detail"),
+    path(f"{_PORTAL}/templates/<int:template_id>/archive/", PortalTemplateArchiveView.as_view(), name="portal-template-archive"),
+    path(f"{_PORTAL}/templates/<int:template_id>/duplicate/", PortalTemplateDuplicateView.as_view(), name="portal-template-duplicate"),
+    path(f"{_PORTAL}/templates/<int:template_id>/create-case/", PortalTemplateCreateCaseView.as_view(), name="portal-template-create-case"),
     path(f"{_PORTAL}/limits/", PortalLimitsView.as_view(), name="portal-limits"),
     path(f"{_PORTAL}/people/", PortalPeopleView.as_view(), name="portal-people"),
     path(f"{_PORTAL}/people/<int:person_id>/", PortalPersonDetailView.as_view(), name="portal-person-detail"),
