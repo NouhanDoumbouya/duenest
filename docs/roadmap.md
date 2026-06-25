@@ -32,6 +32,18 @@ app. The legacy **Subscription Radar** is **deprecated**:
 Items below that describe subscription/finance tracking as a product feature are
 superseded by this refocus and Deadlines & Renewals.
 
+## 0.1 Security & Compliance Hardening V1 (delivered, 2026-06-25)
+
+A hardening + documentation pass for the private beta (branch
+`security/compliance-hardening-v1`). Reviewed and confirmed the existing posture
+(encryption at rest, presigned R2 storage, magic-byte + ClamAV upload validation,
+HttpOnly-cookie JWT, ~30 scoped throttles, sanitized audit/operational/scheduled
+logs, a security-first service worker, and cancellable export/deletion requests).
+Added defense-in-depth metadata sanitization to the document/file/room/emergency
+activity trails, and formalized the **risk register** and **retention-policy
+foundation** in `docs/security-compliance-hardening-v1.md`. This is a hardening
+pass, **not** a compliance certification.
+
 ## 0.2 Integrations OAuth Foundation V1 (delivered, 2026-06-25)
 
 A safe, consistent foundation for **import-only** integrations (branch

@@ -60,13 +60,22 @@ Env-gated, on in production only (dev unaffected):
 - Exposes aggregates + safe encryption counts (no key material), country-level
   map only (no raw IP/GPS). Copy enforced on the map page.
 
+## Implemented since this report was first written
+These were once listed as gaps and have since landed (verified in `main`):
+- **Private object storage with presigned URLs** (Cloudflare R2; private bucket,
+  ≈5-min signed URLs, encrypt-before-store, UUID keys) — replaces local disk.
+- **Upload magic-byte sniffing + ClamAV scan** (`apps/core/security/
+  file_validation.py`; fail-closed in production) — beyond extension/MIME.
+- **HttpOnly-cookie JWT** (`apps/users/cookie_auth.py`) with CSRF double-submit —
+  replaces client-side localStorage tokens for the cookie flow.
+- **Activity-trail metadata sanitization** (Security & Compliance Hardening V1):
+  file/room/document/emergency trails now run metadata through
+  `safe_audit_metadata`. See `docs/security-compliance-hardening-v1.md`.
+
 ## Remaining risks / launch blockers
 - Production secret manager + KEK backups (currently env vars).
-- Object storage with signed URLs (currently local disk).
-- Upload magic-byte sniffing + AV scan (currently extension + content-type
-  allowlist only — see file-upload doc).
-- Email delivery, monitoring/alerting, backups, privacy/legal pages.
+- Enable + monitor ClamAV in production (`CLAMD_ENABLED`, `CLAMD_FAIL_CLOSED`).
+- Enable Redis cache in production so throttles/lockouts are cluster-wide.
+- Email delivery, monitoring/alerting, backups, external security review.
 - P2 foundations (MFA, session management, account lockout, CAPTCHA) are
   documented but not implemented.
-- JWTs stored client-side (localStorage) — XSS-exposure tradeoff; consider
-  HttpOnly-cookie migration before public launch.
