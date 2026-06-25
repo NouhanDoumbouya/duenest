@@ -536,3 +536,23 @@ billing history. Collect billing country via the provider checkout/portal.
   model-ready but not fully implemented in the UI. Teams **portal entitlements**
   exist (org-level limits, founder activation command — see the Teams Plan section
   above), but **live Teams checkout / per-seat Stripe / invoices are not wired**.
+
+## Founder visibility (Founder Admin Tools V1)
+
+The founder console exposes **read-only** plan/limit visibility and one **safe,
+no-Stripe** write action:
+
+- **Personal user plans are read-only** in the console. `GET /founder/users/{id}/`
+  shows a user's plan + per-resource usage + storage via `compute_plan_usage`
+  (no Stripe call). Plans & limits overview (`GET /founder/plans-limits/`) shows
+  plan distribution and who is at/over a limit.
+- **Organization plan/portal** can be set via
+  `POST /founder/organizations/{id}/set-plan/`, which reuses the existing
+  `set_organization_plan` service — it writes only the local
+  `OrganizationPlanProfile` (plan + portal_enabled) and records an audit event.
+  **It never touches Stripe, never creates prices, and never modifies a Stripe
+  subscription.**
+- AI cost/usage visibility (`GET /founder/ai-usage/`) is metering aggregates only.
+
+Live Stripe billing management (checkout, subscriptions, invoices) remains
+deferred to the Teams billing branch and is NOT part of this console.

@@ -19,6 +19,7 @@ from .models import (
     FeatureCompletionItem,
     FeedbackItem,
     FounderAuditLog,
+    FounderSupportNote,
     InviteCode,
     LaunchChecklistItem,
     OperationalEvent,
@@ -29,6 +30,14 @@ from .models import (
 )
 from .observability import build_observability_overview, build_system_status
 from .job_status import build_job_detail, build_jobs_overview, build_jobs_summary
+from .admin_console import (
+    build_ai_usage_overview,
+    build_founder_user_detail,
+    build_organization_detail,
+    build_organizations_list,
+    build_plans_limits_overview,
+    build_storage_overview,
+)
 from apps.core.scheduled_jobs import get_job
 from .permissions import IsFounderUser
 from .serializers import (
@@ -44,6 +53,7 @@ from .serializers import (
     FounderMeSerializer,
     FounderOperationalEventSerializer,
     FounderScheduledJobRunSerializer,
+    FounderSupportNoteSerializer,
     FounderWaitlistEntrySerializer,
     FounderUserListSerializer,
     LaunchChecklistItemSerializer,
@@ -1061,6 +1071,184 @@ class FounderScheduledJobDryRunView(APIView):
             object_id=job_name,
         )
         return Response(result)
+
+
+# ---- Founder Admin Tools V1 (support console) -------------------------------
+
+
+class FounderOrganizationListView(APIView):
+    """Founder support list of organizations (safe aggregates only)."""
+
+    permission_classes = [IsFounderUser]
+
+    def get(self, request):
+        params = request.query_params
+        portal_param = params.get("portal")
+        portal = None
+        if portal_param in {"1", "true", "yes"}:
+            portal = True
+        elif portal_param in {"0", "false", "no"}:
+            portal = False
+        log_founder_action(request=request, action="founder_viewed_organizations")
+        return Response(
+            {
+                "organizations": build_organizations_list(
+                    search=params.get("search", ""),
+                    plan=params.get("plan", ""),
+                    portal=portal,
+                )
+            }
+        )
+
+
+class FounderOrganizationDetailView(APIView):
+    """One organization's support-safe detail (limits, members, events, notes)."""
+
+    permission_classes = [IsFounderUser]
+
+    def get(self, request, org_id):
+        from apps.organizations.models import Organization
+
+        org = Organization.objects.filter(pk=org_id).first()
+        if org is None:
+            return Response(
+                {"detail": "Organization not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        log_founder_action(
+            request=request,
+            action="founder_viewed_organization",
+            object_type="organization",
+            object_id=org.id,
+        )
+        return Response(build_organization_detail(org))
+
+
+class FounderOrganizationSetPlanView(APIView):
+    """Set an org's plan profile / portal-enabled via the existing safe service
+    (no Stripe). Founder only, audited."""
+
+    permission_classes = [IsFounderUser]
+
+    def post(self, request, org_id):
+        from apps.organizations.models import Organization
+        from apps.organizations.portal_limits import set_organization_plan
+
+        org = Organization.objects.filter(pk=org_id).first()
+        if org is None:
+            return Response(
+                {"detail": "Organization not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        data = request.data if isinstance(request.data, dict) else {}
+        plan = data.get("plan")
+        portal_enabled = data.get("portal_enabled")
+        try:
+            set_organization_plan(
+                org,
+                plan=plan,
+                portal_enabled=portal_enabled,
+                actor=request.user,
+            )
+        except ValueError as exc:
+            return Response(
+                {"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST
+            )
+        log_founder_action(
+            request=request,
+            action="founder_set_organization_plan",
+            object_type="organization",
+            object_id=org.id,
+            metadata={"plan": plan},
+        )
+        return Response(build_organization_detail(org))
+
+
+class FounderUserDetailView(APIView):
+    """Enriched founder support view for one user (plan/storage/AI/orgs/notes)."""
+
+    permission_classes = [IsFounderUser]
+
+    def get(self, request, user_id):
+        user = User.objects.filter(pk=user_id).first()
+        if user is None:
+            return Response(
+                {"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND
+            )
+        log_founder_action(
+            request=request,
+            action="founder_viewed_user_detail",
+            object_type="user",
+            object_id=user.id,
+        )
+        return Response(build_founder_user_detail(user))
+
+
+class FounderPlansLimitsView(APIView):
+    permission_classes = [IsFounderUser]
+
+    def get(self, request):
+        return Response(build_plans_limits_overview())
+
+
+class FounderStorageView(APIView):
+    permission_classes = [IsFounderUser]
+
+    def get(self, request):
+        return Response(build_storage_overview())
+
+
+class FounderAiUsageView(APIView):
+    permission_classes = [IsFounderUser]
+
+    def get(self, request):
+        return Response(build_ai_usage_overview())
+
+
+class FounderSupportNoteListCreateView(generics.ListCreateAPIView):
+    """List/create founder support notes; filter by target_user / target_organization."""
+
+    permission_classes = [IsFounderUser]
+    serializer_class = FounderSupportNoteSerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        qs = FounderSupportNote.objects.select_related("created_by")
+        params = self.request.query_params
+        if params.get("target_user"):
+            qs = qs.filter(target_user_id=params["target_user"])
+        if params.get("target_organization"):
+            qs = qs.filter(target_organization_id=params["target_organization"])
+        return qs
+
+    def perform_create(self, serializer):
+        note = serializer.save(created_by=self.request.user)
+        log_founder_action(
+            request=self.request,
+            action="founder_created_support_note",
+            object_type="support_note",
+            object_id=note.id,
+            metadata={"note_type": note.note_type},
+        )
+
+
+class FounderSupportNoteDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """Update a note's status/body/type, or delete it. Founder only."""
+
+    permission_classes = [IsFounderUser]
+    serializer_class = FounderSupportNoteSerializer
+    lookup_url_kwarg = "note_id"
+    queryset = FounderSupportNote.objects.all()
+
+    def perform_update(self, serializer):
+        note = serializer.save()
+        log_founder_action(
+            request=self.request,
+            action="founder_updated_support_note",
+            object_type="support_note",
+            object_id=note.id,
+            metadata={"status": note.status},
+        )
 
 
 class FounderEmailSettingListView(generics.ListAPIView):

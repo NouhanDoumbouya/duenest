@@ -1535,3 +1535,26 @@ are dry-run-only from the console; AI and billing jobs are observe-only.
 
 Deferred: external scheduler vendor, Celery, alerting/pager, job dependencies,
 retry/backoff queues.
+
+## 38. Founder Admin Tools Architecture
+
+The founder support console (Founder Admin Tools V1) is a thin, read-mostly
+aggregation layer over existing safe helpers — it adds no new access to private
+data.
+
+- **`apps/founder/admin_console.py`** builds every payload (organizations
+  list/detail, enriched user detail, plans-limits / storage / AI-usage overviews)
+  by REUSING `documents.plan_usage` (`compute_plan_usage`, storage helpers),
+  `organizations.portal_limits` (`build_organization_limit_payload`,
+  `set_organization_plan` — no Stripe), `ai.metering`, and the existing
+  `build_founder_user_summary`. It never queries document contents.
+- **`founder.FounderSupportNote`** (migration `0014`) — founder-only notes on a
+  user or org; full CRUD via DRF generic views.
+- **Views/urls** live in the founder app under `/api/v1/founder/*`, all gated by
+  `IsFounderUser`; mutations are audited.
+- **Frontend** adds seven pages under `/dashboard/founder/*` and a reusable
+  `SupportNotes` component, following the established founder page → `lib/founder`
+  → `types/founder` pattern.
+
+Deferred (documented): impersonation, file download, account/org deletion, full
+support ticketing, live billing management, per-user/org flag overrides.

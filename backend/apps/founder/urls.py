@@ -52,6 +52,15 @@ from .views import (
     FounderScheduledJobRunView,
     FounderScheduledJobSummaryView,
     FounderSystemStatusView,
+    FounderAiUsageView,
+    FounderOrganizationDetailView,
+    FounderOrganizationListView,
+    FounderOrganizationSetPlanView,
+    FounderPlansLimitsView,
+    FounderStorageView,
+    FounderSupportNoteDetailView,
+    FounderSupportNoteListCreateView,
+    FounderUserDetailView,
     FounderInviteCodeDetailView,
     FounderInviteCodeDisableView,
     FounderInviteCodeListCreateView,
@@ -186,6 +195,46 @@ urlpatterns = [
         "founder/operational-events/<int:event_id>/resolve/",
         FounderOperationalEventResolveView.as_view(),
         name="founder-operational-event-resolve",
+    ),
+    # Founder Admin Tools V1 (support console)
+    path(
+        "founder/users/<int:user_id>/",
+        FounderUserDetailView.as_view(),
+        name="founder-user-detail",
+    ),
+    path(
+        "founder/organizations/",
+        FounderOrganizationListView.as_view(),
+        name="founder-organizations",
+    ),
+    path(
+        "founder/organizations/<int:org_id>/",
+        FounderOrganizationDetailView.as_view(),
+        name="founder-organization-detail",
+    ),
+    path(
+        "founder/organizations/<int:org_id>/set-plan/",
+        FounderOrganizationSetPlanView.as_view(),
+        name="founder-organization-set-plan",
+    ),
+    path(
+        "founder/plans-limits/",
+        FounderPlansLimitsView.as_view(),
+        name="founder-plans-limits",
+    ),
+    path("founder/storage/", FounderStorageView.as_view(), name="founder-storage"),
+    path(
+        "founder/ai-usage/", FounderAiUsageView.as_view(), name="founder-ai-usage"
+    ),
+    path(
+        "founder/support-notes/",
+        FounderSupportNoteListCreateView.as_view(),
+        name="founder-support-notes",
+    ),
+    path(
+        "founder/support-notes/<int:note_id>/",
+        FounderSupportNoteDetailView.as_view(),
+        name="founder-support-note-detail",
     ),
     # Scheduled Jobs & Background Operations V1
     path(

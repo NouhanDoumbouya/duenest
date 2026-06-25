@@ -2151,3 +2151,28 @@ designed to be safe to re-run.
   require `IsFounderUser`; manual run / dry-run are audited via `log_founder_action`.
 
 No external scheduler vendor, queue service, or new secret was introduced.
+
+## Founder Admin Tools V1
+
+A founder/operator support console designed so founders can support users and
+organizations **without seeing private data**.
+
+- **Access:** every endpoint and `/dashboard/founder/*` page requires
+  `IsFounderUser` (superuser, or staff on `FOUNDER_EMAILS`). Normal users and org
+  admins are blocked (tested). Frontend hiding is never the only gate. Mutations
+  (set-plan, support notes) are audited via `log_founder_action`.
+- **Never exposed:** document contents, OCR text, AI prompts/responses, full
+  email bodies, private file URLs, R2 object keys, raw public/password tokens, API
+  keys/secrets. Payloads carry only safe ids, counts, plan/limit values, storage
+  bytes, AI token/cost aggregates, and operator-authored support-note text. A test
+  scans every payload for leak shapes (share/access/upload tokens, api_key,
+  secret, password, prompt, ocr_text, file_url, r2_key).
+- **No dangerous actions in V1:** no impersonation / login-as-user, no file
+  download from the console, no document-content viewing, no account/org deletion,
+  no live Stripe/billing mutation, no AI calls. Personal billing plans are
+  read-only; the only write actions are the org plan/portal toggle (existing
+  no-Stripe service) and founder support notes.
+- **Support notes** (`FounderSupportNote`) are founder-only and never shown to the
+  user/org they reference; operators must not paste private contents into them.
+
+No external support vendor or new secret was introduced.

@@ -2807,3 +2807,57 @@ per-seat Stripe billing + invoices, and org-owned storage.
 
 See `docs/DEPLOYMENT.md` (scheduler commands) and `docs/architecture.md`
 (§37 Scheduled Jobs).
+
+## Founder Admin Tools V1 — delivered (2026-06-25)
+
+`support/founder-admin-tools-v1` turns the founder console into a **safe support
+control center** for private beta: founders can support users and organizations —
+plans, limits, storage, AI usage, email health, feature flags, and operational
+timelines — **without ever seeing private document contents**.
+
+**Reuse first.** Much already existed (a users list + `build_founder_user_summary`,
+feature-flag list/PATCH endpoints, email analytics, the founder dashboard) and
+safe building blocks (`compute_plan_usage`, `get_user_storage_used_bytes`,
+`build_organization_limit_payload`, `set_organization_plan` [no Stripe],
+`build_ai_health`). V1 fills the gaps:
+
+* **Organizations** — `GET /founder/organizations/` (+ `<id>/`) with safe
+  aggregates (plan, portal, members/people/cases/requests/rooms), member list,
+  org-scoped operational events, and support notes. A safe
+  `POST /founder/organizations/<id>/set-plan/` reuses the existing no-Stripe
+  service (local entitlement only).
+* **Enriched user detail** — `GET /founder/users/<id>/` adds plan + storage + AI
+  usage + org memberships + recent operational events + support notes on top of
+  the existing safe summary (which already excludes titles/filenames/OCR/tokens).
+* **`FounderSupportNote`** model (migration `0014`) — founder-only notes on a user
+  or org (type + status + body), never shown to the user; full CRUD.
+* **Plans & limits / Storage / AI usage** overviews — efficient aggregate
+  endpoints (plan distribution, who's at/over a limit, top storage users, AI
+  tokens/cost today+month by reason and top users) reusing the safe helpers.
+* **Frontend** — seven founder pages (`organizations`, `organizations/[orgId]`,
+  `users/[userId]`, `feature-flags`, `plans-limits`, `storage`, `ai-usage`) + a
+  reusable support-notes component, all added to the founder nav.
+
+**What founders can NOT do here (by design):** no impersonation / login-as-user,
+no file downloads or document-content viewing, no account/org deletion, no live
+Stripe/billing changes, no AI calls. Personal billing plans are read-only.
+
+**Privacy:** payloads expose only safe ids and aggregates — never document
+contents, OCR text, AI prompts/responses, full email bodies, private file URLs,
+R2 object keys, raw tokens, or secrets (a test scans every payload for leak
+shapes). All endpoints are `IsFounderUser` and mutations are audited.
+
+**Tests.** 11 new backend tests (founder-only gating, org list/detail safety,
+enriched user detail safety, support-notes CRUD + validation, safe set-plan,
+plans/storage/AI overviews) + 3 frontend page tests. Full backend regression
+(founder/organizations/billing/features/ai/notifications 560 + documents 794) and
+frontend (`tsc`/`eslint`/`vitest` 481/`build`) all green; no migration drift.
+
+**Deferred:** impersonation, file download, account/org deletion, full support
+ticketing, live billing management, per-user/per-org feature-flag overrides, and
+external support-vendor integrations.
+
+**Next recommended branch: `b2b/teams-billing-checkout`** — real Teams checkout /
+per-seat Stripe billing + invoices, and org-owned storage.
+
+See `docs/api-spec.md` (Founder admin tools) and `docs/security-plan.md`.

@@ -7,8 +7,11 @@ import {
   Activity,
   AlertTriangle,
   BarChart3,
+  Building2,
   Clock,
+  Database,
   FileText,
+  Flag,
   Gauge,
   LayoutDashboard,
   LockKeyhole,
@@ -16,7 +19,9 @@ import {
   MessageSquare,
   Receipt,
   Rocket,
+  Scale,
   ShieldCheck,
+  Sparkles,
   Users,
 } from "lucide-react";
 
@@ -36,6 +41,11 @@ const founderNav = [
   { label: "Jobs", href: "/dashboard/founder/jobs", icon: Clock },
   { label: "Security", href: "/dashboard/founder/security", icon: ShieldCheck },
   { label: "Users", href: "/dashboard/founder/users", icon: Users },
+  { label: "Organizations", href: "/dashboard/founder/organizations", icon: Building2 },
+  { label: "Feature flags", href: "/dashboard/founder/feature-flags", icon: Flag },
+  { label: "Plans & limits", href: "/dashboard/founder/plans-limits", icon: Scale },
+  { label: "Storage", href: "/dashboard/founder/storage", icon: Database },
+  { label: "AI usage", href: "/dashboard/founder/ai-usage", icon: Sparkles },
   { label: "Emails", href: "/dashboard/founder/emails", icon: Mail },
   { label: "Launch", href: "/dashboard/founder/launch", icon: Rocket },
 ];

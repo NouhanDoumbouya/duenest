@@ -454,6 +454,71 @@ class ScheduledJobRun(models.Model):
         return f"{self.job_name}={self.status}"
 
 
+class FounderSupportNote(models.Model):
+    """
+    A founder/admin-only note attached to a user or organization for support
+    context (e.g. "reached out about a stuck upload", "watching storage usage").
+
+    Internal only — never shown to the user/org it's about. Holds free text the
+    founder types; callers must not paste private document contents, tokens, or
+    secrets into the body (it is operator-authored support context, not user data).
+    """
+
+    class NoteType(models.TextChoices):
+        SUPPORT = "support", "Support"
+        BETA = "beta", "Beta"
+        BILLING = "billing", "Billing"
+        TECHNICAL = "technical", "Technical"
+        RISK = "risk", "Risk"
+
+    class Status(models.TextChoices):
+        OPEN = "open", "Open"
+        WATCHING = "watching", "Watching"
+        RESOLVED = "resolved", "Resolved"
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="authored_support_notes",
+    )
+    target_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="support_notes",
+    )
+    target_organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="support_notes",
+    )
+    note_type = models.CharField(
+        max_length=16, choices=NoteType.choices, default=NoteType.SUPPORT
+    )
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.OPEN
+    )
+    body = models.TextField()
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["target_user", "created_at"]),
+            models.Index(fields=["target_organization", "created_at"]),
+            models.Index(fields=["status", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.note_type} note ({self.status})"
+
+
 class WaitlistEntry(models.Model):
     """Public private-beta waitlist entry, visible only to founders/admins."""
 

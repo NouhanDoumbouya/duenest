@@ -6875,3 +6875,34 @@ only — never contents, tokens, URLs, or secrets).
 
 The founder console renders these at `/dashboard/founder/jobs`. Job health counts
 also appear under `jobs_summary` in `GET /api/v1/founder/system-status/`.
+
+## Founder Admin Tools (Founder/admin only)
+
+All endpoints require `IsFounderUser`. Payloads are safe aggregates + ids — never
+document contents, OCR text, AI prompts/responses, full email bodies, private file
+URLs, R2 keys, raw tokens, or secrets. No Stripe calls; no impersonation; no file
+download.
+
+### Organizations
+- `GET /api/v1/founder/organizations/` — `?search=&plan=&portal=true|false` → `{ "organizations": [...] }` (name, owner email, plan, portal_enabled, members/people/cases/requests/rooms, archived).
+- `GET /api/v1/founder/organizations/{id}/` → summary + `limits` / `usage` / `remaining` + `members_list` + `recent_events` + `support_notes`. `404` if missing.
+- `POST /api/v1/founder/organizations/{id}/set-plan/` — body `{ "plan": "free|pro|teams_beta|teams|enterprise", "portal_enabled": bool? }`. Reuses the existing **no-Stripe** `set_organization_plan` service; `400` for an unknown plan. Audited.
+
+### Users
+- `GET /api/v1/founder/users/` — existing safe list (search by email, aggregate counts).
+- `GET /api/v1/founder/users/{id}/` — enriched detail: the safe summary + `plan_usage` (resources + storage), `ai` (today + month tokens/cost), `organizations` (memberships), `recent_events`, `support_notes`, and a `privacy_note`. (The legacy `/{id}/summary/` remains.)
+
+### Plans / storage / AI usage
+- `GET /api/v1/founder/plans-limits/` → `{ user_plans, organization_plans, organizations_at_limit[], users_over_storage[] }`.
+- `GET /api/v1/founder/storage/` → `{ total_bytes, total_files, top_users[], upload_failures_24h }`. No storage keys / file URLs.
+- `GET /api/v1/founder/ai-usage/` → `{ configured, today, month, failures_by_reason, top_users[], caps }`. Metering only — no prompts/content.
+
+### Feature flags (already present, reused)
+- `GET /api/v1/founder/feature-flags/` ; `PATCH /api/v1/founder/feature-flags/{key}/` (visibility / maintenance_message).
+
+### Support notes
+- `GET /api/v1/founder/support-notes/` — `?target_user=&target_organization=`.
+- `POST /api/v1/founder/support-notes/` — exactly one of `target_user` / `target_organization`; `{ note_type, status, body }`. `created_by` is the founder. `400` if zero or two targets.
+- `PATCH/DELETE /api/v1/founder/support-notes/{id}/`.
+
+Frontend: `/dashboard/founder/{organizations,organizations/[orgId],users/[userId],feature-flags,plans-limits,storage,ai-usage}`.
