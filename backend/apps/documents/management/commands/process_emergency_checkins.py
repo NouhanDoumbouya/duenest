@@ -60,14 +60,18 @@ class Command(BaseCommand):
             )
         )
         if not summary.get("dry_run"):
-            from apps.founder.services import record_scheduled_job_run
+            from apps.founder.job_runner import bridge_run
+            from apps.founder.models import ScheduledJobRun
 
-            record_scheduled_job_run(
-                "emergency_checkin_job",
-                status="degraded" if summary.get("errors") else "succeeded",
-                message=f"Emergency check-ins: fired {summary.get('fired', 0)}",
+            bridge_run(
+                "emergency_checkin",
+                status=ScheduledJobRun.Status.SUCCEEDED,
+                attempted=summary.get("evaluated", 0),
+                succeeded=summary.get("fired", 0) + summary.get("nudged", 0),
+                failed=summary.get("errors", 0),
                 error_code="run_errors" if summary.get("errors") else "",
-                counts={
+                message=f"Emergency check-ins: fired {summary.get('fired', 0)}",
+                metadata={
                     "evaluated": summary.get("evaluated", 0),
                     "fired": summary.get("fired", 0),
                     "nudged": summary.get("nudged", 0),

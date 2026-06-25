@@ -234,11 +234,22 @@ def build_system_status() -> dict:
     else:
         overall = "ok"
 
+    from .job_status import build_jobs_summary
+
+    jobs_summary = build_jobs_summary()
+
+    # Degrade if scheduled jobs are failing or stale, too.
+    if overall == "ok" and (
+        jobs_summary["scheduled_jobs_failing"] or jobs_summary["scheduled_jobs_stale"]
+    ):
+        overall = "degraded"
+
     return {
         "generated_at": now.isoformat(),
         "overall": overall,
         "components": components,
         "scheduled_jobs": _scheduled_job_runs(),
+        "jobs_summary": jobs_summary,
         "counts": {
             "unresolved_critical_events": unresolved_critical,
             "critical_events_24h": critical_24h,

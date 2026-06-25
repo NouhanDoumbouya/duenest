@@ -34,6 +34,11 @@ import type {
   OperationalEvent,
   Paginated,
   PrivateBetaMetrics,
+  ScheduledJob,
+  ScheduledJobDetail,
+  ScheduledJobRun,
+  ScheduledJobRunResult,
+  ScheduledJobsSummary,
   SecurityOverview,
   SubmitFeedbackRequest,
   SystemStatus,
@@ -579,4 +584,48 @@ export function resolveFounderOperationalEvent(
     `/founder/operational-events/${id}/resolve/`,
     { method: "POST", body: { resolution_note: resolutionNote }, auth: true },
   );
+}
+
+// ---- Scheduled Jobs & Background Operations V1 -----------------------------
+
+export function getFounderJobs(): Promise<{ jobs: ScheduledJob[] }> {
+  return apiFetch<{ jobs: ScheduledJob[] }>("/founder/jobs/", { auth: true });
+}
+
+export function getFounderJobsSummary(): Promise<ScheduledJobsSummary> {
+  return apiFetch<ScheduledJobsSummary>("/founder/jobs/summary/", { auth: true });
+}
+
+export function getFounderJobDetail(
+  jobName: string,
+): Promise<ScheduledJobDetail> {
+  return apiFetch<ScheduledJobDetail>(`/founder/jobs/${jobName}/`, {
+    auth: true,
+  });
+}
+
+export function getFounderJobRuns(
+  jobName: string,
+): Promise<Paginated<ScheduledJobRun>> {
+  return apiFetch<Paginated<ScheduledJobRun>>(`/founder/jobs/${jobName}/runs/`, {
+    auth: true,
+  });
+}
+
+/** Run a job now. Only jobs marked manual-run-allowed (and non-destructive). */
+export function runFounderJob(jobName: string): Promise<ScheduledJobRunResult> {
+  return apiFetch<ScheduledJobRunResult>(`/founder/jobs/${jobName}/run/`, {
+    method: "POST",
+    auth: true,
+  });
+}
+
+/** Preview a job without side effects (used for destructive jobs like purge). */
+export function dryRunFounderJob(
+  jobName: string,
+): Promise<ScheduledJobRunResult> {
+  return apiFetch<ScheduledJobRunResult>(`/founder/jobs/${jobName}/dry-run/`, {
+    method: "POST",
+    auth: true,
+  });
 }

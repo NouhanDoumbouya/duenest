@@ -119,6 +119,50 @@ class Command(BaseCommand):
                 )
             )
 
+        # Bridge into the unified scheduled-jobs dashboard (the detailed
+        # NotificationDeliveryRun above is kept). Best-effort; never breaks the run.
+        if not dry_run:
+            from apps.founder.job_runner import bridge_run
+            from apps.founder.models import ScheduledJobRun
+
+            run_status = (
+                ScheduledJobRun.Status.FAILED
+                if summary["status"] == NotificationDeliveryRun.Status.FAILED
+                else ScheduledJobRun.Status.SUCCEEDED
+            )
+            bridge_run(
+                "notification_delivery",
+                status=run_status,
+                triggered_by=(
+                    ScheduledJobRun.Trigger.MANUAL
+                    if options.get("manual")
+                    else ScheduledJobRun.Trigger.SCHEDULER
+                ),
+                duration_ms=summary.get("duration_ms"),
+                attempted=summary.get("evaluated", 0),
+                succeeded=summary.get("created", 0),
+                skipped=summary.get("existing", 0) + summary.get("skipped_preferences", 0),
+                failed=summary.get("errors", 0) + summary.get("emails_failed", 0),
+                error_code="delivery_failed"
+                if summary["status"] == NotificationDeliveryRun.Status.FAILED
+                else "",
+                message=f"delivered {summary.get('emails_sent', 0)} email(s)",
+                metadata={
+                    k: summary.get(k, 0)
+                    for k in (
+                        "evaluated",
+                        "created",
+                        "existing",
+                        "in_app_delivered",
+                        "emails_sent",
+                        "emails_skipped",
+                        "emails_failed",
+                        "skipped_preferences",
+                        "errors",
+                    )
+                },
+            )
+
         # Non-zero exit only on catastrophic failure, so transient per-email
         # failures don't spam a scheduler's alerting.
         if summary["status"] == NotificationDeliveryRun.Status.FAILED:

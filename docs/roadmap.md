@@ -2745,3 +2745,65 @@ per-seat Stripe billing + invoices, and org-owned storage.
 
 See `docs/security-plan.md` (Reliability & Observability) and `docs/api-spec.md`
 (Founder observability endpoints).
+
+## Scheduled Jobs & Background Operations V1 — delivered (2026-06-25)
+
+`operations/scheduled-jobs-v1` makes CertaNest's time-based work **boring, safe,
+observable, and repeatable**. There is no Celery/queue — jobs are plain Django
+management commands run by an external scheduler (Railway Cron) — so this branch
+adds a thin reliability layer around them, not a new scheduler.
+
+What shipped:
+
+* **Job registry** (`apps/core/scheduled_jobs.py`) — a declarative source of
+  truth for each REAL job (no invented jobs): cadence, category, and safety flags
+  (`is_manual_run_allowed`, `is_destructive`, `supports_dry_run`, `is_idempotent`,
+  `expected_max_age_minutes`, lock timeout). Registered: notification delivery,
+  Weekly Radar email, AI briefing digest (observe-only — it calls AI), emergency
+  check-ins, trash purge (destructive), billing access sync (observe-only).
+* **`ScheduledJobRun`** model (founder app, migration `0013`) — one row per
+  execution: status (started/succeeded/failed/skipped/stale/cancelled), counts
+  (attempted/success/skipped/failed), duration, triggered_by + user,
+  correlation_id, lock_key, error_code, safe_message, scrubbed metadata, and a
+  link to the correlated `OperationalEvent`. `NotificationDeliveryRun` is kept for
+  detailed delivery metrics and bridged (not duplicated).
+* **Runner** (`apps/founder/job_runner.py`) — `run_scheduled_job()` provides
+  registry lookup, a **cache-based lock** (`cache.add`, atomic on Redis) so two
+  instances never run at once (skips with `already_running`), a `ScheduledJobRun`
+  + `OperationalEvent`, and a **dry-run** path that previews with no lock, no run
+  row, and no side effects. Idempotency comes from delegating to the existing,
+  already-idempotent services (dedupe_key / EmailLog window / state guards), so
+  re-runs never duplicate emails.
+* **Uniform work adapters** (`apps/founder/job_work.py`) wrap the existing
+  services with one signature; the five non-AI/non-billing commands bridge their
+  scheduler runs into `ScheduledJobRun` without changing business behaviour or
+  output (the well-tested notification delivery path is **not** rewritten).
+* **Stale detection** (`apps/founder/job_status.py`) — per-job health: healthy /
+  never_run / stale / failing / disabled, plus a summary folded into founder
+  system-status (`scheduled_jobs_total/failing/stale/never_run` + `last_failed_job`).
+* **Founder console** — `GET /founder/jobs/` (+ `summary/`, `<job>/`,
+  `<job>/runs/`) and `POST /founder/jobs/<job>/run/` + `/dry-run/`, all
+  `IsFounderUser`. A new `/dashboard/founder/jobs` page shows health, last runs,
+  and safe manual actions. **Destructive jobs offer dry-run only; AI/billing jobs
+  are observe-only** (the console never triggers AI cost or billing emails).
+
+**Privacy:** runs store counts/status/duration/error_code only — `metadata` is
+scrubbed by `sanitize_metadata`. No document contents, OCR text, prompts, email
+bodies, private URLs, storage keys, tokens, or secrets; no full stack traces.
+
+**Tests.** 18 new backend tests (registry, runner success/failure/lock/skip,
+manual-run safety, destructive dry-run is non-destructive, stale/never-run, scrub,
+command bridging, founder-only + filters) + 2 frontend (jobs page render, Run-now
+only for safe jobs). Full backend regression (founder/notifications/core/ai/
+billing 416 + documents 794) and frontend (`tsc`/`eslint`/`vitest` 478/`build`)
+all green; no migration drift.
+
+**Deferred:** external scheduler vendor, Celery beat UI, external alerts/pager,
+job dependencies, integration-import scheduling, billing subscription sync, retry
+queues with backoff.
+
+**Next recommended branch: `b2b/teams-billing-checkout`** — real Teams checkout /
+per-seat Stripe billing + invoices, and org-owned storage.
+
+See `docs/DEPLOYMENT.md` (scheduler commands) and `docs/architecture.md`
+(§37 Scheduled Jobs).

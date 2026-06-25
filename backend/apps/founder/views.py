@@ -22,11 +22,14 @@ from .models import (
     InviteCode,
     LaunchChecklistItem,
     OperationalEvent,
+    ScheduledJobRun,
     TransactionalEmailSetting,
     ProductEvent,
     WaitlistEntry,
 )
 from .observability import build_observability_overview, build_system_status
+from .job_status import build_job_detail, build_jobs_overview, build_jobs_summary
+from apps.core.scheduled_jobs import get_job
 from .permissions import IsFounderUser
 from .serializers import (
     BetaUserProfileSerializer,
@@ -40,6 +43,7 @@ from .serializers import (
     FounderFeedbackSerializer,
     FounderMeSerializer,
     FounderOperationalEventSerializer,
+    FounderScheduledJobRunSerializer,
     FounderWaitlistEntrySerializer,
     FounderUserListSerializer,
     LaunchChecklistItemSerializer,
@@ -917,6 +921,146 @@ class FounderOperationalEventResolveView(APIView):
             metadata={"category": event.category, "source": event.source},
         )
         return Response(FounderOperationalEventSerializer(event).data)
+
+
+# ---- Scheduled Jobs & Background Operations V1 ------------------------------
+
+
+class FounderScheduledJobListView(APIView):
+    """List every registered scheduled job with its health + last run."""
+
+    permission_classes = [IsFounderUser]
+
+    def get(self, request):
+        log_founder_action(request=request, action="founder_viewed_scheduled_jobs")
+        return Response({"jobs": build_jobs_overview()})
+
+
+class FounderScheduledJobSummaryView(APIView):
+    """Aggregate scheduled-job health counts."""
+
+    permission_classes = [IsFounderUser]
+
+    def get(self, request):
+        return Response(build_jobs_summary())
+
+
+class FounderScheduledJobDetailView(APIView):
+    """One job's metadata, health, and recent run history."""
+
+    permission_classes = [IsFounderUser]
+
+    def get(self, request, job_name):
+        detail = build_job_detail(job_name)
+        if detail is None:
+            return Response(
+                {"detail": "Unknown scheduled job."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(detail)
+
+
+class FounderScheduledJobRunsView(generics.ListAPIView):
+    """Paginated run history for one job."""
+
+    permission_classes = [IsFounderUser]
+    serializer_class = FounderScheduledJobRunSerializer
+
+    def get_queryset(self):
+        return ScheduledJobRun.objects.filter(
+            job_name=self.kwargs["job_name"]
+        ).order_by("-created_at")
+
+
+class FounderScheduledJobRunView(APIView):
+    """Manually run a job NOW (founder only). Only jobs explicitly marked
+    `is_manual_run_allowed` and NOT destructive can be triggered here. Email jobs
+    are idempotent (dedupe), so a manual run cannot double-send."""
+
+    permission_classes = [IsFounderUser]
+
+    def post(self, request, job_name):
+        from .job_runner import run_scheduled_job
+
+        job = get_job(job_name)
+        if job is None:
+            return Response(
+                {"detail": "Unknown scheduled job."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if not job.is_manual_run_allowed or job.is_destructive:
+            return Response(
+                {"detail": "This job cannot be run from the console."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            result = run_scheduled_job(
+                job_name,
+                triggered_by=ScheduledJobRun.Trigger.MANUAL,
+                user=request.user,
+            )
+        except Exception as exc:  # noqa: BLE001 — a FAILED run was already recorded
+            log_founder_action(
+                request=request,
+                action="founder_ran_scheduled_job",
+                object_type="scheduled_job",
+                object_id=job_name,
+                metadata={"outcome": "error"},
+            )
+            return Response(
+                {"detail": "The job failed.", "error_code": type(exc).__name__},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        log_founder_action(
+            request=request,
+            action="founder_ran_scheduled_job",
+            object_type="scheduled_job",
+            object_id=job_name,
+            metadata={"outcome": result.get("status")},
+        )
+        return Response(result)
+
+
+class FounderScheduledJobDryRunView(APIView):
+    """Dry-run a job (preview counts, no side effects). Allowed only when the job
+    declares `supports_dry_run`. Used for destructive jobs (e.g. trash purge) so a
+    founder can see what WOULD happen without deleting anything."""
+
+    permission_classes = [IsFounderUser]
+
+    def post(self, request, job_name):
+        from .job_runner import JobNotRunnable, run_scheduled_job
+
+        job = get_job(job_name)
+        if job is None:
+            return Response(
+                {"detail": "Unknown scheduled job."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if not job.supports_dry_run:
+            return Response(
+                {"detail": "This job does not support a dry run."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            result = run_scheduled_job(
+                job_name,
+                triggered_by=ScheduledJobRun.Trigger.MANUAL,
+                user=request.user,
+                dry_run=True,
+            )
+        except JobNotRunnable:
+            return Response(
+                {"detail": "This job cannot be dry-run."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        log_founder_action(
+            request=request,
+            action="founder_dry_ran_scheduled_job",
+            object_type="scheduled_job",
+            object_id=job_name,
+        )
+        return Response(result)
 
 
 class FounderEmailSettingListView(generics.ListAPIView):

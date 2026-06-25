@@ -112,11 +112,15 @@ class Command(BaseCommand):
             f"AI digest: sent={sent} skipped={skipped} dry_run={dry_run}"
         )
         if not dry_run:
-            from apps.founder.services import record_scheduled_job_run
+            from apps.founder.job_runner import bridge_run
+            from apps.founder.models import ScheduledJobRun
 
-            record_scheduled_job_run(
-                "ai_digest_job",
-                status="succeeded",
+            bridge_run(
+                "ai_briefing_digest",
+                status=ScheduledJobRun.Status.SUCCEEDED,
+                attempted=sent + skipped,
+                succeeded=sent,
+                skipped=skipped,
                 message=f"AI digest sent {sent}",
-                counts={"emails_sent": sent, "skipped": skipped},
+                metadata={"sent": sent, "skipped": skipped},
             )

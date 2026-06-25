@@ -272,3 +272,14 @@ See `docs/PWA.md` §9 for the full flow.
 - PWA Web Push is implemented as an opt-in foundation (see above and
   `docs/PWA.md` §9) but stays off until VAPID keys are configured; per-type push
   controls remain a future enhancement.
+
+## Scheduled-jobs bridge (Scheduled Jobs V1)
+
+Notification delivery (`process_due_notifications`) is registered in the scheduled
+jobs registry as `notification_delivery`. It keeps its detailed
+`NotificationDeliveryRun` record AND now bridges each real run into the unified
+`ScheduledJobRun` history (best-effort, never breaks delivery), so it appears on
+the founder Scheduled Jobs dashboard alongside the other jobs. It remains fully
+idempotent (dedupe_key prevents duplicate notifications/emails), so a manual run
+from the console cannot double-send. The Weekly Radar and AI digest email jobs are
+bridged the same way. See `docs/DEPLOYMENT.md` for scheduler commands.

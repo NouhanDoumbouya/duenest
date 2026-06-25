@@ -67,15 +67,16 @@ class Command(BaseCommand):
             self.stdout.write(f"Weekly Radar [{user.email}]: {result}")
             return
 
-        from apps.founder.services import record_scheduled_job_run
+        from apps.founder.job_runner import bridge_run
+        from apps.founder.models import ScheduledJobRun
 
         try:
             summary = send_weekly_radar_batch(dry_run=dry_run, limit=options["limit"])
         except Exception as exc:  # record the fatal run, then re-raise unchanged
             if not dry_run:
-                record_scheduled_job_run(
-                    "weekly_radar_job",
-                    status="failed",
+                bridge_run(
+                    "weekly_radar_email",
+                    status=ScheduledJobRun.Status.FAILED,
                     message="Weekly Radar batch failed",
                     error_code=type(exc).__name__,
                 )
@@ -85,13 +86,19 @@ class Command(BaseCommand):
             f"failed={summary['failed']} dry_run={summary['dry_run']}"
         )
         if not dry_run:
-            record_scheduled_job_run(
-                "weekly_radar_job",
-                status="degraded" if summary.get("failed") else "succeeded",
+            bridge_run(
+                "weekly_radar_email",
+                status=ScheduledJobRun.Status.SUCCEEDED,
+                attempted=summary.get("sent", 0)
+                + summary.get("skipped", 0)
+                + summary.get("failed", 0),
+                succeeded=summary.get("sent", 0),
+                skipped=summary.get("skipped", 0),
+                failed=summary.get("failed", 0),
                 message=f"Weekly Radar sent {summary.get('sent', 0)}",
-                counts={
-                    "emails_sent": summary.get("sent", 0),
-                    "emails_failed": summary.get("failed", 0),
+                metadata={
+                    "sent": summary.get("sent", 0),
+                    "failed": summary.get("failed", 0),
                     "skipped": summary.get("skipped", 0),
                 },
             )
