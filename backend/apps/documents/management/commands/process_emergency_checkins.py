@@ -59,3 +59,18 @@ class Command(BaseCommand):
                 f"dry_run={summary['dry_run']}"
             )
         )
+        if not summary.get("dry_run"):
+            from apps.founder.services import record_scheduled_job_run
+
+            record_scheduled_job_run(
+                "emergency_checkin_job",
+                status="degraded" if summary.get("errors") else "succeeded",
+                message=f"Emergency check-ins: fired {summary.get('fired', 0)}",
+                error_code="run_errors" if summary.get("errors") else "",
+                counts={
+                    "evaluated": summary.get("evaluated", 0),
+                    "fired": summary.get("fired", 0),
+                    "nudged": summary.get("nudged", 0),
+                    "errors": summary.get("errors", 0),
+                },
+            )

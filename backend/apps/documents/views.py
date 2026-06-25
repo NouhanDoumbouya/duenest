@@ -4133,9 +4133,19 @@ class PublicDocumentRequestUploadView(APIView):
             attach_uploaded_file,
             resolve_document_request_token,
         )
+        from apps.founder.services import record_operational_event
 
         req, state = resolve_document_request_token(token)
         if req is None or not req.can_upload:
+            # Safe operational signal — NO raw token, only the resolution state.
+            record_operational_event(
+                category="public_link",
+                source="document_request_upload",
+                status="failed",
+                error_code=str(state or "unavailable")[:80],
+                message="Document request upload link unavailable",
+                request=request,
+            )
             return Response(
                 {"detail": "This upload link is not available.", "state": state},
                 status=status.HTTP_404_NOT_FOUND,
@@ -4156,6 +4166,20 @@ class PublicDocumentRequestUploadView(APIView):
                 scan=False,
             )
         except file_validation.SecureUploadError as exc:
+            record_operational_event(
+                category="upload",
+                source="document_request_upload",
+                status="failed",
+                error_code="validation_failed",
+                message=str(exc.message)[:255],
+                user=req.owner,
+                request=request,
+                metadata={
+                    "request_id": req.id,
+                    "file_size": getattr(uploaded, "size", None),
+                    "mime_type": getattr(uploaded, "content_type", ""),
+                },
+            )
             return Response({"detail": exc.message}, status=status.HTTP_400_BAD_REQUEST)
 
         # The uploaded file is owned by the request owner and counts against THEIR
@@ -4168,7 +4192,24 @@ class PublicDocumentRequestUploadView(APIView):
             detail = getattr(exc, "detail", {"detail": "Upload limit reached."})
             return Response(detail, status=status.HTTP_403_FORBIDDEN)
 
-        document_file = _create_document_file(uploaded=uploaded, user=owner)
+        try:
+            document_file = _create_document_file(uploaded=uploaded, user=owner)
+        except Exception:  # storage/encryption failure — record then re-raise
+            record_operational_event(
+                category="storage",
+                source="document_request_upload",
+                status="failed",
+                error_code="storage_write_failed",
+                message="Uploaded file could not be stored",
+                user=owner,
+                request=request,
+                metadata={
+                    "request_id": req.id,
+                    "file_size": getattr(uploaded, "size", None),
+                    "mime_type": getattr(uploaded, "content_type", ""),
+                },
+            )
+            raise
         try:
             attach_uploaded_file(req, document_file)
         except DocumentRequestError as exc:
@@ -4400,9 +4441,19 @@ class _PublicSharingRoomFileMixin(APIView):
             public_room_file,
             resolve_sharing_room_token,
         )
+        from apps.founder.services import record_operational_event
 
         room, state = resolve_sharing_room_token(token)
         if room is None or state != RESOLVE_OK:
+            # Safe operational signal — NO raw token, only the resolution state.
+            record_operational_event(
+                category="public_link",
+                source="sharing_room_access",
+                status="failed",
+                error_code=str(state or "not_found")[:80],
+                message="Sharing room link unavailable",
+                request=getattr(self, "request", None),
+            )
             code = (status.HTTP_404_NOT_FOUND if state in (None, "not_found")
                     else status.HTTP_410_GONE)
             return None, None, Response(
@@ -4411,6 +4462,16 @@ class _PublicSharingRoomFileMixin(APIView):
             )
         f = public_room_file(room, file_id)
         if f is None:
+            record_operational_event(
+                category="public_link",
+                source="sharing_room_access",
+                status="failed",
+                error_code="file_not_found",
+                message="Sharing room file not found",
+                user=room.owner,
+                request=getattr(self, "request", None),
+                metadata={"room_id": room.id},
+            )
             return room, None, Response(
                 {"detail": "File not found in this room."},
                 status=status.HTTP_404_NOT_FOUND,

@@ -30,10 +30,13 @@ import type {
   FounderWaitlistEntry,
   LaunchChecklistItem,
   LaunchReadinessResponse,
+  ObservabilityOverview,
+  OperationalEvent,
   Paginated,
   PrivateBetaMetrics,
   SecurityOverview,
   SubmitFeedbackRequest,
+  SystemStatus,
 } from "@/types/founder";
 import type { WaitlistPersona, WaitlistStatus } from "@/types/private-beta";
 
@@ -538,4 +541,42 @@ export interface EmailAnalytics {
 
 export function getEmailAnalytics(): Promise<EmailAnalytics> {
   return apiFetch<EmailAnalytics>("/founder/email-analytics/", { auth: true });
+}
+
+// ---- Reliability & Observability V1 ----------------------------------------
+
+/** Compact, safe platform-health snapshot (founder/admin only). */
+export function getFounderSystemStatus(): Promise<SystemStatus> {
+  return apiFetch<SystemStatus>("/founder/system-status/", { auth: true });
+}
+
+/** The aggregated payload the founder observability page renders. */
+export function getFounderObservability(): Promise<ObservabilityOverview> {
+  return apiFetch<ObservabilityOverview>("/founder/observability/", {
+    auth: true,
+  });
+}
+
+/** Filterable list of operational events (category / severity / status). */
+export function getFounderOperationalEvents(params?: {
+  category?: string;
+  severity?: string;
+  status?: string;
+  resolved?: boolean | "";
+}): Promise<Paginated<OperationalEvent>> {
+  return apiFetch<Paginated<OperationalEvent>>(
+    `/founder/operational-events/${query(params)}`,
+    { auth: true },
+  );
+}
+
+/** Mark an operational event resolved (records who + an optional note). */
+export function resolveFounderOperationalEvent(
+  id: number,
+  resolutionNote = "",
+): Promise<OperationalEvent> {
+  return apiFetch<OperationalEvent>(
+    `/founder/operational-events/${id}/resolve/`,
+    { method: "POST", body: { resolution_note: resolutionNote }, auth: true },
+  );
 }

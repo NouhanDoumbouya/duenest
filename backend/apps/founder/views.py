@@ -21,10 +21,12 @@ from .models import (
     FounderAuditLog,
     InviteCode,
     LaunchChecklistItem,
+    OperationalEvent,
     TransactionalEmailSetting,
     ProductEvent,
     WaitlistEntry,
 )
+from .observability import build_observability_overview, build_system_status
 from .permissions import IsFounderUser
 from .serializers import (
     BetaUserProfileSerializer,
@@ -37,6 +39,7 @@ from .serializers import (
     FounderChecklistTemplateSerializer,
     FounderFeedbackSerializer,
     FounderMeSerializer,
+    FounderOperationalEventSerializer,
     FounderWaitlistEntrySerializer,
     FounderUserListSerializer,
     LaunchChecklistItemSerializer,
@@ -834,6 +837,86 @@ class FounderErrorResolveView(APIView):
         error.resolved_at = timezone.now()
         error.save(update_fields=["resolved", "resolved_at"])
         return Response(FounderAppErrorLogSerializer(error).data)
+
+
+# ---- Reliability & Observability V1 ----------------------------------------
+
+
+class FounderSystemStatusView(APIView):
+    """A compact, safe snapshot of platform health (founder/admin only)."""
+
+    permission_classes = [IsFounderUser]
+
+    def get(self, request):
+        log_founder_action(request=request, action="founder_viewed_system_status")
+        return Response(build_system_status())
+
+
+class FounderObservabilityView(APIView):
+    """The aggregated payload the founder observability page renders."""
+
+    permission_classes = [IsFounderUser]
+
+    def get(self, request):
+        log_founder_action(request=request, action="founder_viewed_observability")
+        return Response(build_observability_overview())
+
+
+class FounderOperationalEventListView(generics.ListAPIView):
+    """Filterable list of operational events (category / severity / status)."""
+
+    permission_classes = [IsFounderUser]
+    serializer_class = FounderOperationalEventSerializer
+
+    def get_queryset(self):
+        queryset = OperationalEvent.objects.select_related("user", "organization")
+        params = self.request.query_params
+        if params.get("category"):
+            queryset = queryset.filter(category=params["category"])
+        if params.get("severity"):
+            queryset = queryset.filter(severity=params["severity"])
+        if params.get("status"):
+            queryset = queryset.filter(status=params["status"])
+        if params.get("source"):
+            queryset = queryset.filter(source=params["source"])
+        resolved = params.get("resolved")
+        if resolved is not None and resolved != "":
+            queryset = queryset.filter(
+                resolved=resolved.lower() in {"1", "true", "yes"}
+            )
+        return queryset
+
+
+class FounderOperationalEventResolveView(APIView):
+    """Mark an operational event resolved (records who + an optional note)."""
+
+    permission_classes = [IsFounderUser]
+
+    def post(self, request, event_id):
+        event = get_object_or_404(OperationalEvent, pk=event_id)
+        note = ""
+        if isinstance(request.data, dict):
+            note = str(request.data.get("resolution_note") or "")[:500]
+        event.resolved = True
+        event.resolved_at = timezone.now()
+        event.resolved_by = request.user
+        event.resolution_note = note
+        event.save(
+            update_fields=[
+                "resolved",
+                "resolved_at",
+                "resolved_by",
+                "resolution_note",
+            ]
+        )
+        log_founder_action(
+            request=request,
+            action="founder_resolved_operational_event",
+            object_type="operational_event",
+            object_id=event.id,
+            metadata={"category": event.category, "source": event.source},
+        )
+        return Response(FounderOperationalEventSerializer(event).data)
 
 
 class FounderEmailSettingListView(generics.ListAPIView):

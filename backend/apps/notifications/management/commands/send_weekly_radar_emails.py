@@ -67,8 +67,31 @@ class Command(BaseCommand):
             self.stdout.write(f"Weekly Radar [{user.email}]: {result}")
             return
 
-        summary = send_weekly_radar_batch(dry_run=dry_run, limit=options["limit"])
+        from apps.founder.services import record_scheduled_job_run
+
+        try:
+            summary = send_weekly_radar_batch(dry_run=dry_run, limit=options["limit"])
+        except Exception as exc:  # record the fatal run, then re-raise unchanged
+            if not dry_run:
+                record_scheduled_job_run(
+                    "weekly_radar_job",
+                    status="failed",
+                    message="Weekly Radar batch failed",
+                    error_code=type(exc).__name__,
+                )
+            raise
         self.stdout.write(
             f"Weekly Radar: sent={summary['sent']} skipped={summary['skipped']} "
             f"failed={summary['failed']} dry_run={summary['dry_run']}"
         )
+        if not dry_run:
+            record_scheduled_job_run(
+                "weekly_radar_job",
+                status="degraded" if summary.get("failed") else "succeeded",
+                message=f"Weekly Radar sent {summary.get('sent', 0)}",
+                counts={
+                    "emails_sent": summary.get("sent", 0),
+                    "emails_failed": summary.get("failed", 0),
+                    "skipped": summary.get("skipped", 0),
+                },
+            )

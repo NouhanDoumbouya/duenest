@@ -270,6 +270,112 @@ class AppErrorLog(models.Model):
         return f"{self.severity}: {self.error_type}"
 
 
+class OperationalEvent(models.Model):
+    """
+    A safe operational lifecycle event for founder/admin observability.
+
+    Records whether the platform's WORKFLOWS worked — uploads, storage, public
+    links, scheduled jobs, portal actions — across a small set of categories and
+    statuses, so a founder can answer "if a beta user says something is broken,
+    what failed, where, and did it touch documents/email/uploads/AI/jobs?".
+
+    This is deliberately distinct from, and never duplicates, the existing safe
+    stores it complements: `AppErrorLog` (unexpected exceptions / client errors),
+    `EmailLog` (email delivery), `AiUsage` (AI metering), and
+    `NotificationDeliveryRun` (the notification job). The founder observability
+    page aggregates all of them.
+
+    PRIVACY (enforced by `record_operational_event`): `metadata` is passed
+    through `sanitize_metadata`, so document contents, OCR text, prompts, tokens,
+    secrets, file paths/keys, and private notes are scrubbed before storage. No
+    raw stack traces are kept — only a short `error_code`. No private file URLs,
+    no R2 object keys, no raw public/password tokens are ever stored here.
+    """
+
+    class Severity(models.TextChoices):
+        INFO = "info", "Info"
+        WARNING = "warning", "Warning"
+        ERROR = "error", "Error"
+        CRITICAL = "critical", "Critical"
+
+    class Category(models.TextChoices):
+        BACKEND = "backend", "Backend"
+        FRONTEND = "frontend", "Frontend"
+        UPLOAD = "upload", "Upload"
+        STORAGE = "storage", "Storage"
+        EMAIL = "email", "Email"
+        AI = "ai", "AI"
+        SCHEDULED_JOB = "scheduled_job", "Scheduled job"
+        PUBLIC_LINK = "public_link", "Public link"
+        BILLING = "billing", "Billing"
+        SECURITY = "security", "Security"
+        PORTAL = "portal", "Portal"
+        SCANNER = "scanner", "Scanner"
+        PWA = "pwa", "PWA"
+
+    class Status(models.TextChoices):
+        STARTED = "started", "Started"
+        SUCCEEDED = "succeeded", "Succeeded"
+        FAILED = "failed", "Failed"
+        SKIPPED = "skipped", "Skipped"
+        DEGRADED = "degraded", "Degraded"
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    severity = models.CharField(
+        max_length=20, choices=Severity.choices, default=Severity.INFO
+    )
+    category = models.CharField(max_length=24, choices=Category.choices)
+    # Short machine-readable source, e.g. "document_request_upload",
+    # "sharing_room_download", "weekly_radar_job".
+    source = models.CharField(max_length=80)
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.FAILED
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="operational_events",
+    )
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="operational_events",
+    )
+    # Safe random per-request id (never a token/session); ties to logs + headers.
+    correlation_id = models.CharField(max_length=64, blank=True, db_index=True)
+    message = models.CharField(max_length=255, blank=True)
+    # Machine-readable failure reason, e.g. "file_too_large", "storage_write_failed".
+    error_code = models.CharField(max_length=80, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    resolved = models.BooleanField(default=False)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="resolved_operational_events",
+    )
+    resolution_note = models.CharField(max_length=500, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["category", "created_at"]),
+            models.Index(fields=["severity", "created_at"]),
+            models.Index(fields=["status", "created_at"]),
+            models.Index(fields=["resolved", "severity", "created_at"]),
+            models.Index(fields=["source", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.severity}:{self.category}:{self.source}={self.status}"
+
+
 class WaitlistEntry(models.Model):
     """Public private-beta waitlist entry, visible only to founders/admins."""
 

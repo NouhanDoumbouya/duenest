@@ -18,6 +18,7 @@ from .models import (
     InviteCode,
     InviteCodeUse,
     LaunchChecklistItem,
+    OperationalEvent,
     ProductEvent,
     TransactionalEmailSetting,
     WaitlistEntry,
@@ -479,6 +480,35 @@ class FounderAppErrorLogSerializer(serializers.ModelSerializer):
         if not resolved:
             validated_data["resolved_at"] = None
         return super().update(instance, validated_data)
+
+
+class FounderOperationalEventSerializer(serializers.ModelSerializer):
+    """Read-only view of an operational event for the observability console.
+
+    Every field here is already safe (metadata was scrubbed on write); user is
+    exposed only as an id, never with private contents.
+    """
+
+    class Meta:
+        model = OperationalEvent
+        fields = [
+            "id",
+            "created_at",
+            "severity",
+            "category",
+            "source",
+            "status",
+            "user",
+            "organization",
+            "correlation_id",
+            "message",
+            "error_code",
+            "metadata",
+            "resolved",
+            "resolved_at",
+            "resolution_note",
+        ]
+        read_only_fields = fields
 
 
 class ProductEventSerializer(serializers.ModelSerializer):

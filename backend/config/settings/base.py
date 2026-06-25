@@ -125,6 +125,9 @@ INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
+    # Attach a safe random correlation id to every request (echoed as the
+    # X-Request-ID response header) for observability. No private data.
+    "apps.core.middleware.CorrelationIdMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",

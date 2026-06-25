@@ -23,6 +23,13 @@ import time
 
 from django.conf import settings
 
+from apps.core.correlation import (
+    get_correlation_id,
+    new_correlation_id,
+    sanitize_correlation_id,
+    set_correlation_id,
+)
+
 logger = logging.getLogger("duenest.performance")
 
 # API path prefixes whose responses carry token-scoped data.
@@ -51,6 +58,34 @@ def _build_csp() -> str:
             "object-src 'none'",
         ]
     )
+
+
+class CorrelationIdMiddleware:
+    """Attach a safe correlation id to every request and echo it on the response.
+
+    Reads an incoming ``X-Request-ID`` (sanitised to alphanumeric/dash) so a
+    proxy/CDN can supply one, otherwise mints a fresh random id. The id is stored
+    on ``request.correlation_id`` and in a ContextVar so downstream code and the
+    operational-event recorder can reference it, and returned as the
+    ``X-Request-ID`` response header so the frontend can show a reference. The id
+    is never derived from a token, session, or user — it carries no private data.
+    """
+
+    INCOMING_HEADER = "HTTP_X_REQUEST_ID"
+    RESPONSE_HEADER = "X-Request-ID"
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        incoming = sanitize_correlation_id(request.META.get(self.INCOMING_HEADER))
+        cid = incoming or new_correlation_id()
+        set_correlation_id(cid)
+        request.correlation_id = cid
+        response = self.get_response(request)
+        # Use the live value (downstream code may have reset it) for the header.
+        response[self.RESPONSE_HEADER] = get_correlation_id() or cid
+        return response
 
 
 class SecurityHeadersMiddleware:
