@@ -670,6 +670,19 @@ upcoming reminder dates from `expiry_date` or `renewal_date`. Due reminder
 delivery is handled by the notifications app through a cron-compatible Django
 management command rather than Celery.
 
+### Implemented: virtual document organization (folders, tags, collections)
+
+`DocumentFolder`, `DocumentTag`, and `DocumentCollection` (with
+`OrganizationDocumentStructurePreference` / `OrganizationTemplateFolderBlueprint` for
+the org portal) are **virtual metadata layered over the `Document` model** —
+`Document.primary_folder` and the `Document.collections` M2M are additive references.
+Organizing a document **never changes the underlying file's storage (R2) object key**,
+never moves or copies the stored blob, and is **never** access control (sharing stays
+governed by `SharingRoom` / `DocumentRequestLink`). Organization happens at the
+**Document** level (the logical owner-scoped vault unit), not the `DocumentFile` level.
+The shared service is `apps.documents.folders`; scope is either a personal owner or an
+organization. **Deterministic — no AI.** See `docs/api-spec.md` §44.
+
 ---
 
 ## 16. File Storage Architecture

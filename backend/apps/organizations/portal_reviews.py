@@ -137,6 +137,14 @@ def accept_case_document_request(case_request, user, *, note: str = "") -> dict:
         metadata={"request_title": link.requested_document_title,
                   "status_from": previous, "status_to": _RS.ACCEPTED, "note": note[:240]},
     )
+    # Custom Document Organization V1 — opt-in auto-filing. Best-effort; never
+    # raises, and is a no-op unless the org enabled auto_file_accepted_uploads.
+    try:
+        from apps.documents.folders import auto_file_document_for_case_upload
+
+        auto_file_document_for_case_upload(case_request, user)
+    except Exception:  # noqa: BLE001 — auto-filing must never break accept
+        pass
     return _decision_result(case_request, notified=False)
 
 

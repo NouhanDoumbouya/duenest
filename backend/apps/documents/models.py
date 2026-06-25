@@ -194,6 +194,25 @@ class Document(models.Model):
         blank=True,
     )
 
+    # Custom Document Organization V1 — virtual METADATA placement only. Moving a
+    # document between folders/collections never touches its files' R2 object keys
+    # and is never used as access control (sharing stays governed by
+    # SharingRoom/DocumentRequestLink). ``primary_folder`` is the single "home"
+    # folder; ``collections`` is flexible cross-folder grouping.
+    primary_folder = models.ForeignKey(
+        "DocumentFolder",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="documents",
+    )
+    collections = models.ManyToManyField(
+        "DocumentCollection",
+        through="DocumentCollectionItem",
+        related_name="documents",
+        blank=True,
+    )
+
     # "I've seen this — stop nagging me until later." When set to a future
     # datetime, the document is hidden from the Life Radar / Attention surfaces
     # until then. It does NOT change the real expiry/renewal facts.
@@ -1834,6 +1853,16 @@ class DocumentTag(models.Model):
         on_delete=models.CASCADE,
         related_name="document_tags",
     )
+    # Custom Document Organization V1 — an ORG-scoped tag sets ``organization``
+    # (owner = the org-owner user, consistent with B2B portal data ownership). A
+    # personal tag leaves it null.
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="document_tags",
+    )
     name = models.CharField(max_length=60)
     slug = models.SlugField(max_length=80, blank=True)
     # Optional small palette key the UI maps to a colour; never free-form CSS.
@@ -1851,6 +1880,7 @@ class DocumentTag(models.Model):
         ]
         indexes = [
             models.Index(fields=["owner", "slug"]),
+            models.Index(fields=["organization", "slug"]),
         ]
 
     def __str__(self):
@@ -3369,3 +3399,218 @@ class AuditLogEntry(models.Model):
 
     def __str__(self):
         return f"AuditLogEntry(owner={self.owner_id}, event={self.event_type})"
+
+
+# ---- Custom Document Organization V1 ----------------------------------------
+#
+# Virtual, METADATA-ONLY organization over documents: nested folders, flexible
+# collections (incl. saved/smart views), and (reused) tags. These NEVER change a
+# file's R2 object key and are NEVER used as access control — sharing stays
+# governed by SharingRoom / DocumentRequestLink. A folder/collection is scoped to
+# exactly one of: a personal owner (``owner`` set, ``organization`` null) OR an
+# organization (``organization`` set; ``owner`` = the org-owner user, matching the
+# rest of the B2B portal). No document contents, file URLs, or tokens are stored.
+
+
+class DocumentFolder(models.Model):
+    """A virtual folder. Nested via ``parent`` (same scope only; cycles rejected
+    on move). ``folder_type`` distinguishes user folders from system/auto folders
+    (case/person/template) the portal creates."""
+
+    class FolderType(models.TextChoices):
+        NORMAL = "normal", "Normal"
+        SYSTEM = "system", "System"
+        CASE = "case", "Case"
+        PERSON = "person", "Person"
+        TEMPLATE = "template", "Template"
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True,
+        related_name="document_folders",
+    )
+    organization = models.ForeignKey(
+        "organizations.Organization", on_delete=models.CASCADE, null=True, blank=True,
+        related_name="document_folders",
+    )
+    parent = models.ForeignKey(
+        "self", on_delete=models.CASCADE, null=True, blank=True, related_name="children"
+    )
+    name = models.CharField(max_length=120)
+    normalized_name = models.SlugField(max_length=140, blank=True)
+    description = models.CharField(max_length=255, blank=True)
+    # Small palette key the UI maps to a colour; never free-form CSS.
+    color = models.CharField(max_length=20, blank=True)
+    icon = models.CharField(max_length=40, blank=True)
+    sort_order = models.PositiveIntegerField(default=0)
+    folder_type = models.CharField(
+        max_length=12, choices=FolderType.choices, default=FolderType.NORMAL
+    )
+    linked_case = models.ForeignKey(
+        "organizations.PortalCase", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="document_folders",
+    )
+    linked_person = models.ForeignKey(
+        "organizations.PortalPerson", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="document_folders",
+    )
+    linked_template = models.ForeignKey(
+        "organizations.OrganizationCaseTemplate", on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="document_folders",
+    )
+    is_archived = models.BooleanField(default=False)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="document_folders_created",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["sort_order", "name"]
+        indexes = [
+            models.Index(fields=["owner", "is_archived", "sort_order"]),
+            models.Index(fields=["organization", "is_archived", "sort_order"]),
+            models.Index(fields=["parent"]),
+        ]
+
+    def __str__(self):
+        return f"DocumentFolder({self.name!r}, owner={self.owner_id}, org={self.organization_id})"
+
+    def save(self, *args, **kwargs):
+        if not self.normalized_name:
+            self.normalized_name = slugify(self.name)[:140]
+        super().save(*args, **kwargs)
+
+
+class DocumentCollection(models.Model):
+    """A flexible grouping of documents across folders. ``manual`` collections hold
+    explicit items; ``saved_view`` collections store a ``filter_config`` and resolve
+    dynamically; ``system`` collections are app-provided smart views."""
+
+    class CollectionType(models.TextChoices):
+        MANUAL = "manual", "Manual"
+        SAVED_VIEW = "saved_view", "Saved view"
+        SYSTEM = "system", "System"
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True,
+        related_name="document_collections",
+    )
+    organization = models.ForeignKey(
+        "organizations.Organization", on_delete=models.CASCADE, null=True, blank=True,
+        related_name="document_collections",
+    )
+    name = models.CharField(max_length=120)
+    description = models.CharField(max_length=255, blank=True)
+    color = models.CharField(max_length=20, blank=True)
+    icon = models.CharField(max_length=40, blank=True)
+    collection_type = models.CharField(
+        max_length=12, choices=CollectionType.choices, default=CollectionType.MANUAL
+    )
+    # Saved-view filters only — a small whitelisted JSON of filter keys (no raw
+    # SQL, no tokens, no URLs). See folders.SMART_VIEW_FILTERS.
+    filter_config = models.JSONField(default=dict, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="document_collections_created",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+        indexes = [
+            models.Index(fields=["owner", "collection_type"]),
+            models.Index(fields=["organization", "collection_type"]),
+        ]
+
+    def __str__(self):
+        return f"DocumentCollection({self.name!r}, type={self.collection_type})"
+
+
+class DocumentCollectionItem(models.Model):
+    """Through model for ``Document.collections`` (manual collections)."""
+
+    collection = models.ForeignKey(
+        DocumentCollection, on_delete=models.CASCADE, related_name="items"
+    )
+    document = models.ForeignKey(
+        Document, on_delete=models.CASCADE, related_name="collection_items"
+    )
+    added_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="document_collection_items_added",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["collection", "document"], name="unique_document_per_collection"
+            )
+        ]
+        indexes = [models.Index(fields=["collection", "created_at"])]
+
+    def __str__(self):
+        return f"DocumentCollectionItem(c={self.collection_id}, d={self.document_id})"
+
+
+class OrganizationDocumentStructurePreference(models.Model):
+    """How an organization auto-structures portal-collected documents. One per org.
+    Deterministic — no AI. Controls auto folder creation + opt-in auto-filing of
+    accepted uploads (which materializes a vault Document owned by the org owner)."""
+
+    class StructureMode(models.TextChoices):
+        BY_PERSON = "by_person", "By person"
+        BY_CASE = "by_case", "By case"
+        BY_DOCUMENT_TYPE = "by_document_type", "By document type"
+        BY_TEMPLATE = "by_template", "By template"
+        CUSTOM = "custom", "Custom"
+
+    organization = models.OneToOneField(
+        "organizations.Organization", on_delete=models.CASCADE,
+        related_name="document_structure_preference",
+    )
+    structure_mode = models.CharField(
+        max_length=20, choices=StructureMode.choices, default=StructureMode.BY_PERSON
+    )
+    auto_create_case_folder = models.BooleanField(default=True)
+    auto_create_person_folder = models.BooleanField(default=True)
+    # Opt-in: when on, accepting a portal upload also saves it to the org-owner's
+    # vault as a Document and files it into the case/person folder. Off by default
+    # so the review-accept flow is unchanged unless an org opts in.
+    auto_file_accepted_uploads = models.BooleanField(default=False)
+    default_root_folder = models.ForeignKey(
+        DocumentFolder, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="structure_default_for",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="document_structure_prefs_updated",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"OrgDocStructurePref(org={self.organization_id}, mode={self.structure_mode})"
+
+
+class OrganizationTemplateFolderBlueprint(models.Model):
+    """A default subfolder name a case template seeds under its case folder
+    (Organization Templates V1 integration). Just an ordered list of names —
+    configuration only, no document data."""
+
+    template = models.ForeignKey(
+        "organizations.OrganizationCaseTemplate", on_delete=models.CASCADE,
+        related_name="folder_blueprints",
+    )
+    name = models.CharField(max_length=120)
+    sort_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["sort_order", "id"]
+        indexes = [models.Index(fields=["template", "sort_order"])]
+
+    def __str__(self):
+        return f"OrganizationTemplateFolderBlueprint(t={self.template_id}, name={self.name!r})"

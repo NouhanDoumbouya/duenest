@@ -29,6 +29,7 @@ import {
   Eye,
   ExternalLink,
   FileUp,
+  FolderTree,
   Loader2,
   Mail,
   Package,
@@ -86,8 +87,10 @@ import {
   reviewNotifyDefault,
   startCaseRequestReview,
 } from "@/lib/portals";
+import { findCaseFolder, getOrgFolders } from "@/lib/document-organization";
 import { cn } from "@/lib/utils";
 import type { Organization } from "@/types/organizations";
+import type { FolderNode } from "@/types/document-organization";
 import type {
   PortalCase,
   PortalCaseRequest,
@@ -152,6 +155,24 @@ export default function PortalCaseDetailPage({
   const previewUrlRef = useRef<string | null>(null);
 
   const canManage = org ? canManageOrganization(org.user_role) : false;
+
+  // The org folder linked to this case (by `linked_case_id`), if one exists.
+  // Best-effort: a failure leaves this null and simply hides the section.
+  const [caseFolder, setCaseFolder] = useState<FolderNode | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    getOrgFolders(orgId)
+      .then((res) => {
+        if (active) setCaseFolder(findCaseFolder(res.folders, caseIdNum));
+      })
+      .catch(() => {
+        // Non-fatal: the folder section just won't render.
+      });
+    return () => {
+      active = false;
+    };
+  }, [orgId, caseIdNum]);
 
   const reload = useCallback(async () => {
     const next = await getPortalCase(orgId, caseIdNum);
@@ -485,6 +506,38 @@ export default function PortalCaseDetailPage({
               </p>
             )}
           </section>
+
+          {/* Case folder — deep link to the org folder for this case, if any. */}
+          {caseFolder && (
+            <section className="rounded-2xl border border-border bg-card p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+                    <FolderTree className="size-4" aria-hidden />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">Case folder</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {caseFolder.name}
+                      {caseFolder.document_count !== null
+                        ? ` · ${caseFolder.document_count} document${
+                            caseFolder.document_count === 1 ? "" : "s"
+                          }`
+                        : ""}
+                    </p>
+                  </div>
+                </div>
+                <Link
+                  href={`/dashboard/organizations/${orgId}/portal/documents`}
+                  className={cn(
+                    buttonVariants({ variant: "outline", size: "sm" }),
+                  )}
+                >
+                  Open folder
+                </Link>
+              </div>
+            </section>
+          )}
 
           {/* Progress */}
           <section className="rounded-2xl border border-border bg-card p-5">

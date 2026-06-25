@@ -1971,6 +1971,41 @@ second pack / room / request / upload system**. **Deterministic — no AI.**
 
 See `docs/b2b-portals.md`, `docs/api-spec.md` §43, and `docs/security/audit-logs.md`.
 
+## Custom Document Organization V1
+
+Owners and organizations organize their vault with **virtual folders, tags, manual
+collections, and saved/smart views** layered over the existing `Document` model
+(`apps/documents/folders.py`). **Deterministic — no AI.**
+
+* **Metadata only — never storage.** Folders / collections / tags / saved-views are
+  **virtual metadata over `Document`**. They **never** change a file's R2 object key and
+  **never** alter, move, or copy the underlying stored file.
+* **Never access control.** Folder placement is **never** a permission boundary —
+  moving a file into a folder or adding it to a collection grants **no** access. Sharing
+  stays governed by `SharingRoom` / `DocumentRequestLink`.
+* **No sensitive data exposed.** No folder / tag / collection / document-summary payload
+  ever includes a file URL, storage key, public/sharing token, or document content.
+  Saved/smart-view filters are restricted to a **whitelisted key set** (no raw SQL,
+  tokens, or URLs).
+* **Personal owner-scoped + org role-gated.** Personal endpoints only see/mutate the
+  requesting user's own scope (another user's folder → `404`). Org endpoints: **read** =
+  any active member; **create/edit/archive/move/structure-preference** = **OWNER/ADMIN**
+  only; behind the `b2b_portals` flag + the org Teams entitlement, org-isolated.
+* **No public surface.** There is **no public folder endpoint** — public document-request
+  recipients and public sharing-room viewers can **never** browse the folder tree.
+* **Auto-filing is opt-in and best-effort.** Materializing an accepted portal upload as
+  a vault `Document` only happens when an org enables `auto_file_accepted_uploads` (off
+  by default); it never raises and never blocks the review-accept flow. The vault copy is
+  owned by the org-owner user and enforces that owner's document plan limit (and counts
+  against the org-owner's **personal** limit until org-owned storage exists).
+* **Sanitized audit metadata.** The `document_folder_*` / `document_*collection*` /
+  `document_tag*` / `case_folder_created` / `person_folder_created` /
+  `document_auto_filed` / `organization_document_structure_updated` events record only
+  safe keys (folder/collection/tag id + name, document/case/person/org id, result) —
+  **never** an R2 object key, file URL, token, or document content.
+
+See `docs/b2b-portals.md`, `docs/api-spec.md` §44, and `docs/security/audit-logs.md`.
+
 ## Teams Plan + Portal Limits V1
 
 Portals are now governed by an **organization-level entitlement** in addition to

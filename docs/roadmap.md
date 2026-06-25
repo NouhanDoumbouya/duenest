@@ -1035,6 +1035,7 @@ b2b/review-approval-workflow           (done — staff accept/reject/needs-repla
 b2b/organization-dashboard-v1          (done — read-only operational command center: metrics + action queues + plan usage; no audit-on-view)
 b2b/bulk-reminder-emails               (done — staff batch branded reminder emails from dashboard queues; cooldown; reuses Document Request Links + branded helper)
 b2b/organization-templates             (done — reusable case workflows; create-case-from-template orchestrates pack/room/requests; limits→warnings; no AI)
+product/custom-document-organization-v1 (done — virtual folders/tags/collections/smart-views over Documents; personal + org scopes; case/person/template folders; opt-in auto-filing; metadata-only; no AI)
 b2b/teams-billing-checkout             ← next (Teams checkout / per-seat Stripe / invoices, org-owned storage)
 integrations/inbox-mailbox-import      (future — Gmail/Drive/Outlook import into Magic Inbox)
 backend/ai-org-credit-pools            (future)
@@ -1664,8 +1665,9 @@ Upcoming planned branches (in order):
 7. `b2b/organization-dashboard-v1` — **delivered** (2026-06-25, read-only operational command center — see below)
 8. `b2b/bulk-reminder-emails` — **delivered** (2026-06-25, staff batch branded reminder emails from dashboard queues — see below)
 9. `b2b/organization-templates` — **delivered** (2026-06-25, reusable case workflows + create-case-from-template — see below)
-10. `b2b/teams-billing-checkout` ← **next** (real Teams checkout / per-seat Stripe / invoices + org-owned storage)
-11. `integrations/inbox-mailbox-import` (future — Gmail/Drive/Outlook import)
+10. `product/custom-document-organization-v1` — **delivered** (2026-06-25, virtual folders/tags/collections/smart-views over Documents, personal + org scopes — see below)
+11. `b2b/teams-billing-checkout` ← **next** (real Teams checkout / per-seat Stripe / invoices + org-owned storage)
+12. `integrations/inbox-mailbox-import` (future — Gmail/Drive/Outlook import)
 
 ## Weekly Radar Email V1 — delivered (2026-06-24)
 
@@ -2382,3 +2384,86 @@ uploaded files no longer draw down the org-owner's personal storage).
 
 See `docs/b2b-portals.md`, `docs/api-spec.md` §43, `docs/security-plan.md`,
 `docs/BILLING.md`, and `docs/security/audit-logs.md`.
+
+## Custom Document Organization V1 — delivered (2026-06-25)
+
+`product/custom-document-organization-v1` is **implemented** (backend complete +
+tested). Owners and organizations can organize their vault with **virtual folders,
+tags, manual collections, and saved/smart views** layered over the existing
+`Document` model. Fully **deterministic — no AI, no AI credits.**
+
+**Metadata only — never storage, never access control.** Folders / collections /
+tags / saved-views are **virtual metadata over `Document`**. They **never** change a
+file's R2 object key, **never** expose a file URL / storage key / token, and are
+**never** used as access control — sharing stays governed by `SharingRoom` /
+`DocumentRequestLink`. Organization happens at the **Document** level (the logical
+owner-scoped vault unit), not the `DocumentFile` level. Service:
+`apps/documents/folders.py`.
+
+Key facts:
+
+* **Data model** (migration `documents/0039`). `DocumentFolder` (nullable
+  `owner`/`organization`, self-FK `parent` for same-scope nesting, `folder_type`
+  normal/system/case/person/template, `linked_case`/`linked_person`/`linked_template`,
+  `is_archived`), `DocumentCollection` (`collection_type` manual/saved_view/system,
+  whitelisted `filter_config` JSON) + the `DocumentCollectionItem` through model
+  (`Document.collections` M2M), `OrganizationDocumentStructurePreference` (one per org),
+  and `OrganizationTemplateFolderBlueprint`. The existing **`DocumentTag` is reused**
+  (not duplicated) — extended with a nullable `organization` FK for org-scoped tags.
+  `Document` gained `primary_folder` (nullable `SET_NULL`) + `collections` — additive
+  metadata, no change to Document ownership/access. **Int PKs** (codebase consistency;
+  the original spec mentioned UUIDs — we deviated for FK consistency).
+* **Scope.** Every folder/collection/tag is scoped to exactly one of a **personal
+  owner** (`owner` set, `organization` null) **or** an **organization** (`organization`
+  set; `owner` = the org-owner user, matching the rest of the B2B portal).
+* **Folders.** Nested via `parent` (same scope only). Moving a folder **rejects cycles**
+  (cannot move into itself or a descendant) and never touches storage. Archiving hides a
+  folder from the default tree. `folder_type` separates user folders from system/case/
+  person/template auto-folders.
+* **Tags / collections / smart views.** Tags reuse `DocumentTag` (assign replaces the
+  set). Collections are **manual** (explicit items), **saved_view** (store a whitelisted
+  `filter_config` and resolve dynamically), or **system**. Smart-view filter keys are
+  **whitelisted** (`document_type`, `tag_id`, `folder_id`, `status`, `lifecycle_status`,
+  `expiring_soon`, `needs_review`, `recently_uploaded`, `unfiled`, `uploaded_after/before`,
+  `due_after/before`) — no raw SQL / tokens / URLs. Built-in presets include **Expiring
+  soon** (expiry within 30 days), **Recently uploaded** (14 days), and **Unfiled**.
+* **System / case / person / template folders.** `ensure_system_folders` (personal:
+  Unfiled, Protected copies; org: Unfiled, Cases, People, Protected copies),
+  `ensure_person_folder` (under People), `ensure_case_folder` (placement follows the org
+  `structure_mode`), and template-blueprint subfolders seeded under the case folder.
+* **Auto-filing (opt-in, default OFF).** When an org enables
+  `auto_file_accepted_uploads`, accepting a portal upload **also** materializes the
+  upload as a vault `Document` (via the existing `save_request_file_to_vault`, owned by
+  the org-owner user, enforcing that owner's document plan limit) and files it into the
+  case folder. **Best-effort** — never raises, never blocks the accept flow; with the
+  preference off (the default) the accept flow is unchanged and no vault Document is
+  created. **Caveat:** the vault copy counts against the org-owner user's **personal**
+  document limit until org-owned storage exists.
+* **Permissions / gates.** Personal endpoints are owner-scoped (another user's folder →
+  404). Org endpoints: **read** (tree/contents/tags/collections/saved-views) = any
+  active member; **create/edit/archive/move/structure-preference** = **OWNER/ADMIN** only;
+  non-members denied; behind the `b2b_portals` flag + Teams entitlement. **No public
+  folder endpoint** — public document-request recipients and sharing-room viewers can
+  never browse the folder tree. Folder placement is **never** access control.
+* **Limits (server-side caps, no Stripe).** Personal free = 20 folders / 20 tags / 5
+  collections; personal pro = 500 / 200 / 100. Org `teams_beta` = 500 / 200 / 100;
+  `teams` = 2000 / 500 / 500; `enterprise` = unlimited.
+* **Audit events.** `document_folder_created/updated/archived/moved`,
+  `document_moved_to_folder`, `document_tag_created`, `document_tags_updated`,
+  `document_collection_created`, `document_added_to_collection`,
+  `document_removed_from_collection`, `organization_document_structure_updated`,
+  `case_folder_created`, `person_folder_created`, `document_auto_filed` — unified Audit
+  Log, category `"document"`, safe metadata only (never an R2 key, file URL, token, or
+  content).
+
+**Deferred (future work):** AI auto-filing, OCR-based classification, universal vault
+search, Google Drive / desktop sync, a public template/folder marketplace, a full
+import/export center, advanced permission inheritance, folder sharing independent of
+rooms, and org-owned storage.
+
+**Next recommended branch: `b2b/teams-billing-checkout`** — real Teams checkout /
+per-seat Stripe billing + invoices, and org-owned storage (so a case's pack, uploaded
+files, and auto-filed vault copies no longer draw down the org-owner's personal storage).
+
+See `docs/api-spec.md`, `docs/b2b-portals.md`, `docs/security-plan.md`, and
+`docs/security/audit-logs.md`.
