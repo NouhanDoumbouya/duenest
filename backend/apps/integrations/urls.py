@@ -1,5 +1,12 @@
 from django.urls import path
 
+from .calendar_views import (
+    GoogleCalendarDestinationsView,
+    GoogleCalendarEventsView,
+    GoogleCalendarImportPreviewView,
+    GoogleCalendarImportView,
+    GoogleCalendarListView,
+)
 from .views import (
     GoogleDriveDestinationsView,
     GoogleDriveFilesView,
@@ -70,5 +77,31 @@ urlpatterns = [
         "integrations/google-drive/import/",
         GoogleDriveImportView.as_view(),
         name="integration-google-drive-import",
+    ),
+    # ---- Google Calendar import (manual, read-only, review-before-save) ----
+    path(
+        "integrations/google-calendar/destinations/",
+        GoogleCalendarDestinationsView.as_view(),
+        name="integration-google-calendar-destinations",
+    ),
+    path(
+        "integrations/google-calendar/calendars/",
+        GoogleCalendarListView.as_view(),
+        name="integration-google-calendar-calendars",
+    ),
+    path(
+        "integrations/google-calendar/events/",
+        GoogleCalendarEventsView.as_view(),
+        name="integration-google-calendar-events",
+    ),
+    path(
+        "integrations/google-calendar/import/preview/",
+        GoogleCalendarImportPreviewView.as_view(),
+        name="integration-google-calendar-import-preview",
+    ),
+    path(
+        "integrations/google-calendar/import/",
+        GoogleCalendarImportView.as_view(),
+        name="integration-google-calendar-import",
     ),
 ]

@@ -227,10 +227,18 @@ file_import_failed/completed`) and an operational event
 (`source=google_drive_import`) record **safe counts/reasons only** — never tokens,
 download URLs, raw Google responses, Drive/document content, or raw file ids.
 
-## Deferred (not in this branch)
+## Built on this foundation
 
-Google Calendar import · Gmail import · automatic/background sync · folder
-mirroring · two-way sync · Drive webhooks · Google Picker UI · write-back ·
-external deletion · external file previews · full Google app verification ·
-Microsoft/Dropbox providers · provider re-auth UX · org-level / shared-Drive
-destinations · integration scheduled jobs · founder integration health console.
+* **Google Drive Import V1** — manual, import-only import of selected Drive files
+  (detailed above).
+* **Google Calendar Import V1** — manual, read-only import of calendar events into
+  CertaNest deadlines + reminders. See
+  [integrations-google-calendar.md](integrations-google-calendar.md).
+
+## Deferred (not on the foundation yet)
+
+Gmail import · automatic/background sync · folder mirroring · two-way sync ·
+Drive/Calendar webhooks · Google Picker UI · write-back · external deletion ·
+external file previews · full Google app verification · Microsoft/Dropbox
+providers · provider re-auth UX · org-level / shared-Drive destinations ·
+integration scheduled jobs · founder integration health console.

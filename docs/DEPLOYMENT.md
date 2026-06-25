@@ -171,6 +171,9 @@ DUENEST_KEK_V1_B64=<base64 32-byte key>   # generate_encryption_key
 # GOOGLE_OAUTH_CLIENT_ID=<google-web-client-id>
 # GOOGLE_OAUTH_CLIENT_SECRET=<google-web-client-secret>
 # GOOGLE_OAUTH_REDIRECT_URI=https://api.certanest.com/api/v1/integrations/google/callback/
+# Google Calendar Import V1 (docs/integrations-google-calendar.md) adds NO new env:
+# it reuses the three GOOGLE_OAUTH_* values above and the existing read-only
+# `calendar.readonly` scope. Gate it with the `google_calendar_import` feature flag.
 ```
 
 Production settings **fail closed** if the encryption KEK is missing/malformed.

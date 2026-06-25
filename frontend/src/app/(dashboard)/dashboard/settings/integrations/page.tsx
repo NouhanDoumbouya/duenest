@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
+  CalendarClock,
   CheckCircle2,
   Loader2,
   Lock,
@@ -13,11 +14,12 @@ import {
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageContainer } from "@/components/ui/page-container";
 import { PageHeader } from "@/components/ui/page-header";
 import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 import { ApiError } from "@/lib/api";
 import {
   accountStatusLabel,
@@ -333,6 +335,31 @@ export default function IntegrationsSettingsPage() {
             </CardContent>
           </Card>
         ))
+      )}
+
+      {/* Google Calendar import shortcut — shown once a Google account is
+          connected. The dedicated page enforces calendar scope + flags. */}
+      {providers?.some((p) => p.key === "google" && p.accounts.length > 0) && (
+        <Card>
+          <CardContent className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <CalendarClock className="mt-0.5 size-5 shrink-0 text-primary" />
+              <div className="space-y-0.5">
+                <p className="text-sm font-medium">Import from Google Calendar</p>
+                <p className="text-sm text-muted-foreground">
+                  Turn selected calendar events into CertaNest deadlines. Read-only —
+                  nothing in Google Calendar is changed.
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/dashboard/settings/integrations/google-calendar"
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "shrink-0")}
+            >
+              Open
+            </Link>
+          </CardContent>
+        </Card>
       )}
 
       <Card>

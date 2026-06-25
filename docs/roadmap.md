@@ -2899,3 +2899,37 @@ external support-vendor integrations.
 per-seat Stripe billing + invoices, and org-owned storage.
 
 See `docs/api-spec.md` (Founder admin tools) and `docs/security-plan.md`.
+
+## Google Calendar Import V1 (`integrations/google-calendar-v1`)
+
+Built on the Integrations OAuth Foundation: a **manual, read-only,
+review-before-save** flow that turns selected Google Calendar events into
+CertaNest deadlines + reminders. No automatic sync, no write-back to Google
+Calendar, no Gmail/Drive, and no AI.
+
+**Design.** Reminders are document-anchored, so each imported event becomes a
+**fileless "deadline" `Document`** (`expiry_date` = the event date) **plus a
+`DocumentReminderRule`** — reusing the real reminder services so the result
+appears in Life Radar and respects the `documents` + `reminders` plan limits.
+Org/case/application destinations and attach-to-existing-document are deferred.
+
+**Safety.** The Google provider's new Calendar methods shape raw API JSON into
+narrow safe payloads (no descriptions, attendees, conference links, or raw
+bodies). Tokens stay encrypted and are never returned/logged. A new
+`ImportedCalendarEvent` row (safe ids + sanitized title only) makes import
+idempotent — duplicates are skipped by default. Gated by `integrations` +
+`google_integrations` + `google_calendar_import` (all founder-only).
+
+**Tests.** 17 new backend tests (auth/ownership, not-configured, safe listing,
+preview dedupe, import → deadline+reminder, duplicate skip, partial import, plan
+limits, unsupported destination, audit/operational safety, no token/description
+leakage — provider always mocked) + 4 frontend page tests. Full backend regression
+(documents 799; integrations/founder/features 161) and frontend
+(`tsc`/`eslint`/`vitest` 491/`build`) all green; no migration drift.
+
+**Deferred:** recurring-series expansion, scheduled/auto sync, calendar webhooks,
+write-back reminders, AI deadline detection, Gmail import, Google Drive import,
+org/case destinations.
+
+See `docs/integrations-google-calendar.md` and `docs/api-spec.md` (Google Calendar
+Import V1).
