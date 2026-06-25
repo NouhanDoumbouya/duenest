@@ -19,14 +19,19 @@ import {
 } from "react";
 import Link from "next/link";
 import {
+  AlarmClock,
   ArrowLeft,
   ArrowUpRight,
   CheckCircle2,
   ClipboardCheck,
   ClipboardList,
+  Clock,
+  DoorOpen,
+  FileWarning,
   Inbox,
   Loader2,
   Mail,
+  RotateCcw,
   ShieldAlert,
   Sparkles,
   UserPlus,
@@ -72,40 +77,41 @@ import {
   PORTAL_PERSON_STATUS_TONE,
   PORTAL_PERSON_TYPE_LABELS,
   PORTAL_PERSON_TYPE_ORDER,
-  REVIEW_STATUS_LABELS,
-  REVIEW_STATUS_TONE,
-  reviewQueueCount,
+  dashboardActivityLabel,
   createPortalCase,
   createPortalPerson,
   getPortalCases,
+  getPortalDashboard,
   getPortalLimits,
   getPortalPeople,
-  getPortalReviewQueue,
-  getPortalSummary,
   isOrgLimitError,
   isPortalNotEnabledError,
+  planLabel,
   progressPercent,
 } from "@/lib/portals";
 import { cn } from "@/lib/utils";
 import type { Organization } from "@/types/organizations";
 import type {
+  DashboardCaseItem,
+  DashboardMetrics,
+  DashboardNeedsReplacementItem,
+  DashboardQueues,
+  DashboardReviewItem,
+  OrganizationDashboard,
   PortalCase,
   PortalCasePriority,
   PortalCaseType,
   PortalLimits,
   PortalPerson,
   PortalPersonType,
-  PortalReviewItem,
-  PortalSummary,
 } from "@/types/portals";
 
 type PortalTab = "people" | "cases";
 
 interface PortalState {
-  summary: PortalSummary;
+  dashboard: OrganizationDashboard;
   people: PortalPerson[];
   cases: PortalCase[];
-  reviewItems: PortalReviewItem[];
 }
 
 /**
@@ -157,18 +163,19 @@ export default function OrganizationPortalPage({
 
   const canManage = org ? canManageOrganization(org.user_role) : false;
 
+  // The dashboard endpoint is the PRIMARY operational data (metrics, queues,
+  // plan, recent activity). People + cases are still loaded for the tabs and the
+  // Create case modal's person picker.
   const loadPortal = useCallback(async (): Promise<PortalState> => {
-    const [summary, people, cases, reviewQueue] = await Promise.all([
-      getPortalSummary(orgId),
+    const [dashboard, people, cases] = await Promise.all([
+      getPortalDashboard(orgId),
       getPortalPeople(orgId),
       getPortalCases(orgId),
-      getPortalReviewQueue(orgId),
     ]);
     return {
-      summary,
+      dashboard,
       people: people.people,
       cases: cases.cases,
-      reviewItems: reviewQueue.items,
     };
   }, [orgId]);
 
@@ -176,14 +183,12 @@ export default function OrganizationPortalPage({
     async (message?: string) => {
       const next = await loadPortal();
       setData(next);
-      // Keep the plan/usage card in sync after a create/archive. Best-effort:
-      // a failure here must not break the refresh.
-      getPortalLimits(orgId)
-        .then((nextLimits) => setLimits(nextLimits))
-        .catch(() => {});
+      // The dashboard payload carries the live plan/usage, so keep the card in
+      // sync from it after a create/archive.
+      setLimits(next.dashboard.plan);
       if (message) setToast({ message, kind: "success" });
     },
-    [loadPortal, orgId],
+    [loadPortal],
   );
 
   useEffect(() => {
@@ -206,7 +211,11 @@ export default function OrganizationPortalPage({
           return;
         }
         const next = await loadPortal();
-        if (active) setData(next);
+        if (active) {
+          setData(next);
+          // Prefer the dashboard's fresh plan snapshot for the usage card.
+          setLimits(next.dashboard.plan);
+        }
       })
       .catch(async (err) => {
         if (!active) return;
@@ -359,13 +368,16 @@ export default function OrganizationPortalPage({
 
   if (!data) return null;
 
-  const summary = data.summary;
+  const dashboard = data.dashboard;
+  const metrics = dashboard.metrics;
+  const queues = dashboard.queues;
+  const isEmpty = metrics.total_people === 0 && metrics.total_cases === 0;
 
   return (
     <PageContainer width="wide">
       {backLink}
       <PageHeader
-        eyebrow={org ? org.name : "Organization"}
+        eyebrow={dashboard.organization.name || org?.name || "Organization"}
         title="Portal"
         description="Manage the people you serve and the documents each of them needs — request, review, and get every case ready."
         actions={
@@ -400,75 +412,70 @@ export default function OrganizationPortalPage({
         </TrustNotice>
       )}
 
+      {/* Portal status + plan badge. */}
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <StatusBadge
+          tone={dashboard.plan.portal_enabled ? "success" : "neutral"}
+          withDot
+        >
+          {dashboard.plan.portal_enabled ? "Portal active" : "Portal off"}
+        </StatusBadge>
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+          <Sparkles className="size-3.5" aria-hidden />
+          {planLabel(dashboard.plan.plan)}
+        </span>
+      </div>
+
       {limits && <LimitWarningBanners data={limits} />}
 
-      {/* Summary tiles — the 7 portal counts. */}
-      <section
-        aria-label="Portal summary"
-        className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
-      >
-        <ProductMetric
-          label="People"
-          value={summary.people_total}
-          hint={`${summary.people_waiting_for_documents} waiting for documents`}
-          icon={Users}
-          tone={summary.people_waiting_for_documents ? "warn" : "secure"}
+      {isEmpty ? (
+        <EmptyDashboard
+          canManage={canManage}
+          onAddPerson={() => setAddingPerson(true)}
+          onCreateCase={() => setCreatingCase(true)}
+          hasPeople={data.people.length > 0}
         />
-        <ProductMetric
-          label="Active cases"
-          value={summary.active_cases}
-          hint={`${summary.ready_cases} ready`}
-          icon={ClipboardCheck}
-        />
-        <ProductMetric
-          label="Needs review"
-          value={summary.uploads_needing_review}
-          hint="Uploads waiting for you"
-          icon={Inbox}
-          tone={summary.uploads_needing_review ? "warn" : "secure"}
-        />
-        <ProductMetric
-          label="At risk"
-          value={summary.overdue_cases + summary.blocked_cases}
-          hint={`${summary.overdue_cases} overdue · ${summary.blocked_cases} blocked`}
-          icon={ShieldAlert}
-          tone={
-            summary.overdue_cases + summary.blocked_cases ? "danger" : "secure"
-          }
-        />
-      </section>
+      ) : (
+        <>
+          <OperationalCards metrics={metrics} />
 
-      <div className="grid gap-6 xl:grid-cols-[1.7fr_1fr]">
-        <div className="space-y-5">
-          <SegmentedControl
-            value={tab}
-            options={TABS}
-            onChange={setTab}
-            label="Portal sections"
-          />
+          <div className="grid gap-6 xl:grid-cols-[1.7fr_1fr]">
+            <div className="space-y-6">
+              <ActionQueues queues={queues} />
 
-          {tab === "people" ? (
-            <PeopleList
-              people={data.people}
-              canManage={canManage}
-              onAdd={() => setAddingPerson(true)}
-            />
-          ) : (
-            <CaseList
-              orgId={orgId}
-              cases={data.cases}
-              canManage={canManage}
-              hasPeople={data.people.length > 0}
-              onCreate={() => setCreatingCase(true)}
-            />
-          )}
-        </div>
+              <section className="space-y-5">
+                <SegmentedControl
+                  value={tab}
+                  options={TABS}
+                  onChange={setTab}
+                  label="Portal sections"
+                />
 
-        <div className="space-y-6">
-          {limits && <PlanUsageCard data={limits} />}
-          <ReviewQueuePanel orgId={orgId} items={data.reviewItems} />
-        </div>
-      </div>
+                {tab === "people" ? (
+                  <PeopleList
+                    people={data.people}
+                    canManage={canManage}
+                    onAdd={() => setAddingPerson(true)}
+                  />
+                ) : (
+                  <CaseList
+                    orgId={orgId}
+                    cases={data.cases}
+                    canManage={canManage}
+                    hasPeople={data.people.length > 0}
+                    onCreate={() => setCreatingCase(true)}
+                  />
+                )}
+              </section>
+            </div>
+
+            <div className="space-y-6">
+              {limits && <PlanUsageCard data={limits} />}
+              <RecentActivity queues={queues} />
+            </div>
+          </div>
+        </>
+      )}
 
       {addingPerson && canManage && (
         <AddPersonModal
@@ -691,78 +698,534 @@ function CaseCard({
   );
 }
 
-// ---- Review queue panel -----------------------------------------------------
+// ---- Empty dashboard --------------------------------------------------------
 
-function ReviewQueuePanel({
-  orgId,
-  items,
+/**
+ * Shown when the org has no people AND no cases: a single focused panel with one
+ * obvious next action, instead of a wall of empty queues.
+ */
+function EmptyDashboard({
+  canManage,
+  hasPeople,
+  onAddPerson,
+  onCreateCase,
 }: {
-  orgId: number;
-  items: PortalReviewItem[];
+  canManage: boolean;
+  hasPeople: boolean;
+  onAddPerson: () => void;
+  onCreateCase: () => void;
 }) {
-  // The backend's default queue returns uploaded + under-review items — the
-  // active work. `reviewQueueCount` mirrors that so the badge matches the list.
-  const activeCount = reviewQueueCount(items);
   return (
-    <aside className="rounded-2xl border border-border bg-card p-5">
+    <div className="rounded-2xl border border-dashed border-border bg-card">
+      <EmptyState
+        icon={ClipboardList}
+        title="Create your first case."
+        description="Add a client, student, or applicant, then create a case to start collecting and reviewing the documents they need — all in one calm, trackable place."
+        action={
+          canManage ? (
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button variant="outline" onClick={onAddPerson}>
+                <UserPlus className="size-4" /> Add person
+              </Button>
+              <Button
+                onClick={onCreateCase}
+                disabled={!hasPeople}
+                title={!hasPeople ? "Add a person first" : undefined}
+              >
+                <ClipboardList className="size-4" /> Create case
+              </Button>
+            </div>
+          ) : undefined
+        }
+      />
+    </div>
+  );
+}
+
+// ---- Operational summary cards ----------------------------------------------
+
+/**
+ * The compact "what needs doing" count grid: the six action-driving numbers, a
+ * restrained tone per card, and a secondary stat row. Cards with a queue link
+ * scroll to the matching action queue; the rest are static counts.
+ */
+function OperationalCards({ metrics }: { metrics: DashboardMetrics }) {
+  const cards: Array<{
+    label: string;
+    value: number;
+    hint: string;
+    icon: typeof Inbox;
+    tone: "default" | "warn" | "danger" | "secure" | "good";
+    href?: string;
+  }> = [
+    {
+      label: "Active cases",
+      value: metrics.active_cases,
+      hint: `${metrics.percent_cases_ready}% ready`,
+      icon: ClipboardCheck,
+      tone: "default",
+    },
+    {
+      label: "Needs review",
+      value: metrics.uploaded_requests_needing_review,
+      hint: "Uploads waiting for you",
+      icon: Inbox,
+      tone: metrics.uploaded_requests_needing_review ? "warn" : "secure",
+      href: "#queue-review",
+    },
+    {
+      label: "Overdue",
+      value: metrics.overdue_cases,
+      hint: `${metrics.due_soon_cases} due soon`,
+      icon: AlarmClock,
+      tone: metrics.overdue_cases ? "danger" : "secure",
+      href: "#queue-overdue",
+    },
+    {
+      label: "Missing documents",
+      value: metrics.missing_required_documents,
+      hint: "Requirements not yet satisfied",
+      icon: FileWarning,
+      tone: metrics.missing_required_documents ? "warn" : "secure",
+      href: "#queue-missing",
+    },
+    {
+      label: "Ready",
+      value: metrics.ready_cases,
+      hint: "Cases ready to move forward",
+      icon: CheckCircle2,
+      tone: metrics.ready_cases ? "good" : "default",
+      href: "#queue-ready",
+    },
+    {
+      label: "Needs replacement",
+      value: metrics.needs_replacement_requests,
+      hint: "Uploads sent back to redo",
+      icon: RotateCcw,
+      tone: metrics.needs_replacement_requests ? "warn" : "secure",
+      href: "#queue-replacement",
+    },
+  ];
+
+  return (
+    <section aria-label="Portal overview" className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {cards.map((card) =>
+          card.href ? (
+            <Link
+              key={card.label}
+              href={card.href}
+              className="rounded-xl focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              <ProductMetric
+                label={card.label}
+                value={card.value}
+                hint={card.hint}
+                icon={card.icon}
+                tone={card.tone}
+              />
+            </Link>
+          ) : (
+            <ProductMetric
+              key={card.label}
+              label={card.label}
+              value={card.value}
+              hint={card.hint}
+              icon={card.icon}
+              tone={card.tone}
+            />
+          ),
+        )}
+      </div>
+
+      {/* Secondary stats — smaller, calm context. */}
+      <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+        <SecondaryStat
+          icon={Users}
+          label={`${metrics.active_people} active ${
+            metrics.active_people === 1 ? "person" : "people"
+          }`}
+        />
+        <SecondaryStat
+          icon={Clock}
+          label={`${metrics.due_soon_cases} due soon`}
+        />
+        <SecondaryStat
+          icon={Mail}
+          label={`${metrics.active_document_requests} active request${
+            metrics.active_document_requests === 1 ? "" : "s"
+          }`}
+        />
+        <SecondaryStat
+          icon={DoorOpen}
+          label={`${metrics.active_sharing_rooms} active room${
+            metrics.active_sharing_rooms === 1 ? "" : "s"
+          }`}
+        />
+        {metrics.readiness_average !== null && (
+          <SecondaryStat
+            icon={ClipboardCheck}
+            label={`${metrics.readiness_average}% avg readiness`}
+          />
+        )}
+      </div>
+    </section>
+  );
+}
+
+function SecondaryStat({
+  icon: Icon,
+  label,
+}: {
+  icon: typeof Users;
+  label: string;
+}) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <Icon className="size-3.5" aria-hidden />
+      {label}
+    </span>
+  );
+}
+
+// ---- Action queues ----------------------------------------------------------
+
+/** A small reusable queue panel header with a count badge. */
+function QueueShell({
+  id,
+  title,
+  description,
+  count,
+  tone,
+  children,
+}: {
+  id: string;
+  title: string;
+  description: string;
+  count: number;
+  tone: "warning" | "danger" | "success" | "neutral";
+  children: React.ReactNode;
+}) {
+  return (
+    <section
+      id={id}
+      className="scroll-mt-24 rounded-2xl border border-border bg-card p-5"
+    >
       <div className="flex items-center justify-between gap-2">
-        <h2 className="font-heading text-base font-semibold">Review queue</h2>
-        <StatusBadge
-          tone={activeCount ? "warning" : "neutral"}
-          withDot={false}
-        >
-          {activeCount}
+        <h3 className="font-heading text-base font-semibold">{title}</h3>
+        <StatusBadge tone={count ? tone : "neutral"} withDot={false}>
+          {count}
         </StatusBadge>
       </div>
-      <p className="mt-1 text-xs text-muted-foreground">
-        Uploads people have sent that are waiting for your review.
-      </p>
+      <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+      <div className="mt-4">{children}</div>
+    </section>
+  );
+}
 
-      {items.length === 0 ? (
-        <div className="mt-4 flex flex-col items-center gap-2 rounded-xl border border-dashed border-border px-3 py-8 text-center">
-          <CheckCircle2 className="size-6 text-brand-success" aria-hidden />
-          <p className="text-sm font-medium">You&apos;re all caught up.</p>
-          <p className="text-xs text-muted-foreground">
-            Nothing is waiting for review right now.
-          </p>
+/** Calm "nothing here" line shared by the queues. */
+function QueueEmpty({ message }: { message: string }) {
+  return (
+    <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border px-3 py-7 text-center">
+      <CheckCircle2 className="size-5 text-brand-success" aria-hidden />
+      <p className="text-xs text-muted-foreground">{message}</p>
+    </div>
+  );
+}
+
+/**
+ * A single queue row: a deep-link (relative `action_url`) to the case/request.
+ * `action_url` values are app routes from the backend — never raw storage URLs.
+ */
+function QueueRow({
+  href,
+  title,
+  subtitle,
+  meta,
+  children,
+}: {
+  href: string;
+  title: string;
+  subtitle: string;
+  meta?: React.ReactNode;
+  children?: React.ReactNode;
+}) {
+  return (
+    <li>
+      <Link
+        href={href}
+        className="block rounded-lg border border-border px-3 py-2.5 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+      >
+        <div className="flex items-start justify-between gap-2">
+          <p className="min-w-0 truncate text-sm font-medium">{title}</p>
+          {meta}
         </div>
+        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+          {subtitle}
+        </p>
+        {children}
+      </Link>
+    </li>
+  );
+}
+
+/** Cap each queue list so a card stays scannable. */
+const QUEUE_CAP = 5;
+
+function ActionQueues({ queues }: { queues: DashboardQueues }) {
+  return (
+    <div className="space-y-4">
+      <ReviewNowQueue items={queues.review_now} />
+      <OverdueQueue items={queues.overdue_cases} />
+      <MissingDocumentsQueue items={queues.missing_documents} />
+      <NeedsReplacementQueue items={queues.needs_replacement} />
+      <ReadyQueue items={queues.ready_cases} />
+    </div>
+  );
+}
+
+function ReviewNowQueue({ items }: { items: DashboardReviewItem[] }) {
+  return (
+    <QueueShell
+      id="queue-review"
+      title="Review now"
+      description="Uploads people have sent that are waiting for your review."
+      count={items.length}
+      tone="warning"
+    >
+      {items.length === 0 ? (
+        <QueueEmpty message="Nothing is waiting for review right now." />
       ) : (
-        <ul className="mt-4 space-y-2">
-          {items.map((item) => (
-            <li key={item.case_request_id}>
-              <Link
-                href={`/dashboard/organizations/${orgId}/portal/cases/${item.case_id}#request-${item.case_request_id}`}
-                className="block rounded-lg border border-border px-3 py-2.5 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <p className="min-w-0 truncate text-sm font-medium">
-                    {item.requested_document_title}
-                  </p>
-                  <StatusBadge
-                    tone={REVIEW_STATUS_TONE[item.review_status]}
-                    withDot={false}
-                  >
-                    {REVIEW_STATUS_LABELS[item.review_status]}
-                  </StatusBadge>
-                </div>
-                <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                  {item.person_name} · {item.case_title}
+        <ul className="space-y-2">
+          {items.slice(0, QUEUE_CAP).map((item) => (
+            <QueueRow
+              key={item.case_request_id}
+              href={item.action_url}
+              title={item.requested_document_title}
+              subtitle={`${item.person_name} · ${item.case_title}`}
+              meta={
+                <span className="shrink-0 text-xs font-medium text-primary">
+                  Review
+                </span>
+              }
+            >
+              {item.uploaded_at && (
+                <p className="mt-1 text-xs text-muted-foreground/80">
+                  Uploaded {formatDate(item.uploaded_at)}
                 </p>
-                <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground/80">
-                  {item.uploaded_at && (
-                    <span>Uploaded {formatDate(item.uploaded_at)}</span>
-                  )}
-                  {item.due_date && (
-                    <span>Due {formatDate(item.due_date)}</span>
-                  )}
-                  <span className="font-medium text-primary">Review</span>
-                </p>
-              </Link>
-            </li>
+              )}
+            </QueueRow>
           ))}
         </ul>
       )}
-    </aside>
+    </QueueShell>
+  );
+}
+
+function OverdueQueue({ items }: { items: DashboardCaseItem[] }) {
+  return (
+    <QueueShell
+      id="queue-overdue"
+      title="Overdue cases"
+      description="Past their due date and still not ready."
+      count={items.length}
+      tone="danger"
+    >
+      {items.length === 0 ? (
+        <QueueEmpty message="No cases are overdue. Nicely on top of it." />
+      ) : (
+        <ul className="space-y-2">
+          {items.slice(0, QUEUE_CAP).map((item) => (
+            <CaseQueueRow key={item.case_id} item={item} />
+          ))}
+        </ul>
+      )}
+    </QueueShell>
+  );
+}
+
+function MissingDocumentsQueue({ items }: { items: DashboardCaseItem[] }) {
+  return (
+    <QueueShell
+      id="queue-missing"
+      title="Missing documents"
+      description="Cases still waiting on required documents."
+      count={items.length}
+      tone="warning"
+    >
+      {items.length === 0 ? (
+        <QueueEmpty message="Every case has what it needs so far." />
+      ) : (
+        <ul className="space-y-2">
+          {items.slice(0, QUEUE_CAP).map((item) => (
+            <CaseQueueRow key={item.case_id} item={item} showMissingTitles />
+          ))}
+        </ul>
+      )}
+    </QueueShell>
+  );
+}
+
+function NeedsReplacementQueue({
+  items,
+}: {
+  items: DashboardNeedsReplacementItem[];
+}) {
+  return (
+    <QueueShell
+      id="queue-replacement"
+      title="Needs replacement"
+      description="Uploads you sent back for the recipient to redo."
+      count={items.length}
+      tone="warning"
+    >
+      {items.length === 0 ? (
+        <QueueEmpty message="Nothing is waiting on a replacement." />
+      ) : (
+        <ul className="space-y-2">
+          {items.slice(0, QUEUE_CAP).map((item) => (
+            <QueueRow
+              key={item.case_request_id}
+              href={item.action_url}
+              title={item.requested_document_title}
+              subtitle={`${item.person_name} · ${item.case_title}`}
+            />
+          ))}
+        </ul>
+      )}
+    </QueueShell>
+  );
+}
+
+function ReadyQueue({ items }: { items: DashboardCaseItem[] }) {
+  return (
+    <QueueShell
+      id="queue-ready"
+      title="Ready cases"
+      description="Cases that have everything and are ready to move forward."
+      count={items.length}
+      tone="success"
+    >
+      {items.length === 0 ? (
+        <QueueEmpty message="No cases are ready just yet." />
+      ) : (
+        <ul className="space-y-2">
+          {items.slice(0, QUEUE_CAP).map((item) => (
+            <CaseQueueRow key={item.case_id} item={item} />
+          ))}
+        </ul>
+      )}
+    </QueueShell>
+  );
+}
+
+/** A case row used across the overdue / missing / ready queues. */
+function CaseQueueRow({
+  item,
+  showMissingTitles = false,
+}: {
+  item: DashboardCaseItem;
+  showMissingTitles?: boolean;
+}) {
+  const titles = item.missing_document_titles ?? [];
+  return (
+    <QueueRow
+      href={item.action_url}
+      title={item.case_title}
+      subtitle={item.person_name}
+      meta={
+        <StatusBadge tone={PORTAL_CASE_STATUS_TONE[item.status]} withDot={false}>
+          {PORTAL_CASE_STATUS_LABELS[item.status]}
+        </StatusBadge>
+      }
+    >
+      <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground/80">
+        {item.due_date && (
+          <span className={item.is_overdue ? "text-destructive" : undefined}>
+            Due {formatDate(item.due_date)}
+          </span>
+        )}
+        {typeof item.missing_requirements === "number" &&
+          item.missing_requirements > 0 && (
+            <span className="text-brand-amber">
+              {item.missing_requirements} missing
+            </span>
+          )}
+        {typeof item.uploads_needing_review === "number" &&
+          item.uploads_needing_review > 0 && (
+            <span className="text-brand-amber">
+              {item.uploads_needing_review} to review
+            </span>
+          )}
+      </p>
+      {showMissingTitles && titles.length > 0 && (
+        <p className="mt-1.5 flex flex-wrap gap-1">
+          {titles.slice(0, 3).map((title) => (
+            <span
+              key={title}
+              className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground"
+            >
+              {title}
+            </span>
+          ))}
+          {titles.length > 3 && (
+            <span className="text-[11px] text-muted-foreground">
+              +{titles.length - 3} more
+            </span>
+          )}
+        </p>
+      )}
+    </QueueRow>
+  );
+}
+
+// ---- Recent activity --------------------------------------------------------
+
+/** A small, calm list of the latest portal events. Safe labels only. */
+function RecentActivity({ queues }: { queues: DashboardQueues }) {
+  const items = queues.recent_activity;
+  return (
+    <section className="rounded-2xl border border-border bg-card p-5">
+      <h2 className="font-heading text-base font-semibold">Recent activity</h2>
+      <p className="mt-1 text-xs text-muted-foreground">
+        The latest things that happened across your portal.
+      </p>
+
+      {items.length === 0 ? (
+        <p className="mt-4 rounded-xl border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
+          Nothing has happened yet. Activity will show here as your team works.
+        </p>
+      ) : (
+        <ul className="mt-4 space-y-3">
+          {items.map((item) => {
+            const { label, objectLabel } = dashboardActivityLabel(item);
+            return (
+              <li key={item.id} className="flex items-start gap-2.5 text-sm">
+                <span
+                  className="mt-1.5 size-1.5 shrink-0 rounded-full bg-muted-foreground/50"
+                  aria-hidden
+                />
+                <div className="min-w-0">
+                  <p className="truncate">
+                    <span className="font-medium">{label}</span>
+                    {objectLabel && (
+                      <span className="text-muted-foreground">
+                        {" "}
+                        · {objectLabel}
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-xs text-muted-foreground/80">
+                    {item.actor_label && <>{item.actor_label} · </>}
+                    {formatDate(item.created_at)}
+                  </p>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
   );
 }
 

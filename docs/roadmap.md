@@ -997,12 +997,14 @@ Free and Pro; founder-only rollout flag `smart_profile` until launched.
 
 **Next recommended branch: `b2b/teams-billing-checkout`** (Magic Inbox V1, Weekly
 Radar Email V1, Document Request Links V1, Sharing Rooms V1, the B2B Portals MVP,
-Teams Plan + Portal Limits V1, and the B2B Review + Approval Workflow V1 are now
-done — see the done sections below). Teams Plan + Portal Limits V1 made portals
-governed by an **organization-level entitlement** (activated by a founder/beta
-command, no Stripe), fixing the prior MVP's personal-limit leak, and the Review +
-Approval Workflow V1 closed the loop with a staff accept/reject/needs-replacement
-queue; wiring real Teams checkout / per-seat Stripe billing and beginning
+Teams Plan + Portal Limits V1, the B2B Review + Approval Workflow V1, and the
+Organization Dashboard V1 are now done — see the done sections below). Teams Plan +
+Portal Limits V1 made portals governed by an **organization-level entitlement**
+(activated by a founder/beta command, no Stripe), fixing the prior MVP's
+personal-limit leak; the Review + Approval Workflow V1 closed the loop with a staff
+accept/reject/needs-replacement queue; and the Organization Dashboard V1 added a
+read-only operational command center (metrics + action queues + plan usage, no
+audit-on-view). Wiring real Teams checkout / per-seat Stripe billing and beginning
 org-owned storage is the sensible follow-up.
 
 Smart Profile was built mainly to power CV/résumé, motivation letters,
@@ -1029,6 +1031,8 @@ security/redaction-watermarking-v1     (done — secure server-side protected co
 security/audit-logs-v1                 (done — owner-scoped security/document event log, hashed fingerprints, owner-only, no AI)
 b2b/portals-mvp                        (done — org portal workspace: people + cases orchestrating existing primitives, founder-gated, deterministic)
 b2b/teams-plan-and-portal-limits       (done — org-level entitlement governs portals; central limit table; personal-limit leak fixed; founder activation command; no Stripe)
+b2b/review-approval-workflow           (done — staff accept/reject/needs-replacement on portal uploads; org-scoped file proxy)
+b2b/organization-dashboard-v1          (done — read-only operational command center: metrics + action queues + plan usage; no audit-on-view)
 b2b/teams-billing-checkout             ← next (Teams checkout / per-seat Stripe / invoices, org-owned storage)
 integrations/inbox-mailbox-import      (future — Gmail/Drive/Outlook import into Magic Inbox)
 backend/ai-org-credit-pools            (future)
@@ -2191,3 +2195,58 @@ validation.
 See `docs/b2b-portals.md`, `docs/api-spec.md` §40, `docs/security-plan.md`,
 `docs/security/audit-logs.md`, and `docs/NOTIFICATIONS.md` for the full contract,
 security model, and email behavior.
+
+---
+
+## Organization Dashboard V1 — delivered (2026-06-25)
+
+`b2b/organization-dashboard-v1` is **implemented** (backend complete + tested). It
+adds the B2B portal's **operational command center**: a single **read-only**
+endpoint that does one deterministic READ over the existing portal data and returns
+operational **metrics**, a handful of small **action queues**, and the org's **plan
+usage** — so staff immediately know what to act on next. Fully **deterministic — no
+AI, no AI credits, no storage/R2 reads, no file decryption.**
+
+**Reuse, no duplication.** Like the rest of B2B Portals it **orchestrates existing
+primitives** and adds **no new model, no migration, and no duplicate upload /
+request-link / sharing-room system**. It reuses `build_organization_limit_payload`
+(plan/usage/limits — the same payload as the §39 limits endpoint),
+`compute_case_progress` (per-case readiness, only on the bounded queues), and the
+unified Audit Log (recent activity, filtered to the org via `metadata.org_id`).
+Service: `apps/organizations/portal_dashboard.py` (`build_dashboard_payload`).
+
+Key facts:
+
+* **Endpoint.** `GET /api/v1/organizations/{org_id}/portal/dashboard/` — single
+  endpoint (no separate `/queues` or `/metrics`). Read-only; **no writes**.
+* **Permissions / gates.** Any **active org member** may read; non-members denied.
+  Gated by both the `b2b_portals` feature flag (`503` when off) and the org Teams
+  entitlement (`403 portal_not_enabled` when not on a Teams plan).
+* **Metrics** (deterministic aggregate queries — no per-case loop, no N+1): people
+  totals, full case-status counts, overdue / due-soon cases, document-request counts
+  (by the **authoritative** `DocumentRequestLink` status), active / expiring sharing
+  rooms, missing required documents, and operational-health (`readiness_average`,
+  `percent_cases_ready`, `percent_cases_blocked_or_overdue`). The due-soon /
+  expiring window is **7 days**.
+* **Action queues** (hard-capped at **8** items; `recent_activity` at **10**):
+  `review_now`, `overdue_cases`, `missing_documents` (with up to 5 requirement
+  **titles** only — never content), `needs_replacement`, `ready_cases`, and
+  `recent_activity` (safe portal audit events). All `action_url`s are **relative app
+  routes** — never public tokens or file URLs.
+* **No audit on view.** Opening the dashboard records **no audit event**
+  (deliberate, to avoid noisy logs); the recent-activity feed only **reads** the
+  unified Audit Log.
+* **Privacy.** Returns only safe operational fields — never document contents, raw
+  public tokens, private file URLs, or storage keys. The uploaded-file proxy routes
+  are **not** surfaced here (review-only).
+
+**Deferred (future work):** bulk reminder campaigns, organization templates, advanced
+BI / analytics, CSV / PDF exports, staff-productivity analytics, SLA timers, a
+revenue / billing dashboard, AI insights, Teams checkout, and org-owned storage.
+
+**Next recommended branch: `b2b/teams-billing-checkout`** — wire real Teams checkout
+/ per-seat Stripe billing and invoices, and begin org-owned storage so a case's pack
+and uploaded files no longer draw down the org-owner's personal storage.
+
+See `docs/b2b-portals.md`, `docs/api-spec.md` §41, `docs/security-plan.md`,
+`docs/security/audit-logs.md`, and `docs/BILLING.md`.

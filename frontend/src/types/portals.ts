@@ -238,6 +238,139 @@ export interface ReviewDecision {
   notified_recipient: boolean;
 }
 
+// ---- Organization dashboard -------------------------------------------------
+
+/**
+ * The full set of operational metrics for the org dashboard. Every value is a
+ * concrete count except `readiness_average`, which is `null` when there are no
+ * cases to average over. `percent_*` values are whole-number percentages.
+ */
+export interface DashboardMetrics {
+  total_people: number;
+  active_people: number;
+  total_cases: number;
+  active_cases: number;
+  draft_cases: number;
+  collecting_documents_cases: number;
+  waiting_for_review_cases: number;
+  ready_cases: number;
+  submitted_cases: number;
+  completed_cases: number;
+  blocked_cases: number;
+  archived_cases: number;
+  overdue_cases: number;
+  due_soon_cases: number;
+  active_document_requests: number;
+  uploaded_requests_needing_review: number;
+  accepted_requests: number;
+  rejected_requests: number;
+  needs_replacement_requests: number;
+  active_sharing_rooms: number;
+  expiring_sharing_rooms: number;
+  missing_required_documents: number;
+  readiness_average: number | null;
+  percent_cases_ready: number;
+  percent_cases_blocked_or_overdue: number;
+}
+
+/**
+ * A review-queue item on the dashboard: one uploaded document request waiting
+ * for an admin decision. `action_url` is a RELATIVE app route (deep-link to the
+ * request on its case page) — safe to use directly with `next/link`. There are
+ * no file URLs or tokens here.
+ */
+export interface DashboardReviewItem {
+  case_request_id: number;
+  case_id: number;
+  case_title: string;
+  person_name: string;
+  requested_document_title: string;
+  status: string;
+  uploaded_at: string | null;
+  /** RELATIVE app route. Never a raw storage URL. */
+  action_url: string;
+}
+
+/**
+ * A case row on a dashboard queue (overdue / missing documents / ready).
+ * `action_url` is a RELATIVE app route. `missing_document_titles` is present on
+ * the missing-documents queue; other queues may omit the optional enrichment
+ * fields.
+ */
+export interface DashboardCaseItem {
+  case_id: number;
+  case_title: string;
+  person_name: string;
+  person_id: number;
+  status: PortalCaseStatus;
+  priority: PortalCasePriority;
+  due_date: string | null;
+  is_overdue: boolean;
+  updated_at: string;
+  /** RELATIVE app route. Never a raw storage URL. */
+  action_url: string;
+  missing_requirements?: number;
+  uploads_needing_review?: number;
+  readiness_score?: number;
+  /** Present on the missing-documents queue: the titles still outstanding. */
+  missing_document_titles?: string[];
+}
+
+/**
+ * A needs-replacement request on the dashboard: an upload the team asked the
+ * recipient to redo. `action_url` is a RELATIVE app route.
+ */
+export interface DashboardNeedsReplacementItem {
+  case_request_id: number;
+  case_id: number;
+  case_title: string;
+  person_name: string;
+  requested_document_title: string;
+  status: string;
+  /** RELATIVE app route. Never a raw storage URL. */
+  action_url: string;
+}
+
+/**
+ * A recent portal activity entry. `event_type` is a stable machine key (mapped
+ * to a human label by `dashboardActivityLabel`); the `*_label` fields are
+ * pre-formatted, safe display strings — they never contain raw tokens, file
+ * URLs, or document content.
+ */
+export interface DashboardActivityItem {
+  id: number;
+  event_type: string;
+  severity: string;
+  object_label: string;
+  related_object_label: string;
+  actor_label: string;
+  created_at: string;
+}
+
+/** The action queues that drive the dashboard's "what needs doing" lists. */
+export interface DashboardQueues {
+  review_now: DashboardReviewItem[];
+  overdue_cases: DashboardCaseItem[];
+  missing_documents: DashboardCaseItem[];
+  needs_replacement: DashboardNeedsReplacementItem[];
+  ready_cases: DashboardCaseItem[];
+  recent_activity: DashboardActivityItem[];
+}
+
+/**
+ * The Organization Dashboard payload: a single read-only snapshot of the org's
+ * portal — its plan/limits (same shape as `PortalLimits`), operational metrics,
+ * action queues, and recent activity. Behind the `b2b_portals` flag + Teams
+ * entitlement. Readable by any active org member.
+ */
+export interface OrganizationDashboard {
+  organization: { id: number; name: string };
+  plan: PortalLimits;
+  metrics: DashboardMetrics;
+  queues: DashboardQueues;
+  generated_at: string;
+}
+
 // ---- Plan + limits ----------------------------------------------------------
 
 /** The org's billing/entitlement plan as it relates to portal capacity. */

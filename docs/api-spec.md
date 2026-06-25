@@ -6071,3 +6071,108 @@ note summary) — never tokens, file URLs, or document contents. See §37 and
 See `docs/b2b-portals.md`, `docs/security-plan.md`, `docs/security/audit-logs.md`,
 and `docs/NOTIFICATIONS.md`.
 
+## 41 — Organization Dashboard V1 (`organizations/{org_id}/portal/dashboard/`)
+
+A **read-only** operational command center for a B2B portal: a single
+deterministic READ over the existing portal data that returns operational
+**metrics** and a handful of small, bounded **action queues** so staff
+immediately know what to act on next. It **reuses, never duplicates** existing
+primitives — `build_organization_limit_payload` for the plan/usage/limits card
+(§39), `compute_case_progress` for per-case readiness on the bounded queues only,
+and the unified Audit Log (§37) for the recent-activity feed. **Deterministic — no
+AI call, no AI credits, no storage/R2 reads, no file decryption.** No writes.
+
+Service: `apps/organizations/portal_dashboard.py` (`build_dashboard_payload`).
+**No new model, no migration.**
+
+### Endpoint
+
+| Method | Path | Role | Description |
+| --- | --- | --- | --- |
+| `GET` | `/dashboard/` | member | Operational metrics + action queues + plan usage |
+
+Single endpoint — there is no separate `/queues` or `/metrics` in V1.
+
+### Permissions & gating
+
+* **Authentication required;** the requester must be an **active member** of
+  `{org_id}` (non-members denied). Read-only — any member may read.
+* **Two gates** (same as the rest of the portal): the `b2b_portals` feature flag
+  (`503` when off) and the org Teams entitlement (`403 portal_not_enabled` when the
+  org isn't on a Teams plan).
+* **No audit event is recorded for opening the dashboard** — this is deliberate, to
+  avoid noisy per-view logs.
+
+### Response shape
+
+```json
+{
+  "organization": { "id": 1, "name": "Acme Advisors" },
+  "plan": { "plan": "teams_beta", "portal_enabled": true,
+            "limits": { "...": 0 }, "usage": { "...": 0 }, "remaining": { "...": 0 } },
+  "metrics": { "...": 0 },
+  "queues": { "review_now": [], "overdue_cases": [], "missing_documents": [],
+              "needs_replacement": [], "ready_cases": [], "recent_activity": [] },
+  "generated_at": "2026-06-25T12:00:00+00:00"
+}
+```
+
+The `plan` block is the **same** `build_organization_limit_payload` output returned
+by the limits endpoint (§39) — the dashboard reuses it for its plan-usage card.
+
+### Metrics (deterministic aggregate queries)
+
+People: `total_people`, `active_people` (non-archived). Case status counts (one
+grouped query): `total_cases`, `active_cases` (`PortalCase.ACTIVE_STATUSES`),
+`draft_cases`, `collecting_documents_cases`, `waiting_for_review_cases`,
+`ready_cases`, `submitted_cases`, `completed_cases`, `blocked_cases`,
+`archived_cases`. Due dates (active cases only): `overdue_cases` (`due_date <
+today`), `due_soon_cases` (due within 7 days). Document requests, by the
+**authoritative** `DocumentRequestLink` status, scoped to the org's non-archived
+cases: `active_document_requests`, `uploaded_requests_needing_review` (`uploaded` /
+`under_review`), `accepted_requests`, `rejected_requests`,
+`needs_replacement_requests`. Sharing rooms: `active_sharing_rooms`,
+`expiring_sharing_rooms` (active + expires within 7 days). Requirements:
+`missing_required_documents` (required pack requirements still `MISSING` across
+active cases). Operational health: `readiness_average` (avg
+`DocumentBundle.readiness_score` across active cases, or `null`),
+`percent_cases_ready`, `percent_cases_blocked_or_overdue` (integers 0–100).
+
+The metric block uses grouped/aggregate queries (no per-case loop, no N+1). The
+due-soon / expiring window is **7 days** (`DUE_SOON_DAYS`).
+
+### Action queues
+
+Every queue list is hard-capped at **8 items** (`QUEUE_LIMIT`); `recent_activity`
+is capped at **10** (`RECENT_ACTIVITY_LIMIT`).
+
+* **`review_now`** — uploaded / under-review case requests awaiting a decision; each
+  item carries case / person / requested-document-title / status / `uploaded_at` /
+  `action_url`.
+* **`overdue_cases`** — active cases past due; each with missing / review counts and
+  readiness via `compute_case_progress`.
+* **`missing_documents`** — active cases with missing required requirements,
+  including up to **5** short requirement **titles** (titles only — never document
+  content; truncated).
+* **`needs_replacement`** — requests in `needs_replacement` / `rejected`.
+* **`ready_cases`** — cases with status `READY`.
+* **`recent_activity`** — recent safe portal Audit Log events for the org
+  (`event_type`, `severity`, `object_label`, `related_object_label`, `actor_label`,
+  `created_at`), read from the unified owner-scoped Audit Log filtered to the org via
+  `metadata.org_id`. Safe labels only — no tokens / URLs / content.
+
+All `action_url`s are **relative app routes** (e.g.
+`/dashboard/organizations/{id}/portal/cases/{caseId}#request-{crId}`) — never public
+tokens or file URLs. The bounded queues call `compute_case_progress` only on the
+≤ 8 returned cases.
+
+### Privacy guarantees
+
+Returns only safe operational fields — **never** document contents, raw public
+tokens, private file URLs, or storage keys. The uploaded-file proxy routes (§40)
+are **not** surfaced here (review-only). Read-only; opening the dashboard performs
+no write and records no audit event.
+
+See `docs/b2b-portals.md`, `docs/security-plan.md`, `docs/security/audit-logs.md`,
+and `docs/roadmap.md`.
+

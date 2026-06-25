@@ -169,6 +169,9 @@ org-seat Stripe price env keys, but **no checkout is wired** — **Teams billing
 checkout, per-seat Stripe, and invoices are future work**
 (`b2b/teams-billing-checkout`). UI reads org entitlement + usage from
 `GET /api/v1/organizations/{org_id}/portal/limits/` (see `docs/api-spec.md` §39).
+The read-only **Organization Dashboard** (`GET …/portal/dashboard/`, §41) reuses the
+**same** `build_organization_limit_payload` (plan / `portal_enabled` / limits /
+usage / remaining) for its plan-usage card — no billing/Stripe changes.
 
 **Storage quota method:** storage used is the sum of stored `DocumentFile.file_size`
 values for the user's non-trashed files, computed from the database. Cloudflare R2

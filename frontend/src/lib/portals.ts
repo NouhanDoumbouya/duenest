@@ -18,6 +18,8 @@ import type {
   CreateCaseRequestBody,
   CreatePortalCaseBody,
   CreatePortalPersonBody,
+  DashboardActivityItem,
+  OrganizationDashboard,
   PortalCase,
   PortalCaseFilters,
   PortalCasePriority,
@@ -69,6 +71,20 @@ export function getPortalLimits(orgId: number): Promise<PortalLimits> {
 /** Read the portal dashboard summary counts. */
 export function getPortalSummary(orgId: number): Promise<PortalSummary> {
   return apiFetch<PortalSummary>(base(orgId, "summary/"));
+}
+
+// ---- Organization dashboard -------------------------------------------------
+
+/**
+ * Read the org's operational dashboard: plan/limits, metrics, action queues,
+ * and recent activity in one call. Readable by any active org member behind the
+ * `b2b_portals` flag + Teams entitlement. The queue `action_url`s are relative
+ * app routes — safe to use with `next/link`; there are no file URLs or tokens.
+ */
+export function getPortalDashboard(
+  orgId: number,
+): Promise<OrganizationDashboard> {
+  return apiFetch<OrganizationDashboard>(base(orgId, "dashboard/"));
 }
 
 // ---- People -----------------------------------------------------------------
@@ -706,6 +722,62 @@ export function isPortalForbiddenError(err: unknown): err is ApiError {
     !isOrgLimitError(err) &&
     !isPortalNotEnabledError(err)
   );
+}
+
+// ---- Dashboard activity helpers ---------------------------------------------
+
+/**
+ * Human labels for the portal activity events surfaced on the dashboard's
+ * recent-activity list. Calm, past-tense phrasing. Unknown event types fall
+ * back to a title-cased version of the key via `dashboardActivityLabel`.
+ */
+export const DASHBOARD_ACTIVITY_LABELS: Record<string, string> = {
+  portal_person_created: "Person added",
+  portal_case_created: "Case created",
+  portal_case_request_created: "Document requested",
+  portal_review_started: "Review started",
+  portal_document_accepted: "Document accepted",
+  portal_document_rejected: "Document rejected",
+  portal_document_needs_replacement: "Replacement requested",
+  portal_recipient_notified: "Recipient notified",
+  portal_case_pack_created: "Application pack created",
+  portal_case_room_created: "Sharing room created",
+  portal_case_status_changed: "Case status changed",
+  portal_case_archived: "Case archived",
+  organization_plan_changed: "Plan changed",
+  organization_portal_limit_reached: "Plan limit reached",
+};
+
+/**
+ * Title-case an unknown snake_case event type into a readable fallback label,
+ * dropping a leading `portal_`/`organization_` prefix so it reads naturally
+ * (e.g. `portal_case_reopened` → "Case reopened"). Never returns an empty
+ * string for a non-empty key.
+ */
+export function humanizeEventType(eventType: string): string {
+  const cleaned = eventType
+    .replace(/^(portal|organization)_/, "")
+    .replace(/_/g, " ")
+    .trim();
+  if (!cleaned) return eventType;
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+}
+
+/**
+ * The display label + object label for a recent-activity row. The label comes
+ * from the known event map, falling back to a humanized event type; the object
+ * label is the pre-formatted, safe display string from the backend (never a raw
+ * token, URL, or document content).
+ */
+export function dashboardActivityLabel(item: DashboardActivityItem): {
+  label: string;
+  objectLabel: string;
+} {
+  return {
+    label: DASHBOARD_ACTIVITY_LABELS[item.event_type] ??
+      humanizeEventType(item.event_type),
+    objectLabel: item.object_label,
+  };
 }
 
 /**
