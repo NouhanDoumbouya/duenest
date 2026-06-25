@@ -6962,3 +6962,22 @@ owner-scoped (another user's id → `404`).
 - `GET /api/v1/integrations/gmail/destinations/` → owner-scoped destination options (same shape as Drive).
 - `POST /api/v1/integrations/gmail/import/preview/` — body `{ account_id, attachments:[{provider_message_id,provider_attachment_id,filename,mime_type,size}], destination:{type,folder_id?,pack_id?} }` → advisory `{ destination, importable_count, skipped_count, results:[{provider_message_id,provider_attachment_id,filename,status:"will_import"|"skipped",reason}], warnings }`. Flags `already_imported`. Throttle `gmail_list`.
 - `POST /api/v1/integrations/gmail/import/` — same body plus optional `force` (re-import duplicates) → downloads SELECTED attachments only, validates, encrypts at rest, saves to destination, enforces plan/storage limits, records an `ImportedGmailAttachment` (hashed ids; safe metadata). Returns `{ status, imported_count, skipped_count, failed_count, destination, results:[{filename,status:"imported"|"skipped"|"failed",reason,document_id,file_id}], warnings }`. Duplicates skipped (`already_imported`) by default; per-attachment failures isolated. Throttle `gmail_import`. Frontend: `/dashboard/settings/integrations/gmail`.
+
+## Google Calendar Import V1 (`integrations/google-calendar/`)
+
+Manual, read-only, review-before-save import of Google Calendar events into
+CertaNest deadlines + reminders. See `docs/integrations-google-calendar.md`. Gated
+by `integrations` + `google_integrations` + `google_calendar_import` (all
+founder-only by default). Every endpoint is owner-scoped to the signed-in user's
+own connected Google account (`account_id`; `404` otherwise). Responses NEVER
+include tokens, raw Google API bodies, or event descriptions. No write-back to
+Google Calendar; no automatic sync; no AI.
+
+- `GET /api/v1/integrations/google-calendar/destinations/` → `{ "destinations": [ { type, label, available, reason?, description } ] }`. Only `deadline` is `available` in V1 (org/case/document destinations reported `available:false`).
+- `GET /api/v1/integrations/google-calendar/calendars/?account_id=` → `{ "calendars": [ { provider_calendar_id, name, primary, access_role, time_zone } ] }`. Safe metadata only.
+- `GET /api/v1/integrations/google-calendar/events/?account_id=&calendar_id=&time_min=&time_max=&query=&page_token=` → `{ "events": [ { provider_event_id, calendar_id, title, start, end, start_date, all_day, location, status, updated, recurring, already_imported } ], "next_page_token" }`. Events are single instances (`singleEvents=true`); descriptions/attendees/conference links are dropped.
+- `POST /api/v1/integrations/google-calendar/import/preview/` — body `{ account_id, events:[...], destination:{type:"deadline", reminder_lead_days?} }` → `{ destination, importable_count, skipped_count, invalid_count, results:[{provider_event_id,title,status,reason,...}] }`. No writes.
+- `POST /api/v1/integrations/google-calendar/import/` — same body → `{ status:"completed"|"partial"|"failed", imported_count, skipped_count, failed_count, results:[{provider_event_id,title,status,reason,reminder_id,document_id}], warnings:[] }`. Each imported event becomes a fileless "deadline" `Document` (`expiry_date` = event date) + a `DocumentReminderRule`; respects `documents` and `reminders` plan limits per event (`plan_limit_reached`); duplicates are skipped (`already_imported`). Error responses: `400 {status:"not_configured"|"reconnect_required"|"destination_not_supported"|...}` for client/config issues, `502 {error_code}` for upstream provider failures.
+
+No new env: reuses the OAuth foundation's `GOOGLE_OAUTH_*` config and the
+`calendar.readonly` scope. Frontend: `/dashboard/settings/integrations/google-calendar`.

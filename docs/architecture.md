@@ -1620,6 +1620,28 @@ integration. Reuses the shared destination + encrypted-save plumbing from
   `POST gmail/import/preview|import` — owner-scoped, gated by `gmail_import`. No
   tokens/bodies/snippets/raw responses in any response or audit/operational metadata.
 
+### Google Calendar Import (`apps/integrations`, on the foundation)
+
+Manual, read-only import of Google Calendar events into CertaNest deadlines. See
+`docs/integrations-google-calendar.md`.
+
+- **Provider:** the Google provider gains read-only Calendar methods
+  (`list_calendars`, `list_calendar_events`, `get_calendar_event`) behind a single
+  `_authorized_get`, plus `build_calendar_payload` / `build_event_payload` that
+  shape raw Google JSON into narrow safe dicts (no descriptions, attendees,
+  conference links, or raw bodies). `calendar.readonly` scope only.
+- **Service** (`calendar_import.py`): lists calendars/events, previews, and imports
+  selected events one at a time (per-event success/skip/failure; a bad event never
+  fails the batch). Each imported event becomes a **fileless "deadline" `Document`**
+  (`expiry_date` = event date) **+ a `DocumentReminderRule`** — the only faithful
+  mapping because reminders are document-anchored. Reuses real reminder services so
+  Life Radar + plan limits (`documents` and `reminders`) apply unchanged.
+- **Idempotency:** `ImportedCalendarEvent` (unique on
+  `(owner, provider, provider_calendar_id, provider_event_id)`) records each import
+  with safe ids + a sanitized title only; re-imports are skipped by default.
+- **No write-back, no sync, no AI.** Endpoints are owner-scoped and gated by
+  `integrations` + `google_integrations` + `google_calendar_import`.
+
 ## Private Beta Readiness (`apps/founder/beta_readiness.py`)
 
 A founder-only, automated, **boolean-only** readiness report that complements the

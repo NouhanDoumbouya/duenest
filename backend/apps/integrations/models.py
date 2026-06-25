@@ -259,3 +259,74 @@ class ImportedGmailAttachment(models.Model):
 
     def __str__(self) -> str:
         return f"gmail attachment import for user {self.user_id}"
+
+
+class ImportedCalendarEvent(models.Model):
+    """Idempotency record for a calendar event a user has imported.
+
+    Stores ONLY safe identifiers + a sanitized title and links to the CertaNest
+    records that were created (a fileless "deadline" Document and its reminder
+    rule). It never stores the event description, attendees, conference links, or
+    any raw provider payload. The unique key prevents a second import of the same
+    provider event from silently creating duplicate deadlines.
+    """
+
+    class Status(models.TextChoices):
+        IMPORTED = "imported", "Imported"
+        # Reserved for a future "the source records were deleted" state.
+        REMOVED = "removed", "Removed"
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="imported_calendar_events",
+    )
+    account = models.ForeignKey(
+        ConnectedIntegrationAccount,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="imported_calendar_events",
+    )
+    provider = models.CharField(max_length=20, choices=Provider.choices, default=Provider.GOOGLE)
+    provider_calendar_id = models.CharField(max_length=255)
+    provider_event_id = models.CharField(max_length=255)
+
+    # The records this import created. SET_NULL so deleting the deadline/reminder
+    # in the vault leaves an honest "was imported" trail without a dangling row.
+    imported_document = models.ForeignKey(
+        "documents.Document",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    imported_reminder = models.ForeignKey(
+        "documents.DocumentReminderRule",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+
+    # Safe display only — the event title, single-line and length-capped. Never a
+    # description/body.
+    sanitized_title = models.CharField(max_length=255, blank=True)
+    event_start_date = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.IMPORTED)
+    imported_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-imported_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["owner", "provider", "provider_calendar_id", "provider_event_id"],
+                name="uniq_imported_calendar_event_per_owner",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["owner", "provider"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"imported {self.provider} event for user {self.owner_id}"
