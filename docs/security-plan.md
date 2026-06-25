@@ -1889,6 +1889,28 @@ AI, no AI credits**.
 See `docs/b2b-portals.md`, `docs/api-spec.md` §40, `docs/NOTIFICATIONS.md`, and
 `docs/security/audit-logs.md`.
 
+### Organization Dashboard V1
+
+A **read-only** operational command center (`GET …/portal/dashboard/`) that does one
+deterministic READ over existing portal data and returns metrics + bounded action
+queues + the org plan-usage payload. **Deterministic — no AI, no AI credits.**
+
+* **Read-only, member-gated, org-isolated.** Any **active org member** may read;
+  non-members are denied. The `b2b_portals` feature flag and the org Teams
+  entitlement gate it, exactly like the rest of the portal. It performs **no
+  writes**.
+* **Exposes no sensitive data.** Returns only safe operational fields — **never**
+  raw public tokens, private file URLs, document contents, or storage keys. All
+  `action_url`s are relative app routes. The org-scoped uploaded-file proxy
+  (`.../file/preview/` `…/file/download/`) is **not** surfaced here — file access
+  stays review-only.
+* **No noisy logging.** Opening the dashboard records **no audit event**
+  (deliberate). Its recent-activity feed only **reads** recent safe portal audit
+  events (safe labels only).
+
+See `docs/b2b-portals.md`, `docs/api-spec.md` §41, and
+`docs/security/audit-logs.md`.
+
 ## Teams Plan + Portal Limits V1
 
 Portals are now governed by an **organization-level entitlement** in addition to

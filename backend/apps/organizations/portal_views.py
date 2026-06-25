@@ -315,6 +315,18 @@ class PortalCaseRequestFileDownloadView(_PortalCaseRequestFileView):
         return _file_response(f, as_attachment=True)
 
 
+class PortalDashboardView(_PortalBase):
+    """GET → the Organization Dashboard V1 payload (operational metrics + bounded
+    action queues + plan usage). Read-only; any active org member may read. No
+    audit event is recorded for opening the dashboard (avoids noisy logs)."""
+
+    def get(self, request, org_id):
+        from . import portal_dashboard
+
+        org = self.get_org(request, org_id)
+        return Response(portal_dashboard.build_dashboard_payload(org, request.user))
+
+
 class PortalLimitsView(_PortalBase):
     """GET → the organization's portal plan, limits, usage, and remaining. Readable
     by any member (even when the portal is not enabled, so the UI can show the

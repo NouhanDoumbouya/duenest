@@ -54,7 +54,7 @@ import { FilePreviewDialog } from "@/components/ui/file-preview-dialog";
 import { useFeature } from "@/components/features/feature-flags-provider";
 import { ApiError } from "@/lib/api";
 import { formatFileSize } from "@/lib/document-files";
-import { formatDate } from "@/lib/documents";
+import { daysUntil, formatDate } from "@/lib/documents";
 import { canManageOrganization, getOrganization } from "@/lib/organizations";
 import {
   PORTAL_CASE_PRIORITY_LABELS,
@@ -432,6 +432,8 @@ export default function PortalCaseDetailPage({
         </TrustNotice>
       )}
 
+      <CaseSummaryStrip portalCase={portalCase} />
+
       <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
         <div className="space-y-6">
           {/* Person card */}
@@ -804,6 +806,92 @@ export default function PortalCaseDetailPage({
 
       <Toast toast={toast} onDismiss={() => setToast(null)} />
     </PageContainer>
+  );
+}
+
+/**
+ * A restrained at-a-glance strip near the top of the case: the few numbers and
+ * dates that say "what's left to do here". Reuses the case payload already
+ * loaded (`progress` + `due_date`/`status`) — no extra fetch.
+ */
+function CaseSummaryStrip({ portalCase }: { portalCase: PortalCase }) {
+  const progress = portalCase.progress;
+  const daysLeft = daysUntil(portalCase.due_date);
+  const overdue =
+    daysLeft !== null &&
+    daysLeft < 0 &&
+    portalCase.status !== "completed" &&
+    portalCase.status !== "archived";
+  const suggestDiffers =
+    progress.suggested_status !== portalCase.status &&
+    portalCase.status !== "archived";
+
+  return (
+    <section
+      aria-label="Case summary"
+      className="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-2xl border border-border bg-card px-5 py-3.5 shadow-card"
+    >
+      <SummaryItem
+        label="Missing"
+        value={progress.missing_requirements}
+        tone={progress.missing_requirements ? "warn" : undefined}
+      />
+      <SummaryItem
+        label="Needs review"
+        value={progress.uploads_needing_review}
+        tone={progress.uploads_needing_review ? "warn" : undefined}
+      />
+      <SummaryItem label="Accepted" value={progress.requests_accepted} />
+      <div className="flex flex-col">
+        <span className="text-xs text-muted-foreground">Due date</span>
+        <span
+          className={cn(
+            "mt-0.5 text-sm font-medium",
+            overdue ? "text-destructive" : "text-foreground",
+          )}
+        >
+          {portalCase.due_date ? formatDate(portalCase.due_date) : "No due date"}
+          {overdue && " · Overdue"}
+        </span>
+      </div>
+      {suggestDiffers && (
+        <div className="flex flex-col">
+          <span className="text-xs text-muted-foreground">Suggested status</span>
+          <span className="mt-0.5">
+            <StatusBadge
+              tone={PORTAL_CASE_STATUS_TONE[progress.suggested_status]}
+              withDot={false}
+            >
+              {PORTAL_CASE_STATUS_LABELS[progress.suggested_status]}
+            </StatusBadge>
+          </span>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SummaryItem({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone?: "warn";
+}) {
+  return (
+    <div className="flex flex-col">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span
+        className={cn(
+          "mt-0.5 text-sm font-semibold",
+          tone === "warn" && value > 0 ? "text-brand-amber" : "text-foreground",
+        )}
+      >
+        {value}
+      </span>
+    </div>
   );
 }
 

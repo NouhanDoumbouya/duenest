@@ -14,6 +14,7 @@ from .portal_views import (
     PortalPersonDetailView,
     PortalReviewQueueView,
     PortalSummaryView,
+    PortalDashboardView,
     PortalLimitsView,
     PortalCaseReviewItemsView,
     PortalCaseRequestStartReviewView,
@@ -38,6 +39,8 @@ urlpatterns = [
     *router.urls,
     # B2B Portals MVP — org-scoped, feature-gated (b2b_portals).
     path(f"{_PORTAL}/summary/", PortalSummaryView.as_view(), name="portal-summary"),
+    # Organization Dashboard V1 — operational command center (read-only).
+    path(f"{_PORTAL}/dashboard/", PortalDashboardView.as_view(), name="portal-dashboard"),
     path(f"{_PORTAL}/limits/", PortalLimitsView.as_view(), name="portal-limits"),
     path(f"{_PORTAL}/people/", PortalPeopleView.as_view(), name="portal-people"),
     path(f"{_PORTAL}/people/<int:person_id>/", PortalPersonDetailView.as_view(), name="portal-person-detail"),

@@ -164,6 +164,7 @@ feature-gated; writes require admin/owner). Full request/response shapes are in
 | Method | Path | Description |
 | --- | --- | --- |
 | `GET` | `/summary/` | Dashboard counts |
+| `GET` | `/dashboard/` | Organization Dashboard V1 — operational metrics + action queues + plan usage (read-only) |
 | `GET` `POST` | `/people/` | List / create people |
 | `GET` `PATCH` | `/people/{id}/` | Retrieve / update a person |
 | `POST` | `/people/{id}/archive/` | Archive a person |
@@ -308,6 +309,51 @@ new_status, notified_recipient). Migration
 `organizations/0007_portalcasereviewdecision_and_more`. Endpoints and shapes are in
 `docs/api-spec.md` §40.
 
+## Organization Dashboard (delivered 2026-06-25)
+
+`b2b/organization-dashboard-v1` adds the portal's **operational command center**: a
+single **read-only** endpoint (`GET …/portal/dashboard/`) that does one
+deterministic READ over the existing portal data and returns operational
+**metrics**, a handful of small **action queues**, and the org's **plan usage** —
+so staff immediately know what to act on next. Fully **deterministic — no AI, no AI
+credits, no storage/R2 reads, no file decryption.** Service:
+`apps/organizations/portal_dashboard.py`.
+
+### What it shows
+
+* **Metrics** (deterministic aggregate queries) — people totals, case-status counts
+  (`active` / `draft` / `collecting_documents` / `waiting_for_review` / `ready` /
+  `submitted` / `completed` / `blocked` / `archived`), overdue and due-soon cases,
+  document-request counts (active / needing-review / accepted / rejected /
+  needs-replacement, by the **authoritative** `DocumentRequestLink` status), active
+  and expiring sharing rooms, missing required documents, and operational-health
+  signals (`readiness_average`, `percent_cases_ready`,
+  `percent_cases_blocked_or_overdue`). The due-soon / expiring window is **7 days**.
+* **Action queues** — `review_now`, `overdue_cases`, `missing_documents` (with up to
+  5 requirement **titles** only), `needs_replacement`, `ready_cases`, and
+  `recent_activity`. Each queue is hard-capped at **8** items (`recent_activity` at
+  **10**); every `action_url` is a **relative app route**, never a public token or
+  file URL.
+* **Plan usage** — the **same** `build_organization_limit_payload` output returned by
+  the limits endpoint (plan / `portal_enabled` / limits / usage / remaining).
+
+### Read-only, reuses existing systems, adds no duplicates
+
+It **reuses** the Teams plan/usage/limits payload (`build_organization_limit_payload`),
+per-case readiness (`compute_case_progress`, only on the ≤ 8 returned queue cases),
+and the unified Audit Log (recent activity, filtered to the org via
+`metadata.org_id`). It introduces **no new model, no migration, and no duplicate
+upload / request-link / sharing-room system**. There are **no writes**, and opening
+the dashboard records **no audit event** (deliberate — avoids noisy per-view logs).
+
+### Privacy guarantees
+
+Returns only safe operational fields — **never** document contents, raw public
+tokens, private file URLs, or storage keys. The uploaded-file proxy routes are
+**not** surfaced on the dashboard (review-only). Any active org member may read;
+non-members are denied; both the `b2b_portals` flag and the org Teams entitlement
+still gate it. Full response shape is in `docs/api-spec.md` §41.
+
 ## Frontend
 
 Owner/staff page `/dashboard/organizations/[orgId]/portal` (dashboard summary +
@@ -336,6 +382,8 @@ people + cases + review queue + case detail/actions). There is **no public UI**.
   table, error codes, limits endpoint).
 - `docs/api-spec.md` §40 — Review + Approval Workflow V1 (review endpoints, review
   fields + `PortalCaseReviewDecision`, statuses/rules, org-scoped file proxy).
+- `docs/api-spec.md` §41 — Organization Dashboard V1 (read-only metrics + action
+  queues + plan usage; response shape, caps, privacy guarantees).
 - `docs/NOTIFICATIONS.md` — the `portal_review_decision` recipient email.
 - `docs/BILLING.md` — feature-flag gate, org entitlement, and the Teams limit table.
 - `docs/security-plan.md` — membership-scoped access, org isolation, and the org

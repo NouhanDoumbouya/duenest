@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { ApiError } from "./api";
 import {
+  DASHBOARD_ACTIVITY_LABELS,
   PORTAL_CASE_PRIORITY_LABELS,
   PORTAL_CASE_PRIORITY_ORDER,
   PORTAL_CASE_PRIORITY_TONE,
@@ -19,7 +20,9 @@ import {
   REVIEW_STATUS_ORDER,
   REVIEW_STATUS_TONE,
   canDecideStatus,
+  dashboardActivityLabel,
   groupReviewItemsByStatus,
+  humanizeEventType,
   isNearLimit,
   isOrgLimitError,
   isPortalForbiddenError,
@@ -34,6 +37,7 @@ import {
   usagePercent,
 } from "./portals";
 import type {
+  DashboardActivityItem,
   PortalCaseProgress,
   PortalReviewStatus,
 } from "@/types/portals";
@@ -414,6 +418,87 @@ describe("reviewQueueCount", () => {
   it("is 0 when nothing is waiting", () => {
     expect(reviewQueueCount([reviewItem("accepted")])).toBe(0);
     expect(reviewQueueCount([])).toBe(0);
+  });
+});
+
+const ALL_DASHBOARD_EVENTS = [
+  "portal_person_created",
+  "portal_case_created",
+  "portal_case_request_created",
+  "portal_review_started",
+  "portal_document_accepted",
+  "portal_document_rejected",
+  "portal_document_needs_replacement",
+  "portal_recipient_notified",
+  "portal_case_pack_created",
+  "portal_case_room_created",
+  "portal_case_status_changed",
+  "portal_case_archived",
+  "organization_plan_changed",
+  "organization_portal_limit_reached",
+] as const;
+
+function makeActivity(
+  overrides: Partial<DashboardActivityItem> = {},
+): DashboardActivityItem {
+  return {
+    id: 1,
+    event_type: "portal_case_created",
+    severity: "info",
+    object_label: "Student visa application",
+    related_object_label: "",
+    actor_label: "Amina Diallo",
+    created_at: "2026-06-25T10:00:00Z",
+    ...overrides,
+  };
+}
+
+describe("dashboard activity label map", () => {
+  it("labels every known portal/org event", () => {
+    for (const event of ALL_DASHBOARD_EVENTS) {
+      expect(DASHBOARD_ACTIVITY_LABELS[event]).toBeTruthy();
+    }
+  });
+
+  it("uses calm, correct wording for key events", () => {
+    expect(DASHBOARD_ACTIVITY_LABELS.portal_document_accepted).toBe(
+      "Document accepted",
+    );
+    expect(DASHBOARD_ACTIVITY_LABELS.portal_document_needs_replacement).toBe(
+      "Replacement requested",
+    );
+    expect(DASHBOARD_ACTIVITY_LABELS.organization_portal_limit_reached).toBe(
+      "Plan limit reached",
+    );
+  });
+});
+
+describe("humanizeEventType", () => {
+  it("title-cases an unknown snake_case event and drops the prefix", () => {
+    expect(humanizeEventType("portal_case_reopened")).toBe("Case reopened");
+    expect(humanizeEventType("organization_seat_added")).toBe("Seat added");
+  });
+
+  it("handles a bare token and never returns empty for a non-empty key", () => {
+    expect(humanizeEventType("something")).toBe("Something");
+    expect(humanizeEventType("portal_")).toBe("portal_");
+  });
+});
+
+describe("dashboardActivityLabel", () => {
+  it("returns the mapped label + the safe object label for known events", () => {
+    const result = dashboardActivityLabel(
+      makeActivity({ event_type: "portal_document_accepted" }),
+    );
+    expect(result.label).toBe("Document accepted");
+    expect(result.objectLabel).toBe("Student visa application");
+  });
+
+  it("falls back to a humanized label for unknown events", () => {
+    const result = dashboardActivityLabel(
+      makeActivity({ event_type: "portal_mystery_thing" }),
+    );
+    expect(result.label).toBe("Mystery thing");
   });
 });
 

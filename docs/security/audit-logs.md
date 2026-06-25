@@ -54,6 +54,14 @@ reads are **not** logged.
   category `system`, owner = the organization's owner user, with `metadata.org_id`
   for scoping. No plan secrets or billing tokens are stored.
 
+The **Organization Dashboard V1** (`GET …/portal/dashboard/`, §41) is a **reader**,
+not a writer, of this log: its recent-activity feed reads the most recent **safe**
+portal audit events for the org (filtered via `metadata.org_id`, returning only
+`event_type` / `severity` / `object_label` / `related_object_label` / `actor_label`
+/ `created_at` — no tokens, URLs, or content). Opening the dashboard itself records
+**no event** (deliberate — read-only dashboard views are not logged, so the feed
+stays free of noisy per-view entries).
+
 Public-route events are recorded with `actor_type` `public_link` (an anonymous
 visitor), via `record_public_link_event`.
 
