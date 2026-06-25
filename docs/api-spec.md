@@ -6638,3 +6638,181 @@ document content.
 See `docs/b2b-portals.md`, `docs/security-plan.md`,
 `docs/security/audit-logs.md`, and `docs/roadmap.md`.
 
+---
+
+## 45 — B2B Custom Fields and Statuses V1 (`organizations/{org_id}/portal/...`)
+
+Organization admins define **custom fields** (on portal people and cases) and **custom
+case statuses**, used across case creation, case detail, filtering, the dashboard, and
+templates — **without** a CRM, a form builder, dynamic DB columns, or raw SQL.
+**Deterministic — no AI, no AI credits.**
+
+**SAFE design.** Field VALUES are stored as **validated JSON** on a dedicated
+`OrganizationCustomFieldValue` model (one value per field per target, validated by
+`field_type`) — **no dynamic database columns**, **no raw SQL** (custom filters use
+Django ORM JSONField lookups only). Custom case statuses **layer on top of** the fixed
+`PortalCase.Status` (they never replace it): each custom status has a `category` that
+maps to the authoritative system status, so setting a case's custom status keeps the
+system `status` in sync and the dashboard / reminders / review keep working unchanged.
+
+Service: `apps/organizations/custom_fields.py`. New models
+`OrganizationCustomField` / `OrganizationCustomFieldValue` /
+`OrganizationCaseStatusDefinition` (migration `organizations/0010`); `PortalCase`
+gained a nullable `custom_status` FK and `OrganizationCaseTemplate` gained
+`default_custom_status_key` + `default_custom_field_values` (JSON) — additive.
+
+### Endpoints
+
+| Method | Path | Role | Description |
+| --- | --- | --- | --- |
+| `GET` | `/custom-fields/?target=&include_archived=` | member | List field definitions (active only unless `include_archived=true`) |
+| `POST` | `/custom-fields/` | owner/admin | Create a field definition |
+| `GET` | `/custom-fields/schema/?target=person\|case` | member | Active field schema for a target (defaults to `case`) |
+| `GET` | `/custom-fields/{id}/` | member | One field definition |
+| `PATCH` | `/custom-fields/{id}/` | owner/admin | Edit (`field_type` + `target` are immutable; silently ignored) |
+| `POST` | `/custom-fields/{id}/archive/` | owner/admin | Archive (deactivate) a field |
+| `GET` | `/people/{person_id}/custom-fields/` | member | A person's `{schema, values}` |
+| `PATCH` | `/people/{person_id}/custom-fields/` | owner/admin | Set/clear values (`{"values": {key: value}}`) |
+| `GET` | `/cases/{case_id}/custom-fields/` | member | A case's `{schema, values}` |
+| `PATCH` | `/cases/{case_id}/custom-fields/` | owner/admin | Set/clear values (`{"values": {key: value}}`) |
+| `GET` | `/case-statuses/?include_archived=` | member | List custom case statuses |
+| `POST` | `/case-statuses/` | owner/admin | Create a custom case status |
+| `POST` | `/case-statuses/seed-defaults/` | owner/admin | Idempotently seed the default statuses |
+| `PATCH` | `/case-statuses/{id}/` | owner/admin | Edit a custom case status |
+| `POST` | `/case-statuses/{id}/archive/` | owner/admin | Archive (deactivate) a status |
+| `POST` | `/cases/{case_id}/status/` | owner/admin | Set a case's custom status (`{"status_id": id}`; omit/empty to clear) |
+
+The cases list endpoint (`GET /cases/`, §38) also gains the filters
+`?custom_status={id}` and `?cf_key={key}&cf_value={value}` (below).
+
+### Permissions & gating
+
+* **Authentication required.** **Read** (lists / schema / values) = any **active
+  member** of `{org_id}`. **Create / edit / archive** fields+statuses and **set**
+  values / status = **OWNER/ADMIN** only. Non-members denied.
+* **Two gates** (same as the rest of the portal): the `b2b_portals` feature flag
+  (`503` when off) and the org Teams entitlement (`403 portal_not_enabled`).
+* **Org isolation:** a field / status / value / case / person must all belong to
+  `{org_id}` (a status/value cannot cross org boundaries).
+* `field_type` and `target` are **immutable** after a field is created (existing
+  values rely on the original type).
+
+### Field definition shape
+
+```json
+{
+  "id": 7, "key": "case_officer", "label": "Case officer", "description": "",
+  "target": "case", "field_type": "single_select",
+  "options": [
+    {"key": "amal", "label": "Amal", "color": "#0f766e", "sort_order": 0}
+  ],
+  "required": false, "visibility": "internal", "sort_order": 0, "is_active": true
+}
+```
+
+* `key` is a slug, **unique per org+target** (auto-derived from `key`/`label` on
+  create; collisions get a numeric suffix).
+* `field_type` is one of: `short_text`, `long_text`, `number`, `date`, `boolean`,
+  `single_select`, `multi_select`, `email`, `phone`, `url`.
+* `options` (select fields only) is a list of `{key, label, color?, sort_order?}`,
+  normalized server-side (string options become `{key: slug, label: string}`).
+* `visibility` is `internal` / `public_readonly` / `public_editable`, **but V1 is
+  internal-only** — the public values are **stored for future use** and custom fields
+  are **never exposed on public request/room pages**.
+
+### Value validation (by `field_type`)
+
+| Type | Accepted / stored as |
+| --- | --- |
+| `short_text` / `email` / `phone` / `url` | string ≤255; `email` must match an email shape; `url` must be http(s) |
+| `long_text` | string ≤2000 |
+| `number` | int or float |
+| `date` | ISO `YYYY-MM-DD` string |
+| `boolean` | true/false |
+| `single_select` | one option `key` |
+| `multi_select` | list of option keys, ≤50 |
+
+`null` / `""` **clears** the value (rejected only if the field is `required`).
+Structured (dict/list where not allowed) or oversized values and obvious `<script>`
+payloads are rejected with `400`. Setting values returns `{"changed": [keys],
+"values": {key: value}}`; unknown or archived field keys in the payload are **skipped**.
+
+### Custom case statuses
+
+A status definition:
+
+```json
+{
+  "id": 3, "key": "in_review", "label": "In Review", "description": "",
+  "category": "reviewing", "color": "", "icon": "", "sort_order": 2,
+  "is_default": false, "is_terminal": false, "is_active": true,
+  "maps_to_system_status": "under_review"
+}
+```
+
+`category` is one of `planning` / `collecting` / `reviewing` / `ready` / `submitted` /
+`completed` / `blocked` / `closed`. **Setting a case's custom status keeps the fixed
+system `PortalCase.status` in sync** from the category:
+
+| `category` | → system `PortalCase.Status` |
+| --- | --- |
+| `planning` | `draft` |
+| `collecting` | `collecting_documents` |
+| `reviewing` | `waiting_for_review` |
+| `ready` | `ready` |
+| `submitted` | `submitted` |
+| `completed` | `completed` |
+| `blocked` | `blocked` |
+| `closed` | `completed` |
+
+`maps_to_system_status` is an informational richer label only (it does not drive the
+sync). `seed-defaults` idempotently creates the workflow-mirroring set — **Planning,
+Collecting Documents, In Review, Ready to Submit, Submitted, Accepted, Rejected,
+Withdrawn, Renewal Needed**. Only one status may be `is_default` (setting one clears the
+others). **Archiving** a status deactivates it and drops its default flag; existing
+cases keep referencing it via the FK (`SET_NULL` on delete).
+
+### Template defaults
+
+A template (§43) may set `default_custom_status_key` (an
+`OrganizationCaseStatusDefinition.key`) and `default_custom_field_values` (a
+`{field_key: value}` map). On **create-case-from-template**, these are applied
+**after** the case is created (status set + values validated), and any
+`custom_field_values` submitted with the create-case request **override** the template
+defaults. **Best-effort** — a bad value adds a `warnings` entry
+(`custom_status_not_applied` / `custom_fields_not_applied`) and never discards the case.
+
+### Dashboard & filter integration
+
+* The Organization Dashboard payload (§41) gains `custom_status_counts` — active-case
+  counts per custom status (empty list when no custom statuses are defined).
+* `GET /cases/` supports `?custom_status={id}` (filter by the custom status FK) and
+  `?cf_key={key}&cf_value={value}` (exact JSON match on a custom field value). **ORM
+  JSONField lookups only — no raw SQL.**
+
+### Limits (server-side caps, no Stripe)
+
+| Plan | Custom fields | Custom statuses | Options per field |
+| --- | --- | --- | --- |
+| `teams_beta` | 50 | 30 | 50 |
+| `teams` | 200 | 100 | 200 |
+| `enterprise` | unlimited | unlimited | unlimited |
+
+Hitting a cap returns `400` with a plan-limit message.
+
+### Audit
+
+`organization_custom_field_created/updated/archived`,
+`organization_custom_field_value_updated`,
+`organization_case_status_created/updated/archived`,
+`portal_case_custom_status_updated`, `default_case_statuses_seeded` — recorded via the
+unified owner-scoped Audit Log (§37, `metadata.org_id`). **Privacy-first:** a value
+update records only **which** field keys changed (`changed_field_keys`), **never the
+values themselves**; metadata holds only safe ids/keys/labels (`field_id` / `field_key`
+/ `field_label` / `field_type` / `target` / `status_id` / `status_key` / `status_label`
+/ `case_id` / `person_id`) — never a private file URL, public token, document content,
+or secret.
+
+See `docs/b2b-portals.md`, `docs/security-plan.md`,
+`docs/security/audit-logs.md`, and `docs/roadmap.md`.
+

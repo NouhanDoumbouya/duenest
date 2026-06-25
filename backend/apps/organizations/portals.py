@@ -378,6 +378,7 @@ def build_portal_person_payload(person: PortalPerson) -> dict:
         "status": person.status,
         "notes": person.notes,
         "active_cases": person.cases.exclude(status=PortalCase.Status.ARCHIVED).count(),
+        "custom_fields": _custom_field_values(person),
         "created_at": person.created_at.isoformat(),
         "updated_at": person.updated_at.isoformat(),
     }
@@ -407,9 +408,31 @@ def build_portal_case_payload(case: PortalCase, user=None) -> dict:
         "room_public_url": _room_public_url(room) if room else None,
         "progress": progress,
         "requests": _case_requests_payload(case),
+        # B2B Custom Fields and Statuses V1 — org-defined status + field values.
+        "custom_status": _custom_status_payload(case.custom_status),
+        "custom_fields": _custom_field_values(case),
         "created_at": case.created_at.isoformat(),
         "updated_at": case.updated_at.isoformat(),
     }
+
+
+def _custom_status_payload(status) -> dict | None:
+    if status is None:
+        return None
+    return {
+        "id": status.id, "key": status.key, "label": status.label,
+        "category": status.category, "color": status.color, "icon": status.icon,
+        "is_active": status.is_active,
+    }
+
+
+def _custom_field_values(target) -> dict:
+    try:
+        from .custom_fields import build_custom_field_values_payload
+
+        return build_custom_field_values_payload(target)
+    except Exception:  # noqa: BLE001 — never break the case/person payload
+        return {}
 
 
 def _case_requests_payload(case: PortalCase) -> list[dict]:

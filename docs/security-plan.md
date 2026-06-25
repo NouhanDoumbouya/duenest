@@ -2006,6 +2006,40 @@ collections, and saved/smart views** layered over the existing `Document` model
 
 See `docs/b2b-portals.md`, `docs/api-spec.md` §44, and `docs/security/audit-logs.md`.
 
+## B2B Custom Fields and Statuses V1
+
+Organization admins define **custom fields** (on portal people/cases) and **custom case
+statuses** (`apps/organizations/custom_fields.py`, migration `organizations/0010`).
+**Deterministic — no AI.**
+
+* **Admin-gated + org-isolated.** **Read** (lists / schema / values) = any active member;
+  **create / edit / archive** fields+statuses and **set** values/status = **OWNER/ADMIN**
+  only; non-members denied. Behind the `b2b_portals` flag + the org Teams entitlement. A
+  field / status / value cannot cross org boundaries.
+* **Validated JSON values — no dynamic columns, no raw SQL.** Field values live in a
+  single JSON column on a dedicated value model and are validated by `field_type` and
+  size-limited at write time. There are **no per-org dynamic tables/columns** and **no
+  raw SQL**: the cases-list custom filters use Django ORM JSONField lookups only.
+  Structured / oversized values and obvious `<script>` payloads are rejected.
+* **Internal-only in V1 — never on public pages.** Field `visibility`
+  (`public_readonly` / `public_editable`) is **stored for future use** but V1 is
+  **internal-only**: custom fields and statuses are **never** exposed on public
+  request/room pages — only authenticated org members see them.
+* **System status stays authoritative.** Custom statuses **layer on top of** the fixed
+  `PortalCase.Status` (each maps to a system category); the system status is kept in
+  sync so dashboards/reminders/review keep working — the custom layer cannot bypass the
+  system workflow.
+* **Privacy-first audit.** `organization_custom_field_created/updated/archived`,
+  `organization_custom_field_value_updated`,
+  `organization_case_status_created/updated/archived`,
+  `portal_case_custom_status_updated`, `default_case_statuses_seeded` — through the
+  unified Audit Log (`metadata.org_id`). A value update records only **which** field keys
+  changed (`changed_field_keys`), **never the values themselves**; metadata holds only
+  safe ids/keys/labels — never a private file URL, public token, document content, or
+  secret.
+
+See `docs/b2b-portals.md`, `docs/api-spec.md` §45, and `docs/security/audit-logs.md`.
+
 ## Teams Plan + Portal Limits V1
 
 Portals are now governed by an **organization-level entitlement** in addition to

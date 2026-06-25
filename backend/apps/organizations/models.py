@@ -889,6 +889,15 @@ class PortalCase(models.Model):
         related_name="portal_cases",
     )
 
+    # B2B Custom Fields and Statuses V1 — an OPTIONAL org-defined status that LAYERS
+    # on top of the fixed system ``status`` (never replaces it). When set, the
+    # system ``status`` is kept in sync from the custom status's category so the
+    # dashboard / reminders / review workflows keep working unchanged.
+    custom_status = models.ForeignKey(
+        "OrganizationCaseStatusDefinition", on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="cases",
+    )
+
     notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -1167,6 +1176,12 @@ class OrganizationCaseTemplate(models.Model):
     auto_create_requests = models.BooleanField(default=False)
     default_room_title = models.CharField(max_length=255, blank=True)
     default_room_description = models.TextField(blank=True)
+    # B2B Custom Fields and Statuses V1 — optional template defaults (additive).
+    # ``default_custom_status_key`` is an OrganizationCaseStatusDefinition.key;
+    # ``default_custom_field_values`` is a {field_key: value} map applied (and
+    # validated) when a case is created from the template.
+    default_custom_status_key = models.CharField(max_length=80, blank=True)
+    default_custom_field_values = models.JSONField(default=dict, blank=True)
     status = models.CharField(
         max_length=12, choices=Status.choices, default=Status.ACTIVE
     )
@@ -1263,3 +1278,188 @@ class OrganizationPlanProfile(models.Model):
 
     def __str__(self):
         return f"OrganizationPlanProfile(org={self.organization_id}, plan={self.plan})"
+
+
+# ---- B2B Custom Fields and Statuses V1 --------------------------------------
+#
+# Org-defined metadata + workflow statuses for portal people/cases. SAFE design:
+# field VALUES live in a JSON column on a dedicated value model (validated by
+# field_type) — NO dynamic DB columns, NO raw SQL. Custom statuses LAYER on top of
+# the fixed PortalCase.Status (each maps to a system category) so existing
+# dashboards/reminders/review keep working. Stores no files, tokens, or secrets.
+
+
+class OrganizationCustomField(models.Model):
+    """An org-defined field attached to portal people OR cases."""
+
+    class Target(models.TextChoices):
+        PERSON = "person", "Person"
+        CASE = "case", "Case"
+
+    class FieldType(models.TextChoices):
+        SHORT_TEXT = "short_text", "Short text"
+        LONG_TEXT = "long_text", "Long text"
+        NUMBER = "number", "Number"
+        DATE = "date", "Date"
+        BOOLEAN = "boolean", "Boolean"
+        SINGLE_SELECT = "single_select", "Single select"
+        MULTI_SELECT = "multi_select", "Multi select"
+        EMAIL = "email", "Email"
+        PHONE = "phone", "Phone"
+        URL = "url", "URL"
+
+    class Visibility(models.TextChoices):
+        INTERNAL = "internal", "Internal"
+        PUBLIC_READONLY = "public_readonly", "Public read-only"
+        PUBLIC_EDITABLE = "public_editable", "Public editable"
+
+    organization = models.ForeignKey(
+        Organization, on_delete=models.CASCADE, related_name="custom_fields"
+    )
+    key = models.SlugField(max_length=80)
+    label = models.CharField(max_length=120)
+    description = models.CharField(max_length=255, blank=True)
+    target = models.CharField(max_length=8, choices=Target.choices)
+    field_type = models.CharField(max_length=16, choices=FieldType.choices)
+    # For select fields: a list of {"key","label","color"?,"sort_order"?}.
+    options = models.JSONField(default=list, blank=True)
+    required = models.BooleanField(default=False)
+    visibility = models.CharField(
+        max_length=16, choices=Visibility.choices, default=Visibility.INTERNAL
+    )
+    sort_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="custom_fields_created",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["target", "sort_order", "label"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "target", "key"],
+                name="unique_custom_field_key_per_org_target",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["organization", "target", "is_active", "sort_order"]),
+        ]
+
+    def __str__(self):
+        return f"OrganizationCustomField(org={self.organization_id}, {self.target}.{self.key})"
+
+
+class OrganizationCustomFieldValue(models.Model):
+    """One field value bound to exactly one target (person XOR case). The value is
+    stored as validated JSON — never a dynamic column. Size-limited at write time."""
+
+    organization = models.ForeignKey(
+        Organization, on_delete=models.CASCADE, related_name="custom_field_values"
+    )
+    field = models.ForeignKey(
+        OrganizationCustomField, on_delete=models.CASCADE, related_name="values"
+    )
+    person = models.ForeignKey(
+        PortalPerson, on_delete=models.CASCADE, null=True, blank=True,
+        related_name="custom_field_values",
+    )
+    case = models.ForeignKey(
+        PortalCase, on_delete=models.CASCADE, null=True, blank=True,
+        related_name="custom_field_values",
+    )
+    value = models.JSONField(null=True, blank=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="custom_field_values_updated",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["field", "person"], name="unique_field_value_per_person",
+                condition=models.Q(person__isnull=False),
+            ),
+            models.UniqueConstraint(
+                fields=["field", "case"], name="unique_field_value_per_case",
+                condition=models.Q(case__isnull=False),
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["organization", "field"]),
+            models.Index(fields=["person"]),
+            models.Index(fields=["case"]),
+        ]
+
+    def __str__(self):
+        return f"OrganizationCustomFieldValue(field={self.field_id})"
+
+
+class OrganizationCaseStatusDefinition(models.Model):
+    """An org-defined case status. Each maps to a system ``category`` (and an
+    informational ``maps_to_system_status``) so the fixed PortalCase.Status stays
+    authoritative for dashboards/reminders/review."""
+
+    class Category(models.TextChoices):
+        PLANNING = "planning", "Planning"
+        COLLECTING = "collecting", "Collecting"
+        REVIEWING = "reviewing", "Reviewing"
+        READY = "ready", "Ready"
+        SUBMITTED = "submitted", "Submitted"
+        COMPLETED = "completed", "Completed"
+        BLOCKED = "blocked", "Blocked"
+        CLOSED = "closed", "Closed"
+
+    class SystemStatus(models.TextChoices):
+        PLANNING = "planning", "Planning"
+        CHECKLIST_CREATED = "checklist_created", "Checklist created"
+        DOCUMENTS_MISSING = "documents_missing", "Documents missing"
+        READY_TO_SUBMIT = "ready_to_submit", "Ready to submit"
+        SUBMITTED = "submitted", "Submitted"
+        UNDER_REVIEW = "under_review", "Under review"
+        INTERVIEW = "interview", "Interview"
+        ACCEPTED = "accepted", "Accepted"
+        REJECTED = "rejected", "Rejected"
+        WITHDRAWN = "withdrawn", "Withdrawn"
+        RENEWAL_NEEDED = "renewal_needed", "Renewal needed"
+
+    organization = models.ForeignKey(
+        Organization, on_delete=models.CASCADE, related_name="case_status_definitions"
+    )
+    key = models.SlugField(max_length=80)
+    label = models.CharField(max_length=120)
+    description = models.CharField(max_length=255, blank=True)
+    category = models.CharField(max_length=12, choices=Category.choices)
+    color = models.CharField(max_length=20, blank=True)
+    icon = models.CharField(max_length=40, blank=True)
+    sort_order = models.PositiveIntegerField(default=0)
+    is_default = models.BooleanField(default=False)
+    is_terminal = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    maps_to_system_status = models.CharField(
+        max_length=20, choices=SystemStatus.choices, blank=True
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="case_status_definitions_created",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["sort_order", "label"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "key"], name="unique_case_status_key_per_org"
+            )
+        ]
+        indexes = [
+            models.Index(fields=["organization", "is_active", "sort_order"]),
+        ]
+
+    def __str__(self):
+        return f"OrganizationCaseStatusDefinition(org={self.organization_id}, key={self.key})"

@@ -121,6 +121,17 @@ class PortalCasesView(_PortalBase):
             qs = qs.filter(person_id=person_filter)
         if request.query_params.get("active") == "true":
             qs = qs.exclude(status=PortalCase.Status.ARCHIVED)
+        # B2B Custom Fields and Statuses V1 — safe, bounded filters (ORM only).
+        custom_status = request.query_params.get("custom_status")
+        if custom_status:
+            qs = qs.filter(custom_status_id=custom_status)
+        cf_key = request.query_params.get("cf_key")
+        cf_value = request.query_params.get("cf_value")
+        if cf_key and cf_value is not None:
+            # Exact match on the validated JSON value (single_select / boolean /
+            # short_text). No raw SQL — Django JSONField lookup only.
+            qs = qs.filter(custom_field_values__field__key=cf_key,
+                           custom_field_values__value=cf_value).distinct()
         data = [portals.build_portal_case_payload(c) for c in qs]
         return Response({"cases": data, "count": len(data)})
 
@@ -614,6 +625,214 @@ class PortalDocumentSavedViewsView(_PortalFolderBase):
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(folders_svc.build_collection_payload(collection),
                         status=status.HTTP_201_CREATED)
+
+
+class _CustomBase(_PortalBase):
+    def get_field(self, org, field_id):
+        from .models import OrganizationCustomField
+
+        return get_object_or_404(OrganizationCustomField, pk=field_id, organization=org)
+
+    def get_status_def(self, org, status_id):
+        from .models import OrganizationCaseStatusDefinition
+
+        return get_object_or_404(OrganizationCaseStatusDefinition, pk=status_id, organization=org)
+
+
+class PortalCustomFieldsView(_CustomBase):
+    """GET → custom fields (member). POST → create a field (admin/owner)."""
+
+    def get(self, request, org_id):
+        from . import custom_fields
+        from .models import OrganizationCustomField
+
+        org = self.get_org(request, org_id)
+        qs = OrganizationCustomField.objects.filter(organization=org)
+        target = request.query_params.get("target")
+        if target:
+            qs = qs.filter(target=target)
+        if request.query_params.get("include_archived") != "true":
+            qs = qs.filter(is_active=True)
+        return Response({"fields": [custom_fields.build_custom_field_payload(f) for f in qs],
+                         "count": qs.count()})
+
+    def post(self, request, org_id):
+        from . import custom_fields
+
+        org = self.get_org(request, org_id, write=True)
+        try:
+            field = custom_fields.create_custom_field(org, request.user, request.data)
+        except portals.PortalError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(custom_fields.build_custom_field_payload(field),
+                        status=status.HTTP_201_CREATED)
+
+
+class PortalCustomFieldDetailView(_CustomBase):
+    def get(self, request, org_id, field_id):
+        from . import custom_fields
+
+        org = self.get_org(request, org_id)
+        return Response(custom_fields.build_custom_field_payload(self.get_field(org, field_id)))
+
+    def patch(self, request, org_id, field_id):
+        from . import custom_fields
+
+        org = self.get_org(request, org_id, write=True)
+        try:
+            field = custom_fields.update_custom_field(
+                self.get_field(org, field_id), request.user, request.data)
+        except portals.PortalError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(custom_fields.build_custom_field_payload(field))
+
+
+class PortalCustomFieldArchiveView(_CustomBase):
+    def post(self, request, org_id, field_id):
+        from . import custom_fields
+
+        org = self.get_org(request, org_id, write=True)
+        field = custom_fields.archive_custom_field(self.get_field(org, field_id), request.user)
+        return Response(custom_fields.build_custom_field_payload(field))
+
+
+class PortalCustomFieldSchemaView(_CustomBase):
+    """GET ?target=person|case → the active field schema (member)."""
+
+    def get(self, request, org_id):
+        from . import custom_fields
+
+        org = self.get_org(request, org_id)
+        target = request.query_params.get("target") or "case"
+        return Response({"target": target,
+                         "fields": custom_fields.build_custom_field_schema(org, target)})
+
+
+class PortalPersonCustomFieldsView(_CustomBase):
+    def get(self, request, org_id, person_id):
+        from . import custom_fields
+
+        org = self.get_org(request, org_id)
+        person = self.get_person(org, person_id)
+        return Response({
+            "schema": custom_fields.build_custom_field_schema(org, "person"),
+            "values": custom_fields.build_custom_field_values_payload(person),
+        })
+
+    def patch(self, request, org_id, person_id):
+        from . import custom_fields
+
+        org = self.get_org(request, org_id, write=True)
+        person = self.get_person(org, person_id)
+        try:
+            changed = custom_fields.set_custom_field_values(
+                org, person, request.data.get("values") or {}, request.user)
+        except portals.PortalError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"changed": changed,
+                         "values": custom_fields.build_custom_field_values_payload(person)})
+
+
+class PortalCaseCustomFieldsView(_CustomBase):
+    def get(self, request, org_id, case_id):
+        from . import custom_fields
+
+        org = self.get_org(request, org_id)
+        case = self.get_case(org, case_id)
+        return Response({
+            "schema": custom_fields.build_custom_field_schema(org, "case"),
+            "values": custom_fields.build_custom_field_values_payload(case),
+        })
+
+    def patch(self, request, org_id, case_id):
+        from . import custom_fields
+
+        org = self.get_org(request, org_id, write=True)
+        case = self.get_case(org, case_id)
+        try:
+            changed = custom_fields.set_custom_field_values(
+                org, case, request.data.get("values") or {}, request.user)
+        except portals.PortalError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"changed": changed,
+                         "values": custom_fields.build_custom_field_values_payload(case)})
+
+
+class PortalCaseStatusesView(_CustomBase):
+    """GET → custom case statuses (member). POST → create (admin/owner)."""
+
+    def get(self, request, org_id):
+        from . import custom_fields
+        from .models import OrganizationCaseStatusDefinition
+
+        org = self.get_org(request, org_id)
+        qs = OrganizationCaseStatusDefinition.objects.filter(organization=org)
+        if request.query_params.get("include_archived") != "true":
+            qs = qs.filter(is_active=True)
+        return Response({"statuses": [custom_fields.build_case_status_payload(s) for s in qs]})
+
+    def post(self, request, org_id):
+        from . import custom_fields
+
+        org = self.get_org(request, org_id, write=True)
+        try:
+            status_def = custom_fields.create_case_status_definition(org, request.user, request.data)
+        except portals.PortalError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(custom_fields.build_case_status_payload(status_def),
+                        status=status.HTTP_201_CREATED)
+
+
+class PortalCaseStatusDetailView(_CustomBase):
+    def patch(self, request, org_id, status_id):
+        from . import custom_fields
+
+        org = self.get_org(request, org_id, write=True)
+        try:
+            status_def = custom_fields.update_case_status_definition(
+                self.get_status_def(org, status_id), request.user, request.data)
+        except portals.PortalError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(custom_fields.build_case_status_payload(status_def))
+
+
+class PortalCaseStatusArchiveView(_CustomBase):
+    def post(self, request, org_id, status_id):
+        from . import custom_fields
+
+        org = self.get_org(request, org_id, write=True)
+        status_def = custom_fields.archive_case_status_definition(
+            self.get_status_def(org, status_id), request.user)
+        return Response(custom_fields.build_case_status_payload(status_def))
+
+
+class PortalCaseStatusSeedView(_CustomBase):
+    def post(self, request, org_id):
+        from . import custom_fields
+        from .models import OrganizationCaseStatusDefinition
+
+        org = self.get_org(request, org_id, write=True)
+        custom_fields.seed_default_case_statuses(org, request.user)
+        qs = OrganizationCaseStatusDefinition.objects.filter(organization=org, is_active=True)
+        return Response({"statuses": [custom_fields.build_case_status_payload(s) for s in qs]})
+
+
+class PortalCaseSetStatusView(_CustomBase):
+    """POST {status_id} → set a case's custom status (keeps system status in sync)."""
+
+    def post(self, request, org_id, case_id):
+        from . import custom_fields
+
+        org = self.get_org(request, org_id, write=True)
+        case = self.get_case(org, case_id)
+        status_def = None
+        if request.data.get("status_id"):
+            status_def = self.get_status_def(org, request.data["status_id"])
+        try:
+            custom_fields.set_case_custom_status(case, status_def, request.user)
+        except portals.PortalError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(portals.build_portal_case_payload(case))
 
 
 class PortalTemplatesView(_PortalBase):

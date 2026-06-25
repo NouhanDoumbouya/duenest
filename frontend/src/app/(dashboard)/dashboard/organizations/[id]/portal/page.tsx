@@ -36,6 +36,7 @@ import {
   Plus,
   RotateCcw,
   ShieldAlert,
+  SlidersHorizontal,
   Sparkles,
   UserPlus,
   Users,
@@ -66,6 +67,11 @@ import {
 } from "@/components/features/portals/plan-usage-card";
 import { ReminderModal } from "@/components/features/portals/reminder-modal";
 import { CreateCaseFromTemplateModal } from "@/components/features/portals/template-modals";
+import { CustomStatusChip } from "@/components/features/portals/custom-status-chip";
+import {
+  CustomFieldsEditModal,
+  CustomFieldsView,
+} from "@/components/features/portals/custom-fields-section";
 import { useFeature } from "@/components/features/feature-flags-provider";
 import { ApiError } from "@/lib/api";
 import { formatDate } from "@/lib/documents";
@@ -85,6 +91,7 @@ import {
   dashboardActivityLabel,
   createPortalCase,
   createPortalPerson,
+  getPersonCustomFields,
   getPortalCases,
   getPortalDashboard,
   getPortalLimits,
@@ -94,6 +101,7 @@ import {
   isPortalNotEnabledError,
   planLabel,
   progressPercent,
+  setPersonCustomFields,
 } from "@/lib/portals";
 import { cn } from "@/lib/utils";
 import type { Organization } from "@/types/organizations";
@@ -112,6 +120,8 @@ import type {
   PortalPersonType,
   OrgCaseTemplateSummary,
   ReminderType,
+  CustomField,
+  CustomFieldValues,
 } from "@/types/portals";
 
 type PortalTab = "people" | "cases";
@@ -463,6 +473,12 @@ export default function OrganizationPortalPage({
         >
           <LayoutTemplate className="size-4" aria-hidden /> Templates
         </Link>
+        <Link
+          href={`/dashboard/organizations/${orgId}/portal/settings/customization`}
+          className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+        >
+          <SlidersHorizontal className="size-4" aria-hidden /> Customization
+        </Link>
       </div>
 
       {/* Portal status + plan badge. */}
@@ -509,6 +525,7 @@ export default function OrganizationPortalPage({
 
                 {tab === "people" ? (
                   <PeopleList
+                    orgId={orgId}
                     people={data.people}
                     canManage={canManage}
                     onAdd={() => setAddingPerson(true)}
@@ -602,10 +619,12 @@ export default function OrganizationPortalPage({
 // ---- People list ------------------------------------------------------------
 
 function PeopleList({
+  orgId,
   people,
   canManage,
   onAdd,
 }: {
+  orgId: number;
   people: PortalPerson[];
   canManage: boolean;
   onAdd: () => void;
@@ -632,36 +651,139 @@ function PeopleList({
   return (
     <div className="grid gap-3">
       {people.map((person) => (
-        <article
+        <PersonCard
           key={person.id}
-          className="rounded-xl border border-border bg-card p-4"
-        >
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="truncate font-medium">{person.full_name}</h3>
-                <StatusBadge
-                  tone={PORTAL_PERSON_STATUS_TONE[person.status]}
-                  withDot={false}
-                >
-                  {PORTAL_PERSON_STATUS_LABELS[person.status]}
-                </StatusBadge>
-              </div>
-              <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                <span className="rounded-md bg-muted px-1.5 py-0.5">
-                  {PORTAL_PERSON_TYPE_LABELS[person.person_type]}
-                </span>
-                {person.email && <span className="truncate">{person.email}</span>}
-              </p>
-            </div>
-            <span className="shrink-0 text-xs text-muted-foreground">
-              {person.active_cases} active case
-              {person.active_cases === 1 ? "" : "s"}
-            </span>
-          </div>
-        </article>
+          orgId={orgId}
+          person={person}
+          canManage={canManage}
+        />
       ))}
     </div>
+  );
+}
+
+/**
+ * A person row that can expand to show/edit the org's custom fields for that
+ * person. The custom fields (schema + values) are lazily fetched on first
+ * expand — the people list stays light until a row is opened. Internal only;
+ * never shown on public pages.
+ */
+function PersonCard({
+  orgId,
+  person,
+  canManage,
+}: {
+  orgId: number;
+  person: PortalPerson;
+  canManage: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [schema, setSchema] = useState<CustomField[] | null>(null);
+  const [values, setValues] = useState<CustomFieldValues>({});
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+
+  const loadFields = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await getPersonCustomFields(orgId, person.id);
+      setSchema(res.schema);
+      setValues(res.values);
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : "Could not load custom fields.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [orgId, person.id]);
+
+  function toggleOpen() {
+    const next = !open;
+    setOpen(next);
+    if (next && schema === null && !loading) void loadFields();
+  }
+
+  return (
+    <article className="rounded-xl border border-border bg-card p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="truncate font-medium">{person.full_name}</h3>
+            <StatusBadge
+              tone={PORTAL_PERSON_STATUS_TONE[person.status]}
+              withDot={false}
+            >
+              {PORTAL_PERSON_STATUS_LABELS[person.status]}
+            </StatusBadge>
+          </div>
+          <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            <span className="rounded-md bg-muted px-1.5 py-0.5">
+              {PORTAL_PERSON_TYPE_LABELS[person.person_type]}
+            </span>
+            {person.email && <span className="truncate">{person.email}</span>}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-3">
+          <span className="text-xs text-muted-foreground">
+            {person.active_cases} active case
+            {person.active_cases === 1 ? "" : "s"}
+          </span>
+          <button
+            type="button"
+            onClick={toggleOpen}
+            aria-expanded={open}
+            className="text-xs font-medium text-primary hover:underline"
+          >
+            {open ? "Hide fields" : "Custom fields"}
+          </button>
+        </div>
+      </div>
+
+      {open && (
+        <div className="mt-3 border-t border-border pt-3">
+          {loading ? (
+            <p className="text-sm text-muted-foreground">Loading custom fields…</p>
+          ) : error ? (
+            <InlineAlert>{error}</InlineAlert>
+          ) : schema && schema.length > 0 ? (
+            <div className="space-y-3">
+              <CustomFieldsView schema={schema} values={values} />
+              {canManage && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setEditing(true)}
+                >
+                  Edit fields
+                </Button>
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No custom fields defined for people yet.
+            </p>
+          )}
+        </div>
+      )}
+
+      {editing && canManage && schema && (
+        <CustomFieldsEditModal
+          title={`Edit fields — ${person.full_name}`}
+          description="These details stay internal to your team — they are never shown on public pages."
+          schema={schema}
+          values={values}
+          onClose={() => setEditing(false)}
+          onSave={async (next) => {
+            const res = await setPersonCustomFields(orgId, person.id, next);
+            setValues(res.values);
+            setEditing(false);
+          }}
+        />
+      )}
+    </article>
   );
 }
 
@@ -731,12 +853,16 @@ function CaseCard({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="truncate font-medium">{portalCase.title}</h3>
-            <StatusBadge
-              tone={PORTAL_CASE_STATUS_TONE[portalCase.status]}
-              withDot={false}
-            >
-              {PORTAL_CASE_STATUS_LABELS[portalCase.status]}
-            </StatusBadge>
+            {portalCase.custom_status ? (
+              <CustomStatusChip status={portalCase.custom_status} />
+            ) : (
+              <StatusBadge
+                tone={PORTAL_CASE_STATUS_TONE[portalCase.status]}
+                withDot={false}
+              >
+                {PORTAL_CASE_STATUS_LABELS[portalCase.status]}
+              </StatusBadge>
+            )}
             {portalCase.priority !== "normal" && (
               <StatusBadge
                 tone={PORTAL_CASE_PRIORITY_TONE[portalCase.priority]}

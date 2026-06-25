@@ -1036,6 +1036,7 @@ b2b/organization-dashboard-v1          (done — read-only operational command c
 b2b/bulk-reminder-emails               (done — staff batch branded reminder emails from dashboard queues; cooldown; reuses Document Request Links + branded helper)
 b2b/organization-templates             (done — reusable case workflows; create-case-from-template orchestrates pack/room/requests; limits→warnings; no AI)
 product/custom-document-organization-v1 (done — virtual folders/tags/collections/smart-views over Documents; personal + org scopes; case/person/template folders; opt-in auto-filing; metadata-only; no AI)
+b2b/custom-fields-and-statuses-v1      (done — org-defined custom fields (validated JSON values, no dynamic columns) + custom case statuses layered on the fixed PortalCase.Status; template/dashboard/filter integration; internal-only; privacy-first audit; no AI)
 b2b/teams-billing-checkout             ← next (Teams checkout / per-seat Stripe / invoices, org-owned storage)
 integrations/inbox-mailbox-import      (future — Gmail/Drive/Outlook import into Magic Inbox)
 backend/ai-org-credit-pools            (future)
@@ -1666,8 +1667,9 @@ Upcoming planned branches (in order):
 8. `b2b/bulk-reminder-emails` — **delivered** (2026-06-25, staff batch branded reminder emails from dashboard queues — see below)
 9. `b2b/organization-templates` — **delivered** (2026-06-25, reusable case workflows + create-case-from-template — see below)
 10. `product/custom-document-organization-v1` — **delivered** (2026-06-25, virtual folders/tags/collections/smart-views over Documents, personal + org scopes — see below)
-11. `b2b/teams-billing-checkout` ← **next** (real Teams checkout / per-seat Stripe / invoices + org-owned storage)
-12. `integrations/inbox-mailbox-import` (future — Gmail/Drive/Outlook import)
+11. `b2b/custom-fields-and-statuses-v1` — **delivered** (2026-06-25, org-defined custom fields + custom case statuses for portal people/cases — see below)
+12. `b2b/teams-billing-checkout` ← **next** (real Teams checkout / per-seat Stripe / invoices + org-owned storage)
+13. `integrations/inbox-mailbox-import` (future — Gmail/Drive/Outlook import)
 
 ## Weekly Radar Email V1 — delivered (2026-06-24)
 
@@ -2464,6 +2466,96 @@ rooms, and org-owned storage.
 **Next recommended branch: `b2b/teams-billing-checkout`** — real Teams checkout /
 per-seat Stripe billing + invoices, and org-owned storage (so a case's pack, uploaded
 files, and auto-filed vault copies no longer draw down the org-owner's personal storage).
+
+See `docs/api-spec.md`, `docs/b2b-portals.md`, `docs/security-plan.md`, and
+`docs/security/audit-logs.md`.
+
+
+## B2B Custom Fields and Statuses V1 — delivered (2026-06-25)
+
+`b2b/custom-fields-and-statuses-v1` is **implemented** (backend complete + tested).
+Organization admins can define **custom fields** (on portal people and cases) and
+**custom case statuses**, used across case creation, case detail, filtering, the
+dashboard, and templates — **without** a CRM, a form builder, dynamic DB columns, or
+raw SQL. Fully **deterministic — no AI, no AI credits.** Service:
+`apps/organizations/custom_fields.py`.
+
+**SAFE design (the point of this feature).** Field VALUES are stored as **validated
+JSON** on a dedicated `OrganizationCustomFieldValue` model (one value per field per
+target, validated by `field_type`) — there are **no dynamic database columns** and
+**no raw SQL** (custom filters use Django ORM JSONField lookups only). Custom case
+statuses **layer on top of** the fixed `PortalCase.Status` (they never replace it):
+each custom status has a `category` that maps to the authoritative system status, so
+when a case's custom status is set the system `status` is kept in sync — dashboards,
+reminders, and review keep working unchanged.
+
+Key facts:
+
+* **Data model** (migration `organizations/0010`). `OrganizationCustomField`
+  (organization, `key` [slug, unique per org+target], label, description, `target`
+  person/case, `field_type` [short_text / long_text / number / date / boolean /
+  single_select / multi_select / email / phone / url], `options` JSON list of
+  `{key,label,color?,sort_order?}`, required, `visibility` [internal /
+  public_readonly / public_editable], sort_order, is_active, created_by).
+  `OrganizationCustomFieldValue` (organization, field, person XOR case [unique per
+  field+target], `value` JSON, updated_by). `OrganizationCaseStatusDefinition`
+  (organization, `key` [unique per org], label, description, `category` [planning /
+  collecting / reviewing / ready / submitted / completed / blocked / closed], color,
+  icon, sort_order, is_default, is_terminal, is_active, `maps_to_system_status`
+  [informational]). `PortalCase` gained a nullable `custom_status` FK (the fixed
+  `status` is kept). `OrganizationCaseTemplate` gained `default_custom_status_key`
+  + `default_custom_field_values` (JSON) — additive.
+* **Field validation (by type).** short_text / email / phone / url (string ≤255;
+  email must match an email shape; url must be http(s)), long_text (≤2000), number
+  (int/float), date (ISO `YYYY-MM-DD`), boolean, single_select (one option key),
+  multi_select (list of option keys, ≤50). Rejects structured / oversized values and
+  obvious `<script>` payloads. Select options are normalized to
+  `{key,label,color,sort_order}`.
+* **Custom status → system mapping** (`category` → `PortalCase.Status`):
+  planning→draft, collecting→collecting_documents, reviewing→waiting_for_review,
+  ready→ready, submitted→submitted, completed→completed, blocked→blocked,
+  closed→completed. **Default seeded statuses** (idempotent, mirror the system
+  workflow): Planning, Collecting Documents, In Review, Ready to Submit, Submitted,
+  Accepted, Rejected, Withdrawn, Renewal Needed. **Archiving** a status deactivates it
+  (drops the default flag); archived statuses leave the active list, and existing
+  cases keep referencing them via the FK (`SET_NULL` on delete).
+* **Template integration.** A template may set `default_custom_status_key` and
+  `default_custom_field_values`; on create-case-from-template these are applied
+  (status set + values validated) **after** the case is created, and any
+  `custom_field_values` submitted with the create-case request **override** the
+  template defaults. **Best-effort** — a bad value adds a warning
+  (`custom_status_not_applied` / `custom_fields_not_applied`), never discards the case.
+* **Dashboard / filter integration.** Dashboard metrics now include
+  `custom_status_counts` (active-case counts per custom status, empty when none are
+  defined). The cases list endpoint supports safe bounded filters: `custom_status`
+  (by id) and `cf_key`+`cf_value` (exact JSON match on a custom field value) — **ORM
+  only, no raw SQL**.
+* **Permissions / gates.** **Read** (lists / schema / values) = any active member;
+  **create / edit / archive** fields+statuses and **set** values/status = **OWNER /
+  ADMIN**; non-members denied. Org isolation enforced (a field / status / value cannot
+  cross org boundaries). Behind the `b2b_portals` flag + Teams entitlement.
+  `field_type` and `target` are **immutable** after a field is created. **Internal-only
+  in V1** — `public_readonly` / `public_editable` are stored for future use but custom
+  fields are **never** exposed on public request/room pages.
+* **Limits (server-side caps, no Stripe).** `teams_beta` = 50 fields / 30 statuses /
+  50 options-per-field; `teams` = 200 / 100 / 200; `enterprise` = unlimited.
+* **Audit events (privacy-first).** `organization_custom_field_created/updated/
+  archived`, `organization_custom_field_value_updated`,
+  `organization_case_status_created/updated/archived`,
+  `portal_case_custom_status_updated`, `default_case_statuses_seeded` — unified Audit
+  Log, `metadata.org_id`. A value update records only **which** field keys changed
+  (`changed_field_keys`), **never the values themselves**; metadata holds only safe
+  ids/keys/labels — never private file URLs, public tokens, document contents, or
+  secrets. (`field_key` / `status_key` / `changed_field_keys` were added to the audit
+  sanitizer's exact-match allow-list because they contain the substring "key" — they
+  hold machine keys, never secret values.)
+
+**Deferred (future work):** conditional field logic, workflow automations, public
+editable custom forms, advanced saved views over custom fields, custom reports, AI
+field suggestions, and any billing changes.
+
+**Next recommended branch: `b2b/teams-billing-checkout`** — real Teams checkout /
+per-seat Stripe billing + invoices, and org-owned storage.
 
 See `docs/api-spec.md`, `docs/b2b-portals.md`, `docs/security-plan.md`, and
 `docs/security/audit-logs.md`.

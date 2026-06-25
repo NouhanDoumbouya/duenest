@@ -54,6 +54,8 @@ def create_case_template(organization, user, payload: dict) -> OrganizationCaseT
         auto_create_requests=_as_bool(payload.get("auto_create_requests"), False),
         default_room_title=(payload.get("default_room_title") or "").strip()[:255],
         default_room_description=(payload.get("default_room_description") or "").strip(),
+        default_custom_status_key=(payload.get("default_custom_status_key") or "").strip()[:80],
+        default_custom_field_values=_safe_dict(payload.get("default_custom_field_values")),
     )
     _replace_requirements(template, payload.get("requirements"))
     record_template_audit_event(
@@ -88,6 +90,12 @@ def update_case_template(template, user, payload: dict) -> OrganizationCaseTempl
     if "default_due_days" in payload:
         template.default_due_days = _positive_int(payload.get("default_due_days"))
         fields.append("default_due_days")
+    if "default_custom_status_key" in payload:
+        template.default_custom_status_key = (payload.get("default_custom_status_key") or "").strip()[:80]
+        fields.append("default_custom_status_key")
+    if "default_custom_field_values" in payload:
+        template.default_custom_field_values = _safe_dict(payload.get("default_custom_field_values"))
+        fields.append("default_custom_field_values")
     for attr in ("auto_create_pack", "auto_create_room", "auto_create_requests"):
         if attr in payload:
             setattr(template, attr, _as_bool(payload.get(attr), getattr(template, attr)))
@@ -170,6 +178,8 @@ def build_case_template_payload(template, *, include_requirements=True) -> dict:
         "auto_create_requests": template.auto_create_requests,
         "default_room_title": template.default_room_title,
         "default_room_description": template.default_room_description,
+        "default_custom_status_key": template.default_custom_status_key,
+        "default_custom_field_values": template.default_custom_field_values or {},
         "status": template.status,
         "requirement_count": template.requirements.count(),
         "created_at": template.created_at.isoformat(),
@@ -258,6 +268,11 @@ def create_case_from_template(organization, user, template, person, payload: dic
         "priority": template.default_priority,
         "due_date": due_date.isoformat() if isinstance(due_date, date) else None,
     })
+
+    # B2B Custom Fields and Statuses V1 — apply the template's custom defaults and
+    # any custom field values submitted with the create-case request. Best-effort:
+    # a bad value warns but never discards the created case.
+    _apply_custom_defaults(case, template, payload, user, warnings)
 
     pack = None
     if create_pack and selected:
@@ -523,3 +538,53 @@ def _string_list(value) -> list:
     if not isinstance(value, (list, tuple)):
         return []
     return [str(v)[:40] for v in value][:20]
+
+
+def _apply_custom_defaults(case, template, payload, user, warnings):
+    """Apply the template's default custom status + field values, then any custom
+    field values submitted with the create-case payload (which override defaults).
+    Best-effort — a validation error is recorded as a warning, not raised."""
+    from . import custom_fields
+    from .models import OrganizationCaseStatusDefinition
+
+    org = case.organization
+    # Default custom status (by key).
+    status_key = (template.default_custom_status_key or "").strip()
+    if status_key:
+        status_def = OrganizationCaseStatusDefinition.objects.filter(
+            organization=org, key=status_key, is_active=True
+        ).first()
+        if status_def is not None:
+            try:
+                custom_fields.set_case_custom_status(case, status_def, user)
+            except PortalError:
+                warnings.append("custom_status_not_applied")
+
+    # Merge template default field values with the submitted ones (submitted wins).
+    values = {}
+    if isinstance(template.default_custom_field_values, dict):
+        values.update(template.default_custom_field_values)
+    submitted = payload.get("custom_field_values")
+    if isinstance(submitted, dict):
+        values.update(submitted)
+    if values:
+        try:
+            custom_fields.set_custom_field_values(org, case, values, user)
+        except PortalError:
+            warnings.append("custom_fields_not_applied")
+
+
+def _safe_dict(value) -> dict:
+    """A shallow {str: scalar/list} dict for template custom-field defaults. Drops
+    nested objects, huge values, and non-string keys (validated again on apply)."""
+    if not isinstance(value, dict):
+        return {}
+    out = {}
+    for k, v in list(value.items())[:50]:
+        if not isinstance(k, str):
+            continue
+        if isinstance(v, (str, int, float, bool)) or v is None:
+            out[k] = (v[:2000] if isinstance(v, str) else v)
+        elif isinstance(v, list):
+            out[k] = [str(x)[:120] for x in v[:50]]
+    return out
