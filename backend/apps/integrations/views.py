@@ -290,3 +290,140 @@ class GoogleDriveImportView(_DriveImportBase):
                 status=http_status.HTTP_400_BAD_REQUEST,
             )
         return Response(result)
+
+
+# ---- Gmail Import V1 -------------------------------------------------------
+
+from . import gmail_import  # noqa: E402
+from .serializers import GmailImportRequestSerializer  # noqa: E402
+
+GMAIL_FLAG = "gmail_import"
+
+
+def _require_gmail_flags(user) -> None:
+    require_feature_enabled(FLAG, user)
+    require_feature_enabled(services.GOOGLE_FLAG, user)
+    require_feature_enabled(GMAIL_FLAG, user)
+
+
+class GmailMessagesView(APIView):
+    """GET the user's Gmail messages with attachments (safe metadata only; no
+    body/snippet/tokens)."""
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "gmail_list"
+
+    def get(self, request):
+        _require_gmail_flags(request.user)
+        account = _get_google_account(request)
+        filters = {
+            "query": request.query_params.get("query") or request.query_params.get("q"),
+            "from_email": request.query_params.get("from"),
+            "date_min": request.query_params.get("date_min"),
+            "date_max": request.query_params.get("date_max"),
+            "file_type": request.query_params.get("file_type"),
+            "page_token": request.query_params.get("page_token"),
+            "page_size": request.query_params.get("page_size") or 20,
+        }
+        try:
+            return Response(
+                gmail_import.search_gmail_import_messages(
+                    request.user, account, filters, request=request
+                )
+            )
+        except ProviderNotConfigured:
+            return _not_configured_response()
+        except ProviderError:
+            return Response(
+                {"detail": "Couldn't reach Gmail. Reconnect and try again.",
+                 "status": "provider_error"},
+                status=http_status.HTTP_502_BAD_GATEWAY,
+            )
+
+
+class GmailMessageAttachmentsView(APIView):
+    """GET one message's attachments (safe metadata only)."""
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "gmail_list"
+
+    def get(self, request, message_id):
+        _require_gmail_flags(request.user)
+        account = _get_google_account(request)
+        try:
+            return Response(
+                gmail_import.list_gmail_message_attachments(
+                    request.user, account, message_id
+                )
+            )
+        except ProviderNotConfigured:
+            return _not_configured_response()
+        except ProviderError:
+            return Response(
+                {"detail": "Couldn't reach Gmail.", "status": "provider_error"},
+                status=http_status.HTTP_502_BAD_GATEWAY,
+            )
+
+
+class GmailDestinationsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        _require_gmail_flags(request.user)
+        return Response(gmail_import.build_destination_options(request.user))
+
+
+class _GmailImportBase(APIView):
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+
+    def _payload(self, request):
+        _require_gmail_flags(request.user)
+        serializer = GmailImportRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        account = get_object_or_404(
+            ConnectedIntegrationAccount.objects.exclude(
+                status=ConnectedIntegrationAccount.Status.DISCONNECTED
+            ),
+            pk=data["account_id"], user=request.user, provider="google",
+        )
+        return data, account
+
+
+class GmailImportPreviewView(_GmailImportBase):
+    throttle_scope = "gmail_list"
+
+    def post(self, request):
+        data, account = self._payload(request)
+        try:
+            result = gmail_import.preview_gmail_attachment_import(
+                request.user, account, data["attachments"], data["destination"],
+                request=request,
+            )
+        except gmail_import.GmailImportError as exc:
+            return Response(
+                {"detail": str(exc), "status": exc.code},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(result)
+
+
+class GmailImportView(_GmailImportBase):
+    throttle_scope = "gmail_import"
+
+    def post(self, request):
+        data, account = self._payload(request)
+        try:
+            result = gmail_import.import_gmail_attachments(
+                request.user, account, data["attachments"], data["destination"],
+                force=data.get("force", False), request=request,
+            )
+        except gmail_import.GmailImportError as exc:
+            return Response(
+                {"detail": str(exc), "status": exc.code},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(result)

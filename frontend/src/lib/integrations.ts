@@ -12,6 +12,10 @@ import type {
   DriveImportResult,
   DriveListResponse,
   DrivePreviewResult,
+  GmailAttachmentRef,
+  GmailImportResult,
+  GmailMessagesResponse,
+  GmailPreviewResult,
   OAuthStartResponse,
   ProvidersResponse,
 } from "@/types/integrations";
@@ -150,5 +154,71 @@ export function driveImportReasonLabel(reason: string): string {
       return "";
     default:
       return "Couldn't import";
+  }
+}
+
+// ---- Gmail Import V1 ----
+
+export function getGmailMessages(
+  accountId: number,
+  opts: {
+    query?: string;
+    from?: string;
+    dateMin?: string;
+    dateMax?: string;
+    fileType?: string;
+    pageToken?: string;
+  } = {},
+): Promise<GmailMessagesResponse> {
+  const params = new URLSearchParams({ account_id: String(accountId) });
+  if (opts.query) params.set("query", opts.query);
+  if (opts.from) params.set("from", opts.from);
+  if (opts.dateMin) params.set("date_min", opts.dateMin);
+  if (opts.dateMax) params.set("date_max", opts.dateMax);
+  if (opts.fileType) params.set("file_type", opts.fileType);
+  if (opts.pageToken) params.set("page_token", opts.pageToken);
+  return apiFetch<GmailMessagesResponse>(
+    `/integrations/gmail/messages/?${params.toString()}`,
+  );
+}
+
+export function getGmailDestinations(): Promise<DriveDestinations> {
+  return apiFetch<DriveDestinations>("/integrations/gmail/destinations/");
+}
+
+export function previewGmailImport(
+  accountId: number,
+  attachments: GmailAttachmentRef[],
+  destination: DriveDestination,
+): Promise<GmailPreviewResult> {
+  return apiFetch<GmailPreviewResult>("/integrations/gmail/import/preview/", {
+    method: "POST",
+    body: { account_id: accountId, attachments, destination },
+  });
+}
+
+export function importGmailAttachments(
+  accountId: number,
+  attachments: GmailAttachmentRef[],
+  destination: DriveDestination,
+  force = false,
+): Promise<GmailImportResult> {
+  return apiFetch<GmailImportResult>("/integrations/gmail/import/", {
+    method: "POST",
+    body: { account_id: accountId, attachments, destination, force },
+  });
+}
+
+/** Friendly, user-facing reason for a skipped/failed Gmail attachment row. */
+export function gmailImportReasonLabel(reason: string): string {
+  switch (reason) {
+    case "already_imported":
+      return "Already imported";
+    case "empty_file":
+      return "Empty attachment";
+    case "permission_denied":
+      return "Permission denied";
+    default:
+      return driveImportReasonLabel(reason);
   }
 }

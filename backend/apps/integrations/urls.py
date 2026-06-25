@@ -1,6 +1,11 @@
 from django.urls import path
 
 from .views import (
+    GmailDestinationsView,
+    GmailImportPreviewView,
+    GmailImportView,
+    GmailMessageAttachmentsView,
+    GmailMessagesView,
     GoogleDriveDestinationsView,
     GoogleDriveFilesView,
     GoogleDriveImportPreviewView,
@@ -70,5 +75,31 @@ urlpatterns = [
         "integrations/google-drive/import/",
         GoogleDriveImportView.as_view(),
         name="integration-google-drive-import",
+    ),
+    # ---- Gmail Import V1 ----
+    path(
+        "integrations/gmail/messages/",
+        GmailMessagesView.as_view(),
+        name="integration-gmail-messages",
+    ),
+    path(
+        "integrations/gmail/messages/<str:message_id>/attachments/",
+        GmailMessageAttachmentsView.as_view(),
+        name="integration-gmail-message-attachments",
+    ),
+    path(
+        "integrations/gmail/destinations/",
+        GmailDestinationsView.as_view(),
+        name="integration-gmail-destinations",
+    ),
+    path(
+        "integrations/gmail/import/preview/",
+        GmailImportPreviewView.as_view(),
+        name="integration-gmail-import-preview",
+    ),
+    path(
+        "integrations/gmail/import/",
+        GmailImportView.as_view(),
+        name="integration-gmail-import",
     ),
 ]

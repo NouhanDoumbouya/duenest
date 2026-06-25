@@ -142,7 +142,7 @@ FEATURE_DEFINITIONS: list[dict] = [
     {"key": "google_integrations", "name": "Integrations — Google", "default": Visibility.FOUNDER_ONLY, "description": "Allow connecting a Google account (OAuth authorization-code flow) for future import-only flows. No effect unless GOOGLE_OAUTH_CLIENT_ID/SECRET/REDIRECT_URI are configured; otherwise the UI shows 'Not configured'."},
     {"key": "google_drive_import", "name": "Integrations — Google Drive import", "default": Visibility.FOUNDER_ONLY, "description": "Future read-only Google Drive document import (review-before-save). Not implemented in the OAuth foundation branch."},
     {"key": "google_calendar_import", "name": "Integrations — Google Calendar import", "default": Visibility.FOUNDER_ONLY, "description": "Future read-only Google Calendar deadline import (review-before-save). Not implemented in the OAuth foundation branch."},
-    {"key": "gmail_import", "name": "Integrations — Gmail attachment import", "default": Visibility.FOUNDER_ONLY, "description": "Future read-only Gmail attachment import (review-before-save). Privacy-sensitive: the Gmail scope is requested only when the user explicitly chooses Gmail. Not implemented in the OAuth foundation branch."},
+    {"key": "gmail_import", "name": "Integrations — Gmail attachment import", "default": Visibility.FOUNDER_ONLY, "description": "Manual, read-only Gmail ATTACHMENT import (review-before-save). Privacy-sensitive: the Gmail scope is requested only when the user explicitly chooses Gmail. No inbox scanning, background sync, write-back, or body import."},
 ]
 
 FEATURE_KEYS = [d["key"] for d in FEATURE_DEFINITIONS]

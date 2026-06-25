@@ -70,6 +70,23 @@ respecting plan + storage limits. Per-file results; safe audit/operational event
 founder-gated by `google_drive_import`. Frontend:
 `/dashboard/settings/integrations/google-drive`. See `docs/integrations.md`.
 
+## 0.4 Gmail Import V1 (delivered, 2026-06-25)
+
+Manual, import-only Gmail **attachment** import (branch
+`integrations/gmail-import-v1`) — the most privacy-sensitive integration, built
+conservatively. Adds read-only Gmail provider methods (message search / metadata /
+attachment download; `format=metadata` so no body data is fetched),
+`apps/integrations/gmail_import.py`, an `ImportedGmailAttachment` dedup model
+(hashed ids + safe file metadata only), and five endpoints under
+`/api/v1/integrations/gmail/`. Selected attachments are validated, encrypted at
+rest via the existing upload path, and saved to File Inbox / Vault / a user-owned
+folder / a user-owned pack, respecting plan + storage limits; duplicates are
+skipped by default. **No** inbox scanning, background sync, body import, AI, or
+Gmail write-back (no modify/delete/archive/label/send). Shares the destination +
+encrypted-save plumbing with Drive import (no duplication). Founder-gated by
+`gmail_import`. Frontend: `/dashboard/settings/integrations/gmail`. See
+`docs/integrations.md`.
+
 ## 1. Roadmap Summary
 
 This roadmap defines how CertaNest will move from a well-documented product concept to a working MVP.

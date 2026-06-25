@@ -34,7 +34,11 @@ This security plan defines the rules, risks, controls, and implementation expect
 > validated to internal paths (no open redirect). **Google Drive import** is
 > read-only and import-only: selected files are validated and **encrypted at rest**
 > via the existing upload path; Drive content, download URLs, and raw Google API
-> responses are never stored or logged. See `docs/integrations.md`.
+> responses are never stored or logged. **Gmail import** is read-only and
+> attachment-only: no inbox scanning, background sync, write-back, or body import;
+> email bodies/snippets are never stored or logged; dedup uses salted hashes of
+> message/attachment ids (never raw ids); selected attachments are encrypted at
+> rest via the same upload path. See `docs/integrations.md`.
 
 ---
 
