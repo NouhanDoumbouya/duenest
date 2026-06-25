@@ -186,3 +186,14 @@ IP addresses, or small-count city drilldowns are shown.
 - Advanced cohort retention and churn prediction.
 - Consent-based sensitive support access.
 - Full incident response center.
+
+## Admin Tools V1 (support console)
+
+The founder console now includes a safe support control center (Founder Admin
+Tools V1): Organizations (list + detail + safe plan/portal action), enriched User
+detail, Feature flags, Plans & limits, Storage, and AI usage — plus founder-only
+Support notes on users/orgs. It links to the existing Observability and Jobs
+pages. Founders can support users **without seeing private document contents**;
+there is no impersonation, no file download, no account deletion, and no live
+billing change. See `docs/api-spec.md` (Founder admin tools) and
+`docs/security-plan.md` (Founder Admin Tools V1) for the full safe-data contract.

@@ -754,3 +754,169 @@ export interface ScheduledJobRunResult {
   reason?: string;
   error_code?: string;
 }
+
+// ---- Founder Admin Tools V1 (support console) ------------------------------
+
+export interface FounderSupportNote {
+  id: number;
+  note_type: "support" | "beta" | "billing" | "technical" | "risk";
+  status: "open" | "watching" | "resolved";
+  body: string;
+  target_user: number | null;
+  target_organization: number | null;
+  created_by: number | null;
+  created_by_email: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FounderOrgListItem {
+  id: number;
+  name: string;
+  slug: string;
+  country: string;
+  organization_type: string;
+  owner: { id: number; email: string } | null;
+  plan: string;
+  portal_enabled: boolean;
+  members: number;
+  people: number;
+  active_cases: number;
+  active_requests: number;
+  active_rooms: number;
+  is_archived: boolean;
+  created_at: string;
+}
+
+export interface FounderOrgMember {
+  user_id: number;
+  email: string;
+  role: string;
+  status: string;
+  joined_at: string | null;
+}
+
+export interface FounderSafeEvent {
+  id: number;
+  created_at: string;
+  severity: string;
+  category: string;
+  source: string;
+  status: string;
+  message: string;
+  error_code: string;
+  correlation_id: string;
+  resolved: boolean;
+}
+
+export interface FounderOrgDetail extends FounderOrgListItem {
+  limits: Record<string, number | null>;
+  usage: Record<string, number>;
+  remaining: Record<string, number | null>;
+  members_list: FounderOrgMember[];
+  recent_events: FounderSafeEvent[];
+  support_notes: FounderSupportNote[];
+}
+
+export interface PlanResourceUsage {
+  resource: string;
+  label: string;
+  used: number;
+  limit: number | null;
+  remaining: number | null;
+  at_limit: boolean;
+  unlimited: boolean;
+}
+
+export interface PlanUsage {
+  plan: string;
+  plan_label: string;
+  is_free: boolean;
+  resources: Record<string, PlanResourceUsage>;
+  storage: {
+    used_bytes: number;
+    limit_bytes: number | null;
+    remaining_bytes: number | null;
+    unlimited: boolean;
+  };
+}
+
+export interface FounderUserDetail {
+  user: {
+    id: number;
+    email: string;
+    username: string;
+    date_joined: string;
+    last_login: string | null;
+    is_staff: boolean;
+  };
+  counts: Record<string, number>;
+  plan_usage: PlanUsage;
+  ai: {
+    daily_tokens_used: number;
+    daily_token_cap: number | null;
+    paused: boolean;
+    month_requests: number;
+    month_tokens: number;
+    month_cost_usd: number;
+  };
+  organizations: Array<{
+    organization_id: number;
+    name: string;
+    role: string;
+    status: string;
+    plan: string;
+  }>;
+  recent_events: FounderSafeEvent[];
+  support_notes: FounderSupportNote[];
+  privacy_note: string;
+}
+
+export interface PlansLimitsOverview {
+  user_plans: Record<string, number>;
+  organization_plans: Record<string, number>;
+  organizations_at_limit: Array<{
+    id: number;
+    name: string;
+    plan: string;
+    at_limit: string[];
+  }>;
+  users_over_storage: Array<{
+    id: number;
+    email: string;
+    used_bytes: number;
+    limit_bytes: number;
+  }>;
+}
+
+export interface StorageOverview {
+  total_bytes: number;
+  total_files: number;
+  top_users: Array<{
+    id: number;
+    email: string;
+    used_bytes: number;
+    limit_bytes: number | null;
+    percent: number | null;
+  }>;
+  upload_failures_24h: number;
+}
+
+export interface AiUsageOverview {
+  configured: boolean;
+  embeddings_configured: boolean;
+  today: { requests: number; tokens: number; cost_usd: number };
+  month: { requests: number; tokens: number; cost_usd: number };
+  failures_by_reason: Record<string, number>;
+  top_users: Array<{
+    user_id: number;
+    email: string;
+    tokens: number;
+    requests: number;
+  }>;
+  caps: {
+    daily_token_cap_user: number | null;
+    daily_token_cap_global: number | null;
+    monthly_cost_limit_usd: number | null;
+  };
+}

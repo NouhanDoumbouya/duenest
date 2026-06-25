@@ -15,6 +15,7 @@ from .models import (
     FeatureCompletionItem,
     FeedbackItem,
     FounderAuditLog,
+    FounderSupportNote,
     InviteCode,
     InviteCodeUse,
     LaunchChecklistItem,
@@ -510,6 +511,42 @@ class FounderOperationalEventSerializer(serializers.ModelSerializer):
             "resolution_note",
         ]
         read_only_fields = fields
+
+
+class FounderSupportNoteSerializer(serializers.ModelSerializer):
+    """Founder-only support note on a user or organization. `created_by` is set
+    from the request; `target_*` are write-once on create."""
+
+    created_by_email = serializers.EmailField(
+        source="created_by.email", read_only=True
+    )
+
+    class Meta:
+        model = FounderSupportNote
+        fields = [
+            "id",
+            "note_type",
+            "status",
+            "body",
+            "target_user",
+            "target_organization",
+            "created_by",
+            "created_by_email",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_by", "created_by_email", "created_at", "updated_at"]
+
+    def validate(self, attrs):
+        # On create, require exactly one target.
+        if self.instance is None:
+            has_user = attrs.get("target_user") is not None
+            has_org = attrs.get("target_organization") is not None
+            if has_user == has_org:
+                raise serializers.ValidationError(
+                    "Provide exactly one of target_user or target_organization."
+                )
+        return attrs
 
 
 class FounderScheduledJobRunSerializer(serializers.ModelSerializer):

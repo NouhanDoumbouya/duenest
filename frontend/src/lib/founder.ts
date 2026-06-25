@@ -30,9 +30,15 @@ import type {
   FounderWaitlistEntry,
   LaunchChecklistItem,
   LaunchReadinessResponse,
+  AiUsageOverview,
+  FounderOrgDetail,
+  FounderOrgListItem,
+  FounderSupportNote,
+  FounderUserDetail,
   ObservabilityOverview,
   OperationalEvent,
   Paginated,
+  PlansLimitsOverview,
   PrivateBetaMetrics,
   ScheduledJob,
   ScheduledJobDetail,
@@ -40,6 +46,7 @@ import type {
   ScheduledJobRunResult,
   ScheduledJobsSummary,
   SecurityOverview,
+  StorageOverview,
   SubmitFeedbackRequest,
   SystemStatus,
 } from "@/types/founder";
@@ -626,6 +633,89 @@ export function dryRunFounderJob(
 ): Promise<ScheduledJobRunResult> {
   return apiFetch<ScheduledJobRunResult>(`/founder/jobs/${jobName}/dry-run/`, {
     method: "POST",
+    auth: true,
+  });
+}
+
+// ---- Founder Admin Tools V1 (support console) ------------------------------
+
+export function getFounderOrganizations(params?: {
+  search?: string;
+  plan?: string;
+  portal?: string;
+}): Promise<{ organizations: FounderOrgListItem[] }> {
+  return apiFetch<{ organizations: FounderOrgListItem[] }>(
+    `/founder/organizations/${query(params)}`,
+    { auth: true },
+  );
+}
+
+export function getFounderOrganizationDetail(
+  orgId: number,
+): Promise<FounderOrgDetail> {
+  return apiFetch<FounderOrgDetail>(`/founder/organizations/${orgId}/`, {
+    auth: true,
+  });
+}
+
+export function setFounderOrganizationPlan(
+  orgId: number,
+  payload: { plan: string; portal_enabled?: boolean },
+): Promise<FounderOrgDetail> {
+  return apiFetch<FounderOrgDetail>(`/founder/organizations/${orgId}/set-plan/`, {
+    method: "POST",
+    body: payload,
+    auth: true,
+  });
+}
+
+export function getFounderUserDetail(userId: number): Promise<FounderUserDetail> {
+  return apiFetch<FounderUserDetail>(`/founder/users/${userId}/`, { auth: true });
+}
+
+export function getFounderPlansLimits(): Promise<PlansLimitsOverview> {
+  return apiFetch<PlansLimitsOverview>("/founder/plans-limits/", { auth: true });
+}
+
+export function getFounderStorage(): Promise<StorageOverview> {
+  return apiFetch<StorageOverview>("/founder/storage/", { auth: true });
+}
+
+export function getFounderAiUsage(): Promise<AiUsageOverview> {
+  return apiFetch<AiUsageOverview>("/founder/ai-usage/", { auth: true });
+}
+
+export function getFounderSupportNotes(params?: {
+  target_user?: number;
+  target_organization?: number;
+}): Promise<FounderSupportNote[]> {
+  return apiFetch<FounderSupportNote[]>(
+    `/founder/support-notes/${query(params)}`,
+    { auth: true },
+  );
+}
+
+export function createFounderSupportNote(payload: {
+  target_user?: number;
+  target_organization?: number;
+  note_type?: string;
+  status?: string;
+  body: string;
+}): Promise<FounderSupportNote> {
+  return apiFetch<FounderSupportNote>("/founder/support-notes/", {
+    method: "POST",
+    body: payload,
+    auth: true,
+  });
+}
+
+export function updateFounderSupportNote(
+  id: number,
+  payload: Partial<Pick<FounderSupportNote, "status" | "body" | "note_type">>,
+): Promise<FounderSupportNote> {
+  return apiFetch<FounderSupportNote>(`/founder/support-notes/${id}/`, {
+    method: "PATCH",
+    body: payload,
     auth: true,
   });
 }
