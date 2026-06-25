@@ -683,6 +683,19 @@ governed by `SharingRoom` / `DocumentRequestLink`). Organization happens at the
 The shared service is `apps.documents.folders`; scope is either a personal owner or an
 organization. **Deterministic — no AI.** See `docs/api-spec.md` §44.
 
+### Implemented: org custom fields/statuses as a safe JSON value model
+
+B2B Custom Fields and Statuses V1 lets organizations define custom fields and case
+statuses for portal people/cases **without per-org dynamic tables or columns and without
+raw SQL.** Field VALUES are stored as **validated JSON** on a dedicated
+`OrganizationCustomFieldValue` model (one row per field per target, validated by
+`field_type` and size-limited at write time); custom filters use Django ORM JSONField
+lookups only. Custom case statuses (`OrganizationCaseStatusDefinition`) **layer on top
+of** the fixed `PortalCase.Status` via a `category`→system-status mapping (the system
+`status` is kept authoritative for dashboards/reminders/review) rather than replacing the
+enum. The shared service is `apps.organizations.custom_fields` (migration
+`organizations/0010`). **Deterministic — no AI.** See `docs/api-spec.md` §45.
+
 ---
 
 ## 16. File Storage Architecture

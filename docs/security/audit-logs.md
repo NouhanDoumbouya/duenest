@@ -79,6 +79,19 @@ reads are **not** logged.
   id + name, document / case / person / organization id, tag_names, result) — never an
   R2 object key, file URL, public/sharing token, or document content. (Folders are
   virtual metadata over `Document` and never change a file's storage key.)
+- **B2B Custom Fields and Statuses:** organization_custom_field_created,
+  organization_custom_field_updated, organization_custom_field_archived,
+  organization_custom_field_value_updated, organization_case_status_created,
+  organization_case_status_updated, organization_case_status_archived,
+  portal_case_custom_status_updated, default_case_statuses_seeded. Recorded under category
+  `system`, owner = the organization's owner user, actor = the acting member, with
+  `metadata.org_id` for scoping. **Privacy rule: a value update records only WHICH field
+  keys changed (`changed_field_keys`), never the values themselves.** Metadata is limited
+  to safe ids/keys/labels (field_id / field_key / field_label / field_type / target /
+  status_id / status_key / status_label / case_id / person_id) — never a private file
+  URL, public token, document content, or secret. (`field_key` / `status_key` /
+  `changed_field_keys` were added to the metadata sanitizer's exact-match allow-list
+  because they contain the substring "key"; they hold machine keys, never secret values.)
 
 The **Organization Dashboard V1** (`GET …/portal/dashboard/`, §41) is a **reader**,
 not a writer, of this log: its recent-activity feed reads the most recent **safe**
@@ -119,7 +132,9 @@ and sizes/counts are capped. Allowed metadata is limited to safe values such as
 `status_from` / `status_to`, file name/title, request/room/pack/application
 titles, `due_date`, `result`, and `reason_category`. (`recipient_count` is on the
 exact-match allow-list because the substring "ip" would otherwise drop it through
-the forbidden-substring filter.)
+the forbidden-substring filter. Likewise `field_key` / `status_key` /
+`changed_field_keys` are on the exact-match allow-list because they contain the
+substring "key" — they hold machine keys, never secret values.)
 
 ## Best-effort (non-breaking)
 

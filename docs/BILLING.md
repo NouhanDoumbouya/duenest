@@ -185,6 +185,12 @@ org-limited in V1, so it still draws down that account's personal storage until
 org-owned pack entitlement exists (same known limitation as above). **No Stripe /
 billing change.**
 
+**B2B Custom Fields and Statuses V1 — limit interaction (no billing change).** Org
+custom fields/statuses (§45) use conservative **server-side caps by plan tier**
+(`teams_beta` = 50 fields / 30 statuses / 50 options-per-field; `teams` = 200 / 100 /
+200; `enterprise` = unlimited), enforced in `apps/organizations/custom_fields.py`.
+Hitting a cap returns `400` with a plan-limit message. **No Stripe / billing change.**
+
 **Storage quota method:** storage used is the sum of stored `DocumentFile.file_size`
 values for the user's non-trashed files, computed from the database. Cloudflare R2
 is never queried for quota calculation — these are product limits, separate from

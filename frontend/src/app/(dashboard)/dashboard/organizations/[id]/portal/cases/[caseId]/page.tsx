@@ -54,6 +54,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Toast, type ToastState } from "@/components/ui/toast";
 import { FilePreviewDialog } from "@/components/ui/file-preview-dialog";
 import { ReminderModal } from "@/components/features/portals/reminder-modal";
+import { CustomStatusChip } from "@/components/features/portals/custom-status-chip";
+import {
+  CustomFieldsEditModal,
+  CustomFieldsEmpty,
+  CustomFieldsView,
+  EditFieldsButton,
+} from "@/components/features/portals/custom-fields-section";
 import { useFeature } from "@/components/features/feature-flags-provider";
 import { ApiError } from "@/lib/api";
 import { formatFileSize } from "@/lib/document-files";
@@ -74,7 +81,11 @@ import {
   createCasePack,
   createCaseRequest,
   createCaseRoom,
+  getCaseCustomFields,
+  getCaseStatuses,
   getPortalCase,
+  setCaseCustomFields,
+  setCaseCustomStatus,
   getReviewFileDownloadBlob,
   getReviewFilePreviewBlob,
   groupReviewItemsByStatus,
@@ -92,6 +103,9 @@ import { cn } from "@/lib/utils";
 import type { Organization } from "@/types/organizations";
 import type { FolderNode } from "@/types/document-organization";
 import type {
+  CaseStatus,
+  CustomField,
+  CustomFieldValues,
   PortalCase,
   PortalCaseRequest,
   PortalReviewDecision,
@@ -160,6 +174,20 @@ export default function PortalCaseDetailPage({
   // Best-effort: a failure leaves this null and simply hides the section.
   const [caseFolder, setCaseFolder] = useState<FolderNode | null>(null);
 
+  // Custom fields + statuses (B2B Custom Fields and Statuses V1). Best-effort:
+  // a failure simply hides the section / disables the dropdown.
+  const [fieldSchema, setFieldSchema] = useState<CustomField[]>([]);
+  const [fieldValues, setFieldValues] = useState<CustomFieldValues>({});
+  const [statuses, setStatuses] = useState<CaseStatus[]>([]);
+  const [editingFields, setEditingFields] = useState(false);
+  const [statusBusy, setStatusBusy] = useState(false);
+
+  const reloadCustomFields = useCallback(async () => {
+    const res = await getCaseCustomFields(orgId, caseIdNum);
+    setFieldSchema(res.schema);
+    setFieldValues(res.values);
+  }, [orgId, caseIdNum]);
+
   useEffect(() => {
     let active = true;
     getOrgFolders(orgId)
@@ -168,6 +196,29 @@ export default function PortalCaseDetailPage({
       })
       .catch(() => {
         // Non-fatal: the folder section just won't render.
+      });
+    return () => {
+      active = false;
+    };
+  }, [orgId, caseIdNum]);
+
+  useEffect(() => {
+    let active = true;
+    getCaseCustomFields(orgId, caseIdNum)
+      .then((res) => {
+        if (!active) return;
+        setFieldSchema(res.schema);
+        setFieldValues(res.values);
+      })
+      .catch(() => {
+        // Non-fatal: the custom-fields section just won't render.
+      });
+    getCaseStatuses(orgId)
+      .then((res) => {
+        if (active) setStatuses(res.statuses);
+      })
+      .catch(() => {
+        // Non-fatal: the status dropdown just won't render.
       });
     return () => {
       active = false;
@@ -269,6 +320,26 @@ export default function PortalCaseDetailPage({
       });
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handleChangeStatus(statusId: number | null) {
+    setStatusBusy(true);
+    try {
+      const next = await setCaseCustomStatus(orgId, caseIdNum, statusId);
+      setPortalCase(next);
+      setToast({ message: "Case status updated.", kind: "success" });
+    } catch (err) {
+      setToast({
+        message: isPortalForbiddenError(err)
+          ? "Only organization owners and admins can change the status."
+          : err instanceof ApiError
+            ? err.message
+            : "Could not update the status.",
+        kind: "error",
+      });
+    } finally {
+      setStatusBusy(false);
     }
   }
 
@@ -448,12 +519,13 @@ export default function PortalCaseDetailPage({
                 <Mail className="size-4" /> Send reminder
               </Button>
             )}
-            <StatusBadge
-              tone={PORTAL_CASE_STATUS_TONE[portalCase.status]}
-              withDot={false}
-            >
-              {PORTAL_CASE_STATUS_LABELS[portalCase.status]}
-            </StatusBadge>
+            <CaseStatusControl
+              portalCase={portalCase}
+              statuses={statuses}
+              canManage={canManage}
+              busy={statusBusy}
+              onChange={handleChangeStatus}
+            />
             {portalCase.priority !== "normal" && (
               <StatusBadge
                 tone={PORTAL_CASE_PRIORITY_TONE[portalCase.priority]}
@@ -504,6 +576,33 @@ export default function PortalCaseDetailPage({
               <p className="mt-3 rounded-lg bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
                 {portalCase.notes}
               </p>
+            )}
+          </section>
+
+          {/* Custom fields — the org's extra case attributes (internal only). */}
+          <section className="rounded-2xl border border-border bg-card p-5">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="font-heading text-base font-semibold">
+                Custom fields
+              </h2>
+              {canManage && fieldSchema.length > 0 && (
+                <EditFieldsButton
+                  onClick={() => setEditingFields(true)}
+                  disabled={busy}
+                />
+              )}
+            </div>
+            {fieldSchema.length === 0 ? (
+              <div className="mt-3">
+                <CustomFieldsEmpty
+                  canManage={canManage}
+                  settingsHref={`/dashboard/organizations/${orgId}/portal/settings/customization`}
+                />
+              </div>
+            ) : (
+              <div className="mt-3">
+                <CustomFieldsView schema={fieldSchema} values={fieldValues} />
+              </div>
             )}
           </section>
 
@@ -876,6 +975,23 @@ export default function PortalCaseDetailPage({
         />
       )}
 
+      {editingFields && canManage && (
+        <CustomFieldsEditModal
+          title="Edit custom fields"
+          description="These details stay internal to your team — they are never shown on public pages."
+          schema={fieldSchema}
+          values={fieldValues}
+          onClose={() => setEditingFields(false)}
+          onSave={async (values) => {
+            const res = await setCaseCustomFields(orgId, caseIdNum, values);
+            setFieldValues(res.values);
+            await reloadCustomFields();
+            setEditingFields(false);
+            setToast({ message: "Custom fields saved.", kind: "success" });
+          }}
+        />
+      )}
+
       <FilePreviewDialog
         preview={
           previewMeta
@@ -893,6 +1009,69 @@ export default function PortalCaseDetailPage({
 
       <Toast toast={toast} onDismiss={() => setToast(null)} />
     </PageContainer>
+  );
+}
+
+/**
+ * The case status shown in the header: a custom-status chip when the org has set
+ * one (else the system status badge), with an admin dropdown to change it. The
+ * dropdown lists the org's active custom statuses plus a "system status" option
+ * that clears the custom status back to the system default.
+ */
+function CaseStatusControl({
+  portalCase,
+  statuses,
+  canManage,
+  busy,
+  onChange,
+}: {
+  portalCase: PortalCase;
+  statuses: CaseStatus[];
+  canManage: boolean;
+  busy: boolean;
+  onChange: (statusId: number | null) => void;
+}) {
+  const activeStatuses = statuses.filter((status) => status.is_active);
+  const custom = portalCase.custom_status;
+
+  const badge = custom ? (
+    <CustomStatusChip status={custom} />
+  ) : (
+    <StatusBadge
+      tone={PORTAL_CASE_STATUS_TONE[portalCase.status]}
+      withDot={false}
+    >
+      {PORTAL_CASE_STATUS_LABELS[portalCase.status]}
+    </StatusBadge>
+  );
+
+  // Members (or an org with no custom statuses) just see the badge.
+  if (!canManage || activeStatuses.length === 0) return badge;
+
+  return (
+    <div className="flex items-center gap-2">
+      {badge}
+      <label className="sr-only" htmlFor="case-status-select">
+        Change case status
+      </label>
+      <select
+        id="case-status-select"
+        value={custom ? String(custom.id) : ""}
+        onChange={(e) =>
+          onChange(e.target.value === "" ? null : Number(e.target.value))
+        }
+        disabled={busy}
+        className="h-8 rounded-lg border border-input bg-transparent px-2 text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
+      >
+        <option value="">System status</option>
+        {activeStatuses.map((status) => (
+          <option key={status.id} value={status.id}>
+            {status.label}
+          </option>
+        ))}
+      </select>
+      {busy && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
+    </div>
   );
 }
 

@@ -62,6 +62,11 @@ export interface PortalPerson {
   status: PortalPersonStatus;
   notes: string;
   active_cases: number;
+  /**
+   * The person's custom-field values, keyed by field `key`. Internal-only in V1
+   * — never render these on public request/room pages. Empty when none are set.
+   */
+  custom_fields: CustomFieldValues;
   created_at: string;
   updated_at: string;
 }
@@ -180,6 +185,18 @@ export interface PortalCase {
 
   progress: PortalCaseProgress;
   requests: PortalCaseRequest[];
+
+  /**
+   * The org's custom case status, when one is set. A compact snapshot of the
+   * full `CaseStatus` (the system `status` above stays in sync with it). `null`
+   * when the case uses only the system status.
+   */
+  custom_status: CaseStatusRef | null;
+  /**
+   * The case's custom-field values, keyed by field `key`. Internal-only in V1 —
+   * never render these on public request/room pages. Empty when none are set.
+   */
+  custom_fields: CustomFieldValues;
 
   created_at: string;
   updated_at: string;
@@ -812,4 +829,210 @@ export interface CreateCaseFromTemplateResult {
   skipped_requirements: string[];
   warnings: CreateCaseFromTemplateWarning[];
   progress: PortalCaseProgress;
+}
+
+// ---- Custom fields + statuses (B2B Custom Fields and Statuses V1) ------------
+//
+// An org customizes its portal with two things:
+//   • Custom fields — extra structured attributes on a person or a case (a
+//     visa number, a program, an intake date), defined once and filled per
+//     record.
+//   • Custom case statuses — the org's own stage names (replacing/augmenting
+//     the system case status), each mapped back to a system status so the rest
+//     of the portal (readiness, queues) keeps working.
+//
+// Behind the `b2b_portals` flag + Teams entitlement. Any member may read the
+// definitions and the values; defining fields/statuses and editing record
+// values is admin/owner only. V1 treats every custom field as INTERNAL — even
+// fields stored with a non-internal `visibility` must NOT be rendered on public
+// request/room pages. Payloads carry no tokens, file URLs, or secrets.
+
+/** The kind of record a custom field is attached to. */
+export type CustomFieldTarget = "person" | "case";
+
+/**
+ * The data type of a custom field. Drives the input control and how a stored
+ * value is formatted and validated.
+ */
+export type CustomFieldType =
+  | "short_text"
+  | "long_text"
+  | "number"
+  | "date"
+  | "boolean"
+  | "single_select"
+  | "multi_select"
+  | "email"
+  | "phone"
+  | "url";
+
+/**
+ * Who may see/edit a custom field. V1 surfaces every field as internal-only;
+ * the non-internal values are stored for a future public-fields feature but are
+ * never exposed on public pages today.
+ */
+export type FieldVisibility = "internal" | "public_readonly" | "public_editable";
+
+/** One choice in a single/multi-select custom field. */
+export interface CustomFieldOption {
+  key: string;
+  label: string;
+  /** Optional display hint (hex or token) — advisory only in V1. */
+  color?: string;
+  sort_order?: number;
+}
+
+/** A custom-field definition for a person or case. */
+export interface CustomField {
+  id: number;
+  /** Stable machine key (snake_case). Immutable once created. */
+  key: string;
+  label: string;
+  description: string;
+  target: CustomFieldTarget;
+  /** Immutable after creation (the stored values depend on it). */
+  field_type: CustomFieldType;
+  /** Present (and meaningful) only for select field types. */
+  options: CustomFieldOption[];
+  required: boolean;
+  visibility: FieldVisibility;
+  sort_order: number;
+  is_active: boolean;
+}
+
+/**
+ * A stored custom-field value. Shape depends on the field type: text/email/
+ * phone/url/date → string; number → number; boolean → boolean; single_select →
+ * the chosen option key (string); multi_select → an array of option keys. A
+ * missing/cleared value is `null`.
+ */
+export type CustomFieldValue = string | number | boolean | string[] | null;
+
+/** A record's custom-field values, keyed by field `key`. */
+export type CustomFieldValues = Record<string, CustomFieldValue>;
+
+/** Where a custom case status sits in the org's broader workflow. */
+export type StatusCategory =
+  | "planning"
+  | "collecting"
+  | "reviewing"
+  | "ready"
+  | "submitted"
+  | "completed"
+  | "blocked"
+  | "closed";
+
+/** An org-defined case status (the org's own stage vocabulary). */
+export interface CaseStatus {
+  id: number;
+  /** Stable machine key (snake_case). */
+  key: string;
+  label: string;
+  description: string;
+  category: StatusCategory;
+  /** Display color (hex). Used to tint the status chip. */
+  color: string;
+  /** A short icon name/token (advisory). */
+  icon: string;
+  sort_order: number;
+  is_default: boolean;
+  /** A terminal status closes the case's active workflow. */
+  is_terminal: boolean;
+  is_active: boolean;
+  /** The system `PortalCaseStatus` this status keeps in sync. */
+  maps_to_system_status: string;
+}
+
+/** A compact custom-status snapshot embedded on a case payload. */
+export interface CaseStatusRef {
+  id: number;
+  key: string;
+  label: string;
+  category: StatusCategory;
+  color: string;
+  icon: string;
+  is_active: boolean;
+}
+
+// ---- Custom field/status request + response shapes --------------------------
+
+/** Response from listing custom fields for a target. */
+export interface CustomFieldsResponse {
+  fields: CustomField[];
+  count: number;
+}
+
+/** The display schema for a target: the ordered active fields to render. */
+export interface CustomFieldSchemaResponse {
+  target: CustomFieldTarget;
+  fields: CustomField[];
+}
+
+/** A record's custom fields: the schema to render + the stored values. */
+export interface RecordCustomFieldsResponse {
+  schema: CustomField[];
+  values: CustomFieldValues;
+}
+
+/** Response from saving a record's custom-field values. */
+export interface SetCustomFieldsResponse {
+  changed: boolean;
+  values: CustomFieldValues;
+}
+
+/** Body for creating a custom field. `field_type` + `target` are immutable. */
+export interface CreateCustomFieldBody {
+  key?: string;
+  label: string;
+  description?: string;
+  target: CustomFieldTarget;
+  field_type: CustomFieldType;
+  options?: CustomFieldOption[];
+  required?: boolean;
+  visibility?: FieldVisibility;
+  sort_order?: number;
+}
+
+/** Body for editing a custom field. `field_type` + `target` cannot change. */
+export interface UpdateCustomFieldBody {
+  label?: string;
+  description?: string;
+  options?: CustomFieldOption[];
+  required?: boolean;
+  visibility?: FieldVisibility;
+  sort_order?: number;
+  is_active?: boolean;
+}
+
+/** Response from listing the org's custom case statuses. */
+export interface CaseStatusesResponse {
+  statuses: CaseStatus[];
+}
+
+/** Body for creating a custom case status. */
+export interface CreateCaseStatusBody {
+  key?: string;
+  label: string;
+  description?: string;
+  category: StatusCategory;
+  color?: string;
+  icon?: string;
+  sort_order?: number;
+  is_default?: boolean;
+  is_terminal?: boolean;
+  maps_to_system_status?: string;
+}
+
+/** Body for editing a custom case status. */
+export interface UpdateCaseStatusBody {
+  label?: string;
+  description?: string;
+  category?: StatusCategory;
+  color?: string;
+  icon?: string;
+  sort_order?: number;
+  is_default?: boolean;
+  is_terminal?: boolean;
+  maps_to_system_status?: string;
+  is_active?: boolean;
 }

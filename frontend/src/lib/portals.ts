@@ -14,6 +14,23 @@
 import { ApiError, apiFetch } from "./api";
 import { fetchBlob, saveBlob } from "./document-files";
 import type {
+  CaseStatus,
+  CaseStatusesResponse,
+  CreateCaseStatusBody,
+  CreateCustomFieldBody,
+  CustomField,
+  CustomFieldSchemaResponse,
+  CustomFieldTarget,
+  CustomFieldType,
+  CustomFieldValue,
+  CustomFieldsResponse,
+  FieldVisibility,
+  RecordCustomFieldsResponse,
+  SetCustomFieldsResponse,
+  StatusCategory,
+  UpdateCaseStatusBody,
+  UpdateCustomFieldBody,
+  CustomFieldValues,
   CaseType,
   CreateCaseFromTemplateBody,
   CreateCaseFromTemplateResult,
@@ -533,6 +550,193 @@ export function createCaseFromTemplate(
     base(orgId, `templates/${templateId}/create-case/`),
     { method: "POST", body },
   );
+}
+
+// ---- Custom fields ----------------------------------------------------------
+
+/**
+ * List the org's custom-field definitions for a target (`person` or `case`).
+ * Any member may read. Pass `include_archived` to also surface inactive fields.
+ */
+export function getCustomFields(
+  orgId: number,
+  target: CustomFieldTarget,
+  options: { include_archived?: boolean } = {},
+): Promise<CustomFieldsResponse> {
+  const params = new URLSearchParams({ target });
+  if (options.include_archived) params.set("include_archived", "true");
+  return apiFetch<CustomFieldsResponse>(
+    base(orgId, `custom-fields/?${params.toString()}`),
+  );
+}
+
+/** Create a custom field. Admin/owner only (members get a 403). */
+export function createCustomField(
+  orgId: number,
+  body: CreateCustomFieldBody,
+): Promise<CustomField> {
+  return apiFetch<CustomField>(base(orgId, "custom-fields/"), {
+    method: "POST",
+    body,
+  });
+}
+
+/**
+ * Edit a custom field. Admin/owner only. `field_type` and `target` are
+ * immutable — only the label, description, options, required/visibility, order,
+ * and active flag can change.
+ */
+export function updateCustomField(
+  orgId: number,
+  fieldId: number,
+  body: UpdateCustomFieldBody,
+): Promise<CustomField> {
+  return apiFetch<CustomField>(base(orgId, `custom-fields/${fieldId}/`), {
+    method: "PATCH",
+    body,
+  });
+}
+
+/** Archive a custom field so it leaves the active schema. Admin/owner only. */
+export function archiveCustomField(
+  orgId: number,
+  fieldId: number,
+): Promise<CustomField> {
+  return apiFetch<CustomField>(
+    base(orgId, `custom-fields/${fieldId}/archive/`),
+    { method: "POST" },
+  );
+}
+
+/** Read the ordered active field schema for a target (for rendering inputs). */
+export function getCustomFieldSchema(
+  orgId: number,
+  target: CustomFieldTarget,
+): Promise<CustomFieldSchemaResponse> {
+  return apiFetch<CustomFieldSchemaResponse>(
+    base(orgId, `custom-fields/schema/?target=${encodeURIComponent(target)}`),
+  );
+}
+
+/** Read a person's custom fields: the schema to render + the stored values. */
+export function getPersonCustomFields(
+  orgId: number,
+  personId: number,
+): Promise<RecordCustomFieldsResponse> {
+  return apiFetch<RecordCustomFieldsResponse>(
+    base(orgId, `people/${personId}/custom-fields/`),
+  );
+}
+
+/** Save a person's custom-field values. Admin/owner only. */
+export function setPersonCustomFields(
+  orgId: number,
+  personId: number,
+  values: CustomFieldValues,
+): Promise<SetCustomFieldsResponse> {
+  return apiFetch<SetCustomFieldsResponse>(
+    base(orgId, `people/${personId}/custom-fields/`),
+    { method: "PATCH", body: { values } },
+  );
+}
+
+/** Read a case's custom fields: the schema to render + the stored values. */
+export function getCaseCustomFields(
+  orgId: number,
+  caseId: number,
+): Promise<RecordCustomFieldsResponse> {
+  return apiFetch<RecordCustomFieldsResponse>(
+    base(orgId, `cases/${caseId}/custom-fields/`),
+  );
+}
+
+/** Save a case's custom-field values. Admin/owner only. */
+export function setCaseCustomFields(
+  orgId: number,
+  caseId: number,
+  values: CustomFieldValues,
+): Promise<SetCustomFieldsResponse> {
+  return apiFetch<SetCustomFieldsResponse>(
+    base(orgId, `cases/${caseId}/custom-fields/`),
+    { method: "PATCH", body: { values } },
+  );
+}
+
+// ---- Custom case statuses ---------------------------------------------------
+
+/**
+ * List the org's custom case statuses. Any member may read. Pass
+ * `include_archived` to also surface inactive statuses.
+ */
+export function getCaseStatuses(
+  orgId: number,
+  options: { include_archived?: boolean } = {},
+): Promise<CaseStatusesResponse> {
+  const query = options.include_archived ? "?include_archived=true" : "";
+  return apiFetch<CaseStatusesResponse>(base(orgId, `case-statuses/${query}`));
+}
+
+/** Create a custom case status. Admin/owner only. */
+export function createCaseStatus(
+  orgId: number,
+  body: CreateCaseStatusBody,
+): Promise<CaseStatus> {
+  return apiFetch<CaseStatus>(base(orgId, "case-statuses/"), {
+    method: "POST",
+    body,
+  });
+}
+
+/** Edit a custom case status. Admin/owner only. */
+export function updateCaseStatus(
+  orgId: number,
+  statusId: number,
+  body: UpdateCaseStatusBody,
+): Promise<CaseStatus> {
+  return apiFetch<CaseStatus>(base(orgId, `case-statuses/${statusId}/`), {
+    method: "PATCH",
+    body,
+  });
+}
+
+/** Archive a custom case status. Admin/owner only. */
+export function archiveCaseStatus(
+  orgId: number,
+  statusId: number,
+): Promise<CaseStatus> {
+  return apiFetch<CaseStatus>(
+    base(orgId, `case-statuses/${statusId}/archive/`),
+    { method: "POST" },
+  );
+}
+
+/**
+ * Seed the org's default case statuses (a calm starting set). Admin/owner only.
+ * Use when the org has no statuses yet.
+ */
+export function seedDefaultCaseStatuses(
+  orgId: number,
+): Promise<CaseStatusesResponse> {
+  return apiFetch<CaseStatusesResponse>(
+    base(orgId, "case-statuses/seed-defaults/"),
+    { method: "POST" },
+  );
+}
+
+/**
+ * Set (or clear) a case's custom status. Admin/owner only. Pass a `statusId` to
+ * apply a status, or `null` to clear it. Returns the full case payload — the
+ * system status stays in sync with the chosen custom status.
+ */
+export function setCaseCustomStatus(
+  orgId: number,
+  caseId: number,
+  statusId: number | null,
+): Promise<PortalCase> {
+  return apiFetch<PortalCase>(base(orgId, `cases/${caseId}/status/`), {
+    method: "POST",
+    body: { status_id: statusId },
+  });
 }
 
 // ---- Pure helpers (no DOM where possible — unit-testable) -------------------
@@ -1128,4 +1332,235 @@ export async function copyToClipboard(text: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+// ---- Custom field + status helpers ------------------------------------------
+
+/** Order the 10 custom-field types appear in the type picker. */
+export const FIELD_TYPE_ORDER: CustomFieldType[] = [
+  "short_text",
+  "long_text",
+  "number",
+  "date",
+  "boolean",
+  "single_select",
+  "multi_select",
+  "email",
+  "phone",
+  "url",
+];
+
+/** Friendly labels for each custom-field type. */
+export const FIELD_TYPE_LABELS: Record<CustomFieldType, string> = {
+  short_text: "Short text",
+  long_text: "Long text",
+  number: "Number",
+  date: "Date",
+  boolean: "Yes / No",
+  single_select: "Single select",
+  multi_select: "Multi select",
+  email: "Email",
+  phone: "Phone",
+  url: "Link",
+};
+
+/** Friendly labels for each field visibility. V1 surfaces all as internal. */
+export const FIELD_VISIBILITY_LABELS: Record<FieldVisibility, string> = {
+  internal: "Internal only",
+  public_readonly: "Public (read-only)",
+  public_editable: "Public (editable)",
+};
+
+/** Order the 8 custom case-status categories appear in. */
+export const STATUS_CATEGORY_ORDER: StatusCategory[] = [
+  "planning",
+  "collecting",
+  "reviewing",
+  "ready",
+  "submitted",
+  "completed",
+  "blocked",
+  "closed",
+];
+
+/** Friendly labels for each custom case-status category. */
+export const STATUS_CATEGORY_LABELS: Record<StatusCategory, string> = {
+  planning: "Planning",
+  collecting: "Collecting",
+  reviewing: "Reviewing",
+  ready: "Ready",
+  submitted: "Submitted",
+  completed: "Completed",
+  blocked: "Blocked",
+  closed: "Closed",
+};
+
+/** Whether a field type is a select (single or multi) — has an options list. */
+export function isSelectFieldType(type: CustomFieldType): boolean {
+  return type === "single_select" || type === "multi_select";
+}
+
+/**
+ * Format the date portion of an ISO string for display, without timezone drift
+ * (we treat a `YYYY-MM-DD` value as a plain calendar date). Returns the raw
+ * string if it can't be parsed, so we never show "Invalid Date".
+ */
+function formatPlainDate(value: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value.trim());
+  if (!match) return value;
+  const [, year, month, day] = match;
+  const date = new Date(Number(year), Number(month) - 1, Number(day));
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+/** Look up a select option's label by its key, falling back to the key. */
+function optionLabel(field: CustomField, key: string): string {
+  const option = field.options.find((opt) => opt.key === key);
+  return option ? option.label : key;
+}
+
+/**
+ * Format a stored custom-field value for display, by field type:
+ *   • date → a readable calendar date
+ *   • boolean → "Yes" / "No"
+ *   • single_select → the chosen option's label
+ *   • multi_select → the chosen options' labels, joined
+ *   • everything else → the value as a string
+ * An empty/cleared value (`null`, `""`, or an empty array) reads as an em dash.
+ */
+export function formatCustomFieldValue(
+  field: CustomField,
+  value: CustomFieldValue,
+): string {
+  if (value === null || value === undefined) return "—";
+
+  switch (field.field_type) {
+    case "boolean":
+      return value ? "Yes" : "No";
+    case "date":
+      return typeof value === "string" && value
+        ? formatPlainDate(value)
+        : "—";
+    case "single_select":
+      return typeof value === "string" && value
+        ? optionLabel(field, value)
+        : "—";
+    case "multi_select": {
+      if (!Array.isArray(value) || value.length === 0) return "—";
+      return value.map((key) => optionLabel(field, key)).join(", ");
+    }
+    case "number":
+      return typeof value === "number" ? String(value) : String(value);
+    default: {
+      const text = typeof value === "string" ? value : String(value);
+      return text.trim() === "" ? "—" : text;
+    }
+  }
+}
+
+// Lenient client-side shape checks (the backend is the source of truth).
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Whether a value counts as "empty" for required-field validation. */
+function isEmptyValue(value: CustomFieldValue): boolean {
+  if (value === null || value === undefined) return true;
+  if (typeof value === "string") return value.trim() === "";
+  if (Array.isArray(value)) return value.length === 0;
+  return false;
+}
+
+/**
+ * Validate a single custom-field value on the client, returning a human error
+ * string or `null` when it's fine. Mirrors the backend's basic rules so the
+ * user gets immediate feedback: required presence, number/email/url shape, and
+ * select membership. The backend remains the source of truth.
+ */
+export function validateCustomFieldValueClient(
+  field: CustomField,
+  value: CustomFieldValue,
+): string | null {
+  const empty = isEmptyValue(value);
+
+  if (field.required && empty) {
+    return `${field.label} is required.`;
+  }
+  // An optional, empty value is always fine.
+  if (empty) return null;
+
+  switch (field.field_type) {
+    case "number": {
+      const num =
+        typeof value === "number"
+          ? value
+          : typeof value === "string"
+            ? Number(value.trim())
+            : Number.NaN;
+      if (Number.isNaN(num)) return `${field.label} must be a number.`;
+      return null;
+    }
+    case "email": {
+      if (typeof value !== "string" || !EMAIL_RE.test(value.trim())) {
+        return `${field.label} must be a valid email address.`;
+      }
+      return null;
+    }
+    case "url": {
+      if (typeof value !== "string") return `${field.label} must be a link.`;
+      try {
+        // Accept bare domains by assuming https when no scheme is present.
+        const candidate = /^https?:\/\//i.test(value.trim())
+          ? value.trim()
+          : `https://${value.trim()}`;
+        new URL(candidate);
+        return null;
+      } catch {
+        return `${field.label} must be a valid link.`;
+      }
+    }
+    case "single_select": {
+      if (typeof value !== "string") {
+        return `Choose an option for ${field.label}.`;
+      }
+      const known = field.options.some((opt) => opt.key === value);
+      return known ? null : `Choose a valid option for ${field.label}.`;
+    }
+    case "multi_select": {
+      if (!Array.isArray(value)) {
+        return `Choose options for ${field.label}.`;
+      }
+      const keys = new Set(field.options.map((opt) => opt.key));
+      const bad = value.some((key) => !keys.has(key));
+      return bad ? `Choose valid options for ${field.label}.` : null;
+    }
+    default:
+      return null;
+  }
+}
+
+/** Human label for a field type, falling back to the raw key. */
+export function fieldTypeLabel(type: CustomFieldType): string {
+  return FIELD_TYPE_LABELS[type] ?? type;
+}
+
+/** Human label for a status category, falling back to the raw key. */
+export function statusCategoryLabel(category: StatusCategory): string {
+  return STATUS_CATEGORY_LABELS[category] ?? category;
+}
+
+/**
+ * Derive a stable snake_case key from a human label — a preview of the key the
+ * backend will assign. Lowercases, replaces runs of non-alphanumerics with a
+ * single underscore, trims leading/trailing underscores. Empty input → "".
+ */
+export function slugifyKey(label: string): string {
+  return label
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
 }

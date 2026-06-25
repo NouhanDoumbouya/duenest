@@ -68,7 +68,30 @@ def build_dashboard_metrics(organization) -> dict:
     metrics.update(build_sharing_room_metrics(organization))
     metrics.update(build_missing_document_metrics(organization))
     metrics.update(_operational_health(organization, metrics))
+    metrics["custom_status_counts"] = build_custom_status_counts(organization)
     return metrics
+
+
+def build_custom_status_counts(organization) -> list[dict]:
+    """Per-custom-status active-case counts (B2B Custom Fields and Statuses V1).
+    Empty when the org defines no custom statuses. One grouped query."""
+    from .models import OrganizationCaseStatusDefinition
+
+    rows = (
+        PortalCase.objects.filter(
+            organization=organization, custom_status__isnull=False)
+        .exclude(status=PortalCase.Status.ARCHIVED)
+        .values("custom_status_id")
+        .annotate(count=Count("id"))
+    )
+    counts = {r["custom_status_id"]: r["count"] for r in rows}
+    defs = OrganizationCaseStatusDefinition.objects.filter(
+        organization=organization, is_active=True)
+    return [
+        {"status_id": d.id, "key": d.key, "label": d.label, "color": d.color,
+         "category": d.category, "count": counts.get(d.id, 0)}
+        for d in defs if counts.get(d.id, 0) > 0
+    ]
 
 
 def _people_metrics(organization) -> dict:

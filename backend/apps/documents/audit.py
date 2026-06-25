@@ -48,6 +48,12 @@ _ALLOWED_KEYS = {
     # ("recipient_count" is allow-listed because "recipient" contains "ip".)
     "reminder_type", "recipient_count", "sent_count", "skipped_count",
     "failed_count", "case_id", "org_id",
+    # B2B Custom Fields and Statuses V1 — safe customization identifiers/labels.
+    # ("field_key"/"status_key"/"changed_field_keys" are allow-listed because they
+    # contain the substring "key"; they hold machine keys, never secret values.)
+    "field_id", "field_key", "field_label", "field_type", "target",
+    "status_id", "status_key", "status_label", "changed_field_keys",
+    "person_id", "organization_id",
 }
 
 _MAX_STR = 255

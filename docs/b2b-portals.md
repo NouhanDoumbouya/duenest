@@ -596,6 +596,82 @@ archived/moved`, `document_moved_to_folder`, `document_tag_created`,
 `case_folder_created`, `person_folder_created`, `document_auto_filed`. Safe metadata
 only — never an R2 key, file URL, token, or document content.
 
+## Custom Fields and Statuses (delivered 2026-06-25)
+
+Organization admins can attach **org-defined custom fields** to portal people and cases
+and define **custom case statuses** — used across case creation, case detail, filtering,
+the dashboard, and templates — **without** a CRM, a form builder, dynamic DB columns, or
+raw SQL. **Deterministic — no AI, no AI credits.** Service:
+`apps/organizations/custom_fields.py`; models in migration `organizations/0010`.
+
+This reuses the existing portal people/case system — there is **no duplicate people or
+case model**, and **no dynamic per-org tables/columns**. Field values live in a single
+JSON column on a dedicated value model.
+
+### Custom fields (values are validated JSON, never a dynamic column)
+
+- `OrganizationCustomField` defines a field on a **person** or a **case** with a
+  `field_type` (short_text / long_text / number / date / boolean / single_select /
+  multi_select / email / phone / url), an optional `options` list (for selects), a
+  `required` flag, and a `key` that is **unique per org+target**.
+- `OrganizationCustomFieldValue` stores **one value per field per target** (person XOR
+  case) as **validated JSON** — size-limited and validated by `field_type` at write
+  time. There are **no dynamic database columns and no raw SQL**: the cases-list custom
+  filters (`custom_status`, `cf_key`+`cf_value`) use Django ORM JSONField lookups only.
+- Setting values returns the changed keys; unknown or **archived** field keys are
+  skipped. A required field cannot be cleared.
+
+### Custom case statuses (the fixed system status stays authoritative)
+
+- `OrganizationCaseStatusDefinition` defines an org status with a `category` (planning /
+  collecting / reviewing / ready / submitted / completed / blocked / closed). Custom
+  statuses **layer on top of** the fixed `PortalCase.Status` — they never replace it.
+- Setting a case's custom status (`POST .../cases/{id}/status/`) writes the
+  `custom_status` FK **and keeps the system `status` in sync** from the category
+  (planning→draft, collecting→collecting_documents, reviewing→waiting_for_review,
+  ready→ready, submitted→submitted, completed→completed, blocked→blocked,
+  closed→completed), so dashboards, reminders, and review keep working unchanged.
+- `seed-defaults` idempotently creates a workflow-mirroring set (Planning, Collecting
+  Documents, In Review, Ready to Submit, Submitted, Accepted, Rejected, Withdrawn,
+  Renewal Needed). Archiving a status deactivates it (and drops its default flag);
+  existing cases keep referencing it via the FK (`SET_NULL`).
+
+### Template defaults
+
+A case template (`OrganizationCaseTemplate`) may carry a `default_custom_status_key` and
+a `default_custom_field_values` map; on create-case-from-template they are applied after
+the case is created, and any custom field values submitted with the request override the
+template defaults. **Best-effort** — a bad value becomes a warning, never discards the
+case.
+
+### Internal-only in V1
+
+Field `visibility` (`public_readonly` / `public_editable`) is **stored for future use**
+but **V1 is internal-only**: custom fields and statuses are **never exposed on public
+request/room pages** — only authenticated org members see them.
+
+### Permissions
+
+**Read** (lists / schema / values) = any **active member**; **create / edit / archive**
+fields+statuses and **set** values/status = **OWNER/ADMIN**; non-members denied. Org
+isolation enforced (a field / status / value cannot cross org boundaries). Behind the
+`b2b_portals` flag + Teams entitlement. `field_type` and `target` are immutable after a
+field is created.
+
+### Limits (server-side caps, no Stripe)
+
+`teams_beta` = 50 fields / 30 statuses / 50 options-per-field; `teams` = 200 / 100 / 200;
+`enterprise` = unlimited.
+
+### Audit
+
+Through the unified Audit Log (`metadata.org_id`): `organization_custom_field_created/
+updated/archived`, `organization_custom_field_value_updated`,
+`organization_case_status_created/updated/archived`, `portal_case_custom_status_updated`,
+`default_case_statuses_seeded`. **Privacy-first:** a value update records only **which**
+field keys changed (`changed_field_keys`), **never the values themselves**; metadata
+holds only safe ids/keys/labels — never a file URL, token, document content, or secret.
+
 ## Frontend
 
 Owner/staff page `/dashboard/organizations/[orgId]/portal` (dashboard summary +
@@ -639,6 +715,9 @@ people + cases + review queue + case detail/actions). There is **no public UI**.
 - `docs/api-spec.md` §44 — Custom Document Organization V1 (personal + org folder/tag/
   collection/saved-view endpoints, smart-view filter whitelist, structure preferences,
   opt-in auto-filing, limits, audit).
+- `docs/api-spec.md` §45 — B2B Custom Fields and Statuses V1 (field definition/value
+  endpoints, field types + validation, status category→system mapping, template
+  defaults, dashboard/filter additions, limits, audit).
 - `docs/NOTIFICATIONS.md` — the `portal_review_decision` and `portal_bulk_reminder`
   recipient emails.
 - `docs/BILLING.md` — feature-flag gate, org entitlement, and the Teams limit table.

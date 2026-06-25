@@ -4,6 +4,15 @@ import { ApiError } from "./api";
 import {
   CASE_TYPE_LABELS,
   CASE_TYPE_ORDER,
+  FIELD_TYPE_LABELS,
+  FIELD_TYPE_ORDER,
+  FIELD_VISIBILITY_LABELS,
+  STATUS_CATEGORY_LABELS,
+  STATUS_CATEGORY_ORDER,
+  formatCustomFieldValue,
+  isSelectFieldType,
+  slugifyKey,
+  validateCustomFieldValueClient,
   DASHBOARD_ACTIVITY_LABELS,
   PORTAL_CASE_PRIORITY_LABELS,
   PORTAL_CASE_PRIORITY_ORDER,
@@ -49,13 +58,35 @@ import {
 } from "./portals";
 import type {
   CaseType,
+  CustomField,
+  CustomFieldType,
   DashboardActivityItem,
+  FieldVisibility,
   PortalCaseProgress,
   PortalReviewStatus,
   ReminderCandidate,
   ReminderPreview,
   ReminderType,
+  StatusCategory,
 } from "@/types/portals";
+
+/** Build a custom field for tests; override the parts a case cares about. */
+function makeField(overrides: Partial<CustomField> = {}): CustomField {
+  return {
+    id: 1,
+    key: "field",
+    label: "Field",
+    description: "",
+    target: "case",
+    field_type: "short_text",
+    options: [],
+    required: false,
+    visibility: "internal",
+    sort_order: 0,
+    is_active: true,
+    ...overrides,
+  };
+}
 
 function makeProgress(
   overrides: Partial<PortalCaseProgress> = {},
@@ -756,5 +787,202 @@ describe("renderTemplateTitlePreview", () => {
       "Onboarding pack",
     );
     expect(renderTemplateTitlePreview("", "Amina")).toBe("");
+  });
+});
+
+// ---- Custom fields + statuses -----------------------------------------------
+
+describe("custom-field type maps", () => {
+  it("labels every field type in the order list", () => {
+    for (const type of FIELD_TYPE_ORDER) {
+      expect(FIELD_TYPE_LABELS[type]).toBeTruthy();
+    }
+  });
+
+  it("covers all 10 field types with no duplicates", () => {
+    expect(FIELD_TYPE_ORDER).toHaveLength(10);
+    expect(new Set(FIELD_TYPE_ORDER).size).toBe(10);
+  });
+
+  it("labels all three visibilities", () => {
+    const keys: FieldVisibility[] = [
+      "internal",
+      "public_readonly",
+      "public_editable",
+    ];
+    for (const key of keys) {
+      expect(FIELD_VISIBILITY_LABELS[key]).toBeTruthy();
+    }
+    expect(Object.keys(FIELD_VISIBILITY_LABELS)).toHaveLength(3);
+  });
+
+  it("flags only the select field types as select", () => {
+    const selectTypes: CustomFieldType[] = ["single_select", "multi_select"];
+    for (const type of FIELD_TYPE_ORDER) {
+      expect(isSelectFieldType(type)).toBe(selectTypes.includes(type));
+    }
+  });
+});
+
+describe("status-category maps", () => {
+  it("labels every category in the order list", () => {
+    for (const category of STATUS_CATEGORY_ORDER) {
+      expect(STATUS_CATEGORY_LABELS[category]).toBeTruthy();
+    }
+  });
+
+  it("covers all 8 categories with no duplicates", () => {
+    expect(STATUS_CATEGORY_ORDER).toHaveLength(8);
+    expect(new Set(STATUS_CATEGORY_ORDER).size).toBe(8);
+    const categories: StatusCategory[] = [
+      "planning",
+      "collecting",
+      "reviewing",
+      "ready",
+      "submitted",
+      "completed",
+      "blocked",
+      "closed",
+    ];
+    expect(new Set(STATUS_CATEGORY_ORDER)).toEqual(new Set(categories));
+  });
+});
+
+describe("slugifyKey", () => {
+  it("derives a snake_case key from a label", () => {
+    expect(slugifyKey("Visa Number")).toBe("visa_number");
+    expect(slugifyKey("  Program / Track  ")).toBe("program_track");
+    expect(slugifyKey("Intake date!!")).toBe("intake_date");
+  });
+
+  it("returns an empty string for non-alphanumeric input", () => {
+    expect(slugifyKey("")).toBe("");
+    expect(slugifyKey("   ")).toBe("");
+    expect(slugifyKey("///")).toBe("");
+  });
+});
+
+describe("formatCustomFieldValue", () => {
+  it("renders a date as a readable calendar date without drift", () => {
+    const field = makeField({ field_type: "date" });
+    expect(formatCustomFieldValue(field, "2026-03-09")).toBe("Mar 9, 2026");
+  });
+
+  it("renders booleans as Yes / No", () => {
+    const field = makeField({ field_type: "boolean" });
+    expect(formatCustomFieldValue(field, true)).toBe("Yes");
+    expect(formatCustomFieldValue(field, false)).toBe("No");
+  });
+
+  it("renders a single_select using the option label", () => {
+    const field = makeField({
+      field_type: "single_select",
+      options: [
+        { key: "gold", label: "Gold tier" },
+        { key: "silver", label: "Silver tier" },
+      ],
+    });
+    expect(formatCustomFieldValue(field, "gold")).toBe("Gold tier");
+    // An unknown key falls back to the key itself, never crashes.
+    expect(formatCustomFieldValue(field, "bronze")).toBe("bronze");
+  });
+
+  it("renders a multi_select as joined option labels", () => {
+    const field = makeField({
+      field_type: "multi_select",
+      options: [
+        { key: "a", label: "Apples" },
+        { key: "b", label: "Bananas" },
+      ],
+    });
+    expect(formatCustomFieldValue(field, ["a", "b"])).toBe("Apples, Bananas");
+  });
+
+  it("renders plain text and numbers as strings", () => {
+    expect(
+      formatCustomFieldValue(makeField({ field_type: "short_text" }), "Hello"),
+    ).toBe("Hello");
+    expect(
+      formatCustomFieldValue(makeField({ field_type: "number" }), 42),
+    ).toBe("42");
+  });
+
+  it("renders empty / cleared values as an em dash", () => {
+    expect(formatCustomFieldValue(makeField(), null)).toBe("—");
+    expect(
+      formatCustomFieldValue(makeField({ field_type: "short_text" }), ""),
+    ).toBe("—");
+    expect(
+      formatCustomFieldValue(makeField({ field_type: "multi_select" }), []),
+    ).toBe("—");
+  });
+});
+
+describe("validateCustomFieldValueClient", () => {
+  it("flags a missing required value and accepts a present one", () => {
+    const field = makeField({ required: true, label: "Visa number" });
+    expect(validateCustomFieldValueClient(field, "")).toBe(
+      "Visa number is required.",
+    );
+    expect(validateCustomFieldValueClient(field, "X123")).toBeNull();
+  });
+
+  it("treats an empty optional value as valid", () => {
+    const field = makeField({ required: false });
+    expect(validateCustomFieldValueClient(field, "")).toBeNull();
+    expect(validateCustomFieldValueClient(field, null)).toBeNull();
+  });
+
+  it("validates number shape", () => {
+    const field = makeField({ field_type: "number", label: "Count" });
+    expect(validateCustomFieldValueClient(field, "12")).toBeNull();
+    expect(validateCustomFieldValueClient(field, 12)).toBeNull();
+    expect(validateCustomFieldValueClient(field, "abc")).toBe(
+      "Count must be a number.",
+    );
+  });
+
+  it("validates email shape", () => {
+    const field = makeField({ field_type: "email", label: "Email" });
+    expect(validateCustomFieldValueClient(field, "a@b.com")).toBeNull();
+    expect(validateCustomFieldValueClient(field, "nope")).toBe(
+      "Email must be a valid email address.",
+    );
+  });
+
+  it("validates url shape (assuming https for bare domains)", () => {
+    const field = makeField({ field_type: "url", label: "Link" });
+    expect(validateCustomFieldValueClient(field, "https://x.com")).toBeNull();
+    expect(validateCustomFieldValueClient(field, "example.com")).toBeNull();
+    expect(validateCustomFieldValueClient(field, "not a url")).toBe(
+      "Link must be a valid link.",
+    );
+  });
+
+  it("validates single_select membership", () => {
+    const field = makeField({
+      field_type: "single_select",
+      label: "Tier",
+      options: [{ key: "gold", label: "Gold" }],
+    });
+    expect(validateCustomFieldValueClient(field, "gold")).toBeNull();
+    expect(validateCustomFieldValueClient(field, "bronze")).toBe(
+      "Choose a valid option for Tier.",
+    );
+  });
+
+  it("validates multi_select membership", () => {
+    const field = makeField({
+      field_type: "multi_select",
+      label: "Tags",
+      options: [
+        { key: "a", label: "A" },
+        { key: "b", label: "B" },
+      ],
+    });
+    expect(validateCustomFieldValueClient(field, ["a", "b"])).toBeNull();
+    expect(validateCustomFieldValueClient(field, ["a", "z"])).toBe(
+      "Choose valid options for Tags.",
+    );
   });
 });
