@@ -1,6 +1,10 @@
 from django.urls import path
 
 from .views import (
+    GoogleDriveDestinationsView,
+    GoogleDriveFilesView,
+    GoogleDriveImportPreviewView,
+    GoogleDriveImportView,
     GoogleOAuthCallbackView,
     GoogleOAuthStartView,
     IntegrationAccountDisconnectView,
@@ -45,5 +49,26 @@ urlpatterns = [
         "integrations/accounts/<int:pk>/health/",
         IntegrationAccountHealthView.as_view(),
         name="integration-account-health",
+    ),
+    # ---- Google Drive Import V1 ----
+    path(
+        "integrations/google-drive/files/",
+        GoogleDriveFilesView.as_view(),
+        name="integration-google-drive-files",
+    ),
+    path(
+        "integrations/google-drive/destinations/",
+        GoogleDriveDestinationsView.as_view(),
+        name="integration-google-drive-destinations",
+    ),
+    path(
+        "integrations/google-drive/import/preview/",
+        GoogleDriveImportPreviewView.as_view(),
+        name="integration-google-drive-import-preview",
+    ),
+    path(
+        "integrations/google-drive/import/",
+        GoogleDriveImportView.as_view(),
+        name="integration-google-drive-import",
     ),
 ]

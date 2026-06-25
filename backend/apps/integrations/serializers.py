@@ -51,3 +51,35 @@ class OAuthStartSerializer(serializers.Serializer):
         default=list,
     )
     redirect_path = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+# ---- Google Drive Import V1 ------------------------------------------------
+
+
+class DriveFileRefSerializer(serializers.Serializer):
+    """A selected Drive file reference (no tokens, no URLs)."""
+
+    provider_file_id = serializers.CharField(max_length=255)
+    name = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
+    mime_type = serializers.CharField(max_length=160, required=False, allow_blank=True, default="")
+    size = serializers.IntegerField(required=False, allow_null=True, default=None)
+
+
+class DriveDestinationSerializer(serializers.Serializer):
+    type = serializers.ChoiceField(
+        choices=["file_inbox", "vault", "folder", "pack", "org_case", "org_folder", "org_pack"],
+        default="file_inbox",
+    )
+    folder_id = serializers.IntegerField(required=False, allow_null=True, default=None)
+    pack_id = serializers.IntegerField(required=False, allow_null=True, default=None)
+
+
+class DriveImportRequestSerializer(serializers.Serializer):
+    account_id = serializers.IntegerField()
+    files = DriveFileRefSerializer(many=True)
+    destination = DriveDestinationSerializer()
+
+    def validate_files(self, value):
+        if not value:
+            raise serializers.ValidationError("Select at least one file to import.")
+        return value

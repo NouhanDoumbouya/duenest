@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   CheckCircle2,
   Loader2,
@@ -317,6 +318,16 @@ export default function IntegrationsSettingsPage() {
                       </div>
                     ))}
                   </div>
+                  {provider.key === "google" && (
+                    <Link
+                      href="/dashboard/settings/integrations/google-drive"
+                      className="inline-block"
+                    >
+                      <Button type="button" variant="outline" size="sm">
+                        Import from Google Drive
+                      </Button>
+                    </Link>
+                  )}
                 </>
               )}
             </CardContent>

@@ -1579,3 +1579,21 @@ does **not** import any Drive/Calendar/Gmail data, sync, or write back.
   metadata only.
 - **Gating:** founder-only feature flags (`integrations`, `google_integrations`,
   and per-import-flow keys). See `docs/integrations.md`.
+
+### Google Drive Import (`apps/integrations/drive_import.py`)
+
+Manual, import-only Drive file import built on the foundation above and the
+existing document upload path:
+
+- **Provider:** read-only Drive methods on `GoogleProvider`
+  (`list_drive_files` / `get_drive_file_metadata` / `download_drive_file`,
+  Google-native → PDF export). Network isolated for mocking; size-capped; never
+  logs tokens/bodies; surfaces safe metadata only.
+- **Service:** `drive_import.py` validates each selected file (size/type), then
+  reuses `validate_secure_upload` + `encrypt_bytes_into_record` to store it
+  encrypted at rest, enforcing `enforce_plan_limit` / `enforce_storage_limit`.
+  Destinations: File Inbox / Vault / user-owned folder / user-owned pack. Per-file
+  failures are isolated. **No** write-back, deletion, or sync.
+- **API:** `GET google-drive/files|destinations`, `POST google-drive/import/preview`,
+  `POST google-drive/import` — owner-scoped, gated by `google_drive_import`. No
+  tokens/URLs/raw Google responses in any response or audit/operational metadata.

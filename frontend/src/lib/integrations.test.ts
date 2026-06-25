@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { accountStatusLabel, providerStatusLabel } from "./integrations";
+import {
+  accountStatusLabel,
+  driveImportReasonLabel,
+  providerStatusLabel,
+} from "./integrations";
 
 describe("providerStatusLabel", () => {
   it("maps provider statuses to friendly copy", () => {
@@ -22,5 +26,15 @@ describe("accountStatusLabel", () => {
     expect(accountStatusLabel("revoked")).toBe("Revoked");
     expect(accountStatusLabel("error")).toBe("Needs attention");
     expect(accountStatusLabel("disconnected")).toBe("Disconnected");
+  });
+});
+
+describe("driveImportReasonLabel", () => {
+  it("maps Drive import skip/failure reasons to friendly copy", () => {
+    expect(driveImportReasonLabel("unsupported_type")).toBe("Unsupported file type");
+    expect(driveImportReasonLabel("too_large")).toBe("File is too large");
+    expect(driveImportReasonLabel("limit_reached")).toBe("Plan limit reached");
+    expect(driveImportReasonLabel("")).toBe("");
+    expect(driveImportReasonLabel("whatever")).toBe("Couldn't import");
   });
 });

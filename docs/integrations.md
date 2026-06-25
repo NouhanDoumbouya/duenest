@@ -163,10 +163,74 @@ pre-selected), connect/disconnect/check actions, and trust copy:
 
 No imported-data UI exists yet.
 
+---
+
+# Google Drive Import V1
+
+Manual, **import-only**, review-before-save import of selected Google Drive files
+into CertaNest. Gated by `integrations` + `google_integrations` +
+`google_drive_import` (all founder-only by default). Drive is accessed with the
+read-only `drive` scope group (`drive.readonly`) from the OAuth foundation —
+**no new scope is added**. CertaNest never modifies, deletes, shares, or writes
+back to Drive; there is no sync and no background job.
+
+## Workflow
+
+Open Integrations → "Import from Google Drive" → search/browse your Drive files →
+select files → choose a destination → **review** → import. Each file returns its
+own result; one file's failure never aborts the batch.
+
+## Provider methods (`apps/integrations/providers/google.py`)
+
+Read-only, network isolated for mocking, size-capped, and never logging
+tokens/bodies: `list_drive_files`, `get_drive_file_metadata`,
+`download_drive_file` (binary `alt=media` or Google-native `export` to PDF), and
+`build_drive_file_payload`. Only safe metadata is surfaced — `provider_file_id`,
+`name`, `mime_type`, `size`, `modified_time`, `type_label`, `is_folder`,
+`is_google_workspace_file`, `exportable`. **Never** web/icon links, download URLs,
+permissions, tokens, or content.
+
+## Supported types
+
+Imports the existing upload allowlist: **PDF, JPEG/PNG, DOC/DOCX** (≤ 10 MB).
+Google Docs/Sheets/Slides are **exported to PDF**. Every imported file goes
+through the same `validate_secure_upload` (size → extension → declared MIME →
+magic bytes → structure → malware-scan) and is **encrypted at rest** via the
+existing envelope encryption. Folders, shortcuts, Forms, oversized, and other
+types are rejected with a clear reason: `unsupported_type`, `too_large`,
+`not_downloadable`, `export_not_supported`, `provider_error`, `storage_error`,
+`limit_reached`, `scan_unavailable`, `invalid_file`.
+
+## Destinations
+
+Owner-scoped only in V1: **File Inbox** (loose file), **Vault** (new Document),
+**a folder** (Vault + primary folder, user-owned), **an application pack** (Vault +
+a new attached `FILE` requirement, user-owned). Plan + storage limits are enforced
+via the existing `enforce_plan_limit` / `enforce_storage_limit` — imports are not
+a bypass. Organization destinations (case/folder/pack) are **deferred** and return
+`destination_not_supported`.
+
+## API (`/api/v1/integrations/google-drive/`)
+
+`GET files/` (search/list, safe metadata) · `GET destinations/` (owner-scoped
+options) · `POST import/preview/` (advisory type/size validation, no download) ·
+`POST import/` (download selected → validate → encrypt → save; per-file results).
+No tokens, download URLs, or raw Google responses are ever returned. Throttles:
+`google_drive_list`, `google_drive_import`.
+
+## Permissions & privacy
+
+A user imports only from **their own** connected account (`account_id` is
+owner-scoped; another user's id → 404). A founder cannot import from a user's
+Drive. Audit events (`google_drive_import_previewed/started/file_imported/
+file_import_failed/completed`) and an operational event
+(`source=google_drive_import`) record **safe counts/reasons only** — never tokens,
+download URLs, raw Google responses, Drive/document content, or raw file ids.
+
 ## Deferred (not in this branch)
 
-Google Drive import · Google Calendar import · Gmail import · automatic/background
-sync · webhook receiver · write-back · external deletion · external file previews ·
-full Google app verification workflow · Microsoft/Dropbox providers · provider
-re-auth UX · org-level connect · integration scheduled jobs · founder integration
-health console.
+Google Calendar import · Gmail import · automatic/background sync · folder
+mirroring · two-way sync · Drive webhooks · Google Picker UI · write-back ·
+external deletion · external file previews · full Google app verification ·
+Microsoft/Dropbox providers · provider re-auth UX · org-level / shared-Drive
+destinations · integration scheduled jobs · founder integration health console.

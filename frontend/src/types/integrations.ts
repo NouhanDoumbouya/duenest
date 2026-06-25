@@ -65,3 +65,67 @@ export interface OAuthStartResponse {
   provider: string;
   scope_groups: string[];
 }
+
+// ---- Google Drive Import V1 ----
+
+export interface DriveFile {
+  provider_file_id: string;
+  name: string;
+  mime_type: string;
+  size: number | null;
+  modified_time: string;
+  type_label: string;
+  is_folder: boolean;
+  is_google_workspace_file: boolean;
+  exportable: boolean;
+  export_mime_type: string;
+}
+
+export interface DriveListResponse {
+  files: DriveFile[];
+  next_page_token: string;
+}
+
+export interface DriveDestinations {
+  fixed: { type: string; label: string }[];
+  folders: { id: number; name: string }[];
+  packs: { id: number; title: string }[];
+  org_supported: boolean;
+}
+
+export type DriveDestination =
+  | { type: "file_inbox" | "vault" }
+  | { type: "folder"; folder_id: number }
+  | { type: "pack"; pack_id: number };
+
+export interface DriveFileRef {
+  provider_file_id: string;
+  name: string;
+  mime_type: string;
+  size?: number | null;
+}
+
+export interface DrivePreviewResult {
+  destination: { type: string };
+  importable_count: number;
+  skipped_count: number;
+  results: { provider_file_id: string; name: string; status: string; reason: string }[];
+  warnings: string[];
+}
+
+export interface DriveImportResultRow {
+  name: string;
+  status: string;
+  reason: string;
+  document_id: number | null;
+  file_id: number | null;
+}
+
+export interface DriveImportResult {
+  status: string;
+  imported_count: number;
+  failed_count: number;
+  destination: { type: string };
+  results: DriveImportResultRow[];
+  warnings: string[];
+}

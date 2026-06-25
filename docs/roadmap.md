@@ -56,6 +56,20 @@ page, and founder-only feature flags. **Import-only and not built yet:** no
 Drive/Calendar/Gmail import, no sync, no background jobs, no write-back. Gmail
 scope is never requested by default. See `docs/integrations.md`.
 
+## 0.3 Google Drive Import V1 (delivered, 2026-06-25)
+
+Manual, import-only Google Drive file import (branch
+`integrations/google-drive-import-v1`). Extends the Google provider with read-only
+Drive list/search/metadata/download (Google-native files export to PDF), and adds
+`apps/integrations/drive_import.py` + four endpoints under
+`/api/v1/integrations/google-drive/`. Selected files are validated (size / type /
+magic bytes / structure / malware-scan), encrypted at rest via the existing upload
+path, and saved to File Inbox / Vault / a user-owned folder / a user-owned pack,
+respecting plan + storage limits. Per-file results; safe audit/operational events.
+**No** Calendar/Gmail import, sync, background jobs, write-back, or deletion;
+founder-gated by `google_drive_import`. Frontend:
+`/dashboard/settings/integrations/google-drive`. See `docs/integrations.md`.
+
 ## 1. Roadmap Summary
 
 This roadmap defines how CertaNest will move from a well-documented product concept to a working MVP.

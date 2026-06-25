@@ -6922,4 +6922,17 @@ Responses NEVER include OAuth tokens, secrets, or raw OAuth state.
 - `POST /api/v1/integrations/accounts/{id}/refresh/` → `{ "result": {status}, "account": {...} }`. Safe when the provider is unconfigured (`status:"configuration_required"`, no crash).
 - `GET /api/v1/integrations/accounts/{id}/health/` → recomputes status from token expiry; stamps `last_checked_at`.
 
-Required env: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_REDIRECT_URI` (unset → provider reports "not configured"). No Drive/Calendar/Gmail data is imported in this version. Frontend: `/dashboard/settings/integrations`.
+Required env: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_REDIRECT_URI` (unset → provider reports "not configured"). Frontend: `/dashboard/settings/integrations`.
+
+## Google Drive Import V1 (`integrations/google-drive/`)
+
+Manual, import-only import of selected Drive files (see `docs/integrations.md`).
+Gated by `integrations` + `google_integrations` + `google_drive_import` (founder-only
+by default → `503` when off). Read-only Drive access (`drive.readonly`); no write-back,
+delete, or sync. Responses NEVER include OAuth tokens, download URLs, or raw Google
+API responses. `account_id` is owner-scoped (another user's id → `404`).
+
+- `GET /api/v1/integrations/google-drive/files/?account_id=&q=&file_type=pdf|image|doc|google&page_token=&page_size=` → `{ "files": [ { provider_file_id, name, mime_type, size, modified_time, type_label, is_folder, is_google_workspace_file, exportable, export_mime_type } ], "next_page_token" }`. Safe metadata only. `400 {status:"not_configured"}` when Google OAuth env is unset; `502` on a Drive error. Throttle `google_drive_list`.
+- `GET /api/v1/integrations/google-drive/destinations/` → `{ fixed:[{type,label}], folders:[{id,name}], packs:[{id,title}], org_supported:false }` (owner-scoped).
+- `POST /api/v1/integrations/google-drive/import/preview/` — body `{ account_id, files:[{provider_file_id,name,mime_type,size}], destination:{type,folder_id?,pack_id?} }` → advisory `{ destination, importable_count, skipped_count, results:[{provider_file_id,name,status:"will_import"|"skipped",reason}], warnings }`. No download. Throttle `google_drive_list`.
+- `POST /api/v1/integrations/google-drive/import/` — same body → downloads SELECTED files only, validates (size/extension/MIME/magic-bytes/structure/malware-scan), encrypts at rest, saves to the destination, enforces plan/storage limits. Returns `{ status, imported_count, failed_count, destination, results:[{name,status:"imported"|"failed",reason,document_id,file_id}], warnings }`. Per-file failures are isolated. Destinations: `file_inbox` / `vault` / `folder` (user-owned) / `pack` (user-owned); org destinations → `400 {status:"destination_not_supported"}`. Throttle `google_drive_import`. Frontend: `/dashboard/settings/integrations/google-drive`.
