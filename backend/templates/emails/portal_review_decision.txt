@@ -1,0 +1,18 @@
+{% extends "emails/base.txt" %}
+{% block content %}{% if decision == "needs_replacement" %}Please re-upload your document{% else %}Document update{% endif %}
+
+{% if recipient_name %}Hi {{ recipient_name }},{% else %}Hello,{% endif %} {{ from_name }} has reviewed your submission for "{{ requested_document_title }}".
+
+{% if decision == "needs_replacement" %}A replacement is needed.{% else %}This submission was not accepted.{% endif %}
+{% if reason %}
+Reason: {{ reason }}
+{% endif %}{% if due_date %}Due by {{ due_date }}
+{% endif %}{% if upload_url %}
+Upload a new document securely here:
+{{ upload_url }}
+{% if expires_at %}This secure link expires on {{ expires_at }}.{% endif %}
+{% endif %}
+Your upload is sent securely to the requester. CertaNest stores files privately and
+never includes document contents, files, access codes, or share tokens in email.
+{% endblock %}
+{% block footer %}Sent via CertaNest on behalf of {{ from_name }}.{% endblock %}

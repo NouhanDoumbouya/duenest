@@ -904,7 +904,25 @@ class PortalCase(models.Model):
 
 class PortalCaseDocumentRequest(models.Model):
     """Links a case to a reused ``DocumentRequestLink`` (and optionally the pack
-    requirement it satisfies). No second request system — this is just the join."""
+    requirement it satisfies). No second request system — this is just the join,
+    plus the staff REVIEW metadata (B2B Review + Approval Workflow V1).
+
+    The review status is the staff-facing mirror of the linked DocumentRequestLink
+    status; it is kept here for fast review-queue/progress queries and to hold the
+    reviewer + note. The decision history lives in ``PortalCaseReviewDecision``.
+    """
+
+    class ReviewStatus(models.TextChoices):
+        PENDING_UPLOAD = "pending_upload", "Pending upload"
+        UPLOADED = "uploaded", "Uploaded"
+        UNDER_REVIEW = "under_review", "Under review"
+        ACCEPTED = "accepted", "Accepted"
+        REJECTED = "rejected", "Rejected"
+        NEEDS_REPLACEMENT = "needs_replacement", "Needs replacement"
+        CANCELLED = "cancelled", "Cancelled"
+
+    # Review statuses that belong in the staff review queue.
+    REVIEW_QUEUE_STATUSES = (ReviewStatus.UPLOADED, ReviewStatus.UNDER_REVIEW)
 
     case = models.ForeignKey(
         PortalCase, on_delete=models.CASCADE, related_name="case_requests"
@@ -917,14 +935,74 @@ class PortalCaseDocumentRequest(models.Model):
         "documents.DocumentBundleRequirement", on_delete=models.SET_NULL,
         null=True, blank=True, related_name="portal_case_requests",
     )
+
+    review_status = models.CharField(
+        max_length=20, choices=ReviewStatus.choices, default=ReviewStatus.PENDING_UPLOAD
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="portal_reviews_made",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_note = models.TextField(blank=True)
+    rejection_reason = models.TextField(blank=True)
+    last_submitted_at = models.DateTimeField(null=True, blank=True)
+    decision_count = models.PositiveIntegerField(default=0)
+
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["-created_at"]
-        indexes = [models.Index(fields=["case", "-created_at"])]
+        indexes = [
+            models.Index(fields=["case", "-created_at"]),
+            models.Index(fields=["review_status"]),
+        ]
 
     def __str__(self):
         return f"PortalCaseDocumentRequest(case={self.case_id}, req={self.document_request_id})"
+
+
+class PortalCaseReviewDecision(models.Model):
+    """Append-only history of staff review decisions on a case's document request
+    (B2B Review + Approval Workflow V1). Stores no document contents/tokens/URLs."""
+
+    class Decision(models.TextChoices):
+        ACCEPTED = "accepted", "Accepted"
+        REJECTED = "rejected", "Rejected"
+        NEEDS_REPLACEMENT = "needs_replacement", "Needs replacement"
+
+    case_request = models.ForeignKey(
+        PortalCaseDocumentRequest, on_delete=models.CASCADE, related_name="decisions"
+    )
+    organization = models.ForeignKey(
+        Organization, on_delete=models.CASCADE, related_name="portal_review_decisions"
+    )
+    case = models.ForeignKey(
+        PortalCase, on_delete=models.CASCADE, related_name="review_decisions"
+    )
+    document_request = models.ForeignKey(
+        "documents.DocumentRequestLink", on_delete=models.CASCADE,
+        related_name="portal_review_decisions",
+    )
+    decision = models.CharField(max_length=20, choices=Decision.choices)
+    note = models.TextField(blank=True)
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+        related_name="portal_decisions_made",
+    )
+    decided_at = models.DateTimeField(auto_now_add=True)
+    previous_status = models.CharField(max_length=20, blank=True)
+    new_status = models.CharField(max_length=20, blank=True)
+    notified_recipient = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-decided_at"]
+        indexes = [models.Index(fields=["case_request", "-decided_at"])]
+
+    def __str__(self):
+        return f"PortalCaseReviewDecision(cr={self.case_request_id}, decision={self.decision})"
 
 
 class OrganizationPlanProfile(models.Model):

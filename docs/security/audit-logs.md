@@ -42,6 +42,12 @@ reads are **not** logged.
   portal_case_pack_created, portal_case_room_created, portal_case_request_created.
   Recorded under category `system`, owner = the organization's owner user, actor =
   the acting member, with `metadata.org_id` for scoping.
+- **B2B Review + Approval:** portal_review_started, portal_document_accepted,
+  portal_document_rejected (severity `warning`), portal_document_needs_replacement,
+  portal_recipient_notified. Same scoping (category `system`, owner = the org owner,
+  actor = the acting member, `metadata.org_id`); metadata is limited to safe
+  summaries (status_from / status_to, decision, request title, a short note
+  summary) — never tokens, file URLs, or document contents.
 - **Teams Plan + Portal Limits:** organization_plan_profile_created,
   organization_plan_changed, organization_portal_enabled,
   organization_portal_disabled, organization_portal_limit_reached. Recorded under

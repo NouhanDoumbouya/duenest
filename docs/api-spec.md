@@ -5949,3 +5949,125 @@ URLs). See §37 and `docs/security/audit-logs.md`.
 
 See `docs/BILLING.md`, `docs/b2b-portals.md`, and `docs/security-plan.md`.
 
+---
+
+## 40 — B2B Review + Approval Workflow V1 (`organizations/{org_id}/portal/...`)
+
+Staff in an organization portal **review uploaded documents and decide
+accept / reject / needs-replacement** from a review queue. It **reuses the
+existing primitives** end-to-end — the **Document Request Link** carries the upload
+and stays the authoritative status, the **pack** records requirement satisfaction —
+so there is **no** second upload, request-link, or sharing-room system.
+**Deterministic — no AI, no AI credits.** All endpoints are org-scoped,
+member-gated, and behind the `b2b_portals` feature flag + the Teams entitlement
+(see §39).
+
+### Workflow
+
+A recipient uploads through the existing Document Request Link
+(`/document-request/{token}`) → the upload appears in the org **review queue** →
+a staff member opens the item, previews/downloads the uploaded file (org-scoped
+proxy), and decides **accept / reject / needs_replacement** with a note → the
+decision drives the **same** Document Request Link's accept / reject /
+needs_replacement service functions → on **accept** the linked pack requirement is
+satisfied (existing attach-to-pack flow) and case progress recomputes → a decision
+record + audit event are written → the recipient may optionally be emailed for
+reject / needs_replacement.
+
+### Endpoints
+
+All under `/api/v1/organizations/{org_id}/portal/` (authenticated, member-scoped,
+feature + entitlement-gated).
+
+| Method | Path | Role | Description |
+| --- | --- | --- | --- |
+| `GET` | `/review-queue/?status=&case_id=&person_id=&search=` | member | Enriched review items (uploads awaiting / under review), filterable |
+| `GET` | `/cases/{case_id}/review-items/` | member | Review items for one case |
+| `POST` | `/cases/{case_id}/requests/{case_request_id}/start-review/` | admin | Mark an item `under_review` |
+| `POST` | `/cases/{case_id}/requests/{case_request_id}/review/` | admin | Decide `accept` / `reject` / `needs_replacement` |
+| `GET` | `/cases/{case_id}/requests/{case_request_id}/decisions/` | member | Append-only decision history |
+| `GET` | `/cases/{case_id}/requests/{case_request_id}/file/preview/` | member | Stream the decrypted uploaded file (org-scoped proxy) |
+| `GET` | `/cases/{case_id}/requests/{case_request_id}/file/download/` | member | Download the decrypted uploaded file (org-scoped proxy) |
+
+### Review statuses and rules
+
+`review_status` is one of `pending_upload` (no file yet) → `uploaded` (awaiting
+review) → `under_review` (staff started) → `accepted` / `rejected` /
+`needs_replacement` (or `cancelled`). It **mirrors the linked `DocumentRequestLink`
+status, which stays authoritative.**
+
+* A document **cannot be accepted without an uploaded file**.
+* **Accept** satisfies the linked pack requirement; **reject does not**.
+* **Needs-replacement** reopens the existing Document Request Link, so the
+  recipient can re-upload, returning the item to the queue.
+* Case progress recomputes after each decision (`suggested_status`:
+  `waiting_for_review` when uploads are pending, `ready` when all required
+  requirements are satisfied, else `collecting_documents`).
+
+### Decision request / response (`POST .../review/`)
+
+Request body:
+
+```json
+{
+  "decision": "accept | reject | needs_replacement",
+  "note": "optional staff note",
+  "notify_recipient": false
+}
+```
+
+Response:
+
+```json
+{
+  "case_request": { "...review item with review_status, reviewed_by, reviewed_at, decision_count..." },
+  "document_request_status": "accepted",
+  "progress": { "...recomputed per-case progress (see §38)..." },
+  "notified_recipient": false
+}
+```
+
+### Org-scoped file proxy (no storage URL)
+
+The uploaded file is an encrypted `DocumentFile` owned by the **org owner**. Because
+a reviewing admin may be a different user, the personal `/api/v1/files/{id}/download/`
+route would `404` for them. Review therefore serves the file through the
+**org-scoped proxy** (`.../file/preview/` and `.../file/download/`) which streams
+the **decrypted bytes** — authenticated, org-member-gated, permission-first.
+**Never a raw storage URL or token.**
+
+### Data model
+
+* **`PortalCaseDocumentRequest`** (extended) — adds review metadata:
+  `review_status` (`pending_upload` / `uploaded` / `under_review` / `accepted` /
+  `rejected` / `needs_replacement` / `cancelled`), `reviewed_by`, `reviewed_at`,
+  `review_note`, `rejection_reason`, `last_submitted_at`, `decision_count`.
+* **`PortalCaseReviewDecision`** (new, append-only) — `case_request`,
+  `organization`, `case`, `document_request`, `decision`, `note`, `decided_by`,
+  `decided_at`, `previous_status`, `new_status`, `notified_recipient`.
+
+Migration: `organizations/0007_portalcasereviewdecision_and_more`.
+
+### Recipient notification
+
+Opt-in via `notify_recipient`, only on **reject / needs_replacement**, and only
+when the request has a `recipient_email`. Uses the shared branded-email path
+(`send_branded_email`, template `portal_review_decision`, category transactional).
+The email carries the request title + reason + (for needs-replacement) the
+recipient's own **public upload-page link** — never a private file URL, storage
+key, raw token-as-content, or document content. Recorded as a
+`portal_recipient_notified` audit event. See `docs/NOTIFICATIONS.md`.
+
+### Audit
+
+Recorded via the unified Audit Logs (category `system`, owner = the org owner,
+actor = the acting member, `metadata.org_id`): `portal_review_started`,
+`portal_document_accepted`, `portal_document_rejected` (severity `warning`),
+`portal_document_needs_replacement`, `portal_recipient_notified`. Metadata carries
+only safe summaries (`status_from` / `status_to`, decision, request title, a short
+note summary) — never tokens, file URLs, or document contents. See §37 and
+`docs/security/audit-logs.md`.
+
+See `docs/b2b-portals.md`, `docs/security-plan.md`, `docs/security/audit-logs.md`,
+and `docs/NOTIFICATIONS.md`.
+

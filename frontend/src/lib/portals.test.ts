@@ -15,15 +15,28 @@ import {
   PORTAL_PERSON_STATUS_TONE,
   PORTAL_PERSON_TYPE_LABELS,
   PORTAL_PERSON_TYPE_ORDER,
+  REVIEW_STATUS_LABELS,
+  REVIEW_STATUS_ORDER,
+  REVIEW_STATUS_TONE,
+  canDecideStatus,
+  groupReviewItemsByStatus,
   isNearLimit,
   isOrgLimitError,
+  isPortalForbiddenError,
   isPortalNotEnabledError,
   limitLabel,
   planLabel,
   progressPercent,
+  reviewNoteRequired,
+  reviewNotifyDefault,
+  reviewQueueCount,
+  reviewStatusCounts,
   usagePercent,
 } from "./portals";
-import type { PortalCaseProgress } from "@/types/portals";
+import type {
+  PortalCaseProgress,
+  PortalReviewStatus,
+} from "@/types/portals";
 
 function makeProgress(
   overrides: Partial<PortalCaseProgress> = {},
@@ -272,5 +285,152 @@ describe("isOrgLimitError + isPortalNotEnabledError", () => {
     expect(isOrgLimitError(new Error("boom"))).toBe(false);
     expect(isPortalNotEnabledError(null)).toBe(false);
     expect(isOrgLimitError(new ApiError("x", 403, null))).toBe(false);
+  });
+});
+
+describe("isPortalForbiddenError", () => {
+  it("matches a plain 403 with no special code", () => {
+    expect(isPortalForbiddenError(new ApiError("Forbidden", 403, null))).toBe(
+      true,
+    );
+    expect(
+      isPortalForbiddenError(new ApiError("Forbidden", 403, { detail: "no" })),
+    ).toBe(true);
+  });
+
+  it("excludes the richer org-limit and not-enabled 403s", () => {
+    expect(
+      isPortalForbiddenError(
+        new ApiError("x", 403, { code: "organization_plan_limit_exceeded" }),
+      ),
+    ).toBe(false);
+    expect(
+      isPortalForbiddenError(
+        new ApiError("x", 403, { code: "portal_not_enabled" }),
+      ),
+    ).toBe(false);
+  });
+
+  it("ignores non-403 statuses and non-ApiErrors", () => {
+    expect(isPortalForbiddenError(new ApiError("x", 404, null))).toBe(false);
+    expect(isPortalForbiddenError(new Error("boom"))).toBe(false);
+    expect(isPortalForbiddenError(null)).toBe(false);
+  });
+});
+
+describe("review-status label + tone + order maps", () => {
+  it("labels and tones every status in the order list", () => {
+    for (const status of REVIEW_STATUS_ORDER) {
+      expect(REVIEW_STATUS_LABELS[status]).toBeTruthy();
+      expect(REVIEW_STATUS_TONE[status]).toBeTruthy();
+    }
+  });
+
+  it("covers all seven review statuses with no duplicates", () => {
+    expect(REVIEW_STATUS_ORDER).toHaveLength(7);
+    expect(new Set(REVIEW_STATUS_ORDER).size).toBe(7);
+  });
+
+  it("maps outcomes to calm, correct tones", () => {
+    expect(REVIEW_STATUS_TONE.accepted).toBe("success");
+    expect(REVIEW_STATUS_TONE.rejected).toBe("danger");
+    expect(REVIEW_STATUS_TONE.needs_replacement).toBe("warning");
+    expect(REVIEW_STATUS_TONE.uploaded).toBe("info");
+    expect(REVIEW_STATUS_TONE.under_review).toBe("warning");
+    expect(REVIEW_STATUS_TONE.pending_upload).toBe("neutral");
+  });
+});
+
+describe("canDecideStatus", () => {
+  it("allows decisions on uploaded, under-review, and needs-replacement", () => {
+    expect(canDecideStatus("uploaded")).toBe(true);
+    expect(canDecideStatus("under_review")).toBe(true);
+    expect(canDecideStatus("needs_replacement")).toBe(true);
+  });
+
+  it("blocks decisions on terminal/empty states", () => {
+    expect(canDecideStatus("pending_upload")).toBe(false);
+    expect(canDecideStatus("accepted")).toBe(false);
+    expect(canDecideStatus("rejected")).toBe(false);
+    expect(canDecideStatus("cancelled")).toBe(false);
+  });
+});
+
+describe("reviewNoteRequired", () => {
+  it("requires a note for reject and needs_replacement only", () => {
+    expect(reviewNoteRequired("rejected")).toBe(true);
+    expect(reviewNoteRequired("needs_replacement")).toBe(true);
+    expect(reviewNoteRequired("accepted")).toBe(false);
+  });
+});
+
+describe("reviewNotifyDefault", () => {
+  it("defaults notify on for reject/needs_replacement, off for accept", () => {
+    expect(reviewNotifyDefault("rejected")).toBe(true);
+    expect(reviewNotifyDefault("needs_replacement")).toBe(true);
+    expect(reviewNotifyDefault("accepted")).toBe(false);
+  });
+});
+
+function reviewItem(status: PortalReviewStatus): { review_status: PortalReviewStatus } {
+  return { review_status: status };
+}
+
+describe("reviewStatusCounts", () => {
+  it("returns a complete record with zeros for absent statuses", () => {
+    const counts = reviewStatusCounts([]);
+    expect(counts.uploaded).toBe(0);
+    expect(counts.accepted).toBe(0);
+    expect(Object.keys(counts)).toHaveLength(7);
+  });
+
+  it("counts each status", () => {
+    const counts = reviewStatusCounts([
+      reviewItem("uploaded"),
+      reviewItem("uploaded"),
+      reviewItem("under_review"),
+      reviewItem("accepted"),
+    ]);
+    expect(counts.uploaded).toBe(2);
+    expect(counts.under_review).toBe(1);
+    expect(counts.accepted).toBe(1);
+    expect(counts.rejected).toBe(0);
+  });
+});
+
+describe("reviewQueueCount", () => {
+  it("counts only uploaded + under-review (the active work)", () => {
+    expect(
+      reviewQueueCount([
+        reviewItem("uploaded"),
+        reviewItem("under_review"),
+        reviewItem("accepted"),
+        reviewItem("rejected"),
+        reviewItem("pending_upload"),
+      ]),
+    ).toBe(2);
+  });
+
+  it("is 0 when nothing is waiting", () => {
+    expect(reviewQueueCount([reviewItem("accepted")])).toBe(0);
+    expect(reviewQueueCount([])).toBe(0);
+  });
+});
+
+describe("groupReviewItemsByStatus", () => {
+  it("groups in canonical order and drops empty groups", () => {
+    const groups = groupReviewItemsByStatus([
+      reviewItem("accepted"),
+      reviewItem("uploaded"),
+      reviewItem("uploaded"),
+    ]);
+    // Order: uploaded comes before accepted in REVIEW_STATUS_ORDER.
+    expect(groups.map((g) => g.status)).toEqual(["uploaded", "accepted"]);
+    expect(groups[0].items).toHaveLength(2);
+    expect(groups[1].items).toHaveLength(1);
+  });
+
+  it("returns an empty array for no items", () => {
+    expect(groupReviewItemsByStatus([])).toEqual([]);
   });
 });

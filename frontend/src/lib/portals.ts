@@ -12,6 +12,7 @@
 // copy. Nothing here is a raw storage URL.
 
 import { ApiError, apiFetch } from "./api";
+import { fetchBlob, saveBlob } from "./document-files";
 import type {
   CreateCasePackBody,
   CreateCaseRequestBody,
@@ -21,6 +22,7 @@ import type {
   PortalCaseFilters,
   PortalCasePriority,
   PortalCaseProgress,
+  PortalCaseReviewItemsResponse,
   PortalCaseStatus,
   PortalCaseType,
   PortalCasesResponse,
@@ -30,8 +32,16 @@ import type {
   PortalPerson,
   PortalPersonStatus,
   PortalPersonType,
+  PortalReviewDecision,
+  PortalReviewItem,
+  PortalReviewQueueFilters,
   PortalReviewQueueResponse,
+  PortalReviewStatus,
   PortalSummary,
+  ReviewCaseRequestBody,
+  ReviewCaseRequestResponse,
+  ReviewDecision,
+  ReviewDecisionsResponse,
   UpdatePortalCaseBody,
   UpdatePortalPersonBody,
 } from "@/types/portals";
@@ -217,11 +227,113 @@ export function getCaseProgress(
 
 // ---- Review queue -----------------------------------------------------------
 
-/** List uploads across all cases that are waiting for review. */
+/**
+ * List review items across all cases. With no filters the backend returns only
+ * uploaded/under-review items (the work queue); pass `status` to filter to a
+ * single review status, or `case_id`/`person_id`/`search` to narrow.
+ */
 export function getPortalReviewQueue(
   orgId: number,
+  filters: PortalReviewQueueFilters = {},
 ): Promise<PortalReviewQueueResponse> {
-  return apiFetch<PortalReviewQueueResponse>(base(orgId, "review-queue/"));
+  const params = new URLSearchParams();
+  if (filters.status) params.set("status", filters.status);
+  if (typeof filters.case_id === "number") {
+    params.set("case_id", String(filters.case_id));
+  }
+  if (typeof filters.person_id === "number") {
+    params.set("person_id", String(filters.person_id));
+  }
+  if (filters.search) params.set("search", filters.search);
+  const query = params.toString();
+  return apiFetch<PortalReviewQueueResponse>(
+    base(orgId, `review-queue/${query ? `?${query}` : ""}`),
+  );
+}
+
+/** List every review item for a single case (all statuses). */
+export function getCaseReviewItems(
+  orgId: number,
+  caseId: number,
+): Promise<PortalCaseReviewItemsResponse> {
+  return apiFetch<PortalCaseReviewItemsResponse>(
+    base(orgId, `cases/${caseId}/review-items/`),
+  );
+}
+
+/**
+ * Start reviewing an uploaded case request (UPLOADED → under_review).
+ * Admin/owner only.
+ */
+export function startCaseRequestReview(
+  orgId: number,
+  caseId: number,
+  caseRequestId: number,
+): Promise<PortalReviewItem> {
+  return apiFetch<PortalReviewItem>(
+    base(orgId, `cases/${caseId}/requests/${caseRequestId}/start-review/`),
+    { method: "POST" },
+  );
+}
+
+/**
+ * Record a review decision on a case request's upload. Admin/owner only.
+ * `note` is required by the backend for `rejected`/`needs_replacement`.
+ */
+export function reviewCaseRequest(
+  orgId: number,
+  caseId: number,
+  caseRequestId: number,
+  body: ReviewCaseRequestBody,
+): Promise<ReviewCaseRequestResponse> {
+  return apiFetch<ReviewCaseRequestResponse>(
+    base(orgId, `cases/${caseId}/requests/${caseRequestId}/review/`),
+    { method: "POST", body },
+  );
+}
+
+/** Read a case request's decision history (most-recent audit trail). */
+export function getCaseRequestDecisions(
+  orgId: number,
+  caseId: number,
+  caseRequestId: number,
+): Promise<ReviewDecision[]> {
+  return apiFetch<ReviewDecisionsResponse>(
+    base(orgId, `cases/${caseId}/requests/${caseRequestId}/decisions/`),
+  ).then((response) => response.decisions);
+}
+
+/**
+ * Fetch the uploaded file behind a case request as an authenticated blob,
+ * through the org-scoped preview proxy. This is the ONLY way to view the file —
+ * there is no raw storage URL.
+ */
+export function getReviewFilePreviewBlob(
+  orgId: number,
+  caseId: number,
+  caseRequestId: number,
+): Promise<Blob> {
+  return fetchBlob(
+    base(orgId, `cases/${caseId}/requests/${caseRequestId}/file/preview/`),
+    { auth: true, fallbackError: "Could not preview this file." },
+  );
+}
+
+/**
+ * Download the uploaded file behind a case request through the org-scoped
+ * download proxy (authenticated blob), then trigger a browser save.
+ */
+export async function getReviewFileDownloadBlob(
+  orgId: number,
+  caseId: number,
+  caseRequestId: number,
+  filename: string,
+): Promise<void> {
+  const blob = await fetchBlob(
+    base(orgId, `cases/${caseId}/requests/${caseRequestId}/file/download/`),
+    { auth: true, fallbackError: "Could not download this file." },
+  );
+  saveBlob(blob, filename);
 }
 
 // ---- Pure helpers (no DOM where possible — unit-testable) -------------------
@@ -357,6 +469,128 @@ export const PORTAL_CASE_PRIORITY_TONE: Record<PortalCasePriority, StatusTone> =
     urgent: "danger",
   };
 
+// ---- Review workflow helpers ------------------------------------------------
+
+/** Order review statuses appear in grouped views. */
+export const REVIEW_STATUS_ORDER: PortalReviewStatus[] = [
+  "uploaded",
+  "under_review",
+  "needs_replacement",
+  "rejected",
+  "accepted",
+  "pending_upload",
+  "cancelled",
+];
+
+/** Friendly, calm labels for each review status. */
+export const REVIEW_STATUS_LABELS: Record<PortalReviewStatus, string> = {
+  pending_upload: "Awaiting upload",
+  uploaded: "Ready to review",
+  under_review: "Under review",
+  accepted: "Accepted",
+  rejected: "Rejected",
+  needs_replacement: "Needs replacement",
+  cancelled: "Cancelled",
+};
+
+/** Status tone for the canonical StatusBadge. */
+export const REVIEW_STATUS_TONE: Record<PortalReviewStatus, StatusTone> = {
+  pending_upload: "neutral",
+  uploaded: "info",
+  under_review: "warning",
+  accepted: "success",
+  rejected: "danger",
+  needs_replacement: "warning",
+  cancelled: "neutral",
+};
+
+/** Human label for a review status, falling back to the raw key. */
+export function reviewStatusLabel(status: PortalReviewStatus): string {
+  return REVIEW_STATUS_LABELS[status] ?? status;
+}
+
+/**
+ * Whether an admin can record a decision on this review status. A file is
+ * decidable once it has been uploaded (`uploaded`), while it is being reviewed
+ * (`under_review`), or after a replacement has been re-uploaded against a prior
+ * `needs_replacement` — the backend re-surfaces those as `uploaded`, but we
+ * also allow `needs_replacement` so the action stays available if a fresh file
+ * is present. Already-decided/empty states are not decidable.
+ */
+export function canDecideStatus(status: PortalReviewStatus): boolean {
+  return (
+    status === "uploaded" ||
+    status === "under_review" ||
+    status === "needs_replacement"
+  );
+}
+
+/** Whether a decision requires a note/reason. Reject + needs-replacement do. */
+export function reviewNoteRequired(decision: PortalReviewDecision): boolean {
+  return decision === "rejected" || decision === "needs_replacement";
+}
+
+/**
+ * Default for the "Notify recipient" checkbox. Reject and needs-replacement
+ * benefit from a heads-up (the recipient must act again), so they default on;
+ * acceptance is quieter and defaults off.
+ */
+export function reviewNotifyDefault(decision: PortalReviewDecision): boolean {
+  return decision === "rejected" || decision === "needs_replacement";
+}
+
+/** A review item shaped like the enriched queue item (queue or case request). */
+type ReviewLike = Pick<PortalReviewItem, "review_status">;
+
+/**
+ * Count items per review status. Returns a complete record (every status keyed,
+ * zero where absent) so callers can read any status without guarding undefined.
+ */
+export function reviewStatusCounts(
+  items: ReviewLike[],
+): Record<PortalReviewStatus, number> {
+  const counts: Record<PortalReviewStatus, number> = {
+    pending_upload: 0,
+    uploaded: 0,
+    under_review: 0,
+    accepted: 0,
+    rejected: 0,
+    needs_replacement: 0,
+    cancelled: 0,
+  };
+  for (const item of items) {
+    counts[item.review_status] += 1;
+  }
+  return counts;
+}
+
+/**
+ * How many items are actively waiting for review (uploaded or under review) —
+ * the number that should drive the "needs review" badge.
+ */
+export function reviewQueueCount(items: ReviewLike[]): number {
+  return items.reduce(
+    (total, item) =>
+      item.review_status === "uploaded" || item.review_status === "under_review"
+        ? total + 1
+        : total,
+    0,
+  );
+}
+
+/**
+ * Group review-like items by status into the canonical display order, dropping
+ * empty groups. Generic so it works on both queue items and case requests.
+ */
+export function groupReviewItemsByStatus<T extends ReviewLike>(
+  items: T[],
+): Array<{ status: PortalReviewStatus; items: T[] }> {
+  return REVIEW_STATUS_ORDER.map((status) => ({
+    status,
+    items: items.filter((item) => item.review_status === status),
+  })).filter((group) => group.items.length > 0);
+}
+
 /**
  * Percentage of requirements satisfied for a case, clamped to 0–100 and rounded
  * to a whole number. A case with no requirements reads as 0% (nothing to be
@@ -456,6 +690,21 @@ export function isPortalNotEnabledError(err: unknown): err is ApiError {
     typeof err.data === "object" &&
     err.data !== null &&
     (err.data as Record<string, unknown>).code === "portal_not_enabled"
+  );
+}
+
+/**
+ * True when `err` is a plain 403 from a portal endpoint — typically a member
+ * who is not an admin/owner trying to take an admin-only action (e.g. recording
+ * a review decision). Distinct from the richer plan-limit / not-enabled 403s,
+ * which carry a `data.code`; this matches a 403 that is NOT one of those.
+ */
+export function isPortalForbiddenError(err: unknown): err is ApiError {
+  return (
+    err instanceof ApiError &&
+    err.status === 403 &&
+    !isOrgLimitError(err) &&
+    !isPortalNotEnabledError(err)
   );
 }
 

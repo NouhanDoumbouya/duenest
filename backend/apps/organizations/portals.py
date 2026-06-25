@@ -413,23 +413,25 @@ def build_portal_case_payload(case: PortalCase, user=None) -> dict:
 
 
 def _case_requests_payload(case: PortalCase) -> list[dict]:
+    # Reuse the review-item builder so the case detail carries the same review
+    # metadata (review_status, uploaded file via the org-scoped proxy route, etc.)
+    # the review queue/items use — no second shape to keep in sync.
+    from .portal_reviews import build_case_review_item, sync_case_request_review_status
+
     rows = (
         PortalCaseDocumentRequest.objects.filter(case=case)
-        .select_related("document_request").order_by("-created_at")
+        .select_related("document_request", "reviewed_by").order_by("-created_at")
     )
     out = []
     for row in rows:
+        sync_case_request_review_status(row)
+        item = build_case_review_item(row, organization=case.organization)
         link = row.document_request
-        out.append({
-            "document_request_id": link.id,
-            "requested_document_title": link.requested_document_title,
-            "status": link.status,
-            "recipient_name": link.recipient_name,
-            "can_upload": link.can_upload,
-            # Public upload page route (frontend) — never a storage URL/token-as-URL.
-            "upload_url": _request_public_url(link),
-            "requirement_id": row.requirement_id,
-        })
+        # Keep the existing fields the frontend already reads, plus the new review
+        # fields. ``upload_url`` is the recipient's public page route (safe).
+        item["status"] = link.status
+        item["upload_url"] = _request_public_url(link)
+        out.append(item)
     return out
 
 

@@ -15,6 +15,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import Link from "next/link";
@@ -24,11 +25,16 @@ import {
   CheckCircle2,
   Copy,
   DoorOpen,
+  Download,
+  Eye,
   ExternalLink,
   FileUp,
   Loader2,
   Package,
+  RotateCcw,
   ShieldAlert,
+  ThumbsDown,
+  ThumbsUp,
   X,
 } from "lucide-react";
 
@@ -44,8 +50,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Toast, type ToastState } from "@/components/ui/toast";
+import { FilePreviewDialog } from "@/components/ui/file-preview-dialog";
 import { useFeature } from "@/components/features/feature-flags-provider";
 import { ApiError } from "@/lib/api";
+import { formatFileSize } from "@/lib/document-files";
 import { formatDate } from "@/lib/documents";
 import { canManageOrganization, getOrganization } from "@/lib/organizations";
 import {
@@ -55,19 +63,34 @@ import {
   PORTAL_CASE_STATUS_TONE,
   PORTAL_CASE_TYPE_LABELS,
   PORTAL_PERSON_TYPE_LABELS,
+  REVIEW_STATUS_LABELS,
+  REVIEW_STATUS_TONE,
   archivePortalCase,
+  canDecideStatus,
   copyToClipboard,
   createCasePack,
   createCaseRequest,
   createCaseRoom,
   getPortalCase,
+  getReviewFileDownloadBlob,
+  getReviewFilePreviewBlob,
+  groupReviewItemsByStatus,
   isOrgLimitError,
+  isPortalForbiddenError,
   isPortalNotEnabledError,
   progressPercent,
+  reviewCaseRequest,
+  reviewNoteRequired,
+  reviewNotifyDefault,
+  startCaseRequestReview,
 } from "@/lib/portals";
 import { cn } from "@/lib/utils";
 import type { Organization } from "@/types/organizations";
-import type { PortalCase, PortalCaseRequest } from "@/types/portals";
+import type {
+  PortalCase,
+  PortalCaseRequest,
+  PortalReviewDecision,
+} from "@/types/portals";
 
 /**
  * Pick the best message for an action error. An `organization_plan_limit_exceeded`
@@ -108,6 +131,21 @@ export default function PortalCaseDetailPage({
   // Inline limit/validation errors surfaced inside the create modals.
   const [packError, setPackError] = useState<string | null>(null);
   const [requestError, setRequestError] = useState<string | null>(null);
+  // The request currently open in the review modal (admin decision flow).
+  const [reviewTarget, setReviewTarget] = useState<PortalCaseRequest | null>(
+    null,
+  );
+  // In-app file preview of an uploaded document (authenticated blob → object URL).
+  const [previewMeta, setPreviewMeta] = useState<{
+    fileName: string;
+    contentType: string;
+  } | null>(null);
+  const [previewFetch, setPreviewFetch] = useState<{
+    url: string | null;
+    loading: boolean;
+    error: string | null;
+  }>({ url: null, loading: false, error: null });
+  const previewUrlRef = useRef<string | null>(null);
 
   const canManage = org ? canManageOrganization(org.user_role) : false;
 
@@ -207,6 +245,93 @@ export default function PortalCaseDetailPage({
     } finally {
       setBusy(false);
     }
+  }
+
+  function revokePreviewUrl() {
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+    }
+  }
+
+  // Release any object URL when the page unmounts.
+  useEffect(() => () => revokePreviewUrl(), []);
+
+  // Preview an uploaded file: fetch it through the org-scoped proxy as an
+  // authenticated blob (NEVER a raw storage URL) and show it in the dialog.
+  async function handlePreviewUpload(request: PortalCaseRequest) {
+    if (!request.uploaded_file) return;
+    revokePreviewUrl();
+    setPreviewMeta({
+      fileName: request.uploaded_file.original_filename,
+      contentType: request.uploaded_file.content_type,
+    });
+    setPreviewFetch({ url: null, loading: true, error: null });
+    try {
+      const blob = await getReviewFilePreviewBlob(
+        orgId,
+        caseIdNum,
+        request.case_request_id,
+      );
+      const url = URL.createObjectURL(blob);
+      previewUrlRef.current = url;
+      setPreviewFetch({ url, loading: false, error: null });
+    } catch (err) {
+      setPreviewFetch({
+        url: null,
+        loading: false,
+        error:
+          err instanceof ApiError ? err.message : "Could not preview this file.",
+      });
+    }
+  }
+
+  function closePreview() {
+    revokePreviewUrl();
+    setPreviewMeta(null);
+    setPreviewFetch({ url: null, loading: false, error: null });
+  }
+
+  // Download an uploaded file through the authenticated org-scoped proxy.
+  async function handleDownloadUpload(request: PortalCaseRequest) {
+    if (!request.uploaded_file) return;
+    setBusy(true);
+    try {
+      await getReviewFileDownloadBlob(
+        orgId,
+        caseIdNum,
+        request.case_request_id,
+        request.uploaded_file.original_filename,
+      );
+    } catch (err) {
+      setToast({
+        message:
+          err instanceof ApiError ? err.message : "Could not download this file.",
+        kind: "error",
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Move an uploaded request into "under review" before opening the modal, so
+  // the queue reflects that someone is working on it. Best-effort: even if the
+  // start-review call fails (e.g. it's already under review), still open.
+  async function openReview(request: PortalCaseRequest) {
+    if (request.review_status === "uploaded") {
+      try {
+        await startCaseRequestReview(orgId, caseIdNum, request.case_request_id);
+        const next = await reload();
+        const refreshed = next.requests.find(
+          (r) => r.case_request_id === request.case_request_id,
+        );
+        setReviewTarget(refreshed ?? request);
+        return;
+      } catch {
+        // Fall through and open with what we have.
+      }
+    }
+    setReviewTarget(request);
   }
 
   if (!portalsEnabled || block === "coming_soon") {
@@ -403,16 +528,38 @@ export default function PortalCaseDetailPage({
                 a document through a secure link.
               </p>
             ) : (
-              <ul className="mt-4 space-y-2">
-                {portalCase.requests.map((request) => (
-                  <RequestRow
-                    key={request.document_request_id}
-                    request={request}
-                    copied={copied}
-                    onCopy={handleCopy}
-                  />
+              <div className="mt-4 space-y-5">
+                {groupReviewItemsByStatus(portalCase.requests).map((group) => (
+                  <div key={group.status}>
+                    <div className="flex items-center gap-2">
+                      <StatusBadge
+                        tone={REVIEW_STATUS_TONE[group.status]}
+                        withDot={false}
+                      >
+                        {REVIEW_STATUS_LABELS[group.status]}
+                      </StatusBadge>
+                      <span className="text-xs text-muted-foreground">
+                        {group.items.length}
+                      </span>
+                    </div>
+                    <ul className="mt-2 space-y-2">
+                      {group.items.map((request) => (
+                        <RequestRow
+                          key={request.case_request_id}
+                          request={request}
+                          canManage={canManage}
+                          busy={busy}
+                          copied={copied}
+                          onCopy={handleCopy}
+                          onPreview={handlePreviewUpload}
+                          onDownload={handleDownloadUpload}
+                          onReview={openReview}
+                        />
+                      ))}
+                    </ul>
+                  </div>
                 ))}
-              </ul>
+              </div>
             )}
           </section>
         </div>
@@ -594,6 +741,67 @@ export default function PortalCaseDetailPage({
         />
       )}
 
+      {reviewTarget && canManage && (
+        <ReviewModal
+          request={reviewTarget}
+          onClose={() => setReviewTarget(null)}
+          onPreview={() => handlePreviewUpload(reviewTarget)}
+          onDownload={() => handleDownloadUpload(reviewTarget)}
+          downloading={busy}
+          onConfirm={async (body) => {
+            try {
+              const result = await reviewCaseRequest(
+                orgId,
+                caseIdNum,
+                reviewTarget.case_request_id,
+                body,
+              );
+              await reload();
+              setReviewTarget(null);
+              const verb =
+                body.decision === "accepted"
+                  ? "accepted"
+                  : body.decision === "rejected"
+                    ? "rejected"
+                    : "marked for replacement";
+              setToast({
+                message: result.notified_recipient
+                  ? `Document ${verb}. The recipient was notified.`
+                  : `Document ${verb}.`,
+                kind: "success",
+              });
+            } catch (err) {
+              // Re-throw a friendly message for the modal to show inline.
+              if (isPortalForbiddenError(err)) {
+                throw new Error(
+                  "Only organization owners and admins can review uploads.",
+                );
+              }
+              throw new Error(
+                err instanceof ApiError
+                  ? err.message
+                  : "Could not record this decision.",
+              );
+            }
+          }}
+        />
+      )}
+
+      <FilePreviewDialog
+        preview={
+          previewMeta
+            ? {
+                fileName: previewMeta.fileName,
+                contentType: previewMeta.contentType,
+                url: previewFetch.url,
+                loading: previewFetch.loading,
+                error: previewFetch.error,
+              }
+            : null
+        }
+        onClose={closePreview}
+      />
+
       <Toast toast={toast} onDismiss={() => setToast(null)} />
     </PageContainer>
   );
@@ -625,25 +833,123 @@ function Stat({
 
 function RequestRow({
   request,
+  canManage,
+  busy,
   copied,
   onCopy,
+  onPreview,
+  onDownload,
+  onReview,
 }: {
   request: PortalCaseRequest;
+  canManage: boolean;
+  busy: boolean;
   copied: string | null;
   onCopy: (text: string, key: string) => void;
+  onPreview: (request: PortalCaseRequest) => void;
+  onDownload: (request: PortalCaseRequest) => void;
+  onReview: (request: PortalCaseRequest) => void;
 }) {
-  const key = `req-${request.document_request_id}`;
+  const key = `req-${request.case_request_id}`;
+  const file = request.uploaded_file;
+  const decidable = canDecideStatus(request.review_status);
   return (
-    <li className="rounded-lg border border-border px-3 py-2.5">
+    <li
+      id={`request-${request.case_request_id}`}
+      className="scroll-mt-24 rounded-lg border border-border px-3 py-2.5"
+    >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate text-sm font-medium">
             {request.requested_document_title}
           </p>
-          <p className="mt-0.5 truncate text-xs text-muted-foreground">
-            {request.recipient_name || "No recipient"} · {request.status}
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 truncate text-xs text-muted-foreground">
+            <span>{request.recipient_name || "No recipient"}</span>
+            {request.due_date && <span>· Due {formatDate(request.due_date)}</span>}
           </p>
         </div>
+        <StatusBadge
+          tone={REVIEW_STATUS_TONE[request.review_status]}
+          withDot={false}
+        >
+          {REVIEW_STATUS_LABELS[request.review_status]}
+        </StatusBadge>
+      </div>
+
+      {/* Uploaded file + its metadata */}
+      {file && (
+        <div className="mt-2 rounded-lg bg-muted/40 px-3 py-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="truncate text-xs font-medium">
+                {file.original_filename}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {formatFileSize(file.file_size)}
+                {request.uploaded_at && (
+                  <> · Uploaded {formatDate(request.uploaded_at)}</>
+                )}
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+              {file.is_previewable && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => onPreview(request)}
+                  disabled={busy}
+                >
+                  <Eye className="size-4" aria-hidden /> Preview
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => onDownload(request)}
+                disabled={busy}
+              >
+                <Download className="size-4" aria-hidden /> Download
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Decision outcome (when reviewed) */}
+      {(request.reviewed_by || request.review_note || request.rejection_reason) && (
+        <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+          {request.reviewed_by && (
+            <p>
+              Reviewed by {request.reviewed_by}
+              {request.reviewed_at && <> · {formatDate(request.reviewed_at)}</>}
+            </p>
+          )}
+          {(request.review_note || request.rejection_reason) && (
+            <p className="rounded-md bg-muted/40 px-2 py-1.5 text-foreground/80">
+              {request.rejection_reason || request.review_note}
+            </p>
+          )}
+          {request.decision_count > 0 && (
+            <p>
+              {request.decision_count} decision
+              {request.decision_count === 1 ? "" : "s"} on record
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="mt-2 flex flex-wrap items-center gap-1">
+        {canManage && decidable && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onReview(request)}
+            disabled={busy}
+          >
+            <ThumbsUp className="size-4" aria-hidden /> Review
+          </Button>
+        )}
         {request.can_upload && request.upload_url && (
           <Button
             size="sm"
@@ -904,6 +1210,245 @@ function CreateRequestModal({
           <Button type="submit" disabled={busy || titleEmpty}>
             {busy && <Loader2 className="size-4 animate-spin" />}
             Create request
+          </Button>
+        </div>
+      </form>
+    </ModalShell>
+  );
+}
+
+// ---- Review modal -----------------------------------------------------------
+
+const DECISIONS: Array<{
+  value: PortalReviewDecision;
+  label: string;
+  icon: typeof ThumbsUp;
+}> = [
+  { value: "accepted", label: "Accept", icon: ThumbsUp },
+  { value: "needs_replacement", label: "Needs replacement", icon: RotateCcw },
+  { value: "rejected", label: "Reject", icon: ThumbsDown },
+];
+
+function ReviewModal({
+  request,
+  onClose,
+  onConfirm,
+  onPreview,
+  onDownload,
+  downloading,
+}: {
+  request: PortalCaseRequest;
+  onClose: () => void;
+  onConfirm: (body: {
+    decision: PortalReviewDecision;
+    note?: string;
+    notify_recipient?: boolean;
+  }) => Promise<void>;
+  onPreview: () => void;
+  onDownload: () => void;
+  downloading: boolean;
+}) {
+  const [decision, setDecision] = useState<PortalReviewDecision>("accepted");
+  const [note, setNote] = useState("");
+  const [notify, setNotify] = useState(reviewNotifyDefault("accepted"));
+  const [touched, setTouched] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const file = request.uploaded_file;
+  const noteRequired = reviewNoteRequired(decision);
+  const noteMissing = noteRequired && note.trim().length === 0;
+  const satisfiesRequirement = request.requirement_id !== null;
+
+  function pickDecision(next: PortalReviewDecision) {
+    setDecision(next);
+    setNotify(reviewNotifyDefault(next));
+    setError(null);
+  }
+
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (noteMissing) {
+      setTouched(true);
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await onConfirm({
+        decision,
+        note: note.trim() || undefined,
+        notify_recipient: request.has_recipient_email ? notify : undefined,
+      });
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not record this decision.",
+      );
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <ModalShell
+      title="Review document"
+      description="Decide whether this upload is accepted, needs replacing, or is rejected. The original file is always preserved."
+      onClose={onClose}
+    >
+      <form className="mt-5 flex flex-col gap-4" onSubmit={handleSubmit}>
+        {/* Context */}
+        <div className="rounded-lg border border-border px-3 py-2.5">
+          <p className="text-sm font-medium">
+            {request.requested_document_title}
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {request.recipient_name || "No recipient"}
+          </p>
+          {file ? (
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="truncate text-xs font-medium">
+                  {file.original_filename}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {formatFileSize(file.file_size)}
+                  {request.uploaded_at && (
+                    <> · Uploaded {formatDate(request.uploaded_at)}</>
+                  )}
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-1">
+                {file.is_previewable && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={onPreview}
+                    disabled={submitting}
+                  >
+                    <Eye className="size-4" aria-hidden /> Preview
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={onDownload}
+                  disabled={submitting || downloading}
+                >
+                  <Download className="size-4" aria-hidden /> Download
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <p className="mt-2 text-xs text-brand-amber">
+              No file has been uploaded yet — you can only accept a document once
+              it has been uploaded.
+            </p>
+          )}
+        </div>
+
+        {/* Decision */}
+        <fieldset className="flex flex-col gap-2">
+          <legend className="text-sm font-medium">Decision</legend>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {DECISIONS.map((option) => {
+              const Icon = option.icon;
+              const active = decision === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => pickDecision(option.value)}
+                  aria-pressed={active}
+                  disabled={submitting}
+                  className={cn(
+                    "flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                    active
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground hover:bg-muted/50",
+                  )}
+                >
+                  <Icon className="size-4" aria-hidden />
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
+
+        {decision === "accepted" && satisfiesRequirement && (
+          <InlineAlert tone="secure">
+            Acceptance will satisfy the linked pack requirement.
+          </InlineAlert>
+        )}
+
+        {/* Note */}
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="rv-note">
+            {decision === "accepted" ? "Note (optional)" : "Reason"}
+            {noteRequired && <span className="text-destructive"> *</span>}
+          </Label>
+          <Textarea
+            id="rv-note"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            onBlur={() => setTouched(true)}
+            rows={3}
+            placeholder={
+              decision === "accepted"
+                ? "Anything worth noting for your team."
+                : "Tell the recipient what to fix or why this was rejected."
+            }
+            aria-invalid={touched && noteMissing}
+            disabled={submitting}
+          />
+          {touched && noteMissing && (
+            <p className="text-xs text-destructive">
+              Add a short reason so the recipient knows what to do.
+            </p>
+          )}
+        </div>
+
+        {/* Notify */}
+        {request.has_recipient_email && (
+          <label className="flex items-start gap-2.5 text-sm">
+            <input
+              type="checkbox"
+              checked={notify}
+              onChange={(e) => setNotify(e.target.checked)}
+              disabled={submitting}
+              className="mt-0.5 size-4 rounded border-input"
+            />
+            <span>
+              Notify the recipient by email
+              <span className="block text-xs text-muted-foreground">
+                Sends a short update about this decision.
+              </span>
+            </span>
+          </label>
+        )}
+
+        {error && <InlineAlert>{error}</InlineAlert>}
+
+        <div className="flex justify-end gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={onClose}
+            disabled={submitting}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            disabled={submitting || (decision === "accepted" && !file)}
+          >
+            {submitting && <Loader2 className="size-4 animate-spin" />}
+            {decision === "accepted"
+              ? "Accept document"
+              : decision === "rejected"
+                ? "Reject document"
+                : "Request replacement"}
           </Button>
         </div>
       </form>

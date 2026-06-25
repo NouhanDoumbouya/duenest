@@ -93,19 +93,72 @@ export interface PortalCaseProgress {
 }
 
 /**
- * A document request linked to a case. `upload_url` is a FRONTEND page route
- * (`/document-request/{token}`) the recipient visits — safe to show and copy.
- * It is never a raw storage URL.
+ * Where an uploaded document sits in the org's review workflow.
+ * - `pending_upload`: nothing uploaded yet.
+ * - `uploaded`: a file is in, waiting for an admin to start reviewing.
+ * - `under_review`: an admin has opened the review.
+ * - `accepted` / `rejected` / `needs_replacement`: a decision was made.
+ * - `cancelled`: the request was cancelled.
+ */
+export type PortalReviewStatus =
+  | "pending_upload"
+  | "uploaded"
+  | "under_review"
+  | "accepted"
+  | "rejected"
+  | "needs_replacement"
+  | "cancelled";
+
+/** A review decision an admin can take on an uploaded document. */
+export type PortalReviewDecision = "accepted" | "rejected" | "needs_replacement";
+
+/**
+ * The uploaded file behind a review item. `preview_url`/`download_url` are
+ * ORG-SCOPED PROXY paths (relative `/api/v1/...`) that must be fetched as an
+ * authenticated blob — they are NEVER raw storage URLs and must not be rendered
+ * directly as an href/src.
+ */
+export interface PortalReviewUploadedFile {
+  id: number;
+  original_filename: string;
+  content_type: string;
+  file_size: number;
+  is_previewable: boolean;
+  /** Authenticated org-scoped proxy path. Fetch as a blob; never render raw. */
+  preview_url: string;
+  /** Authenticated org-scoped proxy path. Fetch as a blob; never render raw. */
+  download_url: string;
+}
+
+/**
+ * A document request linked to a case, enriched with its review state.
+ * `upload_url` is a FRONTEND page route (`/document-request/{token}`) the
+ * recipient visits — safe to show and copy. It is never a raw storage URL.
  */
 export interface PortalCaseRequest {
+  case_request_id: number;
   document_request_id: number;
   requested_document_title: string;
   status: string;
+  /** The underlying DocumentRequest status string (informational). */
+  document_request_status: string;
   recipient_name: string;
+  has_recipient_email: boolean;
   can_upload: boolean;
   /** FRONTEND page route the recipient uploads through. Safe to show/copy. */
   upload_url: string | null;
   requirement_id: number | null;
+
+  // ---- Review workflow fields ----
+  review_status: PortalReviewStatus;
+  uploaded_at: string | null;
+  due_date: string | null;
+  reviewed_by: string;
+  reviewed_at: string | null;
+  review_note: string;
+  rejection_reason: string;
+  decision_count: number;
+  uploaded_file: PortalReviewUploadedFile | null;
 }
 
 /** A full case owned by an organization through the portal. */
@@ -143,15 +196,46 @@ export interface PortalSummary {
   blocked_cases: number;
 }
 
-/** A single upload waiting for the organization to review. */
+/**
+ * An enriched review-queue item: one document request seen through the review
+ * workflow, carrying its person/case context, review state, and (when present)
+ * the uploaded file behind org-scoped proxy paths. `uploaded_file.preview_url`
+ * / `download_url` are authenticated proxy paths — never raw storage URLs.
+ */
 export interface PortalReviewItem {
+  case_request_id: number;
   case_id: number;
   case_title: string;
   person_name: string;
+  person_id: number;
   document_request_id: number;
   requested_document_title: string;
-  status: string;
-  uploaded_at: string;
+  review_status: PortalReviewStatus;
+  document_request_status: string;
+  recipient_name: string;
+  has_recipient_email: boolean;
+  can_upload: boolean;
+  uploaded_at: string | null;
+  due_date: string | null;
+  reviewed_by: string;
+  reviewed_at: string | null;
+  review_note: string;
+  rejection_reason: string;
+  decision_count: number;
+  requirement_id: number | null;
+  uploaded_file: PortalReviewUploadedFile | null;
+}
+
+/** A single recorded review decision in a request's audit trail. */
+export interface ReviewDecision {
+  id: number;
+  decision: string;
+  note: string;
+  decided_by: string;
+  decided_at: string;
+  previous_status: string;
+  new_status: string;
+  notified_recipient: boolean;
 }
 
 // ---- Plan + limits ----------------------------------------------------------
@@ -217,6 +301,40 @@ export interface PortalCasesResponse {
 export interface PortalReviewQueueResponse {
   items: PortalReviewItem[];
   count: number;
+}
+
+/** Filters for the review queue listing. */
+export interface PortalReviewQueueFilters {
+  status?: PortalReviewStatus;
+  case_id?: number;
+  person_id?: number;
+  search?: string;
+}
+
+/** Response from listing a case's review items (all statuses). */
+export interface PortalCaseReviewItemsResponse {
+  items: PortalReviewItem[];
+  count: number;
+}
+
+/** Body for an admin review decision on a case request's upload. */
+export interface ReviewCaseRequestBody {
+  decision: PortalReviewDecision;
+  note?: string;
+  notify_recipient?: boolean;
+}
+
+/** Response from a review decision: the updated item, status, and progress. */
+export interface ReviewCaseRequestResponse {
+  case_request: PortalReviewItem;
+  document_request_status: string;
+  progress: PortalCaseProgress;
+  notified_recipient: boolean;
+}
+
+/** Response from listing a case request's decision history. */
+export interface ReviewDecisionsResponse {
+  decisions: ReviewDecision[];
 }
 
 // ---- Request bodies ---------------------------------------------------------
