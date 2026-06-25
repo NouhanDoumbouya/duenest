@@ -319,14 +319,24 @@ export default function IntegrationsSettingsPage() {
                     ))}
                   </div>
                   {provider.key === "google" && (
-                    <Link
-                      href="/dashboard/settings/integrations/google-drive"
-                      className="inline-block"
-                    >
-                      <Button type="button" variant="outline" size="sm">
-                        Import from Google Drive
-                      </Button>
-                    </Link>
+                    <div className="flex flex-wrap gap-2">
+                      <Link
+                        href="/dashboard/settings/integrations/google-drive"
+                        className="inline-block"
+                      >
+                        <Button type="button" variant="outline" size="sm">
+                          Import from Google Drive
+                        </Button>
+                      </Link>
+                      <Link
+                        href="/dashboard/settings/integrations/gmail"
+                        className="inline-block"
+                      >
+                        <Button type="button" variant="outline" size="sm">
+                          Import from Gmail
+                        </Button>
+                      </Link>
+                    </div>
                   )}
                 </>
               )}

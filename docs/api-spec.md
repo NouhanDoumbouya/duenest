@@ -6936,3 +6936,18 @@ API responses. `account_id` is owner-scoped (another user's id → `404`).
 - `GET /api/v1/integrations/google-drive/destinations/` → `{ fixed:[{type,label}], folders:[{id,name}], packs:[{id,title}], org_supported:false }` (owner-scoped).
 - `POST /api/v1/integrations/google-drive/import/preview/` — body `{ account_id, files:[{provider_file_id,name,mime_type,size}], destination:{type,folder_id?,pack_id?} }` → advisory `{ destination, importable_count, skipped_count, results:[{provider_file_id,name,status:"will_import"|"skipped",reason}], warnings }`. No download. Throttle `google_drive_list`.
 - `POST /api/v1/integrations/google-drive/import/` — same body → downloads SELECTED files only, validates (size/extension/MIME/magic-bytes/structure/malware-scan), encrypts at rest, saves to the destination, enforces plan/storage limits. Returns `{ status, imported_count, failed_count, destination, results:[{name,status:"imported"|"failed",reason,document_id,file_id}], warnings }`. Per-file failures are isolated. Destinations: `file_inbox` / `vault` / `folder` (user-owned) / `pack` (user-owned); org destinations → `400 {status:"destination_not_supported"}`. Throttle `google_drive_import`. Frontend: `/dashboard/settings/integrations/google-drive`.
+
+## Gmail Import V1 (`integrations/gmail/`)
+
+Manual, import-only import of SELECTED Gmail **attachments** (see `docs/integrations.md`).
+Gated by `integrations` + `google_integrations` + `gmail_import` (founder-only by
+default → `503` when off). Read-only (`gmail.readonly`); no inbox scanning, background
+sync, write-back, or body import. Responses NEVER include OAuth tokens, raw Gmail API
+responses, email bodies/snippets, download URLs, or attachment content. `account_id` is
+owner-scoped (another user's id → `404`).
+
+- `GET /api/v1/integrations/gmail/messages/?account_id=&query=&from=&date_min=&date_max=&file_type=pdf|image|doc&page_token=` → `{ "messages": [ { provider_message_id, thread_id, from_display, from_email, subject, date, attachment_count, attachments:[{provider_message_id,provider_attachment_id,filename,mime_type,size,attachment_index,downloadable,already_imported}] } ], "next_page_token" }`. Always `has:attachment`; default `newer_than:1y`. Safe metadata only. `400 {status:"not_configured"}` / `502` on Gmail error. Throttle `gmail_list`.
+- `GET /api/v1/integrations/gmail/messages/{message_id}/attachments/?account_id=` → `{ message:{...safe...}, attachments:[...] }`.
+- `GET /api/v1/integrations/gmail/destinations/` → owner-scoped destination options (same shape as Drive).
+- `POST /api/v1/integrations/gmail/import/preview/` — body `{ account_id, attachments:[{provider_message_id,provider_attachment_id,filename,mime_type,size}], destination:{type,folder_id?,pack_id?} }` → advisory `{ destination, importable_count, skipped_count, results:[{provider_message_id,provider_attachment_id,filename,status:"will_import"|"skipped",reason}], warnings }`. Flags `already_imported`. Throttle `gmail_list`.
+- `POST /api/v1/integrations/gmail/import/` — same body plus optional `force` (re-import duplicates) → downloads SELECTED attachments only, validates, encrypts at rest, saves to destination, enforces plan/storage limits, records an `ImportedGmailAttachment` (hashed ids; safe metadata). Returns `{ status, imported_count, skipped_count, failed_count, destination, results:[{filename,status:"imported"|"skipped"|"failed",reason,document_id,file_id}], warnings }`. Duplicates skipped (`already_imported`) by default; per-attachment failures isolated. Throttle `gmail_import`. Frontend: `/dashboard/settings/integrations/gmail`.

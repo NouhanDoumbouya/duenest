@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   accountStatusLabel,
   driveImportReasonLabel,
+  gmailImportReasonLabel,
   providerStatusLabel,
 } from "./integrations";
 
@@ -36,5 +37,16 @@ describe("driveImportReasonLabel", () => {
     expect(driveImportReasonLabel("limit_reached")).toBe("Plan limit reached");
     expect(driveImportReasonLabel("")).toBe("");
     expect(driveImportReasonLabel("whatever")).toBe("Couldn't import");
+  });
+});
+
+describe("gmailImportReasonLabel", () => {
+  it("maps Gmail-specific reasons and delegates shared ones", () => {
+    expect(gmailImportReasonLabel("already_imported")).toBe("Already imported");
+    expect(gmailImportReasonLabel("empty_file")).toBe("Empty attachment");
+    expect(gmailImportReasonLabel("permission_denied")).toBe("Permission denied");
+    // Delegates to the shared Drive label for common reasons.
+    expect(gmailImportReasonLabel("unsupported_type")).toBe("Unsupported file type");
+    expect(gmailImportReasonLabel("too_large")).toBe("File is too large");
   });
 });

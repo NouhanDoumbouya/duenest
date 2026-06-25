@@ -16,6 +16,7 @@ Nothing here logs tokens, secrets, codes, or raw provider response bodies.
 
 from __future__ import annotations
 
+import base64
 import logging
 from datetime import timedelta
 from urllib.parse import urlencode
@@ -39,6 +40,7 @@ TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 REVOKE_ENDPOINT = "https://oauth2.googleapis.com/revoke"
 USERINFO_ENDPOINT = "https://openidconnect.googleapis.com/v1/userinfo"
 DRIVE_FILES_ENDPOINT = "https://www.googleapis.com/drive/v3/files"
+GMAIL_MESSAGES_ENDPOINT = "https://gmail.googleapis.com/gmail/v1/users/me/messages"
 _HTTP_TIMEOUT = 10  # seconds
 
 # Only safe metadata fields are ever requested from Drive (no external links,
@@ -84,6 +86,73 @@ def build_drive_file_payload(meta: dict) -> dict:
         "is_google_workspace_file": mime.startswith("application/vnd.google-apps"),
         "exportable": bool(export_mime),
         "export_mime_type": export_mime or "",
+    }
+
+
+# ---- Gmail safe payload builders (module-level; no body, no snippet) -------
+
+
+def _parse_from(value: str) -> tuple[str, str]:
+    """Split a raw ``From`` header into (display name, email). Never raises."""
+    try:
+        from email.utils import parseaddr
+
+        name, addr = parseaddr(value or "")
+        return (name or "")[:255], (addr or "")[:255]
+    except Exception:  # noqa: BLE001
+        return "", ""
+
+
+def _collect_gmail_attachments(payload: dict, message_id: str) -> list[dict]:
+    """Walk a Gmail message payload tree and return SAFE attachment metadata only
+    (filename / mime / size / attachmentId) — never body data or content."""
+    out: list[dict] = []
+
+    def walk(part):
+        if not isinstance(part, dict):
+            return
+        body = part.get("body", {}) or {}
+        filename = part.get("filename") or ""
+        attachment_id = body.get("attachmentId")
+        # A real attachment has a filename and a fetchable attachmentId.
+        if filename and attachment_id:
+            out.append(
+                {
+                    "provider_message_id": message_id,
+                    "provider_attachment_id": attachment_id,
+                    "filename": filename[:255],
+                    "mime_type": part.get("mimeType", "") or "",
+                    "size": int(body["size"]) if str(body.get("size") or "").isdigit() else None,
+                    "attachment_index": len(out),
+                    "downloadable": True,
+                }
+            )
+        for sub in part.get("parts", []) or []:
+            walk(sub)
+
+    walk(payload or {})
+    return out
+
+
+def build_gmail_message_payload(raw: dict) -> dict:
+    """Map a raw Gmail message to SAFE metadata. NEVER includes the body, the
+    snippet, tokens, raw headers, or attachment content."""
+    message_id = raw.get("id", "") or ""
+    headers = {
+        (h.get("name", "") or "").lower(): h.get("value", "") or ""
+        for h in (raw.get("payload", {}) or {}).get("headers", [])
+    }
+    from_display, from_email = _parse_from(headers.get("from", ""))
+    attachments = _collect_gmail_attachments(raw.get("payload", {}) or {}, message_id)
+    return {
+        "provider_message_id": message_id,
+        "thread_id": raw.get("threadId", "") or "",
+        "from_display": from_display,
+        "from_email": from_email,
+        "subject": (headers.get("subject", "") or "")[:255],
+        "date": (headers.get("date", "") or "")[:120],
+        "attachment_count": len(attachments),
+        "attachments": attachments,
     }
 
 
@@ -333,6 +402,62 @@ class GoogleProvider(BaseIntegrationProvider):
         return self._drive_get(
             access_token, url, params=params, stream_bytes=True, max_bytes=max_bytes
         )
+
+    # ---- Gmail (read-only; import only) ------------------------------------
+    #
+    # Read-only. NEVER modifies, deletes, archives, labels, or sends messages.
+    # Only safe metadata + explicitly-selected attachment bytes are fetched;
+    # never the email body/snippet, tokens, or raw API responses are logged.
+
+    def search_gmail_messages(
+        self, *, access_token: str, query: str | None = None,
+        page_token: str | None = None, page_size: int = 20,
+    ) -> dict:
+        self._require_configured()
+        params = {
+            "q": query or "has:attachment newer_than:1y",
+            "maxResults": max(1, min(int(page_size or 20), 50)),
+        }
+        if page_token:
+            params["pageToken"] = page_token
+        payload = self._drive_get(access_token, GMAIL_MESSAGES_ENDPOINT, params=params)
+        return {
+            "message_ids": [m.get("id", "") for m in payload.get("messages", []) if m.get("id")],
+            "next_page_token": payload.get("nextPageToken", "") or "",
+        }
+
+    def get_gmail_message(self, *, access_token: str, message_id: str) -> dict:
+        self._require_configured()
+        # format=metadata returns headers + the part tree (filenames / attachment
+        # ids / sizes) but NO body data — exactly what we need, nothing more.
+        return self._drive_get(
+            access_token,
+            f"{GMAIL_MESSAGES_ENDPOINT}/{message_id}",
+            params={
+                "format": "metadata",
+                "metadataHeaders": ["From", "Subject", "Date"],
+            },
+        )
+
+    def download_gmail_attachment(
+        self, *, access_token: str, message_id: str, attachment_id: str,
+        max_bytes: int | None = None,
+    ) -> bytes:
+        self._require_configured()
+        payload = self._drive_get(
+            access_token,
+            f"{GMAIL_MESSAGES_ENDPOINT}/{message_id}/attachments/{attachment_id}",
+        )
+        data = payload.get("data", "") or ""
+        if not data:
+            return b""
+        try:
+            raw = base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))
+        except Exception as exc:  # noqa: BLE001
+            raise ProviderError("Bad attachment data.", code="bad_response") from exc
+        if max_bytes is not None and len(raw) > max_bytes:
+            raise ProviderError("File too large.", code="too_large")
+        return raw
 
 
 register_provider(GoogleProvider())

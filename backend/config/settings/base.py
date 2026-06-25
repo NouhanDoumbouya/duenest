@@ -518,6 +518,10 @@ REST_FRAMEWORK = {
         "google_drive_list": _throttle_rate("60/min"),
         # Google Drive import: the actual import action (per user) — bounds cost.
         "google_drive_import": _throttle_rate("10/min"),
+        # Gmail import: search/listing/preview (per user) — bounds API fan-out.
+        "gmail_list": _throttle_rate("30/min"),
+        # Gmail import: the actual import action (per user) — bounds cost.
+        "gmail_import": _throttle_rate("10/min"),
     },
 }
 

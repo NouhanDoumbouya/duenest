@@ -129,3 +129,72 @@ export interface DriveImportResult {
   results: DriveImportResultRow[];
   warnings: string[];
 }
+
+// ---- Gmail Import V1 ----
+
+export interface GmailAttachment {
+  provider_message_id: string;
+  provider_attachment_id: string;
+  filename: string;
+  mime_type: string;
+  size: number | null;
+  attachment_index: number;
+  downloadable: boolean;
+  already_imported: boolean;
+}
+
+export interface GmailMessage {
+  provider_message_id: string;
+  thread_id: string;
+  from_display: string;
+  from_email: string;
+  subject: string;
+  date: string;
+  attachment_count: number;
+  attachments: GmailAttachment[];
+}
+
+export interface GmailMessagesResponse {
+  messages: GmailMessage[];
+  next_page_token: string;
+}
+
+export interface GmailAttachmentRef {
+  provider_message_id: string;
+  provider_attachment_id: string;
+  filename: string;
+  mime_type: string;
+  size?: number | null;
+}
+
+export interface GmailPreviewResult {
+  destination: { type: string };
+  importable_count: number;
+  skipped_count: number;
+  results: {
+    provider_message_id: string;
+    provider_attachment_id: string;
+    filename: string;
+    status: string;
+    reason: string;
+  }[];
+  warnings: string[];
+}
+
+export interface GmailImportResultRow {
+  filename: string;
+  status: string;
+  reason: string;
+  document_id: number | null;
+  file_id: number | null;
+}
+
+export interface GmailImportResult {
+  status: string;
+  imported_count: number;
+  skipped_count: number;
+  failed_count: number;
+  destination: { type: string };
+  results: GmailImportResultRow[];
+  warnings: string[];
+}

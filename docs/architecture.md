@@ -1597,3 +1597,25 @@ existing document upload path:
 - **API:** `GET google-drive/files|destinations`, `POST google-drive/import/preview`,
   `POST google-drive/import` — owner-scoped, gated by `google_drive_import`. No
   tokens/URLs/raw Google responses in any response or audit/operational metadata.
+
+### Gmail Import (`apps/integrations/gmail_import.py`)
+
+Manual, import-only Gmail **attachment** import — the most privacy-sensitive
+integration. Reuses the shared destination + encrypted-save plumbing from
+`drive_import` (no duplication).
+
+- **Provider:** read-only Gmail methods on `GoogleProvider`
+  (`search_gmail_messages` → ids; `get_gmail_message` with `format=metadata` so
+  **no body data** is fetched; `download_gmail_attachment`, base64url, size-capped)
+  + `build_gmail_message_payload` surfacing safe metadata only (sender/subject/
+  date/attachment list) — never body, snippet, raw headers, tokens, or content.
+- **Service:** `gmail_import.py` validates each selected attachment (size/type),
+  skips duplicates via `ImportedGmailAttachment` (salted-hashed message+attachment
+  ids; safe file metadata only — never email content), then reuses
+  `validate_secure_upload` + `encrypt_bytes_into_record` into the same destinations
+  as Drive, enforcing plan/storage limits. Per-attachment failures isolated.
+- **No** inbox scanning, background sync, body import, AI, or Gmail write-back
+  (no modify/delete/archive/label/send).
+- **API:** `GET gmail/messages|messages/{id}/attachments|destinations`,
+  `POST gmail/import/preview|import` — owner-scoped, gated by `gmail_import`. No
+  tokens/bodies/snippets/raw responses in any response or audit/operational metadata.

@@ -229,8 +229,88 @@ download URLs, raw Google responses, Drive/document content, or raw file ids.
 
 ## Deferred (not in this branch)
 
-Google Calendar import · Gmail import · automatic/background sync · folder
-mirroring · two-way sync · Drive webhooks · Google Picker UI · write-back ·
-external deletion · external file previews · full Google app verification ·
-Microsoft/Dropbox providers · provider re-auth UX · org-level / shared-Drive
-destinations · integration scheduled jobs · founder integration health console.
+Google Calendar import · automatic/background sync · folder mirroring · two-way
+sync · Drive webhooks · Google Picker UI · write-back · external deletion ·
+external file previews · full Google app verification · Microsoft/Dropbox
+providers · provider re-auth UX · org-level / shared-Drive destinations ·
+integration scheduled jobs · founder integration health console.
+
+---
+
+# Gmail Import V1
+
+Manual, **import-only**, review-before-save import of **selected Gmail
+attachments**. Gmail is the most privacy-sensitive integration, so V1 is
+deliberately conservative. Gated by `integrations` + `google_integrations` +
+`gmail_import` (all founder-only by default). Uses the read-only `gmail.readonly`
+scope from the OAuth foundation, requested **only** when the user explicitly
+chooses the Gmail scope group.
+
+CertaNest **never** scans the inbox automatically, monitors it in the background,
+reads or stores email **bodies/snippets**, writes back to Gmail (no
+modify/delete/archive/label/send), or calls AI. There is no sync and no webhook.
+
+## Workflow
+
+Open Integrations → "Import from Gmail" → search (user-triggered, bounded) →
+review safe message metadata (sender / subject / date / attachment list) → select
+specific attachments → choose a destination → **review** → import. Per-attachment
+results; one failure never aborts the batch.
+
+## Provider methods (`apps/integrations/providers/google.py`)
+
+Read-only, isolated for mocking, never logging tokens/bodies:
+`search_gmail_messages` (ids only), `get_gmail_message` (`format=metadata` —
+headers + part tree, **no body data**), `download_gmail_attachment` (base64url
+decode, size-capped), plus `build_gmail_message_payload` which surfaces ONLY safe
+metadata (provider_message_id, thread_id, from_display/from_email, subject, date,
+and an attachment list of filename/mime/size/attachment_id). **Never** the body,
+snippet, raw headers, tokens, download URLs, or attachment content.
+
+## Search
+
+User-triggered and bounded. `has:attachment` is always applied; optional query
+text, `from:`, date range (`after:`/`before:`), and a `filename:` file-type
+filter; default `has:attachment newer_than:1y`. No mailbox-wide auto-scan, no
+background search, no body indexing, no AI.
+
+## Supported attachment types & destinations
+
+Same upload allowlist as the rest of CertaNest: **PDF, JPEG/PNG, DOC/DOCX**
+(≤ 10 MB). Each selected attachment runs through `validate_secure_upload`
+(size → extension → MIME → magic bytes → structure → malware-scan) and is
+**encrypted at rest**. Reasons: `unsupported_type`, `too_large`, `empty_file`,
+`not_downloadable`, `provider_error`, `storage_error`, `limit_reached`,
+`scan_unavailable`, `invalid_file`, `already_imported`. Destinations are the same
+owner-scoped set as Drive (File Inbox / Vault / user-owned folder / user-owned
+pack); org destinations deferred. Plan + storage limits enforced.
+
+## Duplicate / idempotency
+
+`ImportedGmailAttachment` stores **salted hashes** of the Gmail message +
+attachment ids (never raw ids) plus safe file metadata (filename/mime/size) —
+**never** email content. Preview flags `already_imported`; import skips duplicates
+by default. A user may explicitly `force` a re-import.
+
+## API (`/api/v1/integrations/gmail/`)
+
+`GET messages/` (search; safe metadata) · `GET messages/{id}/attachments/` ·
+`GET destinations/` · `POST import/preview/` · `POST import/`. No tokens, raw
+Gmail payloads, email bodies, or download URLs are ever returned. Throttles:
+`gmail_list`, `gmail_import`.
+
+## Permissions & privacy
+
+A user imports only from **their own** connected account (`account_id`
+owner-scoped → 404 otherwise); a founder cannot import from a user's Gmail. Audit
+events (`gmail_import_search_performed/previewed/started`,
+`gmail_attachment_imported/skipped/failed`, `gmail_import_completed`) and an
+operational event (`source=gmail_import`) record **safe counts/reasons only** —
+never tokens, raw Gmail responses, email bodies, snippets, subjects, attachment
+content, or raw message/attachment ids.
+
+## Deferred (not in this branch)
+
+Gmail body import · automatic inbox scanning/monitoring · scheduled imports ·
+Gmail push/webhooks · Gmail labels/modify/archive/delete/send · AI email
+analysis · contact import · full email-to-case automation.

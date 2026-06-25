@@ -83,3 +83,26 @@ class DriveImportRequestSerializer(serializers.Serializer):
         if not value:
             raise serializers.ValidationError("Select at least one file to import.")
         return value
+
+
+# ---- Gmail Import V1 -------------------------------------------------------
+
+
+class GmailAttachmentRefSerializer(serializers.Serializer):
+    provider_message_id = serializers.CharField(max_length=255)
+    provider_attachment_id = serializers.CharField(max_length=512)
+    filename = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
+    mime_type = serializers.CharField(max_length=160, required=False, allow_blank=True, default="")
+    size = serializers.IntegerField(required=False, allow_null=True, default=None)
+
+
+class GmailImportRequestSerializer(serializers.Serializer):
+    account_id = serializers.IntegerField()
+    attachments = GmailAttachmentRefSerializer(many=True)
+    destination = DriveDestinationSerializer()
+    force = serializers.BooleanField(required=False, default=False)
+
+    def validate_attachments(self, value):
+        if not value:
+            raise serializers.ValidationError("Select at least one attachment to import.")
+        return value

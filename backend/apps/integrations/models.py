@@ -204,3 +204,58 @@ class IntegrationOAuthState(models.Model):
     @property
     def is_consumed(self) -> bool:
         return self.consumed_at is not None
+
+
+class ImportedGmailAttachment(models.Model):
+    """Idempotency record for a Gmail attachment imported into CertaNest.
+
+    Stores only **salted hashes** of the Gmail message/attachment ids (never the
+    raw ids) plus safe file metadata (filename/mime/size) — **never** the email
+    body, snippet, subject, or attachment content. Used to skip duplicate imports.
+    """
+
+    class Status(models.TextChoices):
+        IMPORTED = "imported", "Imported"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="imported_gmail_attachments",
+    )
+    account = models.ForeignKey(
+        "integrations.ConnectedIntegrationAccount",
+        on_delete=models.CASCADE,
+        related_name="imported_gmail_attachments",
+    )
+    provider_message_id_hash = models.CharField(max_length=64, db_index=True)
+    provider_attachment_id_hash = models.CharField(max_length=64)
+    imported_document = models.ForeignKey(
+        "documents.Document", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+",
+    )
+    imported_file = models.ForeignKey(
+        "documents.DocumentFile", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+",
+    )
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.IMPORTED
+    )
+    # Safe file metadata only (filename/mime_type/size). Never email content.
+    sanitized_metadata = models.JSONField(default=dict, blank=True)
+    imported_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["-imported_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "user", "account",
+                    "provider_message_id_hash", "provider_attachment_id_hash",
+                ],
+                name="uniq_user_account_gmail_attachment",
+            )
+        ]
+        indexes = [models.Index(fields=["user", "account"])]
+
+    def __str__(self) -> str:
+        return f"gmail attachment import for user {self.user_id}"
