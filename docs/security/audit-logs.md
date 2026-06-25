@@ -68,6 +68,17 @@ reads are **not** logged.
   `metadata.org_id`); metadata is limited to safe keys (template_id, template_name,
   case_id, case_type, requirements_count, created_requests_count, result) — never a
   raw token, private file URL, storage key, document content, or email body.
+- **Custom Document Organization:** document_folder_created, document_folder_updated,
+  document_folder_archived, document_folder_moved, document_moved_to_folder,
+  document_tag_created, document_tags_updated, document_collection_created,
+  document_added_to_collection, document_removed_from_collection,
+  organization_document_structure_updated, case_folder_created, person_folder_created,
+  document_auto_filed. Recorded under category **`document`**, owner = the user who owns
+  the documents (personal: the user; org: the org-owner user, with `metadata.org_id`),
+  actor = the acting user. Metadata is limited to safe keys (folder / collection / tag
+  id + name, document / case / person / organization id, tag_names, result) — never an
+  R2 object key, file URL, public/sharing token, or document content. (Folders are
+  virtual metadata over `Document` and never change a file's storage key.)
 
 The **Organization Dashboard V1** (`GET …/portal/dashboard/`, §41) is a **reader**,
 not a writer, of this log: its recent-activity feed reads the most recent **safe**

@@ -1,6 +1,20 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 
+from .folder_views import (
+    CollectionItemsView,
+    CollectionsView,
+    DocumentMoveToFolderView,
+    DocumentTagsView,
+    FolderArchiveView,
+    FolderContentsView,
+    FolderDetailView,
+    FolderMoveView,
+    FoldersView,
+    SavedViewsView,
+    SmartViewResolveView,
+    TagsView,
+)
 from .scanner import UploadScannedDocumentView
 from .views import (
     BundleExportDetailView,
@@ -1002,4 +1016,17 @@ urlpatterns = [
         PublicEmergencyPackItemDownloadView.as_view(),
         name="public-emergency-pack-item-download",
     ),
+    # Custom Document Organization V1 — personal (owner-scoped) folders/tags/collections.
+    path("documents/folders/", FoldersView.as_view(), name="document-folders"),
+    path("documents/folders/<int:folder_id>/", FolderDetailView.as_view(), name="document-folder-detail"),
+    path("documents/folders/<int:folder_id>/archive/", FolderArchiveView.as_view(), name="document-folder-archive"),
+    path("documents/folders/<int:folder_id>/move/", FolderMoveView.as_view(), name="document-folder-move"),
+    path("documents/folders/<int:folder_id>/contents/", FolderContentsView.as_view(), name="document-folder-contents"),
+    path("documents/<int:document_id>/move-to-folder/", DocumentMoveToFolderView.as_view(), name="document-move-to-folder"),
+    path("documents/<int:document_id>/tags/", DocumentTagsView.as_view(), name="document-tags-assign"),
+    path("documents/tags/", TagsView.as_view(), name="document-tags"),
+    path("documents/collections/", CollectionsView.as_view(), name="document-collections"),
+    path("documents/collections/<int:collection_id>/items/", CollectionItemsView.as_view(), name="document-collection-items"),
+    path("documents/saved-views/", SavedViewsView.as_view(), name="document-saved-views"),
+    path("documents/smart-view/", SmartViewResolveView.as_view(), name="document-smart-view"),
 ] + router.urls

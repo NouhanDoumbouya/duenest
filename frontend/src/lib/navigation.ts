@@ -98,6 +98,12 @@ export const NAV_SECTIONS: NavSection[] = [
           "Meaningful life records like passports, visas, certificates, insurance cards, and transcripts.",
       },
       {
+        label: "Organize",
+        href: "/dashboard/documents/organize",
+        description:
+          "Folders, tags, collections, and smart views — an organizing lens over your documents.",
+      },
+      {
         label: "File Inbox",
         href: "/dashboard/files",
         featureKey: "file_inbox",
@@ -119,6 +125,7 @@ export const NAV_SECTIONS: NavSection[] = [
     memberPrefixes: [
       "/dashboard/vault",
       "/dashboard/documents",
+      "/dashboard/documents/organize",
       "/dashboard/files",
       "/dashboard/trash",
     ],

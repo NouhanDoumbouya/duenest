@@ -28,6 +28,7 @@ import {
   Clock,
   DoorOpen,
   FileWarning,
+  FolderTree,
   Inbox,
   LayoutTemplate,
   Loader2,
@@ -447,6 +448,22 @@ export default function OrganizationPortalPage({
           requests are limited to organization owners and admins.
         </TrustNotice>
       )}
+
+      {/* Quick links to the portal's sub-surfaces (visible to all members). */}
+      <div className="flex flex-wrap gap-2">
+        <Link
+          href={`/dashboard/organizations/${orgId}/portal/documents`}
+          className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+        >
+          <FolderTree className="size-4" aria-hidden /> Documents
+        </Link>
+        <Link
+          href={`/dashboard/organizations/${orgId}/portal/templates`}
+          className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+        >
+          <LayoutTemplate className="size-4" aria-hidden /> Templates
+        </Link>
+      </div>
 
       {/* Portal status + plan badge. */}
       <div className="flex flex-wrap items-center gap-2 text-sm">

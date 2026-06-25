@@ -526,6 +526,76 @@ requirements_count, created_requests_count, result) — never tokens, private fi
 storage keys, document contents, or email bodies. Endpoints and shapes are in
 `docs/api-spec.md` §43.
 
+## Document Organization (delivered 2026-06-25)
+
+Organizations can structure their portal-collected documents with **virtual folders,
+tags, manual collections, and saved/smart views** scoped to the org. This builds on the
+existing primitives — it is **metadata over the existing `Document` model** and adds
+**no duplicate storage / upload / request system**. It **never** changes a file's R2
+object key, **never** exposes a file URL / storage key / token, and is **never** access
+control. Fully **deterministic — no AI.** Shared service:
+`apps/documents/folders.py` (scope-parameterized; the same code powers the personal
+vault). Endpoints + shapes are in `docs/api-spec.md` §44.
+
+### Org folder tree
+
+A read returns the org folder tree, tags, collections, and the structure preference
+(`GET …/portal/document-organization/`). System folders are seeded for the org —
+**Unfiled, Cases, People, Protected copies**. Folders nest via `parent` (same scope
+only); moving a folder rejects cycles and never touches storage. `folder_type`
+distinguishes user folders (`normal`) from `system` / `case` / `person` / `template`
+auto-folders.
+
+### Structure preferences (`OrganizationDocumentStructurePreference`, one per org)
+
+`PATCH …/portal/document-organization/preferences/` (OWNER/ADMIN) controls how the
+portal auto-structures documents:
+
+- **`structure_mode`** — `by_person` (default), `by_case`, `by_document_type`,
+  `by_template`, or `custom`. This drives case-folder placement: `by_person` → under the
+  person folder; `by_case` → under `Cases/{case_type}`; `custom` → under
+  `default_root_folder`.
+- **`auto_create_case_folder`** / **`auto_create_person_folder`** — default `true`.
+- **`auto_file_accepted_uploads`** — default **`false`** (opt-in; see below).
+- **`default_root_folder`** — used in `custom` mode.
+
+### Case / person / template folders
+
+`ensure_person_folder` creates a person folder under **People**; `ensure_case_folder`
+places a case folder per the structure mode and then seeds the case template's
+`OrganizationTemplateFolderBlueprint` subfolders (an ordered list of default subfolder
+names — configuration only, no document data).
+
+### Opt-in auto-filing (with a vault-copy caveat)
+
+When an org sets `auto_file_accepted_uploads=true`, accepting a portal upload (see
+"Review + Approval" above) **also** materializes the upload as a vault `Document` via
+the existing `save_request_file_to_vault` — owned by the **org-owner user**, enforcing
+that owner's document plan limit — and files it into the case folder. It is
+**best-effort**: it never raises and never blocks the accept flow, and with the
+preference off (the default) the accept flow is completely unchanged. **Caveat:** the
+vault copy counts against the **org-owner user's personal document limit** until
+org-owned storage exists (`b2b/teams-billing-checkout`).
+
+### Permissions and no public exposure
+
+**Read** (tree / contents / tags / collections / saved-views) = any **active member**;
+**create / edit / archive / move / structure-preference** = **OWNER/ADMIN** only;
+non-members denied. Behind the `b2b_portals` flag + the org Teams entitlement, org-
+isolated. There is **no public folder endpoint** — public document-request recipients
+and sharing-room viewers can never browse the folder tree, and folder placement grants
+no access. Org limits: `teams_beta` = 500 folders / 200 tags / 100 collections; `teams`
+= 2000 / 500 / 500; `enterprise` = unlimited.
+
+### Audit
+
+Through the unified Audit Log (category `document`): `document_folder_created/updated/
+archived/moved`, `document_moved_to_folder`, `document_tag_created`,
+`document_tags_updated`, `document_collection_created`, `document_added_to_collection`,
+`document_removed_from_collection`, `organization_document_structure_updated`,
+`case_folder_created`, `person_folder_created`, `document_auto_filed`. Safe metadata
+only — never an R2 key, file URL, token, or document content.
+
 ## Frontend
 
 Owner/staff page `/dashboard/organizations/[orgId]/portal` (dashboard summary +
@@ -566,6 +636,9 @@ people + cases + review queue + case detail/actions). There is **no public UI**.
   cooldown, batch shapes, audit events).
 - `docs/api-spec.md` §43 — Organization Templates V1 (template + requirement shapes,
   CRUD/duplicate/archive, create-case body/result, limit→warning behavior).
+- `docs/api-spec.md` §44 — Custom Document Organization V1 (personal + org folder/tag/
+  collection/saved-view endpoints, smart-view filter whitelist, structure preferences,
+  opt-in auto-filing, limits, audit).
 - `docs/NOTIFICATIONS.md` — the `portal_review_decision` and `portal_bulk_reminder`
   recipient emails.
 - `docs/BILLING.md` — feature-flag gate, org entitlement, and the Teams limit table.

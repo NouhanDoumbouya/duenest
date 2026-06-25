@@ -6491,3 +6491,150 @@ key, document content, or email body.
 See `docs/b2b-portals.md`, `docs/security-plan.md`,
 `docs/security/audit-logs.md`, and `docs/roadmap.md`.
 
+---
+
+## 44 — Custom Document Organization V1 (`documents/...` + `organizations/{org_id}/portal/...`)
+
+Owners and organizations organize their vault with **virtual folders, tags, manual
+collections, and saved/smart views** layered over the existing `Document` model.
+**Deterministic — no AI, no AI credits.**
+
+**Metadata only.** Folders / collections / tags / saved-views are **virtual metadata
+over `Document`**. They **never** change a file's R2 object key, **never** expose a
+file URL / storage key / token, and are **never** access control — sharing stays
+governed by `SharingRoom` / `DocumentRequestLink` (§34, §35). Organization happens at
+the **Document** level (the owner-scoped vault unit), not the `DocumentFile` level. No
+listing payload (`folder`, `tag`, `collection`, or `document` summary) ever includes a
+file URL, storage key, or document content.
+
+Services: `apps/documents/folders.py` (shared, scope-parameterized),
+`apps/documents/folder_views.py` (personal endpoints), `PortalFolder*` /
+`PortalDocument*` views in `apps/organizations/portal_views.py` (org endpoints). New
+models (migration `documents/0039`): `DocumentFolder`, `DocumentCollection`,
+`DocumentCollectionItem`, `OrganizationDocumentStructurePreference`,
+`OrganizationTemplateFolderBlueprint`; the existing **`DocumentTag` is reused** (extended
+with a nullable `organization` FK); `Document` gained `primary_folder` (nullable
+`SET_NULL`) + a `collections` M2M. **Int PKs** for FK/codebase consistency.
+
+### Scope
+
+Every folder/collection/tag is scoped to exactly one of a **personal owner** (`owner`
+set, `organization` null) **or** an **organization** (`organization` set; `owner` = the
+org-owner user, matching the rest of the B2B portal). Personal endpoints are owner-scoped
+(another user's folder → `404`); org endpoints are membership-scoped and role-gated.
+
+### Personal endpoints (`/api/v1/documents/...`, authenticated, owner-scoped)
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `documents/folders/?include_archived=` | The owner's folder tree (nested; archived excluded unless `include_archived=true`) |
+| `POST` | `documents/folders/` | Create a folder (`name`, optional `parent`, `description`, `color`, `icon`, `sort_order`, `folder_type`) |
+| `GET`/`PATCH` | `documents/folders/{id}/` | Folder detail / rename + metadata edit |
+| `POST` | `documents/folders/{id}/archive/` | Archive a folder (hides it from the default tree) |
+| `POST` | `documents/folders/{id}/move/` | Re-parent (`parent_id`; same scope; cycles rejected) |
+| `GET` | `documents/folders/{id}/contents/` | Documents whose `primary_folder` is this folder (+ breadcrumb; accepts smart-view filters) |
+| `POST` | `documents/{document_id}/move-to-folder/` | Set/clear a document's `primary_folder` (`folder_id`, omit to unfile) |
+| `GET`/`POST` | `documents/tags/` | List / create tags |
+| `POST` | `documents/{document_id}/tags/` | Replace a document's tag set (`tag_ids`) |
+| `GET`/`POST` | `documents/collections/?collection_type=` | List / create collections |
+| `GET`/`POST` | `documents/collections/{id}/items/` | List collection contents / add (`document_id`) or remove (`document_id`,`remove:true`) an item |
+| `GET`/`POST` | `documents/saved-views/` | List / create saved views (collections of type `saved_view`) |
+| `GET`/`POST` | `documents/smart-view/` | Resolve a `filter_config` (query params or body) → matching documents |
+
+### Org endpoints (`/api/v1/organizations/{org_id}/portal/...`)
+
+| Method | Path | Role | Description |
+| --- | --- | --- | --- |
+| `GET` | `document-organization/` | member | Folder tree + tags + collections + structure preference |
+| `PATCH` | `document-organization/preferences/` | owner/admin | Update the org structure preference |
+| `GET`/`POST` | `folders/` | member / owner-admin | List tree / create folder |
+| `GET`/`PATCH` | `folders/{id}/` | member / owner-admin | Detail / edit |
+| `POST` | `folders/{id}/archive/` | owner/admin | Archive a folder |
+| `POST` | `folders/{id}/move/` | owner/admin | Re-parent (cycles rejected) |
+| `GET` | `folders/{id}/contents/` | member | Documents in the folder (+ breadcrumb) |
+| `GET`/`POST` | `tags/` | member / owner-admin | List / create org tags |
+| `GET`/`POST` | `collections/` | member / owner-admin | List / create org collections |
+| `GET`/`POST` | `saved-views/` | member / owner-admin | List / create org saved views |
+
+### Folders
+
+Nested via `parent` (same scope only). Moving a folder **rejects cycles** (cannot move
+into itself or a descendant → `400`) and never touches storage. `folder_type` separates
+user folders (`normal`) from system/case/person/template auto-folders.
+
+### Smart-view filter whitelist
+
+Saved/smart-view `filter_config` accepts **only** these keys (any other key is dropped —
+no raw SQL, tokens, or URLs):
+
+```
+document_type, tag_id, folder_id, status, lifecycle_status,
+expiring_soon, needs_review, recently_uploaded, unfiled,
+uploaded_after, uploaded_before, due_after, due_before
+```
+
+Built-in preset semantics: **`expiring_soon`** = expiry within 30 days,
+**`recently_uploaded`** = uploaded within 14 days, **`unfiled`** = no `primary_folder`.
+
+### System / case / person / template folders
+
+`ensure_system_folders` seeds **Unfiled, Protected copies** (personal) or **Unfiled,
+Cases, People, Protected copies** (org). `ensure_person_folder` creates a person folder
+under **People**; `ensure_case_folder` places a case folder per the org `structure_mode`
+(`by_person` → under the person folder; `by_case` → under `Cases/{case_type}`; `custom`
+→ under `default_root_folder`), then seeds the case template's blueprint subfolders.
+
+### Structure preference (`OrganizationDocumentStructurePreference`, one per org)
+
+`structure_mode` (`by_person` default / `by_case` / `by_document_type` / `by_template` /
+`custom`), `auto_create_case_folder` (default `true`), `auto_create_person_folder`
+(default `true`), `auto_file_accepted_uploads` (default **`false`** — opt-in),
+`default_root_folder`.
+
+### Opt-in auto-filing
+
+When an org sets `auto_file_accepted_uploads=true`, accepting a portal upload (§40)
+**also** materializes the upload as a vault `Document` via the existing
+`save_request_file_to_vault` (owned by the org-owner user, enforcing that owner's
+document plan limit) and files it into the case folder. **Best-effort** — never raises,
+never blocks the accept flow. With the preference off (the default) the accept flow is
+unchanged and no vault Document is created. **Caveat:** the vault copy counts against the
+org-owner user's **personal** document limit until org-owned storage exists.
+
+### Permissions & gating
+
+* **Personal:** authenticated, owner-scoped — a user only sees/mutates their own scope.
+* **Org:** **read** (tree/contents/tags/collections/saved-views) = any **active member**;
+  **create/edit/archive/move/structure-preference** = **OWNER/ADMIN** only; non-members
+  denied. Two gates: the `b2b_portals` feature flag (`503` when off) + the org Teams
+  entitlement (`403 portal_not_enabled`).
+* **No public folder endpoint.** Public document-request recipients and sharing-room
+  viewers can never browse the folder tree. Folder placement is **never** access control.
+
+### Limits (server-side caps, no Stripe)
+
+| Scope / plan | Folders | Tags | Collections |
+| --- | --- | --- | --- |
+| Personal free | 20 | 20 | 5 |
+| Personal pro | 500 | 200 | 100 |
+| Org `teams_beta` | 500 | 200 | 100 |
+| Org `teams` | 2000 | 500 | 500 |
+| Org `enterprise` | unlimited | unlimited | unlimited |
+
+Hitting a cap returns `400` with a plan-limit message.
+
+### Audit
+
+`document_folder_created/updated/archived/moved`, `document_moved_to_folder`,
+`document_tag_created`, `document_tags_updated`, `document_collection_created`,
+`document_added_to_collection`, `document_removed_from_collection`,
+`organization_document_structure_updated`, `case_folder_created`, `person_folder_created`,
+`document_auto_filed` — recorded via the unified owner-scoped Audit Log (§37), category
+`"document"`. Metadata is limited to safe keys (`folder_id`/`folder_name`,
+`collection_id`/`collection_name`, `tag_names`, `document_id`, `case_id`, `person_id`,
+`organization_id`, `result`) — never an R2 object key, file URL, public/sharing token, or
+document content.
+
+See `docs/b2b-portals.md`, `docs/security-plan.md`,
+`docs/security/audit-logs.md`, and `docs/roadmap.md`.
+
