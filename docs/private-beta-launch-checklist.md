@@ -74,3 +74,18 @@ not a public production launch checklist.
 - Public legal pages are beta drafts and need review.
 - Local development token storage remains a known production-hardening item.
 - Founder Console V1 does not implement billing analytics, advanced segmentation, consent-based sensitive support access, AI analytics, churn prediction, or a full incident response center.
+
+## Automated check & related guides
+
+Run the automated, read-only, secret-free readiness probe before inviting users:
+
+```
+python manage.py beta_readiness_check        # prints READY / ATTENTION / BLOCKED
+```
+
+(Founders can fetch the same report at `GET /api/v1/founder/beta-readiness/`.)
+
+See also:
+- `docs/FOUNDER_BETA_RUNBOOK.md` — readiness standard, org setup, flag review, launch gates, rollback/triage.
+- `docs/BETA_TESTER_GUIDE.md` — what beta testers should try and what not to upload.
+- `docs/qa/PRIVATE_BETA_QA.md` — the manual personal/B2B/security/mobile QA script.

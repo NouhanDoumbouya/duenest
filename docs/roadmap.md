@@ -2916,3 +2916,36 @@ external support-vendor integrations.
 per-seat Stripe billing + invoices, and org-owned storage.
 
 See `docs/api-spec.md` (Founder admin tools) and `docs/security-plan.md`.
+
+## Private Beta Readiness V1 (`launch/private-beta-readiness`)
+
+A readiness-and-documentation pass (not a new product feature) to open CertaNest to
+a small controlled private beta with confidence. It deliberately builds on what
+already exists (the founder launch-readiness tracker, `build_system_status`
+observability, `seed_feature_flags`, `set_organization_plan`) instead of
+duplicating it.
+
+**Added (small, safe code):**
+- `apps/founder/beta_readiness.py` — `build_beta_readiness_report()`: an automated,
+  **boolean-only** readiness snapshot reusing `build_system_status` and adding
+  launch-gate checks (storage private, email/AI configured + capped, flags seeded,
+  founder account, **Stripe test-vs-live**, Google OAuth, DEBUG/KEK/audit-salt/hosts,
+  unresolved-critical + scheduled-job counts). No secret values; read-only.
+- `manage.py beta_readiness_check` (`--json`, `--include-database-counts`) — the same
+  report on the CLI; never sends email, calls AI, or calls Google.
+- `GET /api/v1/founder/beta-readiness/` — founder-only endpoint exposing the report.
+
+**Docs:** new `docs/BETA_TESTER_GUIDE.md`, `docs/FOUNDER_BETA_RUNBOOK.md` (readiness
+standard + org setup + flag review + launch gates + rollback/triage), and
+`docs/qa/PRIVATE_BETA_QA.md` (personal/B2B/security/mobile manual QA); cross-links
+into the existing beta/launch checklist docs.
+
+**Tests:** 10 backend tests (report shape; no-secret payload; Stripe-not-live;
+endpoint founder-only/403; command runs + `--json` valid; command is read-only — no
+email, no AI usage, no operational-event writes). No migration (no model change).
+
+**Deliberately NOT built (no overbuild):** a new `/dashboard/founder/beta-readiness`
+page (the existing `/founder/launch` tracker + `/founder` observability already give
+the in-app view), live Stripe, org-owned storage, or any new product feature.
+
+See `docs/FOUNDER_BETA_RUNBOOK.md` and `docs/api-spec.md` (Founder Console).

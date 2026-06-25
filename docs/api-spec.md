@@ -4149,8 +4149,19 @@ GET   /api/v1/founder/beta-users/
 PATCH /api/v1/founder/beta-users/:profile_id/
 GET   /api/v1/founder/launch-readiness/
 PATCH /api/v1/founder/launch-readiness/:item_id/
+GET   /api/v1/founder/beta-readiness/?include_counts=true|false
 GET   /api/v1/founder/country-activity/?range=7d|30d|90d|all
 ```
+
+`GET /api/v1/founder/beta-readiness/` returns an **automated, boolean-only**
+private-beta readiness snapshot (founder-only): `{ generated_at, overall:
+"ready"|"attention"|"blocked", summary, gates:[{key,label,status,detail}],
+system_overall }`. It reuses `build_system_status` and adds launch-gate checks
+(storage private, email/AI configured, feature flags seeded, founder account,
+**Stripe test-vs-live mode**, Google OAuth configured, DEBUG/KEK/audit-salt/hosts,
+unresolved-critical and scheduled-job counts). It **never** returns a secret value,
+sends email, calls AI, or calls Google. The same report is available via
+`python manage.py beta_readiness_check [--json] [--include-database-counts]`.
 
 Privacy rule: founder endpoints return aggregate metrics and safe account
 metadata only. They must not expose document contents, raw OCR text, access

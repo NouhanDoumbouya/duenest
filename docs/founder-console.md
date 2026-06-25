@@ -197,3 +197,20 @@ pages. Founders can support users **without seeing private document contents**;
 there is no impersonation, no file download, no account deletion, and no live
 billing change. See `docs/api-spec.md` (Founder admin tools) and
 `docs/security-plan.md` (Founder Admin Tools V1) for the full safe-data contract.
+
+## Private Beta Readiness
+
+Two complementary readiness surfaces:
+
+- **Launch readiness tracker** (`/founder/launch`, `GET/PATCH
+  /api/v1/founder/launch-readiness/`) — a founder-editable checklist of launch
+  blockers.
+- **Automated beta readiness** (`GET /api/v1/founder/beta-readiness/` and the
+  `python manage.py beta_readiness_check` command) — a computed, **boolean-only**
+  snapshot built from settings + the live system status: storage private,
+  email/AI configured, feature flags seeded, founder account present, **Stripe
+  test-vs-live mode**, Google OAuth configured, DEBUG/KEK/audit-salt/hosts, and
+  unresolved-critical / scheduled-job counts. It never exposes a secret value and
+  never sends email, calls AI, or calls Google. The command is read-only and safe
+  to run on any environment. See `docs/FOUNDER_BETA_RUNBOOK.md`,
+  `docs/BETA_TESTER_GUIDE.md`, and `docs/qa/PRIVATE_BETA_QA.md`.
