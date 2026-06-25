@@ -32,6 +32,18 @@ app. The legacy **Subscription Radar** is **deprecated**:
 Items below that describe subscription/finance tracking as a product feature are
 superseded by this refocus and Deadlines & Renewals.
 
+## 0.2 Integrations OAuth Foundation V1 (delivered, 2026-06-25)
+
+A safe, consistent foundation for **import-only** integrations (branch
+`integrations/oauth-foundation-v1`). Adds an `apps/integrations` app:
+`ConnectedIntegrationAccount` + `IntegrationOAuthState`, a provider abstraction
+(Google implemented), encrypted-at-rest OAuth tokens (reusing the existing KEK/DEK
+field encryption), single-use hashed OAuth state, safe-redirect validation,
+connect/disconnect/refresh/health endpoints, a `/dashboard/settings/integrations`
+page, and founder-only feature flags. **Import-only and not built yet:** no
+Drive/Calendar/Gmail import, no sync, no background jobs, no write-back. Gmail
+scope is never requested by default. See `docs/integrations.md`.
+
 ## 1. Roadmap Summary
 
 This roadmap defines how CertaNest will move from a well-documented product concept to a working MVP.
