@@ -1005,6 +1005,125 @@ class PortalCaseReviewDecision(models.Model):
         return f"PortalCaseReviewDecision(cr={self.case_request_id}, decision={self.decision})"
 
 
+class PortalReminderBatch(models.Model):
+    """
+    A staff-triggered batch of operational reminder emails to portal recipients
+    (B2B Bulk Reminder Emails V1). Built from the org's existing dashboard queues
+    (missing documents / overdue requests / needs-replacement / rejected / due-soon
+    / collecting) — it does NOT introduce a new email or request system. Each send
+    flows through the shared branded-email helper; outcomes are recorded per
+    recipient in ``PortalReminderRecipient``. Stores no document contents, file
+    URLs, or raw tokens.
+    """
+
+    class ReminderType(models.TextChoices):
+        MISSING_DOCUMENTS = "missing_documents", "Missing documents"
+        OVERDUE_REQUESTS = "overdue_requests", "Overdue requests"
+        NEEDS_REPLACEMENT = "needs_replacement", "Needs replacement"
+        REJECTED_DOCUMENTS = "rejected_documents", "Rejected documents"
+        DUE_SOON_CASES = "due_soon_cases", "Due soon cases"
+        COLLECTING_DOCUMENTS = "collecting_documents", "Collecting documents"
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        SENDING = "sending", "Sending"
+        SENT = "sent", "Sent"
+        PARTIALLY_FAILED = "partially_failed", "Partially failed"
+        FAILED = "failed", "Failed"
+        CANCELLED = "cancelled", "Cancelled"
+
+    organization = models.ForeignKey(
+        Organization, on_delete=models.CASCADE, related_name="portal_reminder_batches"
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+        related_name="portal_reminder_batches_created",
+    )
+    # Optional case scope (set for a case-specific reminder send).
+    case = models.ForeignKey(
+        PortalCase, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="reminder_batches",
+    )
+    reminder_type = models.CharField(max_length=24, choices=ReminderType.choices)
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.DRAFT
+    )
+    subject = models.CharField(max_length=255, blank=True)
+    message_intro = models.TextField(blank=True)
+    recipient_count = models.PositiveIntegerField(default=0)
+    sent_count = models.PositiveIntegerField(default=0)
+    skipped_count = models.PositiveIntegerField(default=0)
+    failed_count = models.PositiveIntegerField(default=0)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["organization", "-created_at"]),
+            models.Index(fields=["organization", "reminder_type", "-created_at"]),
+        ]
+
+    def __str__(self):
+        return f"PortalReminderBatch(org={self.organization_id}, type={self.reminder_type})"
+
+
+class PortalReminderRecipient(models.Model):
+    """One recipient row in a ``PortalReminderBatch`` — the per-recipient outcome
+    of a reminder send. Also the source of truth for the duplicate/cooldown check
+    (match on org + reminder_type + recipient_email + case/case_request within the
+    cooldown window). Stores no file URLs, raw tokens, or document contents."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        SENT = "sent", "Sent"
+        SKIPPED = "skipped", "Skipped"
+        FAILED = "failed", "Failed"
+
+    batch = models.ForeignKey(
+        PortalReminderBatch, on_delete=models.CASCADE, related_name="recipients"
+    )
+    portal_case = models.ForeignKey(
+        PortalCase, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="reminder_recipients",
+    )
+    portal_person = models.ForeignKey(
+        PortalPerson, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="reminder_recipients",
+    )
+    case_request = models.ForeignKey(
+        PortalCaseDocumentRequest, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="reminder_recipients",
+    )
+    document_request = models.ForeignKey(
+        "documents.DocumentRequestLink", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="portal_reminder_recipients",
+    )
+    recipient_email = models.EmailField()
+    recipient_name = models.CharField(max_length=255, blank=True)
+    status = models.CharField(
+        max_length=12, choices=Status.choices, default=Status.PENDING
+    )
+    skip_reason = models.CharField(max_length=40, blank=True)
+    error_message = models.CharField(max_length=255, blank=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+        indexes = [
+            models.Index(fields=["batch", "status"]),
+            # Cooldown lookups: recent sent reminders for an email in an org.
+            models.Index(fields=["recipient_email", "status", "-created_at"]),
+            models.Index(fields=["case_request", "-created_at"]),
+            models.Index(fields=["portal_case", "-created_at"]),
+        ]
+
+    def __str__(self):
+        return f"PortalReminderRecipient(batch={self.batch_id}, email={self.recipient_email!r})"
+
+
 class OrganizationPlanProfile(models.Model):
     """
     Organization-level entitlement for B2B Portals (Teams Plan V1).

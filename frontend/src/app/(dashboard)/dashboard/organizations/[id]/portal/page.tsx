@@ -61,6 +61,7 @@ import {
   LimitWarningBanners,
   PlanUsageCard,
 } from "@/components/features/portals/plan-usage-card";
+import { ReminderModal } from "@/components/features/portals/reminder-modal";
 import { useFeature } from "@/components/features/feature-flags-provider";
 import { ApiError } from "@/lib/api";
 import { formatDate } from "@/lib/documents";
@@ -104,6 +105,7 @@ import type {
   PortalLimits,
   PortalPerson,
   PortalPersonType,
+  ReminderType,
 } from "@/types/portals";
 
 type PortalTab = "people" | "cases";
@@ -160,6 +162,9 @@ export default function OrganizationPortalPage({
   const [toast, setToast] = useState<ToastState | null>(null);
   const [addingPerson, setAddingPerson] = useState(false);
   const [creatingCase, setCreatingCase] = useState(false);
+  // When set, the bulk-reminder modal is open pre-set to this reminder type.
+  // `null` means closed; an open value carries the type to start on.
+  const [reminderType, setReminderType] = useState<ReminderType | null>(null);
 
   const canManage = org ? canManageOrganization(org.user_role) : false;
 
@@ -385,6 +390,12 @@ export default function OrganizationPortalPage({
             <div className="flex flex-wrap gap-2">
               <Button
                 variant="outline"
+                onClick={() => setReminderType("missing_documents")}
+              >
+                <Mail className="size-4" /> Send reminders
+              </Button>
+              <Button
+                variant="outline"
                 onClick={() => setAddingPerson(true)}
               >
                 <UserPlus className="size-4" /> Add person
@@ -441,7 +452,10 @@ export default function OrganizationPortalPage({
 
           <div className="grid gap-6 xl:grid-cols-[1.7fr_1fr]">
             <div className="space-y-6">
-              <ActionQueues queues={queues} />
+              <ActionQueues
+                queues={queues}
+                onRemind={canManage ? setReminderType : undefined}
+              />
 
               <section className="space-y-5">
                 <SegmentedControl
@@ -498,6 +512,18 @@ export default function OrganizationPortalPage({
             setCreatingCase(false);
             setTab("cases");
             await refresh("Case created.");
+          }}
+        />
+      )}
+
+      {reminderType !== null && canManage && (
+        <ReminderModal
+          orgId={orgId}
+          defaultType={reminderType}
+          onClose={() => setReminderType(null)}
+          onSent={async () => {
+            setReminderType(null);
+            await refresh("Reminders sent.");
           }}
         />
       )}
@@ -897,6 +923,7 @@ function QueueShell({
   description,
   count,
   tone,
+  action,
   children,
 }: {
   id: string;
@@ -904,6 +931,8 @@ function QueueShell({
   description: string;
   count: number;
   tone: "warning" | "danger" | "success" | "neutral";
+  /** Optional header action (e.g. the bulk "Remind…" button). */
+  action?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -913,9 +942,12 @@ function QueueShell({
     >
       <div className="flex items-center justify-between gap-2">
         <h3 className="font-heading text-base font-semibold">{title}</h3>
-        <StatusBadge tone={count ? tone : "neutral"} withDot={false}>
-          {count}
-        </StatusBadge>
+        <div className="flex items-center gap-2">
+          {action}
+          <StatusBadge tone={count ? tone : "neutral"} withDot={false}>
+            {count}
+          </StatusBadge>
+        </div>
       </div>
       <p className="mt-1 text-xs text-muted-foreground">{description}</p>
       <div className="mt-4">{children}</div>
@@ -972,15 +1004,44 @@ function QueueRow({
 /** Cap each queue list so a card stays scannable. */
 const QUEUE_CAP = 5;
 
-function ActionQueues({ queues }: { queues: DashboardQueues }) {
+function ActionQueues({
+  queues,
+  onRemind,
+}: {
+  queues: DashboardQueues;
+  /** When present (admin/owner), queues show a bulk "Remind…" action. */
+  onRemind?: (type: ReminderType) => void;
+}) {
   return (
     <div className="space-y-4">
+      {/* The Review-now queue intentionally has NO bulk-remind action: these are
+          uploads waiting on YOUR review, not on the recipient. */}
       <ReviewNowQueue items={queues.review_now} />
-      <OverdueQueue items={queues.overdue_cases} />
-      <MissingDocumentsQueue items={queues.missing_documents} />
-      <NeedsReplacementQueue items={queues.needs_replacement} />
+      <OverdueQueue items={queues.overdue_cases} onRemind={onRemind} />
+      <MissingDocumentsQueue
+        items={queues.missing_documents}
+        onRemind={onRemind}
+      />
+      <NeedsReplacementQueue
+        items={queues.needs_replacement}
+        onRemind={onRemind}
+      />
       <ReadyQueue items={queues.ready_cases} />
     </div>
+  );
+}
+
+/** A small, restrained "Remind…" button for a queue header. */
+function RemindButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+    >
+      <Mail className="size-3.5" aria-hidden />
+      Remind…
+    </button>
   );
 }
 
@@ -1022,7 +1083,13 @@ function ReviewNowQueue({ items }: { items: DashboardReviewItem[] }) {
   );
 }
 
-function OverdueQueue({ items }: { items: DashboardCaseItem[] }) {
+function OverdueQueue({
+  items,
+  onRemind,
+}: {
+  items: DashboardCaseItem[];
+  onRemind?: (type: ReminderType) => void;
+}) {
   return (
     <QueueShell
       id="queue-overdue"
@@ -1030,6 +1097,11 @@ function OverdueQueue({ items }: { items: DashboardCaseItem[] }) {
       description="Past their due date and still not ready."
       count={items.length}
       tone="danger"
+      action={
+        onRemind && items.length > 0 ? (
+          <RemindButton onClick={() => onRemind("overdue_requests")} />
+        ) : undefined
+      }
     >
       {items.length === 0 ? (
         <QueueEmpty message="No cases are overdue. Nicely on top of it." />
@@ -1044,7 +1116,13 @@ function OverdueQueue({ items }: { items: DashboardCaseItem[] }) {
   );
 }
 
-function MissingDocumentsQueue({ items }: { items: DashboardCaseItem[] }) {
+function MissingDocumentsQueue({
+  items,
+  onRemind,
+}: {
+  items: DashboardCaseItem[];
+  onRemind?: (type: ReminderType) => void;
+}) {
   return (
     <QueueShell
       id="queue-missing"
@@ -1052,6 +1130,11 @@ function MissingDocumentsQueue({ items }: { items: DashboardCaseItem[] }) {
       description="Cases still waiting on required documents."
       count={items.length}
       tone="warning"
+      action={
+        onRemind && items.length > 0 ? (
+          <RemindButton onClick={() => onRemind("missing_documents")} />
+        ) : undefined
+      }
     >
       {items.length === 0 ? (
         <QueueEmpty message="Every case has what it needs so far." />
@@ -1068,8 +1151,10 @@ function MissingDocumentsQueue({ items }: { items: DashboardCaseItem[] }) {
 
 function NeedsReplacementQueue({
   items,
+  onRemind,
 }: {
   items: DashboardNeedsReplacementItem[];
+  onRemind?: (type: ReminderType) => void;
 }) {
   return (
     <QueueShell
@@ -1078,6 +1163,11 @@ function NeedsReplacementQueue({
       description="Uploads you sent back for the recipient to redo."
       count={items.length}
       tone="warning"
+      action={
+        onRemind && items.length > 0 ? (
+          <RemindButton onClick={() => onRemind("needs_replacement")} />
+        ) : undefined
+      }
     >
       {items.length === 0 ? (
         <QueueEmpty message="Nothing is waiting on a replacement." />

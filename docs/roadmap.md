@@ -2250,3 +2250,64 @@ and uploaded files no longer draw down the org-owner's personal storage.
 
 See `docs/b2b-portals.md`, `docs/api-spec.md` §41, `docs/security-plan.md`,
 `docs/security/audit-logs.md`, and `docs/BILLING.md`.
+
+## B2B Bulk Reminder Emails V1 — delivered (2026-06-25)
+
+`b2b/bulk-reminder-emails` is **implemented** (backend complete + tested). It turns
+the organization dashboard's operational queues into a **controlled batch of branded
+reminder emails** to the recipients who must upload, replace, or complete documents.
+Fully **deterministic — no AI, no AI credits.**
+
+**Reuse, no duplication.** Like the rest of B2B Portals it **orchestrates existing
+primitives** — `PortalPerson` / `PortalCase` / `PortalCaseDocumentRequest` /
+`DocumentRequestLink`, the shared `send_branded_email` helper (with `EmailLog`
+suppression + one-click unsubscribe), and the unified Audit Log. It adds **no
+duplicate upload / request-link / sharing-room / email system**. Service:
+`apps/organizations/portal_reminders.py`.
+
+Key facts:
+
+* **Reminder types** (`reminder_type`): `missing_documents`, `overdue_requests`,
+  `needs_replacement`, `rejected_documents`, `due_soon_cases`,
+  `collecting_documents`. `missing_documents` includes up to 5 short missing
+  requirement **titles** (titles only); `needs_replacement` / `rejected_documents`
+  include a sanitized review reason. The due-soon window is **7 days**.
+* **Preview → send flow.** `GET …/portal/reminders/preview/` returns recipient
+  candidates with safe context plus `recently_reminded` / `eligible` / `skip_reason`
+  (`""` | `no_email` | `recently_reminded`). `POST …/portal/reminders/batches/`
+  materializes a **draft batch** (recomputed server-side — the client only echoes
+  `candidate_id`s) and sends if `send_now`. Also list / detail (with per-recipient
+  outcomes) / send / cancel.
+* **Cooldown.** The same `reminder_type` is not re-sent to the same recipient for the
+  same case/request within **3 days** (`COOLDOWN_DAYS`); such recipients are skipped
+  with reason `recently_reminded`. Staff may override with
+  `override_recent_reminders=true`. Re-checked at send time, not just preview.
+* **Best-effort send.** Synchronous; one suppressed/failed recipient never fails the
+  batch — it ends `sent` / `partially_failed` / `failed`. Capped at **200**
+  recipients per batch.
+* **Email privacy.** Branded `portal_bulk_reminder` email (category `transactional`)
+  carries only a **public** upload/case action link (when one safely exists), safe
+  context, optional staff `message_intro`, and a privacy note — **never** a private
+  file URL, storage key, document content, raw token, or internal staff note. Respects
+  `SuppressedEmail` + one-click unsubscribe; logged in `EmailLog`.
+* **Permissions / gates.** Preview = any **active org member**; create / send / cancel
+  = **OWNER/ADMIN** only. Gated by both the `b2b_portals` feature flag (`503` when off)
+  and the org Teams entitlement (`403 portal_not_enabled`). No public endpoint.
+* **Data model.** New `PortalReminderBatch` and `PortalReminderRecipient` (new org
+  migration). `EmailLog` is **not** FK-linked; per-recipient outcome lives on
+  `PortalReminderRecipient`.
+* **Audit events.** `portal_reminder_batch_created`, `portal_reminder_batch_sent`,
+  `portal_reminder_recipient_sent`, `portal_reminder_recipient_skipped`,
+  `portal_reminder_recipient_failed` — recorded via the unified owner-scoped Audit
+  Log (`metadata.org_id`), with sanitized metadata only.
+
+**Deferred (future work):** recurring reminder campaigns, drip sequences,
+WhatsApp / SMS channels, organization-owned email templates, advanced delivery
+analytics, marketing newsletters, per-recipient custom editing, and Teams billing.
+
+**Next recommended branch: `b2b/teams-billing-checkout`** — wire real Teams checkout
+/ per-seat Stripe billing and invoices (the org templates / billing layer the rest of
+B2B Portals now implies next).
+
+See `docs/b2b-portals.md`, `docs/api-spec.md`, `docs/NOTIFICATIONS.md`,
+`docs/security-plan.md`, and `docs/security/audit-logs.md`.

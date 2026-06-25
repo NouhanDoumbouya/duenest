@@ -1,0 +1,22 @@
+{% extends "emails/base.txt" %}
+{% block content %}{% if reminder_type == "needs_replacement" %}A replacement is needed{% elif reminder_type == "overdue_requests" %}Action needed on your document{% else %}You have pending documents{% endif %}
+
+{% if recipient_name %}Hi {{ recipient_name }},{% else %}Hello,{% endif %} {{ from_name }} is reminding you about {% if document_title %}"{{ document_title }}"{% elif case_title %}your case "{{ case_title }}"{% else %}your pending documents{% endif %}.
+{% if message_intro %}
+{{ message_intro }}
+{% endif %}{% if missing_titles %}
+Documents still needed:
+{% for title in missing_titles %}- {{ title }}
+{% endfor %}{% elif reason %}
+{{ reason }}
+{% endif %}{% if due_date %}Due by {{ due_date }}
+{% endif %}{% if action_url %}
+Upload your document securely here:
+{{ action_url }}
+{% else %}
+Your requester will follow up with a secure link to continue.
+{% endif %}
+Your upload is sent securely to the requester. CertaNest stores files privately and
+never includes document contents, files, access codes, or share tokens in email.
+{% endblock %}
+{% block footer %}Sent via CertaNest on behalf of {{ from_name }}.{% endblock %}

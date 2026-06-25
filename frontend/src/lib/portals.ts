@@ -40,6 +40,14 @@ import type {
   PortalReviewQueueResponse,
   PortalReviewStatus,
   PortalSummary,
+  CreateReminderBatchBody,
+  ReminderBatch,
+  ReminderBatchesResponse,
+  ReminderCandidate,
+  ReminderPreview,
+  ReminderPreviewQuery,
+  ReminderType,
+  SendReminderBatchBody,
   ReviewCaseRequestBody,
   ReviewCaseRequestResponse,
   ReviewDecision,
@@ -350,6 +358,87 @@ export async function getReviewFileDownloadBlob(
     { auth: true, fallbackError: "Could not download this file." },
   );
   saveBlob(blob, filename);
+}
+
+// ---- Bulk reminder emails ---------------------------------------------------
+
+/**
+ * Preview who a reminder of a given type would reach. Any org member may read
+ * this (so a non-admin can see the work), but only admins/owners can send.
+ * Pass `case_id`/`person_id` to scope, and `include_recently_reminded` to also
+ * surface recipients reminded in the last few days (otherwise held back).
+ */
+export function getReminderPreview(
+  orgId: number,
+  query: ReminderPreviewQuery,
+): Promise<ReminderPreview> {
+  const params = new URLSearchParams();
+  params.set("reminder_type", query.reminder_type);
+  if (typeof query.case_id === "number") {
+    params.set("case_id", String(query.case_id));
+  }
+  if (typeof query.person_id === "number") {
+    params.set("person_id", String(query.person_id));
+  }
+  if (query.include_recently_reminded) {
+    params.set("include_recently_reminded", "true");
+  }
+  return apiFetch<ReminderPreview>(
+    base(orgId, `reminders/preview/?${params.toString()}`),
+  );
+}
+
+/**
+ * Create a reminder batch (and send it immediately when `send_now` is true).
+ * Admin/owner only — members get a 403. `selected_candidate_ids` narrows the
+ * batch to the chosen recipients; omit to include every eligible candidate.
+ */
+export function createReminderBatch(
+  orgId: number,
+  body: CreateReminderBatchBody,
+): Promise<ReminderBatch> {
+  return apiFetch<ReminderBatch>(base(orgId, "reminders/batches/"), {
+    method: "POST",
+    body,
+  });
+}
+
+/** List the org's reminder batches (most recent first). */
+export function getReminderBatches(
+  orgId: number,
+): Promise<ReminderBatchesResponse> {
+  return apiFetch<ReminderBatchesResponse>(base(orgId, "reminders/batches/"));
+}
+
+/** Read a single reminder batch with its recipients. */
+export function getReminderBatch(
+  orgId: number,
+  batchId: number,
+): Promise<ReminderBatch> {
+  return apiFetch<ReminderBatch>(base(orgId, `reminders/batches/${batchId}/`));
+}
+
+/** Send a draft reminder batch. Admin/owner only. */
+export function sendReminderBatch(
+  orgId: number,
+  batchId: number,
+  body: SendReminderBatchBody = {},
+): Promise<ReminderBatch> {
+  return apiFetch<ReminderBatch>(
+    base(orgId, `reminders/batches/${batchId}/send/`),
+    { method: "POST", body },
+  );
+}
+
+/** Cancel a draft reminder batch. Admin/owner only. */
+export function cancelReminderBatch(
+  orgId: number,
+  batchId: number,
+): Promise<ReminderBatch> {
+  return apiFetch<ReminderBatch>(
+    base(orgId, `reminders/batches/${batchId}/cancel/`),
+    { method: "POST" },
+  );
 }
 
 // ---- Pure helpers (no DOM where possible — unit-testable) -------------------
@@ -778,6 +867,67 @@ export function dashboardActivityLabel(item: DashboardActivityItem): {
       humanizeEventType(item.event_type),
     objectLabel: item.object_label,
   };
+}
+
+// ---- Bulk reminder helpers --------------------------------------------------
+
+/** The order the reminder types appear in the type picker. */
+export const REMINDER_TYPE_ORDER: ReminderType[] = [
+  "missing_documents",
+  "overdue_requests",
+  "due_soon_cases",
+  "needs_replacement",
+  "rejected_documents",
+  "collecting_documents",
+];
+
+/** Friendly, calm labels for each reminder type. */
+export const REMINDER_TYPE_LABELS: Record<ReminderType, string> = {
+  missing_documents: "Missing documents",
+  overdue_requests: "Overdue requests",
+  needs_replacement: "Needs replacement",
+  rejected_documents: "Rejected documents",
+  due_soon_cases: "Due soon",
+  collecting_documents: "Still collecting",
+};
+
+/** A short, plain-language description of what each reminder nudges about. */
+export const REMINDER_TYPE_DESCRIPTIONS: Record<ReminderType, string> = {
+  missing_documents:
+    "Recipients who still owe a required document on an open case.",
+  overdue_requests:
+    "Requests past their due date that haven't been uploaded yet.",
+  needs_replacement:
+    "Uploads you sent back asking the recipient to redo them.",
+  rejected_documents:
+    "Documents you rejected that the recipient needs to resend.",
+  due_soon_cases: "Cases with a due date coming up that aren't ready yet.",
+  collecting_documents:
+    "Cases still in the collecting stage with outstanding requests.",
+};
+
+/** Human label for a reminder type, falling back to the raw key. */
+export function reminderTypeLabel(type: ReminderType): string {
+  return REMINDER_TYPE_LABELS[type] ?? type;
+}
+
+/** Why a candidate was skipped, as friendly copy. Empty reason → "". */
+export function reminderSkipLabel(skipReason: string): string {
+  switch (skipReason) {
+    case "no_email":
+      return "No email on file";
+    case "recently_reminded":
+      return "Reminded in the last 3 days";
+    default:
+      return "";
+  }
+}
+
+/** The candidates from a preview that can actually be selected and sent. */
+export function selectableCandidates(
+  preview: ReminderPreview,
+): ReminderCandidate[] {
+  return preview.candidates.filter((candidate) => candidate.eligible);
 }
 
 /**

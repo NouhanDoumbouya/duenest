@@ -1911,6 +1911,34 @@ queues + the org plan-usage payload. **Deterministic — no AI, no AI credits.**
 See `docs/b2b-portals.md`, `docs/api-spec.md` §41, and
 `docs/security/audit-logs.md`.
 
+### B2B Bulk Reminder Emails V1
+
+Staff can send a controlled **batch of branded reminder emails** to portal recipients
+who must upload, replace, or complete documents
+(`apps/organizations/portal_reminders.py`). It **reuses existing primitives** (the
+Document Request Links, the shared branded-email helper, the unified Audit Log) and
+adds **no new public route or email system**. **Deterministic — no AI.**
+
+* **Admin-gated, org-isolated.** Preview is readable by any **active org member**;
+  **create / send / cancel are OWNER/ADMIN only**. Non-members are denied. The
+  `b2b_portals` feature flag and the org Teams entitlement gate it like the rest of
+  the portal. No public endpoint.
+* **Emails carry no private data.** The `portal_bulk_reminder` email includes only the
+  organization/requester name, reason, document/case context, due date, and a **public
+  recipient-facing action link only when one safely exists** (the upload page or an
+  open case room) — **never** a private file URL, storage key, raw token, document
+  content, or internal staff note.
+* **Suppression + unsubscribe respected.** Sends go through `send_branded_email`
+  (category `transactional`), honoring `SuppressedEmail` and one-click unsubscribe, and
+  are logged in `EmailLog`. A **3-day cooldown** prevents re-sending the same reminder
+  type to the same recipient for the same case/request (overridable by staff).
+* **Sanitized audit metadata.** The five `portal_reminder_*` events record only safe
+  keys (reminder type, counts, case id, reason category, result) — **never** a raw
+  upload token, private file URL, storage key, document content, or full email body.
+
+See `docs/b2b-portals.md`, `docs/api-spec.md` §42, `docs/NOTIFICATIONS.md`, and
+`docs/security/audit-logs.md`.
+
 ## Teams Plan + Portal Limits V1
 
 Portals are now governed by an **organization-level entitlement** in addition to

@@ -53,6 +53,13 @@ reads are **not** logged.
   organization_portal_disabled, organization_portal_limit_reached. Recorded under
   category `system`, owner = the organization's owner user, with `metadata.org_id`
   for scoping. No plan secrets or billing tokens are stored.
+- **B2B Bulk Reminder Emails:** portal_reminder_batch_created,
+  portal_reminder_batch_sent, portal_reminder_recipient_sent,
+  portal_reminder_recipient_skipped, portal_reminder_recipient_failed. Same scoping
+  (category `system`, owner = the org owner, actor = the acting member,
+  `metadata.org_id`); metadata is limited to safe keys (reminder_type, recipient /
+  sent / skipped / failed counts, case id, reason category, result) — never a raw
+  upload token, private file URL, storage key, document content, or full email body.
 
 The **Organization Dashboard V1** (`GET …/portal/dashboard/`, §41) is a **reader**,
 not a writer, of this log: its recent-activity feed reads the most recent **safe**
@@ -91,7 +98,9 @@ name looks sensitive (url / token / storage / key / content / password / etc.) i
 dropped through a forbidden-substring filter with a small exact-match allow-list,
 and sizes/counts are capped. Allowed metadata is limited to safe values such as
 `status_from` / `status_to`, file name/title, request/room/pack/application
-titles, `due_date`, `result`, and `reason_category`.
+titles, `due_date`, `result`, and `reason_category`. (`recipient_count` is on the
+exact-match allow-list because the substring "ip" would otherwise drop it through
+the forbidden-substring filter.)
 
 ## Best-effort (non-breaking)
 

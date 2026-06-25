@@ -315,6 +315,110 @@ class PortalCaseRequestFileDownloadView(_PortalCaseRequestFileView):
         return _file_response(f, as_attachment=True)
 
 
+class PortalReminderPreviewView(_PortalBase):
+    """GET → reminder recipient preview for a reminder_type. Any active member may
+    preview. Query: reminder_type (required), case_id, person_id,
+    include_recently_reminded."""
+
+    def get(self, request, org_id):
+        from . import portal_reminders
+
+        org = self.get_org(request, org_id)
+        reminder_type = request.query_params.get("reminder_type") or ""
+        filters = {
+            "case_id": request.query_params.get("case_id"),
+            "person_id": request.query_params.get("person_id"),
+        }
+        include_recent = request.query_params.get("include_recently_reminded") == "true"
+        try:
+            payload = portal_reminders.build_reminder_preview_payload(
+                org, request.user, reminder_type,
+                filters=filters, include_recently_reminded=include_recent,
+            )
+        except portal_reminders.ReminderError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(payload)
+
+
+class PortalReminderBatchesView(_PortalBase):
+    """GET → recent reminder batches (member). POST → create + optionally send a
+    batch (admin/owner only)."""
+
+    def get(self, request, org_id):
+        from . import portal_reminders
+        from .models import PortalReminderBatch
+
+        org = self.get_org(request, org_id)
+        qs = PortalReminderBatch.objects.filter(organization=org)[:50]
+        data = [portal_reminders.build_reminder_batch_payload(b) for b in qs]
+        return Response({"batches": data, "count": len(data)})
+
+    def post(self, request, org_id):
+        from . import portal_reminders
+
+        org = self.get_org(request, org_id, write=True)
+        try:
+            batch = portal_reminders.create_reminder_batch(
+                org, request.user,
+                request.data.get("reminder_type") or "",
+                payload=request.data,
+            )
+        except portal_reminders.ReminderError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            portal_reminders.build_reminder_batch_payload(batch, include_recipients=True),
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class PortalReminderBatchDetailView(_PortalBase):
+    """GET → a reminder batch with its recipient outcomes (member)."""
+
+    def get(self, request, org_id, batch_id):
+        from . import portal_reminders
+        from .models import PortalReminderBatch
+
+        org = self.get_org(request, org_id)
+        batch = get_object_or_404(PortalReminderBatch, pk=batch_id, organization=org)
+        return Response(
+            portal_reminders.build_reminder_batch_payload(batch, include_recipients=True)
+        )
+
+
+class PortalReminderBatchSendView(_PortalBase):
+    """POST → send a draft batch (admin/owner only)."""
+
+    def post(self, request, org_id, batch_id):
+        from . import portal_reminders
+        from .models import PortalReminderBatch
+
+        org = self.get_org(request, org_id, write=True)
+        batch = get_object_or_404(PortalReminderBatch, pk=batch_id, organization=org)
+        portal_reminders.send_portal_reminder_batch(
+            batch, request.user,
+            override_recent=bool(request.data.get("override_recent_reminders")),
+        )
+        return Response(
+            portal_reminders.build_reminder_batch_payload(batch, include_recipients=True)
+        )
+
+
+class PortalReminderBatchCancelView(_PortalBase):
+    """POST → cancel a draft batch (admin/owner only)."""
+
+    def post(self, request, org_id, batch_id):
+        from . import portal_reminders
+        from .models import PortalReminderBatch
+
+        org = self.get_org(request, org_id, write=True)
+        batch = get_object_or_404(PortalReminderBatch, pk=batch_id, organization=org)
+        try:
+            portal_reminders.cancel_reminder_batch(batch, request.user)
+        except portal_reminders.ReminderError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(portal_reminders.build_reminder_batch_payload(batch))
+
+
 class PortalDashboardView(_PortalBase):
     """GET → the Organization Dashboard V1 payload (operational metrics + bounded
     action queues + plan usage). Read-only; any active org member may read. No
