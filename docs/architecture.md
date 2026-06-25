@@ -1497,3 +1497,41 @@ lifecycle event model.
 
 Deferred to later branches: external APM (Sentry), pager alerts, full incident
 management, session replay, and centralised scheduled-job orchestration.
+
+## 37. Scheduled Jobs & Background Operations Architecture
+
+CertaNest has **no Celery/queue**: time-based work runs as plain Django
+management commands invoked by an external scheduler (Railway Cron). V1 wraps
+that with a thin, safe reliability layer (it does NOT change the scheduler).
+
+- **Registry** (`apps/core/scheduled_jobs.py`): declarative metadata for each
+  real job — cadence, category, lock timeout, and safety flags
+  (`is_manual_run_allowed`, `is_destructive`, `supports_dry_run`, `is_idempotent`,
+  `expected_max_age_minutes`, `work_path`). No secrets, no runtime state. Core
+  has no model dependency, so it stays import-cycle-free.
+- **Runner** (`apps/founder/job_runner.py`): `run_scheduled_job()` looks up the
+  registry, takes a cache lock (`cache.add` — atomic on Redis; per-process on the
+  LocMem fallback), records a `ScheduledJobRun` (started → succeeded/failed/
+  skipped) plus a correlated `OperationalEvent`, and releases the lock in a
+  `finally`. Dry-runs preview via the work callable with no lock, no run row, no
+  side effects. `bridge_run()` is a best-effort variant for commands that manage
+  their own execution (notification delivery).
+- **Work adapters** (`apps/founder/job_work.py`): one uniform
+  `work(*, dry_run, limit)` per runnable job, delegating to the existing
+  idempotent service — so the runner is decoupled from command internals and the
+  founder console can invoke a job without `call_command`.
+- **Health** (`apps/founder/job_status.py`): per-job stale detection (healthy /
+  never_run / stale / failing / disabled) from `ScheduledJobRun` history + the
+  registry's `expected_max_age_minutes`; a summary is folded into founder
+  system-status.
+- **Model**: `founder.ScheduledJobRun` (counts/status/duration/trigger/
+  correlation_id/scrubbed metadata). `notifications.NotificationDeliveryRun` is
+  retained for detailed delivery metrics and bridged, never duplicated.
+- **Console**: `/api/v1/founder/jobs/*` (founder-only) + `/dashboard/founder/jobs`.
+
+**Idempotency & safety:** re-runs never duplicate emails (dedupe_key / EmailLog
+window / state guards in the underlying services). Destructive jobs (trash purge)
+are dry-run-only from the console; AI and billing jobs are observe-only.
+
+Deferred: external scheduler vendor, Celery, alerting/pager, job dependencies,
+retry/backoff queues.

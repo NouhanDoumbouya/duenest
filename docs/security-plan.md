@@ -2123,3 +2123,31 @@ global observability data. Resolving an event is founder-only and audited.
 
 **No external monitoring vendor, no new secret, and no change to document/storage
 handling** were introduced.
+
+## Scheduled Jobs & Background Operations V1
+
+Background jobs are observable to founders without exposing user data, and are
+designed to be safe to re-run.
+
+- **What is logged:** `ScheduledJobRun` rows hold counts (attempted/success/
+  skipped/failed), status, duration, `triggered_by` (+ user id), a correlation
+  id, a short `error_code` (exception class), a `safe_message`, and **scrubbed**
+  `metadata` (via `sanitize_metadata`). Never document contents, OCR text,
+  prompts, AI responses, email bodies, private URLs, storage keys, tokens, or
+  secrets; never a full stack trace.
+- **Idempotency / no duplicate emails:** the runner delegates to the existing,
+  already-idempotent services — notification delivery dedupes via `dedupe_key`,
+  Weekly Radar via an EmailLog window, emergency check-ins via state guards — so
+  a manual re-run from the console cannot double-send.
+- **Destructive safety:** trash purge is `is_destructive` and **not** manually
+  runnable from the console; it offers a dry-run (read-only count) only. The real
+  delete runs from the scheduler.
+- **AI / billing safety:** the AI briefing digest and billing access sync are
+  registered for visibility but are **observe-only** — the console never triggers
+  them (no AI cost, no billing-email side effects from a click).
+- **Concurrency:** a cache lock (atomic on Redis) prevents two instances of a job
+  from running at once; a blocked run is recorded as `skipped (already_running)`.
+- **Access:** all scheduled-job endpoints and the `/dashboard/founder/jobs` page
+  require `IsFounderUser`; manual run / dry-run are audited via `log_founder_action`.
+
+No external scheduler vendor, queue service, or new secret was introduced.

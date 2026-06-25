@@ -274,3 +274,37 @@ Tests use local filesystem storage (no S3/boto3 needed).
 - Production email provider must be configured + domain-authenticated before
   relying on reminder emails.
 - Multi-instance migrations should run as a release step, not at container start.
+
+## Scheduled jobs (Railway Cron)
+
+CertaNest's background work runs as Django management commands invoked by an
+external scheduler (Railway Cron). There is no Celery/queue. Each command is
+idempotent and writes a `ScheduledJobRun` you can view in the founder console at
+`/dashboard/founder/jobs`. Recommended scheduler entries (cron `command`):
+
+| Job | Command | Suggested cron | Notes |
+| --- | --- | --- | --- |
+| Notification delivery | `python manage.py process_due_notifications` | every 30–60 min | Idempotent (dedupe_key); safe to run often. |
+| Weekly Radar email | `python manage.py send_weekly_radar_emails` | weekly | Dedupes via EmailLog (6-day window). |
+| AI briefing digest | `python manage.py send_ai_digests` | weekly | Calls the AI provider; never triggered from the console. |
+| Emergency check-ins | `python manage.py process_emergency_checkins` | daily (or hourly) | Feature-gated + state-guarded. |
+| Trash purge (destructive) | `python manage.py purge_expired_trash` | daily | Permanent delete past `TRASH_RETENTION_DAYS`. Set `0` to disable. |
+| Billing access sync | `python manage.py sync_billing_access` | daily | Local entitlement lifecycle sync (no live Stripe calls). |
+
+Each command accepts `--dry-run` to preview without side effects, e.g.:
+
+```bash
+python manage.py purge_expired_trash --dry-run
+python manage.py send_weekly_radar_emails --dry-run
+```
+
+**Check last run:** open `/dashboard/founder/jobs` (founder/staff only) — it shows
+each job's health (healthy / stale / failing / never-run), last run time, counts,
+and recent history. The same counts appear under `jobs_summary` in
+`GET /api/v1/founder/system-status/`.
+
+**Recover from a stale job:** a "stale" badge means a job hasn't completed within
+its expected window — check the scheduler entry exists and is firing, then run the
+command manually (or, for safe non-destructive jobs, click **Run now** in the
+console). Trash purge is **dry-run only** from the console; run the real command
+from the scheduler/CLI. No secrets are needed beyond the existing environment.

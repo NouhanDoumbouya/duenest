@@ -12,20 +12,9 @@ manual permanent-delete path). Set TRASH_RETENTION_DAYS=0 to disable.
 
 from __future__ import annotations
 
-from datetime import timedelta
-
-from django.conf import settings
 from django.core.management.base import BaseCommand
-from django.utils import timezone
 
-from apps.documents.models import Document, DocumentFile
-
-
-def _delete_blob(file: DocumentFile) -> None:
-    try:
-        file.file.delete(save=False)
-    except Exception:  # noqa: BLE001 — best-effort blob cleanup
-        pass
+from apps.documents.services import purge_expired_trash
 
 
 class Command(BaseCommand):
@@ -39,8 +28,10 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        retention = getattr(settings, "TRASH_RETENTION_DAYS", 30)
-        if retention <= 0:
+        dry_run = options["dry_run"]
+        result = purge_expired_trash(dry_run=dry_run)
+
+        if result.get("disabled"):
             self.stdout.write(
                 self.style.WARNING(
                     "TRASH_RETENTION_DAYS is 0 — auto-purge disabled. Nothing to do."
@@ -48,46 +39,24 @@ class Command(BaseCommand):
             )
             return
 
-        dry_run = options["dry_run"]
-        cutoff = timezone.now() - timedelta(days=retention)
-
-        documents = Document.objects.filter(is_trashed=True, trashed_at__lt=cutoff)
-        # Standalone inbox files and trashed files whose document is not itself
-        # being purged below (those are removed via cascade).
-        loose_files = DocumentFile.objects.filter(
-            is_trashed=True, trashed_at__lt=cutoff
-        ).exclude(document__in=documents)
-
-        doc_count = documents.count()
-        file_count = loose_files.count()
-
-        if dry_run:
-            self.stdout.write(
-                f"Would purge {doc_count} document(s) and {file_count} loose file(s) "
-                f"trashed before {cutoff.date()}."
-            )
-            return
-
-        for document in documents.iterator():
-            for file in document.files.all():
-                _delete_blob(file)
-            document.delete()  # cascades files, share links, versions, activity
-
-        for file in loose_files.iterator():
-            _delete_blob(file)
-            file.delete()
-
-        self.stdout.write(
-            self.style.SUCCESS(
-                f"Purged {doc_count} document(s) and {file_count} loose file(s) "
-                f"trashed before {cutoff.date()}."
-            )
+        doc_count = result.get("documents", 0)
+        file_count = result.get("files", 0)
+        verb = "Would purge" if dry_run else "Purged"
+        line = (
+            f"{verb} {doc_count} document(s) and {file_count} loose file(s) "
+            f"trashed before {result.get('cutoff')}."
         )
-        from apps.founder.services import record_scheduled_job_run
+        self.stdout.write(line if dry_run else self.style.SUCCESS(line))
 
-        record_scheduled_job_run(
-            "purge_expired_trash_job",
-            status="succeeded",
-            message=f"Purged {doc_count} document(s)",
-            counts={"documents": doc_count, "files": file_count},
-        )
+        if not dry_run:
+            from apps.founder.job_runner import bridge_run
+            from apps.founder.models import ScheduledJobRun
+
+            bridge_run(
+                "purge_expired_trash",
+                status=ScheduledJobRun.Status.SUCCEEDED,
+                attempted=doc_count + file_count,
+                succeeded=doc_count + file_count,
+                message=f"Purged {doc_count} document(s)",
+                metadata={"documents": doc_count, "files": file_count},
+            )

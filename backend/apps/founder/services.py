@@ -183,15 +183,17 @@ def record_operational_event(
     request=None,
     correlation_id: str = "",
     metadata: dict | None = None,
-) -> None:
+):
     """
     Best-effort OperationalEvent write for founder/admin observability.
 
-    NEVER raises — observability must not break the workflow it observes. The
-    `metadata` dict is scrubbed by `sanitize_metadata` (so even an accidental
-    token/content value is redacted); callers should still pass only safe ids
-    (document/file/case/request/room/org ids, file size, content type) and never
-    raw tokens, file contents, OCR text, prompts, private URLs, or storage keys.
+    NEVER raises — observability must not break the workflow it observes. Returns
+    the created `OperationalEvent` (or `None` on any failure) so callers that want
+    to link it (e.g. a `ScheduledJobRun`) can. The `metadata` dict is scrubbed by
+    `sanitize_metadata` (so even an accidental token/content value is redacted);
+    callers should still pass only safe ids (document/file/case/request/room/org
+    ids, file size, content type) and never raw tokens, file contents, OCR text,
+    prompts, private URLs, or storage keys.
     """
     try:
         from .models import OperationalEvent
@@ -216,7 +218,7 @@ def record_operational_event(
             cid = get_correlation_id()
         cid = str(cid or "")[:64]
 
-        OperationalEvent.objects.create(
+        return OperationalEvent.objects.create(
             category=str(category)[:24],
             source=str(source)[:80],
             status=str(status)[:16],
@@ -230,6 +232,7 @@ def record_operational_event(
         )
     except Exception:  # noqa: BLE001 — observability must never break a workflow
         logger.warning("record_operational_event failed", exc_info=False)
+        return None
 
 
 def record_scheduled_job_run(

@@ -6860,3 +6860,18 @@ an incoming `X-Request-ID` is accepted but sanitised to `[A-Za-z0-9-]`, max 64).
 - `POST /api/v1/founder/operational-events/<id>/resolve/` — body `{ "resolution_note": "..." }` (optional). Marks resolved and records the resolver. Audited via `log_founder_action`.
 
 The frontend founder console renders these at `/dashboard/founder/observability`.
+
+## Scheduled Jobs (Founder/admin only)
+
+All endpoints require `IsFounderUser`. Payloads are safe (counts/status/timestamps
+only — never contents, tokens, URLs, or secrets).
+
+- `GET /api/v1/founder/jobs/` → `{ "jobs": [ {job metadata + health + last_run} ] }`. `health` ∈ healthy/never_run/stale/failing/disabled.
+- `GET /api/v1/founder/jobs/summary/` → `{ scheduled_jobs_total, scheduled_jobs_healthy, scheduled_jobs_failing, scheduled_jobs_stale, scheduled_jobs_never_run, scheduled_jobs_disabled, last_failed_job }`.
+- `GET /api/v1/founder/jobs/{job_name}/` → job metadata + health + `recent_runs[]`. `404` for an unknown job.
+- `GET /api/v1/founder/jobs/{job_name}/runs/` → paginated `ScheduledJobRun` history.
+- `POST /api/v1/founder/jobs/{job_name}/run/` → run NOW (synchronous). Allowed only for jobs marked `is_manual_run_allowed` and NOT `is_destructive`; otherwise `400`. Email jobs are idempotent (no double-send). Returns `{ run_id, status, attempted, succeeded, skipped, failed, message }`; `502` (safe message) if the job raised (a FAILED run was recorded).
+- `POST /api/v1/founder/jobs/{job_name}/dry-run/` → preview, no side effects. Allowed only when `supports_dry_run`; otherwise `400`. Used for destructive jobs (trash purge) to see what WOULD happen.
+
+The founder console renders these at `/dashboard/founder/jobs`. Job health counts
+also appear under `jobs_summary` in `GET /api/v1/founder/system-status/`.

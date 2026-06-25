@@ -2455,6 +2455,68 @@ def fire_checkin_escalation(pack, *, now=None, dry_run: bool = False) -> dict:
     return {"pack_id": pack.id, "notified": notified, "dry_run": False}
 
 
+def _delete_trashed_blob(file: "DocumentFile") -> None:
+    try:
+        file.file.delete(save=False)
+    except Exception:  # noqa: BLE001 — best-effort blob cleanup
+        pass
+
+
+def purge_expired_trash(
+    *, dry_run: bool = False, retention_days: int | None = None
+) -> dict:
+    """
+    Permanently delete trashed documents/files past the retention window.
+
+    Idempotent and safe to re-run: it only ever targets rows already past the
+    cutoff, and a `dry_run` reports counts without deleting anything. Returns safe
+    counts only (no titles, paths, or contents). `TRASH_RETENTION_DAYS=0` disables
+    purging entirely.
+    """
+    from django.conf import settings
+
+    retention = (
+        retention_days
+        if retention_days is not None
+        else getattr(settings, "TRASH_RETENTION_DAYS", 30)
+    )
+    if retention <= 0:
+        return {"documents": 0, "files": 0, "disabled": True}
+
+    cutoff = timezone.now() - timedelta(days=retention)
+    documents = Document.objects.filter(is_trashed=True, trashed_at__lt=cutoff)
+    # Trashed loose files whose document isn't itself being purged (cascade covers those).
+    loose_files = DocumentFile.objects.filter(
+        is_trashed=True, trashed_at__lt=cutoff
+    ).exclude(document__in=documents)
+
+    doc_count = documents.count()
+    file_count = loose_files.count()
+
+    if dry_run:
+        return {
+            "documents": doc_count,
+            "files": file_count,
+            "cutoff": cutoff.date().isoformat(),
+            "dry_run": True,
+        }
+
+    for document in documents.iterator():
+        for file in document.files.all():
+            _delete_trashed_blob(file)
+        document.delete()  # cascades files, share links, versions, activity
+
+    for file in loose_files.iterator():
+        _delete_trashed_blob(file)
+        file.delete()
+
+    return {
+        "documents": doc_count,
+        "files": file_count,
+        "cutoff": cutoff.date().isoformat(),
+    }
+
+
 def process_emergency_checkins(*, now=None, dry_run: bool = False) -> dict:
     """
     One scheduler pass over armed safety check-ins:

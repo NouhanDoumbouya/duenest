@@ -677,3 +677,80 @@ export interface ObservabilityOverview {
   ai_health: AiHealth;
   email_health: NotificationDeliveryHealth | null;
 }
+
+// ---- Scheduled Jobs & Background Operations V1 -----------------------------
+
+export interface ScheduledJobRun {
+  id: number;
+  job_name: string;
+  display_name?: string;
+  category?: string;
+  status: string;
+  started_at: string | null;
+  finished_at: string | null;
+  duration_ms: number | null;
+  attempted_count: number;
+  success_count: number;
+  skipped_count: number;
+  failed_count: number;
+  triggered_by: string;
+  triggered_by_user: number | null;
+  correlation_id: string;
+  error_code: string;
+  safe_message: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export type ScheduledJobHealth =
+  | "healthy"
+  | "never_run"
+  | "stale"
+  | "failing"
+  | "disabled";
+
+export interface ScheduledJob {
+  job_name: string;
+  display_name: string;
+  description: string;
+  category: string;
+  command_name: string;
+  expected_frequency: string;
+  expected_max_age_minutes: number | null;
+  is_enabled: boolean;
+  is_manual_run_allowed: boolean;
+  supports_dry_run: boolean;
+  is_destructive: boolean;
+  is_idempotent: boolean;
+  safe_to_retry: boolean;
+  notes: string;
+  health: ScheduledJobHealth;
+  last_run: ScheduledJobRun | null;
+}
+
+export interface ScheduledJobDetail extends ScheduledJob {
+  recent_runs: ScheduledJobRun[];
+}
+
+export interface ScheduledJobsSummary {
+  scheduled_jobs_total: number;
+  scheduled_jobs_healthy: number;
+  scheduled_jobs_failing: number;
+  scheduled_jobs_stale: number;
+  scheduled_jobs_never_run: number;
+  scheduled_jobs_disabled: number;
+  last_failed_job: string | null;
+}
+
+export interface ScheduledJobRunResult {
+  run_id?: number;
+  status?: string;
+  dry_run?: boolean;
+  attempted?: number;
+  succeeded?: number;
+  skipped?: number;
+  failed?: number;
+  message?: string;
+  reason?: string;
+  error_code?: string;
+}

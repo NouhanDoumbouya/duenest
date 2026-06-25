@@ -45,6 +45,12 @@ from .views import (
     FounderObservabilityView,
     FounderOperationalEventListView,
     FounderOperationalEventResolveView,
+    FounderScheduledJobDetailView,
+    FounderScheduledJobDryRunView,
+    FounderScheduledJobListView,
+    FounderScheduledJobRunsView,
+    FounderScheduledJobRunView,
+    FounderScheduledJobSummaryView,
     FounderSystemStatusView,
     FounderInviteCodeDetailView,
     FounderInviteCodeDisableView,
@@ -180,6 +186,37 @@ urlpatterns = [
         "founder/operational-events/<int:event_id>/resolve/",
         FounderOperationalEventResolveView.as_view(),
         name="founder-operational-event-resolve",
+    ),
+    # Scheduled Jobs & Background Operations V1
+    path(
+        "founder/jobs/",
+        FounderScheduledJobListView.as_view(),
+        name="founder-scheduled-jobs",
+    ),
+    path(
+        "founder/jobs/summary/",
+        FounderScheduledJobSummaryView.as_view(),
+        name="founder-scheduled-jobs-summary",
+    ),
+    path(
+        "founder/jobs/<str:job_name>/",
+        FounderScheduledJobDetailView.as_view(),
+        name="founder-scheduled-job-detail",
+    ),
+    path(
+        "founder/jobs/<str:job_name>/runs/",
+        FounderScheduledJobRunsView.as_view(),
+        name="founder-scheduled-job-runs",
+    ),
+    path(
+        "founder/jobs/<str:job_name>/run/",
+        FounderScheduledJobRunView.as_view(),
+        name="founder-scheduled-job-run",
+    ),
+    path(
+        "founder/jobs/<str:job_name>/dry-run/",
+        FounderScheduledJobDryRunView.as_view(),
+        name="founder-scheduled-job-dry-run",
     ),
     path(
         "founder/security-overview/",

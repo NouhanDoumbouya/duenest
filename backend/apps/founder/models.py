@@ -376,6 +376,84 @@ class OperationalEvent(models.Model):
         return f"{self.severity}:{self.category}:{self.source}={self.status}"
 
 
+class ScheduledJobRun(models.Model):
+    """
+    One execution of a registered scheduled job (see `core.scheduled_jobs`).
+
+    The founder Scheduled Jobs dashboard reads these to answer: which jobs ran,
+    when, with what outcome and counts, who triggered them, and whether a job is
+    stale. Complements `NotificationDeliveryRun` (kept for detailed delivery
+    metrics) — the notification job writes BOTH.
+
+    PRIVACY: `metadata` is scrubbed via `sanitize_metadata` on write; only safe
+    counts/ids are stored — never document contents, OCR text, prompts, email
+    bodies, private URLs, storage keys, tokens, or secrets. `error_code` holds an
+    exception class / reason string, never a full stack trace.
+    """
+
+    class Status(models.TextChoices):
+        STARTED = "started", "Started"
+        SUCCEEDED = "succeeded", "Succeeded"
+        FAILED = "failed", "Failed"
+        SKIPPED = "skipped", "Skipped"
+        STALE = "stale", "Stale"
+        CANCELLED = "cancelled", "Cancelled"
+
+    class Trigger(models.TextChoices):
+        SCHEDULER = "scheduler", "Scheduler"
+        MANUAL = "manual", "Manual"
+        COMMAND = "command", "Command"
+        SYSTEM = "system", "System"
+
+    job_name = models.CharField(max_length=80, db_index=True)
+    display_name = models.CharField(max_length=120, blank=True)
+    category = models.CharField(max_length=24, blank=True)
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.STARTED
+    )
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    duration_ms = models.PositiveIntegerField(null=True, blank=True)
+    attempted_count = models.PositiveIntegerField(default=0)
+    success_count = models.PositiveIntegerField(default=0)
+    skipped_count = models.PositiveIntegerField(default=0)
+    failed_count = models.PositiveIntegerField(default=0)
+    triggered_by = models.CharField(
+        max_length=16, choices=Trigger.choices, default=Trigger.SCHEDULER
+    )
+    triggered_by_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="triggered_scheduled_job_runs",
+    )
+    correlation_id = models.CharField(max_length=64, blank=True, db_index=True)
+    lock_key = models.CharField(max_length=120, blank=True)
+    error_code = models.CharField(max_length=80, blank=True)
+    safe_message = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    operational_event = models.ForeignKey(
+        OperationalEvent,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="scheduled_job_runs",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["job_name", "created_at"]),
+            models.Index(fields=["status", "created_at"]),
+            models.Index(fields=["job_name", "status", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.job_name}={self.status}"
+
+
 class WaitlistEntry(models.Model):
     """Public private-beta waitlist entry, visible only to founders/admins."""
 

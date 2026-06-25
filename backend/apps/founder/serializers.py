@@ -20,6 +20,7 @@ from .models import (
     LaunchChecklistItem,
     OperationalEvent,
     ProductEvent,
+    ScheduledJobRun,
     TransactionalEmailSetting,
     WaitlistEntry,
 )
@@ -507,6 +508,35 @@ class FounderOperationalEventSerializer(serializers.ModelSerializer):
             "resolved",
             "resolved_at",
             "resolution_note",
+        ]
+        read_only_fields = fields
+
+
+class FounderScheduledJobRunSerializer(serializers.ModelSerializer):
+    """Read-only view of one scheduled-job execution (already-safe fields)."""
+
+    class Meta:
+        model = ScheduledJobRun
+        fields = [
+            "id",
+            "job_name",
+            "display_name",
+            "category",
+            "status",
+            "started_at",
+            "finished_at",
+            "duration_ms",
+            "attempted_count",
+            "success_count",
+            "skipped_count",
+            "failed_count",
+            "triggered_by",
+            "triggered_by_user",
+            "correlation_id",
+            "error_code",
+            "safe_message",
+            "metadata",
+            "created_at",
         ]
         read_only_fields = fields
 
