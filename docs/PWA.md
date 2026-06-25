@@ -264,3 +264,54 @@ Unsafe (never):
   site root; ensure the host does not add long-lived immutable caching to `sw.js`
   (browsers re-check it, but avoid CDN pinning the old worker).
 - Bump `VERSION` in `sw.js` on each release that changes cached assets.
+
+## 13. Mobile / PWA Final Polish V1 (2026-06-25)
+
+A frontend-only pass that hardens mobile quality on top of the PWA Lite
+foundation. **No change to the caching/offline security model** — the service
+worker, manifest, offline page, icons, and metadata were verified correct and
+left as-is (the SW already never caches `/api/*`, navigations, authed responses,
+tokens, R2 URLs, or document/share/room/request routes; only the shell, hashed
+static assets, icons, and OpenCV).
+
+What this pass changed:
+
+- **Safe-area for fixed overlays.** Fixed overlays escape the standalone body's
+  `env(safe-area-inset-*)` padding, so each now pads itself: the shared
+  `DrawerPanel` (all portal modals) pads its bottom past the home indicator, the
+  dashboard "More" nav drawer pads top and bottom, and the full-screen scanner
+  pads its top bar and bottom capture controls. The slim mobile header is left to
+  the standalone body padding (avoids double-padding).
+- **Tables → cards on phones.** The documents table (`documents-table.tsx`)
+  renders a stacked card list below `sm` and the scannable table from `sm` up, so
+  phones never need horizontal scroll. The power-user table is unchanged on
+  tablet/desktop.
+- **Folder sidebar mobile toggle.** The document-organization folder sidebar
+  collapses behind a "Folders & views" disclosure below `lg` (always expanded
+  from `lg`), and auto-collapses on selection so a long folder tree never pushes
+  the document list off-screen.
+- **Public upload on phones.** The organization public request input gained an
+  `accept` list (`image/*,application/pdf,.doc,.docx`) so mobile browsers offer
+  camera, photo library, and files. No `capture` attribute is forced — a
+  requested document is often an existing PDF, so the camera must not be
+  mandatory. No raw tokens, private URLs, internal folders/tags/custom fields are
+  exposed on any public page.
+- **Touch targets.** Comfortable tap sizes on the person-card details toggle and
+  the documents mobile card controls.
+
+### Scanner offline (verified, unchanged)
+
+The scanner already handles offline safely and was NOT rebuilt: an "Offline" pill
+in its header, calm "Scan queued — uploads automatically when you're back online"
+messaging, and an **encrypted** offline queue. Queued scans are stored in
+IndexedDB as **AES-256-GCM ciphertext** under a **non-extractable** CryptoKey and
+**auto-purged after 7 days** (`lib/scanner/queue.ts`); `scanner-sw.js` caches only
+OpenCV, never scan bytes or app/API responses. This is the one place document
+bytes touch the device, and it does so encrypted, time-boxed, and only to survive
+a flaky connection — never as an offline vault.
+
+### Deferred
+
+Native mobile app, React Native, offline vault, an offline **upload queue** for
+public recipients, biometric app lock, advanced push, and a mobile-specific
+camera rewrite remain out of scope.

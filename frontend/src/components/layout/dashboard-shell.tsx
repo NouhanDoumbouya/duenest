@@ -472,7 +472,10 @@ export function DashboardShell({
               onClick={() => setMobileNavOpen(false)}
             />
             <aside
-              className="absolute inset-y-0 left-0 flex w-[min(20rem,calc(100vw-2rem))] flex-col border-r border-border bg-sidebar shadow-xl"
+              // Fixed overlay: it escapes the standalone body's safe-area
+              // padding, so it pads its own top/bottom to clear the notch and
+              // home indicator (UserFooter sits at the very bottom).
+              className="absolute inset-y-0 left-0 flex w-[min(20rem,calc(100vw-2rem))] flex-col border-r border-border bg-sidebar pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] shadow-xl"
               role="dialog"
               aria-modal="true"
               aria-label="Dashboard navigation"

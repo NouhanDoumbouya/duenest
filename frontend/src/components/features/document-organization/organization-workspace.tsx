@@ -10,9 +10,11 @@
 // does NOT change its sharing or access. No raw file URLs are ever rendered.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ChevronDown, FolderTree } from "lucide-react";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { Toast, type ToastState } from "@/components/ui/toast";
+import { cn } from "@/lib/utils";
 import {
   FolderSidebar,
   type OrgSelection,
@@ -118,6 +120,9 @@ export function OrganizationWorkspace({
 
   const [selection, setSelection] = useState<OrgSelection>({ kind: "unfiled" });
   const [contents, setContents] = useState<ContentsState>(EMPTY_CONTENTS);
+  // On phones the folder sidebar is collapsed behind a toggle so a long folder
+  // tree doesn't push the document list off-screen; always expanded on lg+.
+  const [foldersOpen, setFoldersOpen] = useState(false);
 
   const [toast, setToast] = useState<ToastState | null>(null);
 
@@ -308,18 +313,44 @@ export function OrganizationWorkspace({
     <>
       <div className="grid gap-6 lg:grid-cols-[18rem_1fr]">
         <aside className="rounded-2xl border border-border bg-card p-3 shadow-sm lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
-          <FolderSidebar
-            folders={folders}
-            tags={tags}
-            collections={collections}
-            selection={selection}
-            onSelect={setSelection}
-            onCreateFolder={
-              canManage && source.createFolder
-                ? () => setCreatingFolder(true)
-                : undefined
-            }
-          />
+          {/* Mobile-only disclosure: keeps a long folder tree from pushing the
+              document list off-screen. Always expanded from lg up. */}
+          <button
+            type="button"
+            onClick={() => setFoldersOpen((open) => !open)}
+            aria-expanded={foldersOpen}
+            className="flex min-h-11 w-full items-center justify-between gap-2 rounded-lg px-1 text-sm font-medium lg:hidden"
+          >
+            <span className="inline-flex items-center gap-2">
+              <FolderTree className="size-4 text-primary" aria-hidden />
+              Folders &amp; views
+            </span>
+            <ChevronDown
+              className={cn(
+                "size-4 text-muted-foreground transition-transform",
+                foldersOpen && "rotate-180",
+              )}
+              aria-hidden
+            />
+          </button>
+          <div className={cn(foldersOpen ? "mt-2 block" : "hidden", "lg:mt-0 lg:block")}>
+            <FolderSidebar
+              folders={folders}
+              tags={tags}
+              collections={collections}
+              selection={selection}
+              onSelect={(next) => {
+                setSelection(next);
+                // On mobile, collapse so the chosen folder's documents are visible.
+                setFoldersOpen(false);
+              }}
+              onCreateFolder={
+                canManage && source.createFolder
+                  ? () => setCreatingFolder(true)
+                  : undefined
+              }
+            />
+          </div>
         </aside>
 
         <FolderContentsView
