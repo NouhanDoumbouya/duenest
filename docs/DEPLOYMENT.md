@@ -165,6 +165,12 @@ DUENEST_KEK_V1_B64=<base64 32-byte key>   # generate_encryption_key
 # + EMAIL_* vars (see docs/EMAIL_REMINDERS.md) for all transactional email
 #   (invite, waitlist, password reset, email verification, reminders)
 # + FRONTEND_APP_URL=https://app.certanest.com  (links in invite/reset/verification emails)
+# --- Optional: Integrations OAuth Foundation V1 (import-only; docs/integrations.md) ---
+# Leave unset to keep the Google integration "Not configured" (no crash). Never
+# commit real values; store in the secret manager.
+# GOOGLE_OAUTH_CLIENT_ID=<google-web-client-id>
+# GOOGLE_OAUTH_CLIENT_SECRET=<google-web-client-secret>
+# GOOGLE_OAUTH_REDIRECT_URI=https://api.certanest.com/api/v1/integrations/google/callback/
 ```
 
 Production settings **fail closed** if the encryption KEK is missing/malformed.

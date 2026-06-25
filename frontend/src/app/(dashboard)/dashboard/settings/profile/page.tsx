@@ -9,6 +9,7 @@ import {
   Database,
   Loader2,
   Lock,
+  Plug,
   ShieldCheck,
   Trash2,
   Upload,
@@ -40,6 +41,7 @@ const ACCOUNT_AREAS = [
   { label: "Plan & Billing", href: "/dashboard/settings/billing", icon: CreditCard },
   { label: "Data & privacy", href: "/dashboard/settings/data", icon: Database },
   { label: "AI settings", href: "/dashboard/settings/ai", icon: Lock },
+  { label: "Integrations", href: "/dashboard/settings/integrations", icon: Plug },
   { label: "Trust & security", href: "/dashboard/trust", icon: ShieldCheck },
 ];
 

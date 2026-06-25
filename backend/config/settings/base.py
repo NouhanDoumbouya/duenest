@@ -23,6 +23,14 @@ DEBUG = config("DJANGO_DEBUG", default=False, cast=bool)
 # Keep this out of source control; set it via the environment / .env file.
 GOOGLE_OAUTH_CLIENT_ID = config("GOOGLE_OAUTH_CLIENT_ID", default="")
 
+# Google OAuth *authorization-code* flow (Integrations OAuth Foundation V1).
+# Used only by the integrations app to connect a Google account for future
+# import-only flows. With any of these unset the Google provider reports
+# "configuration_required" and the UI shows "Not configured" (no crash).
+# NEVER commit real values — set them via the environment / secret manager.
+GOOGLE_OAUTH_CLIENT_SECRET = config("GOOGLE_OAUTH_CLIENT_SECRET", default="")
+GOOGLE_OAUTH_REDIRECT_URI = config("GOOGLE_OAUTH_REDIRECT_URI", default="")
+
 # Controls whether new account creation requires a valid invite code.
 # Existing users can still log in when private beta mode is enabled.
 PRIVATE_BETA_ENABLED = config("PRIVATE_BETA_ENABLED", default=False, cast=bool)
@@ -119,6 +127,7 @@ LOCAL_APPS = [
     "apps.features.apps.FeaturesConfig",
     "apps.billing.apps.BillingConfig",
     "apps.ai.apps.AiConfig",
+    "apps.integrations.apps.IntegrationsConfig",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -501,6 +510,10 @@ REST_FRAMEWORK = {
         "ai_doc_generation": _throttle_rate("10/min"),
         # Magic Inbox AI triage (per authenticated user) — bounds model cost.
         "magic_inbox_triage": _throttle_rate("10/min"),
+        # Integrations OAuth foundation — start a connect (per authenticated user).
+        "integration_oauth": _throttle_rate("10/min"),
+        # Integrations OAuth callback (public; state-validated) — bounds abuse.
+        "integration_oauth_callback": _throttle_rate("30/min"),
     },
 }
 

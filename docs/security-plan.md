@@ -20,6 +20,12 @@ The first version of CertaNest must be designed around the following principle:
 
 This security plan defines the rules, risks, controls, and implementation expectations for v0.1 and future versions.
 
+> **Integrations (OAuth):** external-account OAuth tokens are stored **encrypted at
+> rest** (reusing the KEK/DEK field encryption), never serialized to the frontend,
+> never logged, and never placed in audit/operational metadata. OAuth `state` is
+> stored only as a salted hash (single-use, time-boxed) and redirect paths are
+> validated to internal paths (no open redirect). See `docs/integrations.md`.
+
 ---
 
 ## 2. Security Objectives

@@ -6906,3 +6906,20 @@ download.
 - `PATCH/DELETE /api/v1/founder/support-notes/{id}/`.
 
 Frontend: `/dashboard/founder/{organizations,organizations/[orgId],users/[userId],feature-flags,plans-limits,storage,ai-usage}`.
+
+## Integrations OAuth Foundation V1 (`integrations/`)
+
+Import-only foundation — connect/disconnect external accounts (Google in V1). See
+`docs/integrations.md`. Gated by the `integrations` feature flag (founder-only by
+default → `503` when off); `google/start/` also requires `google_integrations`.
+Responses NEVER include OAuth tokens, secrets, or raw OAuth state.
+
+- `GET /api/v1/integrations/providers/` → `{ "providers": [ { key, name, description, available, configured, status, scope_groups[{key,label,description,privacy_sensitive,status}], accounts[] } ] }`. No tokens.
+- `GET /api/v1/integrations/accounts/` → `{ "accounts": [ safe account metadata ] }` (provider, provider_email, scope_groups, status, token_expires_at, …). No tokens.
+- `POST /api/v1/integrations/google/start/` — body `{ "scope_groups": ["drive"|"calendar"|"gmail"]?, "redirect_path": "/internal/path"? }` → `{ "authorization_url", "provider", "scope_groups" }`. Creates a single-use, hashed OAuth state; Gmail is requested only if explicitly chosen; unsafe `redirect_path` falls back to the default (no open redirect). `400 {status:"not_configured"}` when Google OAuth env is unset. Throttle `integration_oauth`.
+- `GET /api/v1/integrations/google/callback/?code=&state=` — validates the single-use, time-boxed state, exchanges the code server-side, stores **encrypted** tokens, and **redirects** to `FRONTEND_APP_URL{redirect_path}?integration=google&status=connected|error`. Never includes a token or code. `AllowAny` (state-validated). Throttle `integration_oauth_callback`.
+- `POST /api/v1/integrations/accounts/{id}/disconnect/` — best-effort provider revoke, clears tokens, marks `disconnected`. Owner-scoped (`404` otherwise).
+- `POST /api/v1/integrations/accounts/{id}/refresh/` → `{ "result": {status}, "account": {...} }`. Safe when the provider is unconfigured (`status:"configuration_required"`, no crash).
+- `GET /api/v1/integrations/accounts/{id}/health/` → recomputes status from token expiry; stamps `last_checked_at`.
+
+Required env: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_REDIRECT_URI` (unset → provider reports "not configured"). No Drive/Calendar/Gmail data is imported in this version. Frontend: `/dashboard/settings/integrations`.

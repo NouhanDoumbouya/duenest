@@ -1558,3 +1558,24 @@ data.
 
 Deferred (documented): impersonation, file download, account/org deletion, full
 support ticketing, live billing management, per-user/org flag overrides.
+
+## Integrations OAuth Foundation (`apps/integrations`)
+
+A foundation for **import-only** external-account integrations (Google in V1). It
+does **not** import any Drive/Calendar/Gmail data, sync, or write back.
+
+- **Models:** `ConnectedIntegrationAccount` (one connected account per user;
+  unique on `(user, provider, provider_account_id)`) and `IntegrationOAuthState`
+  (single-use, time-boxed OAuth state, stored as a salted hash only).
+- **Provider abstraction** (`apps/integrations/providers/`): a `BaseIntegrationProvider`
+  interface (authorization URL / exchange / refresh / revoke / profile) with a
+  Google implementation; network calls are isolated for mocking. Unconfigured →
+  `configuration_required` (UI shows "Not configured", no crash).
+- **Token security:** access/refresh tokens are encrypted at rest reusing
+  `apps.core.security.encryption.encrypt_field_value` (KEK/DEK, AAD-bound). Tokens
+  are never serialized, logged, or placed in audit/operational metadata.
+- **Events:** integration actions are recorded via the existing `AuditLogEntry`
+  (owner-scoped, `SECURITY` category) and `OperationalEvent` sinks with safe
+  metadata only.
+- **Gating:** founder-only feature flags (`integrations`, `google_integrations`,
+  and per-import-flow keys). See `docs/integrations.md`.
