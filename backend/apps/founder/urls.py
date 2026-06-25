@@ -42,6 +42,10 @@ from .views import (
     FounderFeatureCompletionListView,
     FounderFeedbackDetailView,
     FounderFeedbackListView,
+    FounderObservabilityView,
+    FounderOperationalEventListView,
+    FounderOperationalEventResolveView,
+    FounderSystemStatusView,
     FounderInviteCodeDetailView,
     FounderInviteCodeDisableView,
     FounderInviteCodeListCreateView,
@@ -155,6 +159,27 @@ urlpatterns = [
         "founder/errors/<int:error_id>/resolve/",
         FounderErrorResolveView.as_view(),
         name="founder-error-resolve",
+    ),
+    # Reliability & Observability V1
+    path(
+        "founder/system-status/",
+        FounderSystemStatusView.as_view(),
+        name="founder-system-status",
+    ),
+    path(
+        "founder/observability/",
+        FounderObservabilityView.as_view(),
+        name="founder-observability",
+    ),
+    path(
+        "founder/operational-events/",
+        FounderOperationalEventListView.as_view(),
+        name="founder-operational-events",
+    ),
+    path(
+        "founder/operational-events/<int:event_id>/resolve/",
+        FounderOperationalEventResolveView.as_view(),
+        name="founder-operational-event-resolve",
     ),
     path(
         "founder/security-overview/",

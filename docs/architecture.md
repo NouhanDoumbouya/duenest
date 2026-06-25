@@ -1466,3 +1466,34 @@ unlock requests, access duration, optional location capture — none of which th
 share engine models. Both remain separate by design (reaffirmed 2026-06). Any
 future convergence should be a shared *backend plumbing* refactor
 (token/access-code/watermark/limit helpers), not a merge of the user flows.
+
+## 36. Reliability & Observability Architecture
+
+CertaNest exposes founder/admin operational visibility without leaking private
+data. The design favours **reuse** of existing safe stores plus one new
+lifecycle event model.
+
+- **Correlation IDs.** `apps/core/correlation.py` (a `ContextVar`) +
+  `CorrelationIdMiddleware` (registered just after CORS) attach a safe random id
+  per request, expose it as `request.correlation_id` and the `X-Request-ID`
+  response header, and make it available to recorders. The frontend captures it
+  into `ApiError.requestId`.
+- **`OperationalEvent`** (`apps/founder/models.py`) is the unified store for
+  upload/storage/public-link/scanner/portal failures and scheduled-job runs that
+  lack a dedicated run model. Written by best-effort `record_operational_event()`
+  (`apps/founder/services.py`), which scrubs metadata via `sanitize_metadata` and
+  never raises.
+- **Aggregation, not duplication.** `apps/founder/observability.py` builds the
+  system-status and observability-overview payloads by READING `OperationalEvent`,
+  `AppErrorLog`, `EmailLog`/`build_delivery_health`, `AiUsage`, and
+  `NotificationDeliveryRun` — plus config/health probes (db, cache, storage
+  backend class, `EMAIL_PROVIDER`, `AI_CONFIGURED`, `EMBEDDINGS_CONFIGURED`,
+  feature-flag count). The same domains are never recorded twice.
+- **Health** stays at `GET /api/v1/health/` (liveness) and `/readiness/`
+  (db+cache); founder status/observability live under `/api/v1/founder/`.
+- **Frontend** gains App Router error boundaries (`global-error.tsx`, a dashboard
+  `error.tsx`, `not-found.tsx`) showing a safe reference id, and the founder
+  Observability console at `/dashboard/founder/observability`.
+
+Deferred to later branches: external APM (Sentry), pager alerts, full incident
+management, session replay, and centralised scheduled-job orchestration.

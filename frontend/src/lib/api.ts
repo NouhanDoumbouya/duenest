@@ -27,12 +27,25 @@ const UNSAFE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 export class ApiError extends Error {
   readonly status: number;
   readonly data: unknown;
+  /**
+   * Safe correlation id from the `X-Request-ID` response header, when present.
+   * It's a random per-request id (never a token/session) that a founder can use
+   * to find the matching server-side logs/operational events. Shown to users as
+   * "Reference: …". Empty for network failures (no response was received).
+   */
+  readonly requestId: string;
 
-  constructor(message: string, status: number, data: unknown) {
+  constructor(
+    message: string,
+    status: number,
+    data: unknown,
+    requestId = "",
+  ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.data = data;
+    this.requestId = requestId;
   }
 }
 
@@ -213,6 +226,7 @@ export async function apiFetch<T>(
       extractErrorMessage(data, "Something went wrong. Please try again."),
       response.status,
       data,
+      response.headers.get("X-Request-ID") ?? "",
     );
   }
 

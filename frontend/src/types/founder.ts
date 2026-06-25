@@ -591,3 +591,89 @@ export interface NotificationDeliveryHealth {
   email_failure_rate_7d: number;
   emails_attempted_7d: number;
 }
+
+// ---- Reliability & Observability V1 ----------------------------------------
+
+export type OperationalSeverity = "info" | "warning" | "error" | "critical";
+export type OperationalStatus =
+  | "started"
+  | "succeeded"
+  | "failed"
+  | "skipped"
+  | "degraded";
+
+/** A safe operational lifecycle event (metadata already scrubbed server-side). */
+export interface OperationalEvent {
+  id: number;
+  created_at: string;
+  severity: OperationalSeverity;
+  category: string;
+  source: string;
+  status: OperationalStatus;
+  user: number | null;
+  organization: number | null;
+  correlation_id: string;
+  message: string;
+  error_code: string;
+  metadata: Record<string, unknown>;
+  resolved: boolean;
+  resolved_at: string | null;
+  resolution_note: string;
+}
+
+export interface SystemStatusComponent {
+  ok?: boolean;
+  configured?: boolean;
+  backend?: string;
+  provider?: string;
+  embeddings_configured?: boolean;
+  loaded?: boolean;
+  count?: number;
+}
+
+export interface ScheduledJobRunInfo {
+  job_name: string;
+  status: string;
+  started_at: string | null;
+  finished_at: string | null;
+  emails_sent: number | null;
+  emails_failed: number | null;
+  error: string;
+}
+
+export interface SystemStatus {
+  generated_at: string;
+  overall: "ok" | "degraded" | "down";
+  components: Record<string, SystemStatusComponent>;
+  scheduled_jobs: ScheduledJobRunInfo[];
+  counts: {
+    unresolved_critical_events: number;
+    critical_events_24h: number;
+    unresolved_app_errors: number;
+  };
+}
+
+export interface AiHealth {
+  configured: boolean;
+  embeddings_configured: boolean;
+  succeeded_24h: number;
+  errored_24h: number;
+  blocked_24h: number;
+  recent_failures: Array<{
+    feature: string;
+    provider: string;
+    model: string;
+    status: string;
+    reason: string;
+    created_at: string;
+  }>;
+}
+
+export interface ObservabilityOverview {
+  system_status: SystemStatus;
+  recent_critical_events: OperationalEvent[];
+  upload_storage_issues: OperationalEvent[];
+  public_link_issues: OperationalEvent[];
+  ai_health: AiHealth;
+  email_health: NotificationDeliveryHealth | null;
+}

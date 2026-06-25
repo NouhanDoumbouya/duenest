@@ -83,3 +83,11 @@ class Command(BaseCommand):
                 f"trashed before {cutoff.date()}."
             )
         )
+        from apps.founder.services import record_scheduled_job_run
+
+        record_scheduled_job_run(
+            "purge_expired_trash_job",
+            status="succeeded",
+            message=f"Purged {doc_count} document(s)",
+            counts={"documents": doc_count, "files": file_count},
+        )

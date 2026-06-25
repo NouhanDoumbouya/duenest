@@ -2075,3 +2075,51 @@ paywall, but it exposes only plan/limit/usage metadata — no tokens or file URL
 
 See `docs/b2b-portals.md`, `docs/api-spec.md` §39, `docs/BILLING.md`, and
 `docs/security/audit-logs.md`.
+
+## Reliability & Observability V1
+
+Operational visibility for founders/admins, designed privacy-first. The goal is
+to see *that* a workflow failed and *where* — never *what* the user's data was.
+
+### What is logged
+
+- **`OperationalEvent`** (founder app): a safe lifecycle event — severity,
+  category, machine `source` (e.g. `document_request_upload`), status, a short
+  `message`, a machine `error_code`, nullable user/organization **ids**, a
+  correlation id, and a **scrubbed** `metadata` dict (safe ids only:
+  document/file/case/request/room/org ids, file size, mime type).
+- Reused safe stores, surfaced (not re-recorded): `AppErrorLog` (errors),
+  `EmailLog`/`SuppressedEmail` (email routing metadata, never bodies), `AiUsage`
+  (token/cost/status/reason — never prompts/content), `NotificationDeliveryRun`.
+
+### What is never logged
+
+Document contents, OCR text, AI prompts, full AI responses, full email bodies,
+private file URLs, R2 object keys, raw public/upload tokens, password-reset
+tokens, API keys / provider secrets. Enforced two ways:
+
+1. `record_operational_event()` runs every `metadata` value through
+   `founder.services.sanitize_metadata`, which **redacts any key** containing
+   `token`/`secret`/`password`/`code`/`ocr`/`content`/`file_path`/`notes`/… (so an
+   accidental sensitive value is dropped even if a caller passes it).
+2. Instrumentation deliberately passes only safe ids; invalid-token public-link
+   events store the resolution **state** (e.g. `expired`), never the token.
+3. No raw stack traces are stored — only `error_type`/`error_code` strings.
+4. The `SensitiveDataFilter` log filter continues to redact Bearer tokens,
+   cookies, and `key=value` secrets from stdout logs.
+
+### Correlation IDs
+
+`CorrelationIdMiddleware` attaches a **random** id (or a sanitised incoming
+`X-Request-ID`) to each request and echoes it as the `X-Request-ID` response
+header. It is never derived from a token, session, or user id, so it is safe to
+show users ("Reference: …") and to store on events/logs.
+
+### Access control
+
+All observability endpoints require `IsFounderUser` (superuser, or staff on the
+`FOUNDER_EMAILS` allowlist). Normal users and organization admins cannot see any
+global observability data. Resolving an event is founder-only and audited.
+
+**No external monitoring vendor, no new secret, and no change to document/storage
+handling** were introduced.

@@ -2677,3 +2677,71 @@ camera rewrite.
 per-seat Stripe billing + invoices, and org-owned storage.
 
 See `docs/PWA.md` (section 13) for the full mobile/PWA polish detail.
+
+## Reliability & Observability V1 — delivered (2026-06-25)
+
+`reliability/observability-v1` makes CertaNest **observable, debuggable, and
+supportable before private beta** — without leaking any private user data. It
+answers: "if a beta user says something is broken, can we see what failed, where,
+and whether it touched documents, email, uploads, AI, jobs, billing, or portal
+workflows?"
+
+**Reuse, not reinvent.** The audit found a strong existing safe foundation
+(`founder.AppErrorLog`, `EmailLog`/`SuppressedEmail`/`build_delivery_health`,
+`ai.AiUsage`, `notifications.NotificationDeliveryRun`, `/api/v1/health/` +
+`/readiness/`, `sanitize_metadata`, `SensitiveDataFilter`, `IsFounderUser`). V1
+**adds one model** for the lifecycle the others don't cover and **aggregates the
+rest** on a founder page — no duplicate recording.
+
+What shipped:
+
+* **`OperationalEvent`** (founder app, migration `0012`) — a safe operational
+  lifecycle event: severity / category (upload, storage, email, ai,
+  scheduled_job, public_link, portal, scanner, …) / source / status
+  (started/succeeded/failed/skipped/degraded) / user / organization /
+  correlation_id / message / error_code / scrubbed `metadata` / resolution
+  workflow. Written via best-effort `record_operational_event()` (never raises;
+  runs `metadata` through `sanitize_metadata`). **No raw stack traces** — only an
+  `error_code`/`error_type` string.
+* **Correlation IDs** — `CorrelationIdMiddleware` attaches a safe random id to
+  every request (or sanitises an incoming `X-Request-ID`), stores it on a
+  ContextVar + `request.correlation_id`, and echoes it as the `X-Request-ID`
+  response header. Captured into `ApiError.requestId` on the frontend and shown
+  to users as "Reference: …". The id is never derived from a token/session/user.
+* **Founder endpoints** (all `IsFounderUser`): `GET /founder/system-status/`
+  (db / cache / storage / email / AI / embeddings / feature-flags + recent job
+  + critical counts), `GET /founder/observability/` (the aggregated page
+  payload), `GET /founder/operational-events/` (filter by
+  category/severity/status/source/resolved), and
+  `POST /founder/operational-events/<id>/resolve/`.
+* **Instrumentation** — public document-request upload (invalid/expired link +
+  validation + storage-write failures), sharing-room public access (invalid/
+  expired token + file-not-found), and the four scheduled jobs that lacked run
+  records (weekly radar, AI digests, emergency check-ins, trash purge) now record
+  one safe run event each. Email reuses `EmailLog`/delivery-health; AI reuses
+  `AiUsage`; notifications reuse `NotificationDeliveryRun`.
+* **Frontend** — the App Router gained its first error boundaries
+  (`app/global-error.tsx`, `app/(dashboard)/error.tsx`, `app/not-found.tsx`)
+  with a calm fallback + safe reference id, plus a founder **Observability**
+  console page (`/dashboard/founder/observability`).
+
+**Privacy (never logged):** document contents, OCR text, prompts, full AI
+responses, full email bodies, private file URLs, R2 object keys, raw public/
+password tokens, API keys/secrets. Safe ids only (document/file/case/request/
+room/org ids, file size, mime type). Observability is **founder/staff only**.
+
+**Tests.** 11 new backend tests (scrubbing, recorder never-raises, correlation
+header, safe health, founder-only gating, event filtering, resolve, invalid
+public link records an event WITHOUT the token) + 5 new frontend tests (error
+fallback, observability page render). Full backend regression
+(founder/notifications/organizations/ai/billing/documents/core) and frontend
+(`tsc`/`eslint`/`vitest` 476/`next build`) all green. No new migration drift.
+
+**Deferred:** Sentry/external APM, pager alerts, full incident management,
+session replay, full scheduled-job orchestration, advanced analytics.
+
+**Next recommended branch: `b2b/teams-billing-checkout`** — real Teams checkout /
+per-seat Stripe billing + invoices, and org-owned storage.
+
+See `docs/security-plan.md` (Reliability & Observability) and `docs/api-spec.md`
+(Founder observability endpoints).

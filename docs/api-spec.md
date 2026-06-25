@@ -6816,3 +6816,47 @@ or secret.
 See `docs/b2b-portals.md`, `docs/security-plan.md`,
 `docs/security/audit-logs.md`, and `docs/roadmap.md`.
 
+
+## Reliability & Observability (Founder/admin only)
+
+All endpoints below require the `IsFounderUser` permission (superuser, or staff on
+the `FOUNDER_EMAILS` allowlist). Normal users and org admins receive `403`. None
+of these expose document contents, private file URLs, R2 keys, tokens, or secrets.
+
+### Health (public)
+
+- `GET /api/v1/health/` — liveness. `{ "status": "ok", "service": ..., "version": ... }`. No auth, no sensitive data.
+- `GET /api/v1/readiness/` — `{ "status": "ok"|"degraded", "checks": { "database": bool, "cache": bool } }` (`503` when degraded).
+
+Every response now carries an `X-Request-ID` header (a safe random correlation id;
+an incoming `X-Request-ID` is accepted but sanitised to `[A-Za-z0-9-]`, max 64).
+
+### Founder system status
+
+- `GET /api/v1/founder/system-status/` →
+  ```json
+  {
+    "generated_at": "...", "overall": "ok|degraded|down",
+    "components": {
+      "database": {"ok": true}, "cache": {"ok": true},
+      "storage": {"backend": "s3|local", "configured": true},
+      "email": {"provider": "...", "configured": true},
+      "ai": {"configured": false, "embeddings_configured": false},
+      "feature_flags": {"loaded": true, "count": 12}
+    },
+    "scheduled_jobs": [{"job_name": "...", "status": "...", "finished_at": "...", "emails_sent": 5, "emails_failed": 0, "error": ""}],
+    "counts": {"unresolved_critical_events": 0, "critical_events_24h": 0, "unresolved_app_errors": 0}
+  }
+  ```
+  Never exposes the storage bucket name or any credential.
+
+### Founder observability overview
+
+- `GET /api/v1/founder/observability/` → `{ system_status, recent_critical_events[], upload_storage_issues[], public_link_issues[], ai_health, email_health }`. `email_health` reuses the notification delivery-health builder; `ai_health` aggregates `AiUsage` (metering only — never prompts/content).
+
+### Operational events
+
+- `GET /api/v1/founder/operational-events/` — paginated list. Query filters: `category`, `severity`, `status`, `source`, `resolved` (`true`/`false`). Each event: `{ id, created_at, severity, category, source, status, user, organization, correlation_id, message, error_code, metadata, resolved, resolved_at, resolution_note }`. `metadata` is already scrubbed; `user`/`organization` are ids only.
+- `POST /api/v1/founder/operational-events/<id>/resolve/` — body `{ "resolution_note": "..." }` (optional). Marks resolved and records the resolver. Audited via `log_founder_action`.
+
+The frontend founder console renders these at `/dashboard/founder/observability`.

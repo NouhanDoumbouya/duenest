@@ -111,3 +111,12 @@ class Command(BaseCommand):
         self.stdout.write(
             f"AI digest: sent={sent} skipped={skipped} dry_run={dry_run}"
         )
+        if not dry_run:
+            from apps.founder.services import record_scheduled_job_run
+
+            record_scheduled_job_run(
+                "ai_digest_job",
+                status="succeeded",
+                message=f"AI digest sent {sent}",
+                counts={"emails_sent": sent, "skipped": skipped},
+            )

@@ -160,6 +160,102 @@ def sanitize_metadata(value: Any, *, _depth: int = 0) -> Any:
     return str(value)[:200]
 
 
+# Default severity to use for each operational status when not given explicitly.
+_STATUS_SEVERITY = {
+    "failed": "error",
+    "degraded": "warning",
+    "skipped": "info",
+    "succeeded": "info",
+    "started": "info",
+}
+
+
+def record_operational_event(
+    *,
+    category: str,
+    source: str,
+    status: str = "failed",
+    severity: str | None = None,
+    message: str = "",
+    error_code: str = "",
+    user=None,
+    organization=None,
+    request=None,
+    correlation_id: str = "",
+    metadata: dict | None = None,
+) -> None:
+    """
+    Best-effort OperationalEvent write for founder/admin observability.
+
+    NEVER raises — observability must not break the workflow it observes. The
+    `metadata` dict is scrubbed by `sanitize_metadata` (so even an accidental
+    token/content value is redacted); callers should still pass only safe ids
+    (document/file/case/request/room/org ids, file size, content type) and never
+    raw tokens, file contents, OCR text, prompts, private URLs, or storage keys.
+    """
+    try:
+        from .models import OperationalEvent
+        from apps.core.correlation import get_correlation_id
+
+        resolved_severity = severity or _STATUS_SEVERITY.get(status, "info")
+
+        event_user = user
+        if event_user is None and request is not None:
+            candidate = getattr(request, "user", None)
+            if getattr(candidate, "is_authenticated", False):
+                event_user = candidate
+        if event_user is not None and not getattr(
+            event_user, "is_authenticated", True
+        ):
+            event_user = None
+
+        cid = (correlation_id or "").strip()
+        if not cid and request is not None:
+            cid = getattr(request, "correlation_id", "") or ""
+        if not cid:
+            cid = get_correlation_id()
+        cid = str(cid or "")[:64]
+
+        OperationalEvent.objects.create(
+            category=str(category)[:24],
+            source=str(source)[:80],
+            status=str(status)[:16],
+            severity=str(resolved_severity)[:20],
+            message=str(message or "")[:255],
+            error_code=str(error_code or "")[:80],
+            user=event_user,
+            organization=organization,
+            correlation_id=cid,
+            metadata=sanitize_metadata(metadata or {}),
+        )
+    except Exception:  # noqa: BLE001 — observability must never break a workflow
+        logger.warning("record_operational_event failed", exc_info=False)
+
+
+def record_scheduled_job_run(
+    source: str,
+    *,
+    status: str,
+    message: str = "",
+    error_code: str = "",
+    counts: dict | None = None,
+) -> None:
+    """Best-effort run record for a cron-style management command.
+
+    A thin wrapper over `record_operational_event` for the scheduled jobs that
+    don't already have a dedicated run model. `counts` holds only safe integer
+    tallies (sent/failed/skipped/…) — never user data or contents.
+    """
+    record_operational_event(
+        category="scheduled_job",
+        source=source,
+        status=status,
+        message=message,
+        error_code=error_code,
+        metadata=dict(counts or {}),
+    )
+
+
 # Edge/CDN headers that carry a privacy-safe ISO-3166 alpha-2 country code.
 # These are set by the platform in front of the app (Cloudflare, Vercel, etc.)
 # and let us aggregate country-level activity without doing any IP geolocation
