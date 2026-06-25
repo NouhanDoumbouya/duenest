@@ -72,6 +72,9 @@ import {
   PORTAL_PERSON_STATUS_TONE,
   PORTAL_PERSON_TYPE_LABELS,
   PORTAL_PERSON_TYPE_ORDER,
+  REVIEW_STATUS_LABELS,
+  REVIEW_STATUS_TONE,
+  reviewQueueCount,
   createPortalCase,
   createPortalPerson,
   getPortalCases,
@@ -697,12 +700,18 @@ function ReviewQueuePanel({
   orgId: number;
   items: PortalReviewItem[];
 }) {
+  // The backend's default queue returns uploaded + under-review items — the
+  // active work. `reviewQueueCount` mirrors that so the badge matches the list.
+  const activeCount = reviewQueueCount(items);
   return (
     <aside className="rounded-2xl border border-border bg-card p-5">
       <div className="flex items-center justify-between gap-2">
         <h2 className="font-heading text-base font-semibold">Review queue</h2>
-        <StatusBadge tone={items.length ? "warning" : "neutral"} withDot={false}>
-          {items.length}
+        <StatusBadge
+          tone={activeCount ? "warning" : "neutral"}
+          withDot={false}
+        >
+          {activeCount}
         </StatusBadge>
       </div>
       <p className="mt-1 text-xs text-muted-foreground">
@@ -720,22 +729,34 @@ function ReviewQueuePanel({
       ) : (
         <ul className="mt-4 space-y-2">
           {items.map((item) => (
-            <li key={item.document_request_id}>
+            <li key={item.case_request_id}>
               <Link
-                href={`/dashboard/organizations/${orgId}/portal/cases/${item.case_id}`}
+                href={`/dashboard/organizations/${orgId}/portal/cases/${item.case_id}#request-${item.case_request_id}`}
                 className="block rounded-lg border border-border px-3 py-2.5 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
               >
-                <p className="truncate text-sm font-medium">
-                  {item.requested_document_title}
-                </p>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="min-w-0 truncate text-sm font-medium">
+                    {item.requested_document_title}
+                  </p>
+                  <StatusBadge
+                    tone={REVIEW_STATUS_TONE[item.review_status]}
+                    withDot={false}
+                  >
+                    {REVIEW_STATUS_LABELS[item.review_status]}
+                  </StatusBadge>
+                </div>
                 <p className="mt-0.5 truncate text-xs text-muted-foreground">
                   {item.person_name} · {item.case_title}
                 </p>
-                {item.uploaded_at && (
-                  <p className="mt-0.5 text-xs text-muted-foreground/80">
-                    Uploaded {formatDate(item.uploaded_at)}
-                  </p>
-                )}
+                <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground/80">
+                  {item.uploaded_at && (
+                    <span>Uploaded {formatDate(item.uploaded_at)}</span>
+                  )}
+                  {item.due_date && (
+                    <span>Due {formatDate(item.due_date)}</span>
+                  )}
+                  <span className="font-medium text-primary">Review</span>
+                </p>
               </Link>
             </li>
           ))}

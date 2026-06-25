@@ -1856,6 +1856,39 @@ stored (the same privacy rules as Audit Logs V1 above).
 See `docs/b2b-portals.md`, `docs/api-spec.md` §38, and
 `docs/security/audit-logs.md` for the full contract and event catalog.
 
+### Review + Approval Workflow V1
+
+Staff review uploaded documents and decide accept / reject / needs-replacement
+from the portal review queue. It **reuses the Document Request Link + pack
+primitives** (no second upload/request/room system) and is **deterministic — no
+AI, no AI credits**.
+
+* **Admin-gated decisions, org-isolated.** Reading the review queue / case review
+  items / the uploaded file is open to any active org member; **making a decision**
+  (start-review, accept, reject, needs-replacement) requires an **admin/owner role**
+  (`require_role(ADMIN_ROLES)`). Org isolation, the Teams entitlement gate, and the
+  `b2b_portals` feature flag still apply.
+* **File served only via the authenticated org-scoped proxy.** The uploaded file is
+  an encrypted `DocumentFile` owned by the org owner; because a reviewing admin may
+  be a different user, the personal `/files/{id}/download/` route would `404` for
+  them. Review therefore streams the **decrypted bytes** through an org-scoped proxy
+  (`.../file/preview/` and `.../file/download/`) — authenticated, org-member-gated,
+  permission-first, **decrypt-in-memory**, with **no raw storage URL or token** ever
+  exposed.
+* **Recipient emails carry no private data.** Notification is opt-in and only on
+  reject / needs-replacement; it uses the shared branded-email path
+  (`portal_review_decision`) and carries only the request title + reason + (for
+  needs-replacement) the recipient's own public upload-page link — **never** a
+  private file URL, storage key, raw token, or document content.
+* **Audited.** `portal_review_started`, `portal_document_accepted`,
+  `portal_document_rejected` (severity `warning`),
+  `portal_document_needs_replacement`, `portal_recipient_notified` are recorded
+  through the unified Audit Logs (category `system`, owner = the org owner, actor =
+  the acting member, `metadata.org_id`; no tokens, file URLs, or document contents).
+
+See `docs/b2b-portals.md`, `docs/api-spec.md` §40, `docs/NOTIFICATIONS.md`, and
+`docs/security/audit-logs.md`.
+
 ## Teams Plan + Portal Limits V1
 
 Portals are now governed by an **organization-level entitlement** in addition to

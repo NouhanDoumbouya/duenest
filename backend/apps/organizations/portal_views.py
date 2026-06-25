@@ -48,6 +48,14 @@ class _PortalBase(APIView):
     def get_case(self, org, case_id):
         return get_object_or_404(PortalCase, pk=case_id, organization=org)
 
+    def get_case_request(self, org, case_id, case_request_id):
+        from .models import PortalCaseDocumentRequest
+
+        case = self.get_case(org, case_id)
+        return get_object_or_404(
+            PortalCaseDocumentRequest, pk=case_request_id, case=case
+        )
+
 
 class PortalSummaryView(_PortalBase):
     def get(self, request, org_id):
@@ -196,10 +204,115 @@ class PortalCaseProgressView(_PortalBase):
 
 
 class PortalReviewQueueView(_PortalBase):
+    """GET → review queue (uploads awaiting review). Filters: status, case_id,
+    person_id, search. Readable by any org member."""
+
     def get(self, request, org_id):
+        from . import portal_reviews
+
         org = self.get_org(request, org_id)
-        items = portals.build_review_queue(org)
+        filters = {
+            "status": request.query_params.get("status"),
+            "case_id": request.query_params.get("case_id"),
+            "person_id": request.query_params.get("person_id"),
+            "search": request.query_params.get("search"),
+        }
+        items = portal_reviews.build_portal_review_queue(org, request.user, filters)
         return Response({"items": items, "count": len(items)})
+
+
+class PortalCaseReviewItemsView(_PortalBase):
+    """GET → all review items for a case (any status)."""
+
+    def get(self, request, org_id, case_id):
+        from . import portal_reviews
+
+        org = self.get_org(request, org_id)
+        case = self.get_case(org, case_id)
+        items = portal_reviews.build_case_review_items(case, request.user)
+        return Response({"items": items, "count": len(items)})
+
+
+class PortalCaseRequestStartReviewView(_PortalBase):
+    """POST → move an uploaded item to 'under review'. Admin/owner only."""
+
+    def post(self, request, org_id, case_id, case_request_id):
+        from . import portal_reviews
+
+        org = self.get_org(request, org_id, write=True)
+        cr = self.get_case_request(org, case_id, case_request_id)
+        portal_reviews.start_case_request_review(cr, request.user)
+        return Response(portal_reviews.build_case_review_item(cr, organization=org))
+
+
+class PortalCaseRequestReviewView(_PortalBase):
+    """POST {decision, note, notify_recipient} → accept / reject / needs_replacement.
+    Admin/owner only. Accept satisfies the linked pack requirement."""
+
+    def post(self, request, org_id, case_id, case_request_id):
+        from . import portal_reviews
+
+        org = self.get_org(request, org_id, write=True)
+        cr = self.get_case_request(org, case_id, case_request_id)
+        try:
+            result = portal_reviews.review_case_document_request(
+                cr, request.user,
+                decision=request.data.get("decision"),
+                note=(request.data.get("note") or "").strip(),
+                notify_recipient=bool(request.data.get("notify_recipient")),
+            )
+        except portal_reviews.ReviewError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(result)
+
+
+class PortalCaseRequestDecisionsView(_PortalBase):
+    """GET → the decision history for a case request."""
+
+    def get(self, request, org_id, case_id, case_request_id):
+        from . import portal_reviews
+
+        org = self.get_org(request, org_id)
+        cr = self.get_case_request(org, case_id, case_request_id)
+        return Response({"decisions": portal_reviews.build_case_request_decisions(cr)})
+
+
+class _PortalCaseRequestFileView(_PortalBase):
+    """Org-scoped proxy for the uploaded file of a case request. Streams the
+    decrypted bytes (permission-first) — never a raw storage URL. Any org member
+    may view; the uploaded file is owned by the org owner."""
+
+    def _resolve(self, request, org_id, case_id, case_request_id):
+        from . import portal_reviews
+
+        org = self.get_org(request, org_id)
+        cr = self.get_case_request(org, case_id, case_request_id)
+        return portal_reviews.resolve_case_request_file(cr)
+
+
+class PortalCaseRequestFilePreviewView(_PortalCaseRequestFileView):
+    def get(self, request, org_id, case_id, case_request_id):
+        from apps.documents.views import _inline_file_response
+
+        f = self._resolve(request, org_id, case_id, case_request_id)
+        if f is None:
+            return Response({"detail": "No uploaded file."}, status=status.HTTP_404_NOT_FOUND)
+        if not f.is_previewable:
+            return Response(
+                {"detail": "This file type cannot be previewed."},
+                status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            )
+        return _inline_file_response(f)
+
+
+class PortalCaseRequestFileDownloadView(_PortalCaseRequestFileView):
+    def get(self, request, org_id, case_id, case_request_id):
+        from apps.documents.views import _file_response
+
+        f = self._resolve(request, org_id, case_id, case_request_id)
+        if f is None:
+            return Response({"detail": "No uploaded file."}, status=status.HTTP_404_NOT_FOUND)
+        return _file_response(f, as_attachment=True)
 
 
 class PortalLimitsView(_PortalBase):

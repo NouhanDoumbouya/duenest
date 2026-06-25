@@ -160,6 +160,23 @@ gracefully unless email is configured and users have opted in. Preference field:
 `notifications/0009_notificationpreference_weekly_radar_email_enabled`), exposed
 on `GET/PATCH /api/v1/notifications/preferences/`.
 
+## Portal Review Decision Email (B2B)
+
+When a staff member rejects or asks for a replacement on a document in a B2B portal
+review (`apps/organizations/portal_reviews.py`), the recipient may **optionally** be
+emailed so they know to act. It is **opt-in** (the staff member sets
+`notify_recipient` on the decision), sent **only** on **reject / needs-replacement**
+(never on accept), and **only** when the original request has a recipient email.
+
+It uses the shared branded-email path (`send_branded_email`, template
+`portal_review_decision`, category transactional). The email carries only the
+request title + reason + (for needs-replacement) the recipient's own **public
+upload-page link** so they can re-upload — **never** a private file URL, storage
+key, raw token-as-content, or any document content. A successful send is recorded
+as a `portal_recipient_notified` audit event. This is the same deterministic,
+no-AI path as the rest of B2B Portals. See `docs/b2b-portals.md`,
+`docs/api-spec.md` §40, and `docs/security/audit-logs.md`.
+
 ## Scheduled Delivery
 
 Celery tasks and a beat schedule are defined (`config/celery.py`,

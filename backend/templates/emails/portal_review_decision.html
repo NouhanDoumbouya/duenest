@@ -1,0 +1,30 @@
+{% extends "emails/base.html" %}
+{% block preheader %}Update on your document: {{ requested_document_title }}{% endblock %}
+{% block content %}
+<h1 style="margin:0 0 12px;font-size:22px;line-height:1.3;color:#0B1220;">
+  {% if decision == "needs_replacement" %}Please re-upload your document{% else %}Document update{% endif %}
+</h1>
+<p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#475569;">
+  {% if recipient_name %}Hi {{ recipient_name }},{% else %}Hello,{% endif %}
+  {{ from_name }} has reviewed your submission for
+  <strong style="color:#0B1220;">{{ requested_document_title }}</strong>.
+</p>
+
+<div style="margin:0 0 16px;padding:14px 16px;border:1px solid #E2E8F0;border-radius:10px;">
+  {% if decision == "needs_replacement" %}
+  <p style="margin:0 0 4px;font-size:15px;font-weight:700;color:#0B1220;">A replacement is needed</p>
+  {% else %}
+  <p style="margin:0 0 4px;font-size:15px;font-weight:700;color:#0B1220;">This submission was not accepted</p>
+  {% endif %}
+  {% if reason %}<p style="margin:0;font-size:14px;line-height:1.6;color:#475569;">{{ reason }}</p>{% endif %}
+  {% if due_date %}<p style="margin:8px 0 0;font-size:13px;color:#64748B;">Due by {{ due_date }}</p>{% endif %}
+</div>
+
+{% if upload_url %}
+<a href="{{ upload_url }}" style="display:inline-block;margin-top:4px;border-radius:8px;background:#0f766e;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;padding:12px 18px;">Upload a new document</a>
+{% if expires_at %}<p style="margin:16px 0 0;font-size:12px;color:#64748B;">This secure link expires on {{ expires_at }}.</p>{% endif %}
+{% endif %}
+
+<p style="margin:16px 0 0;font-size:12px;line-height:1.6;color:#64748B;">Your upload is sent securely to the requester. CertaNest stores files privately and never shares them publicly. CertaNest emails never include document contents, files, access codes, or share tokens.</p>
+{% endblock %}
+{% block footer %}Sent via CertaNest on behalf of {{ from_name }}.{% endblock %}

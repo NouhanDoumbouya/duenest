@@ -15,6 +15,12 @@ from .portal_views import (
     PortalReviewQueueView,
     PortalSummaryView,
     PortalLimitsView,
+    PortalCaseReviewItemsView,
+    PortalCaseRequestStartReviewView,
+    PortalCaseRequestReviewView,
+    PortalCaseRequestDecisionsView,
+    PortalCaseRequestFilePreviewView,
+    PortalCaseRequestFileDownloadView,
 )
 from .views import (
     OrganizationInviteTokenView,
@@ -44,6 +50,13 @@ urlpatterns = [
     path(f"{_PORTAL}/cases/<int:case_id>/create-request/", PortalCaseCreateRequestView.as_view(), name="portal-case-create-request"),
     path(f"{_PORTAL}/cases/<int:case_id>/progress/", PortalCaseProgressView.as_view(), name="portal-case-progress"),
     path(f"{_PORTAL}/review-queue/", PortalReviewQueueView.as_view(), name="portal-review-queue"),
+    # B2B Review + Approval Workflow V1.
+    path(f"{_PORTAL}/cases/<int:case_id>/review-items/", PortalCaseReviewItemsView.as_view(), name="portal-case-review-items"),
+    path(f"{_PORTAL}/cases/<int:case_id>/requests/<int:case_request_id>/start-review/", PortalCaseRequestStartReviewView.as_view(), name="portal-case-request-start-review"),
+    path(f"{_PORTAL}/cases/<int:case_id>/requests/<int:case_request_id>/review/", PortalCaseRequestReviewView.as_view(), name="portal-case-request-review"),
+    path(f"{_PORTAL}/cases/<int:case_id>/requests/<int:case_request_id>/decisions/", PortalCaseRequestDecisionsView.as_view(), name="portal-case-request-decisions"),
+    path(f"{_PORTAL}/cases/<int:case_id>/requests/<int:case_request_id>/file/preview/", PortalCaseRequestFilePreviewView.as_view(), name="portal-case-request-file-preview"),
+    path(f"{_PORTAL}/cases/<int:case_id>/requests/<int:case_request_id>/file/download/", PortalCaseRequestFileDownloadView.as_view(), name="portal-case-request-file-download"),
     path(
         "organization-invites/<str:token>/",
         OrganizationInviteTokenView.as_view(),

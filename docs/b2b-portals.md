@@ -174,7 +174,12 @@ feature-gated; writes require admin/owner). Full request/response shapes are in
 | `POST` | `/cases/{id}/create-room/` | Create + link a `SharingRoom` |
 | `POST` | `/cases/{id}/create-request/` | Create a `DocumentRequestLink` |
 | `GET` | `/cases/{id}/progress/` | Deterministic per-case progress |
-| `GET` | `/review-queue/` | Case requests with an upload awaiting review |
+| `GET` | `/review-queue/` | Case requests with an upload awaiting review (filterable; admin-decided) |
+| `GET` | `/cases/{id}/review-items/` | Review items for one case |
+| `POST` | `/cases/{id}/requests/{rid}/start-review/` | Mark an item `under_review` (admin) |
+| `POST` | `/cases/{id}/requests/{rid}/review/` | Accept / reject / needs_replacement (admin) |
+| `GET` | `/cases/{id}/requests/{rid}/decisions/` | Append-only decision history |
+| `GET` | `/cases/{id}/requests/{rid}/file/preview/` `…/file/download/` | Stream the decrypted uploaded file (org-scoped proxy) |
 | `GET` | `/limits/` | Org plan, `portal_enabled`, limits / usage / remaining (any member, even when disabled) |
 
 The dashboard `summary` returns `people_total`, `active_cases`,
@@ -203,9 +208,17 @@ lists case requests in `UPLOADED` / `UNDER_REVIEW`.
   `linked_bundle` / `linked_application` / `linked_room` (all `SET_NULL` FKs to the
   `apps.documents` primitives), `notes`, `archived_at`.
 - **`PortalCaseDocumentRequest`** — `case`, `document_request`
-  (`DocumentRequestLink`), `requirement` (`DocumentBundleRequirement`).
+  (`DocumentRequestLink`), `requirement` (`DocumentBundleRequirement`); plus the
+  **Review + Approval** metadata added in `0007`: `review_status` (`pending_upload`
+  / `uploaded` / `under_review` / `accepted` / `rejected` / `needs_replacement` /
+  `cancelled`, mirroring the linked link status), `reviewed_by`, `reviewed_at`,
+  `review_note`, `rejection_reason`, `last_submitted_at`, `decision_count`.
+- **`PortalCaseReviewDecision`** — append-only decision history: `case_request`,
+  `organization`, `case`, `document_request`, `decision`, `note`, `decided_by`,
+  `decided_at`, `previous_status`, `new_status`, `notified_recipient`.
 
-Migration: `organizations/0005_*`.
+Migrations: `organizations/0005_*` (MVP) and
+`organizations/0007_portalcasereviewdecision_and_more` (Review + Approval).
 
 ## Audit
 
@@ -215,10 +228,85 @@ member, `metadata.org_id` for scoping):
 
 `portal_person_created`, `portal_person_archived`, `portal_case_created`,
 `portal_case_status_changed`, `portal_case_archived`, `portal_case_pack_created`,
-`portal_case_room_created`, `portal_case_request_created`.
+`portal_case_room_created`, `portal_case_request_created`, and the **Review +
+Approval** events `portal_review_started`, `portal_document_accepted`,
+`portal_document_rejected` (severity `warning`),
+`portal_document_needs_replacement`, `portal_recipient_notified`.
 
 No document contents, tokens, or file URLs are stored (the same privacy rules as
 the rest of Audit Logs V1 — see `docs/security/audit-logs.md`).
+
+## Review + Approval (delivered 2026-06-25)
+
+`b2b/review-approval-workflow` closes the loop: staff **review uploaded documents
+and decide accept / reject / needs-replacement** from the review queue. Like the
+rest of B2B Portals it **builds on Document Request Links + packs** and adds **no
+duplicate upload, request-link, or sharing-room system**. Fully **deterministic —
+no AI, no AI credits.**
+
+### Workflow
+
+A recipient uploads through the existing Document Request Link
+(`/document-request/{token}`) → the upload appears in the org **review queue** →
+a staff member opens the item, previews/downloads the uploaded file (org-scoped
+secure proxy), and chooses **Accept / Reject / Needs-replacement** with a note →
+the decision drives the **same** Document Request Link's accept / reject /
+needs_replacement service functions → on **Accept** the linked pack requirement is
+satisfied (via the existing attach-to-pack flow) and case progress recomputes → a
+decision record + audit event are written → the recipient may optionally be emailed
+for reject / needs-replacement.
+
+### Statuses and rules
+
+The item's `review_status` is one of `pending_upload` (no file yet) → `uploaded`
+(awaiting review) → `under_review` (staff started) → `accepted` / `rejected` /
+`needs_replacement` (or `cancelled`). It **mirrors the linked `DocumentRequestLink`
+status, which stays authoritative.**
+
+- A document **cannot be accepted without an uploaded file**.
+- **Accept satisfies** the linked pack requirement; **reject does not**.
+- **Needs-replacement reopens** the existing Document Request Link, so the
+  recipient can re-upload, returning the item to the queue.
+- Case progress recomputes after each decision (`suggested_status`:
+  `waiting_for_review` when uploads are pending, `ready` when all required
+  requirements are satisfied, else `collecting_documents`).
+
+### File access (org-scoped proxy, no storage URL)
+
+The uploaded file is an encrypted `DocumentFile` owned by the **org owner**. Since
+a reviewing admin may be a different user, the personal `/api/v1/files/{id}/download/`
+route would `404` for them — so review uses an **org-scoped secure proxy** that
+streams the **decrypted bytes** (`.../file/preview/` and `.../file/download/`),
+authenticated, org-member-gated, permission-first. **Never a raw storage URL or
+token.**
+
+### Recipient notification
+
+Opt-in via `notify_recipient`, only on **reject / needs-replacement**, and only
+when the request has a recipient email. It uses the shared branded-email path
+(`send_branded_email`, template `portal_review_decision`, category transactional)
+and carries the request title + reason + (for needs-replacement) the recipient's
+own public upload-page link — **never** a private file URL, storage key, raw token,
+or document content. See `docs/NOTIFICATIONS.md`.
+
+### Permissions
+
+Reading the review queue / case review items / the uploaded file = **any active
+org member**; **making a decision** (start-review, accept, reject,
+needs-replacement) = **admin/owner only** (`require_role(ADMIN_ROLES)`). Org
+isolation, the Teams entitlement gate, and the `b2b_portals` feature flag still
+apply.
+
+### Data model added
+
+`PortalCaseDocumentRequest` is **extended** with review metadata — `review_status`,
+`reviewed_by`, `reviewed_at`, `review_note`, `rejection_reason`,
+`last_submitted_at`, `decision_count` — and a new append-only
+**`PortalCaseReviewDecision`** records each decision (case_request, organization,
+case, document_request, decision, note, decided_by, decided_at, previous_status,
+new_status, notified_recipient). Migration
+`organizations/0007_portalcasereviewdecision_and_more`. Endpoints and shapes are in
+`docs/api-spec.md` §40.
 
 ## Frontend
 
@@ -231,7 +319,10 @@ people + cases + review queue + case detail/actions). There is **no public UI**.
   (`b2b/teams-billing-checkout`) so a case's pack and uploaded files no longer draw
   down the org-owner's personal storage. (Org entitlement + portal limits are
   **delivered** — see "Teams Plan + Portal Limits V1" above.)
-- A portal **review / approval workflow** (multi-step review states, approvals).
+- **Advanced approvals** beyond the delivered accept/reject/needs-replacement
+  workflow (see "Review + Approval" above): multi-level approval chains, reviewer
+  assignment, SLA / due-date tracking, bulk review actions, and AI-assisted
+  document validation.
 - **Bulk reminders** across people / cases.
 - **Organization document templates** (reusable case/checklist templates).
 - An **analytics dashboard** for the organization.
@@ -243,6 +334,9 @@ people + cases + review queue + case detail/actions). There is **no public UI**.
 - `docs/api-spec.md` §38 — endpoint contract, models, progress/summary shapes.
 - `docs/api-spec.md` §39 — Teams Plan + Portal Limits V1 (entitlement model, limit
   table, error codes, limits endpoint).
+- `docs/api-spec.md` §40 — Review + Approval Workflow V1 (review endpoints, review
+  fields + `PortalCaseReviewDecision`, statuses/rules, org-scoped file proxy).
+- `docs/NOTIFICATIONS.md` — the `portal_review_decision` recipient email.
 - `docs/BILLING.md` — feature-flag gate, org entitlement, and the Teams limit table.
 - `docs/security-plan.md` — membership-scoped access, org isolation, and the org
   entitlement gate.

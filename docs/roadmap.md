@@ -997,11 +997,13 @@ Free and Pro; founder-only rollout flag `smart_profile` until launched.
 
 **Next recommended branch: `b2b/teams-billing-checkout`** (Magic Inbox V1, Weekly
 Radar Email V1, Document Request Links V1, Sharing Rooms V1, the B2B Portals MVP,
-and Teams Plan + Portal Limits V1 are now done — see the done sections below).
-Teams Plan + Portal Limits V1 made portals governed by an **organization-level
-entitlement** (activated by a founder/beta command, no Stripe), fixing the prior
-MVP's personal-limit leak; wiring real Teams checkout / per-seat Stripe billing
-and beginning org-owned storage is the sensible follow-up.
+Teams Plan + Portal Limits V1, and the B2B Review + Approval Workflow V1 are now
+done — see the done sections below). Teams Plan + Portal Limits V1 made portals
+governed by an **organization-level entitlement** (activated by a founder/beta
+command, no Stripe), fixing the prior MVP's personal-limit leak, and the Review +
+Approval Workflow V1 closed the loop with a staff accept/reject/needs-replacement
+queue; wiring real Teams checkout / per-seat Stripe billing and beginning
+org-owned storage is the sensible follow-up.
 
 Smart Profile was built mainly to power CV/résumé, motivation letters,
 application emails, SOPs, and form filling — the AI Application Document
@@ -1651,8 +1653,10 @@ Upcoming planned branches (in order):
 2. `sharing/document-request-links-v1` — **delivered** (2026-06-24, see below)
 3. `sharing/rooms-v1` — **delivered** (2026-06-24, see below)
 4. `b2b/portals-mvp` — **delivered** (2026-06-24, see below)
-5. `b2b/portals-teams-plan` ← **next** (Teams plan + lifted limits, portal review/approval workflow)
-6. `integrations/inbox-mailbox-import` (future — Gmail/Drive/Outlook import)
+5. `b2b/portals-teams-plan` — **delivered** (2026-06-24, Teams plan + lifted limits — see below)
+6. `b2b/review-approval-workflow` — **delivered** (2026-06-25, staff accept/reject/needs-replacement queue — see below)
+7. `b2b/teams-billing-checkout` ← **next** (real Teams checkout / per-seat Stripe / invoices + org-owned storage)
+8. `integrations/inbox-mailbox-import` (future — Gmail/Drive/Outlook import)
 
 ## Weekly Radar Email V1 — delivered (2026-06-24)
 
@@ -2106,3 +2110,84 @@ remain queued.)
 
 See `docs/api-spec.md`, `docs/BILLING.md`, `docs/b2b-portals.md`,
 `docs/security-plan.md`, and `docs/security/audit-logs.md`.
+
+---
+
+## B2B Review + Approval Workflow V1 — delivered (2026-06-25)
+
+`b2b/review-approval-workflow` is **implemented** (backend complete + tested). It
+closes the loop on B2B Portals: staff in an organization portal now **review
+uploaded documents and decide accept / reject / needs-replacement** from a review
+queue. Like the rest of B2B Portals, it **orchestrates existing primitives** — it
+adds **no** second upload, request-link, or sharing-room system — and is fully
+**deterministic — no AI, no AI credits.**
+
+**Workflow.** A recipient uploads through the existing **Document Request Link**
+(`/document-request/{token}`) → the upload appears in the org portal **review
+queue** → a staff member opens the item, previews/downloads the uploaded file (via
+an org-scoped secure proxy), and chooses **Accept / Reject / Needs-replacement**
+with a note → the decision drives the **same** Document Request Link's
+accept/reject/needs_replacement service functions → on **Accept** the linked pack
+requirement is satisfied (via the existing attach-to-pack flow) and case progress
+recomputes → a decision record + audit event are written → the recipient may
+optionally be emailed for reject / needs-replacement.
+
+**Data model.** `PortalCaseDocumentRequest` (`apps/organizations/models.py`) is
+extended with review metadata — `review_status` (`pending_upload` / `uploaded` /
+`under_review` / `accepted` / `rejected` / `needs_replacement` / `cancelled`,
+mirroring the linked `DocumentRequestLink` status, which stays **authoritative**),
+`reviewed_by`, `reviewed_at`, `review_note`, `rejection_reason`,
+`last_submitted_at`, `decision_count`. A new append-only
+**`PortalCaseReviewDecision`** records each decision (case_request, organization,
+case, document_request, decision, note, decided_by, decided_at, previous_status,
+new_status, notified_recipient). Migration
+`organizations/0007_portalcasereviewdecision_and_more`.
+
+**Rules.** A document **cannot be accepted without an uploaded file**. **Accept**
+satisfies the linked pack requirement; **reject does not**. **Needs-replacement**
+reopens the existing Document Request Link so the recipient can re-upload, which
+returns the item to the queue. Case progress recomputes after each decision
+(`suggested_status`: `waiting_for_review` when uploads are pending, `ready` when
+all required requirements are satisfied, else `collecting_documents`).
+
+**Permissions.** Reading the queue / case review items / the uploaded file = any
+active org member; **making a decision** (start-review, accept, reject,
+needs-replacement) = **admin/owner only** (`require_role(ADMIN_ROLES)`). Org
+isolation, the Teams entitlement gate, and the `b2b_portals` feature flag still
+apply.
+
+**File access.** The uploaded file is an encrypted `DocumentFile` owned by the org
+owner, so a reviewing admin (a different user) would 404 on the personal
+`/files/{id}/download/` route. Review therefore uses an **org-scoped secure proxy**
+that streams the decrypted bytes — `GET .../requests/{case_request_id}/file/preview/`
+and `.../file/download/` (authenticated, org-member-gated, permission-first). Never
+a raw storage URL or token.
+
+**Recipient notification.** Opt-in via `notify_recipient`, only on **reject /
+needs-replacement**, and only when the request has a `recipient_email`. It uses the
+shared branded-email path (`send_branded_email`, new template
+`portal_review_decision`, category transactional). The email carries the request
+title + reason + (for needs-replacement) the recipient's own public upload-page
+link — **never** a private file URL, storage key, raw token-as-content, or document
+content. Recorded as a `portal_recipient_notified` audit event.
+
+**Endpoints (all `/api/v1/organizations/{org_id}/portal/...`, member-gated,
+feature + entitlement-gated).** `GET /review-queue/?status=&case_id=&person_id=&search=`;
+`GET /cases/{case_id}/review-items/`; `POST .../requests/{case_request_id}/start-review/`
+(admin); `POST .../requests/{case_request_id}/review/` body
+`{decision, note, notify_recipient}` (admin); `GET .../requests/{case_request_id}/decisions/`;
+`GET .../requests/{case_request_id}/file/preview/` + `.../file/download/`.
+
+**Audit.** Five new events through the unified Audit Logs (category `system`,
+owner = the org owner, actor = the acting member, `metadata.org_id`):
+`portal_review_started`, `portal_document_accepted`, `portal_document_rejected`
+(severity `warning`), `portal_document_needs_replacement`,
+`portal_recipient_notified`. No tokens, file URLs, or document contents stored.
+
+**Deferred (future work):** multi-level approvals / approval chains, reviewer
+assignment, SLA / due-date tracking, bulk review actions, and AI-assisted document
+validation.
+
+See `docs/b2b-portals.md`, `docs/api-spec.md` §40, `docs/security-plan.md`,
+`docs/security/audit-logs.md`, and `docs/NOTIFICATIONS.md` for the full contract,
+security model, and email behavior.
