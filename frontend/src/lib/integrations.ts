@@ -6,6 +6,12 @@
 import { apiFetch } from "./api";
 import type {
   ConnectedAccount,
+  DriveDestination,
+  DriveDestinations,
+  DriveFileRef,
+  DriveImportResult,
+  DriveListResponse,
+  DrivePreviewResult,
   OAuthStartResponse,
   ProvidersResponse,
 } from "@/types/integrations";
@@ -75,5 +81,74 @@ export function accountStatusLabel(status: string): string {
       return "Disconnected";
     default:
       return "Unknown";
+  }
+}
+
+// ---- Google Drive Import V1 ----
+
+export function getDriveFiles(
+  accountId: number,
+  opts: { q?: string; fileType?: string; pageToken?: string } = {},
+): Promise<DriveListResponse> {
+  const params = new URLSearchParams({ account_id: String(accountId) });
+  if (opts.q) params.set("q", opts.q);
+  if (opts.fileType) params.set("file_type", opts.fileType);
+  if (opts.pageToken) params.set("page_token", opts.pageToken);
+  return apiFetch<DriveListResponse>(
+    `/integrations/google-drive/files/?${params.toString()}`,
+  );
+}
+
+export function getDriveDestinations(): Promise<DriveDestinations> {
+  return apiFetch<DriveDestinations>("/integrations/google-drive/destinations/");
+}
+
+export function previewDriveImport(
+  accountId: number,
+  files: DriveFileRef[],
+  destination: DriveDestination,
+): Promise<DrivePreviewResult> {
+  return apiFetch<DrivePreviewResult>("/integrations/google-drive/import/preview/", {
+    method: "POST",
+    body: { account_id: accountId, files, destination },
+  });
+}
+
+export function importDriveFiles(
+  accountId: number,
+  files: DriveFileRef[],
+  destination: DriveDestination,
+): Promise<DriveImportResult> {
+  return apiFetch<DriveImportResult>("/integrations/google-drive/import/", {
+    method: "POST",
+    body: { account_id: accountId, files, destination },
+  });
+}
+
+/** Friendly, user-facing reason for a skipped/failed Drive import row. */
+export function driveImportReasonLabel(reason: string): string {
+  switch (reason) {
+    case "unsupported_type":
+      return "Unsupported file type";
+    case "too_large":
+      return "File is too large";
+    case "not_downloadable":
+      return "Couldn't download from Drive";
+    case "export_not_supported":
+      return "This Google file can't be exported";
+    case "storage_error":
+      return "Not enough storage";
+    case "limit_reached":
+      return "Plan limit reached";
+    case "scan_unavailable":
+      return "Security scan unavailable — try again";
+    case "invalid_file":
+      return "File failed validation";
+    case "provider_error":
+      return "Google Drive error";
+    case "":
+      return "";
+    default:
+      return "Couldn't import";
   }
 }

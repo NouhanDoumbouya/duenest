@@ -38,7 +38,53 @@ AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 REVOKE_ENDPOINT = "https://oauth2.googleapis.com/revoke"
 USERINFO_ENDPOINT = "https://openidconnect.googleapis.com/v1/userinfo"
+DRIVE_FILES_ENDPOINT = "https://www.googleapis.com/drive/v3/files"
 _HTTP_TIMEOUT = 10  # seconds
+
+# Only safe metadata fields are ever requested from Drive (no external links,
+# no permissions, no content). iconLink/webViewLink are deliberately omitted.
+DRIVE_FILE_FIELDS = "id,name,mimeType,size,modifiedTime,trashed"
+DRIVE_LIST_FIELDS = f"nextPageToken,files({DRIVE_FILE_FIELDS})"
+
+# Google-native types we can EXPORT to a supported format (PDF). Read-only.
+GOOGLE_WORKSPACE_EXPORTABLE = {
+    "application/vnd.google-apps.document": "application/pdf",
+    "application/vnd.google-apps.spreadsheet": "application/pdf",
+    "application/vnd.google-apps.presentation": "application/pdf",
+}
+_DRIVE_TYPE_LABELS = {
+    "application/pdf": "PDF",
+    "image/jpeg": "Image",
+    "image/png": "Image",
+    "application/msword": "Word",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "Word",
+    "application/vnd.google-apps.document": "Google Doc",
+    "application/vnd.google-apps.spreadsheet": "Google Sheet",
+    "application/vnd.google-apps.presentation": "Google Slides",
+    "application/vnd.google-apps.folder": "Folder",
+}
+
+
+def build_drive_file_payload(meta: dict) -> dict:
+    """Map raw Drive file metadata to the SAFE fields we surface.
+
+    Never includes tokens, download URLs, external links, permissions, or content.
+    """
+    mime = meta.get("mimeType", "") or ""
+    size = meta.get("size")
+    export_mime = GOOGLE_WORKSPACE_EXPORTABLE.get(mime)
+    return {
+        "provider_file_id": meta.get("id", "") or "",
+        "name": meta.get("name", "") or "",
+        "mime_type": mime,
+        "size": int(size) if str(size or "").isdigit() else None,
+        "modified_time": meta.get("modifiedTime", "") or "",
+        "type_label": _DRIVE_TYPE_LABELS.get(mime, "File"),
+        "is_folder": mime == "application/vnd.google-apps.folder",
+        "is_google_workspace_file": mime.startswith("application/vnd.google-apps"),
+        "exportable": bool(export_mime),
+        "export_mime_type": export_mime or "",
+    }
 
 
 class GoogleProvider(BaseIntegrationProvider):
@@ -185,6 +231,107 @@ class GoogleProvider(BaseIntegrationProvider):
             account_id=str(account_id),
             email=data.get("email", "") or "",
             display_name=data.get("name", "") or "",
+        )
+
+    # ---- Google Drive (read-only; import only) -----------------------------
+    #
+    # Drive is accessed read-only. These methods NEVER modify, delete, share, or
+    # write back to Drive. Token/secret/body are never logged. Only safe metadata
+    # is surfaced; download streams are size-capped to the upload limit.
+
+    def _drive_get(
+        self, access_token: str, url: str, *, params=None,
+        stream_bytes: bool = False, max_bytes: int | None = None,
+    ):
+        import requests
+
+        try:
+            resp = requests.get(
+                url,
+                headers={"Authorization": f"Bearer {access_token}"},
+                params=params,
+                timeout=_HTTP_TIMEOUT,
+                stream=stream_bytes,
+            )
+        except requests.RequestException as exc:
+            raise ProviderError("Network error.", code="provider_unreachable") from exc
+        if resp.status_code == 401:
+            raise ProviderError("Unauthorized.", code="unauthorized")
+        if resp.status_code == 403:
+            raise ProviderError("Forbidden.", code="forbidden")
+        if resp.status_code == 404:
+            raise ProviderError("Not found.", code="not_found")
+        if resp.status_code >= 400:
+            # Never include the body — it may echo identifiers or the token.
+            raise ProviderError("Drive request failed.", code="drive_request_failed")
+        if stream_bytes:
+            buf = bytearray()
+            for chunk in resp.iter_content(chunk_size=65536):
+                if not chunk:
+                    continue
+                buf.extend(chunk)
+                if max_bytes is not None and len(buf) > max_bytes:
+                    resp.close()
+                    raise ProviderError("File too large.", code="too_large")
+            return bytes(buf)
+        try:
+            return resp.json()
+        except ValueError as exc:
+            raise ProviderError("Bad provider response.", code="bad_response") from exc
+
+    def list_drive_files(
+        self, *, access_token: str, query: str | None = None,
+        page_token: str | None = None, page_size: int = 25,
+        mime_types: list[str] | None = None,
+    ) -> dict:
+        self._require_configured()
+        q_parts = ["trashed = false"]
+        if query:
+            # Strip characters that would break the Drive `q` string / inject.
+            safe = query.replace("\\", "").replace("'", "")[:120]
+            if safe:
+                q_parts.append(f"name contains '{safe}'")
+        if mime_types:
+            ors = " or ".join(f"mimeType = '{m}'" for m in mime_types if "'" not in m)
+            if ors:
+                q_parts.append(f"({ors})")
+        params = {
+            "q": " and ".join(q_parts),
+            "pageSize": max(1, min(int(page_size or 25), 100)),
+            "fields": DRIVE_LIST_FIELDS,
+            "spaces": "drive",
+            "corpora": "user",
+            "orderBy": "modifiedTime desc",
+        }
+        if page_token:
+            params["pageToken"] = page_token
+        payload = self._drive_get(access_token, DRIVE_FILES_ENDPOINT, params=params)
+        return {
+            "files": [build_drive_file_payload(f) for f in payload.get("files", [])],
+            "next_page_token": payload.get("nextPageToken", "") or "",
+        }
+
+    def get_drive_file_metadata(self, *, access_token: str, file_id: str) -> dict:
+        self._require_configured()
+        return self._drive_get(
+            access_token,
+            f"{DRIVE_FILES_ENDPOINT}/{file_id}",
+            params={"fields": DRIVE_FILE_FIELDS},
+        )
+
+    def download_drive_file(
+        self, *, access_token: str, file_id: str,
+        export_mime: str | None = None, max_bytes: int | None = None,
+    ) -> bytes:
+        self._require_configured()
+        if export_mime:
+            url = f"{DRIVE_FILES_ENDPOINT}/{file_id}/export"
+            params = {"mimeType": export_mime}
+        else:
+            url = f"{DRIVE_FILES_ENDPOINT}/{file_id}"
+            params = {"alt": "media"}
+        return self._drive_get(
+            access_token, url, params=params, stream_bytes=True, max_bytes=max_bytes
         )
 
 

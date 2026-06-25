@@ -514,6 +514,10 @@ REST_FRAMEWORK = {
         "integration_oauth": _throttle_rate("10/min"),
         # Integrations OAuth callback (public; state-validated) — bounds abuse.
         "integration_oauth_callback": _throttle_rate("30/min"),
+        # Google Drive import: listing/preview (per user) — bounds API fan-out.
+        "google_drive_list": _throttle_rate("60/min"),
+        # Google Drive import: the actual import action (per user) — bounds cost.
+        "google_drive_import": _throttle_rate("10/min"),
     },
 }
 

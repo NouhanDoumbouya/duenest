@@ -67,6 +67,75 @@ def record_integration_audit(
         logger.warning("integration audit failed event=%s", event_type, exc_info=True)
 
 
+# --- Google Drive Import V1 event types ------------------------------------
+GD_IMPORT_PREVIEWED = "google_drive_import_previewed"
+GD_IMPORT_STARTED = "google_drive_import_started"
+GD_FILE_IMPORTED = "google_drive_file_imported"
+GD_FILE_IMPORT_FAILED = "google_drive_file_import_failed"
+GD_IMPORT_COMPLETED = "google_drive_import_completed"
+
+
+def record_drive_import_audit(
+    *, user, event_type, account=None, status="", reason="", destination_type="",
+    object_label="", request=None, severity=None,
+):
+    """Owner-scoped audit for a Drive import action. Safe metadata only — never a
+    token, download URL, raw Google response, file content, or raw file id."""
+    try:
+        from apps.documents.audit import record_audit_event
+        from apps.documents.models import AuditLogEntry
+
+        meta = {"provider": "google"}
+        if status:
+            meta["status"] = status
+        if reason:
+            meta["reason_category"] = reason
+        if destination_type:
+            meta["destination_type"] = destination_type
+        record_audit_event(
+            user,
+            event_type,
+            AuditLogEntry.Category.SECURITY,
+            actor_user=user,
+            obj=account,
+            object_type="ConnectedIntegrationAccount",
+            object_label=object_label[:255] if object_label else "google_drive",
+            metadata=meta,
+            request=request,
+            severity=severity or AuditLogEntry.Severity.INFO,
+        )
+    except Exception:  # noqa: BLE001 - logging must never break the import
+        logger.warning("drive import audit failed event=%s", event_type, exc_info=True)
+
+
+def record_drive_import_operational(
+    *, user, status, imported_count=0, failed_count=0, destination_type="",
+    file_count=0, total_size=0, request=None,
+):
+    """Founder-facing operational event for a Drive import batch (safe counts)."""
+    try:
+        from apps.founder.services import record_operational_event
+        from apps.founder.models import OperationalEvent
+
+        record_operational_event(
+            category=OperationalEvent.Category.SECURITY,
+            source="google_drive_import",
+            status=status,
+            user=user,
+            request=request,
+            metadata={
+                "provider": "google",
+                "imported_count": int(imported_count),
+                "failed_count": int(failed_count),
+                "file_count": int(file_count),
+                "destination_type": destination_type,
+                "total_size": int(total_size),
+            },
+        )
+    except Exception:  # noqa: BLE001 - logging must never break the import
+        logger.warning("drive import op-event failed", exc_info=True)
+
+
 def record_integration_operational(
     *, source, status, user=None, organization=None, provider, scope_group="",
     error_code="", message="", request=None, severity=None,

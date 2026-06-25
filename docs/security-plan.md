@@ -31,7 +31,10 @@ This security plan defines the rules, risks, controls, and implementation expect
 > rest** (reusing the KEK/DEK field encryption), never serialized to the frontend,
 > never logged, and never placed in audit/operational metadata. OAuth `state` is
 > stored only as a salted hash (single-use, time-boxed) and redirect paths are
-> validated to internal paths (no open redirect). See `docs/integrations.md`.
+> validated to internal paths (no open redirect). **Google Drive import** is
+> read-only and import-only: selected files are validated and **encrypted at rest**
+> via the existing upload path; Drive content, download URLs, and raw Google API
+> responses are never stored or logged. See `docs/integrations.md`.
 
 ---
 

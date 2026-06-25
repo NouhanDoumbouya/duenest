@@ -150,3 +150,143 @@ class IntegrationAccountHealthView(_OwnedAccountView):
         account = self.get_account(request, pk)
         account = services.account_health(account=account)
         return Response(ConnectedIntegrationAccountSerializer(account).data)
+
+
+# ---- Google Drive Import V1 ------------------------------------------------
+
+from . import drive_import  # noqa: E402
+from .providers.base import ProviderError  # noqa: E402
+from .providers.google import GOOGLE_WORKSPACE_EXPORTABLE  # noqa: E402
+from .serializers import DriveImportRequestSerializer  # noqa: E402
+
+GOOGLE_DRIVE_FLAG = "google_drive_import"
+
+# Friendly file-type filter -> Drive MIME types (read-only listing).
+_DRIVE_TYPE_FILTERS = {
+    "pdf": ["application/pdf"],
+    "image": ["image/jpeg", "image/png"],
+    "doc": [
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ],
+    "google": list(GOOGLE_WORKSPACE_EXPORTABLE.keys()),
+}
+
+
+def _require_drive_flags(user) -> None:
+    require_feature_enabled(FLAG, user)
+    require_feature_enabled(services.GOOGLE_FLAG, user)
+    require_feature_enabled(GOOGLE_DRIVE_FLAG, user)
+
+
+def _get_google_account(request):
+    """The signed-in user's own, still-connected Google account, or 404."""
+    return get_object_or_404(
+        ConnectedIntegrationAccount.objects.exclude(
+            status=ConnectedIntegrationAccount.Status.DISCONNECTED
+        ),
+        pk=request.query_params.get("account_id"),
+        user=request.user,
+        provider="google",
+    )
+
+
+def _not_configured_response():
+    return Response(
+        {"detail": "Google integration is not configured on this server yet.",
+         "status": "not_configured"},
+        status=http_status.HTTP_400_BAD_REQUEST,
+    )
+
+
+class GoogleDriveFilesView(APIView):
+    """GET the user's Drive files (safe metadata only; no tokens/URLs)."""
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "google_drive_list"
+
+    def get(self, request):
+        _require_drive_flags(request.user)
+        account = _get_google_account(request)
+        file_type = request.query_params.get("file_type", "")
+        try:
+            payload = drive_import.list_google_drive_files(
+                request.user,
+                account,
+                query=request.query_params.get("q") or None,
+                page_token=request.query_params.get("page_token") or None,
+                page_size=int(request.query_params.get("page_size") or 25),
+                mime_types=_DRIVE_TYPE_FILTERS.get(file_type),
+            )
+        except ProviderNotConfigured:
+            return _not_configured_response()
+        except ProviderError:
+            return Response(
+                {"detail": "Couldn't reach Google Drive. Reconnect and try again.",
+                 "status": "provider_error"},
+                status=http_status.HTTP_502_BAD_GATEWAY,
+            )
+        return Response(payload)
+
+
+class GoogleDriveDestinationsView(APIView):
+    """GET safe import destination options (owner-scoped)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        _require_drive_flags(request.user)
+        return Response(drive_import.build_destination_options(request.user))
+
+
+class _DriveImportBase(APIView):
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+
+    def _payload(self, request):
+        _require_drive_flags(request.user)
+        serializer = DriveImportRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        account = get_object_or_404(
+            ConnectedIntegrationAccount.objects.exclude(
+                status=ConnectedIntegrationAccount.Status.DISCONNECTED
+            ),
+            pk=data["account_id"], user=request.user, provider="google",
+        )
+        return data, account
+
+
+class GoogleDriveImportPreviewView(_DriveImportBase):
+    throttle_scope = "google_drive_list"
+
+    def post(self, request):
+        data, account = self._payload(request)
+        try:
+            result = drive_import.preview_google_drive_import(
+                request.user, account, data["files"], data["destination"], request=request,
+            )
+        except drive_import.DriveImportError as exc:
+            return Response(
+                {"detail": str(exc), "status": exc.code},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(result)
+
+
+class GoogleDriveImportView(_DriveImportBase):
+    throttle_scope = "google_drive_import"
+
+    def post(self, request):
+        data, account = self._payload(request)
+        try:
+            result = drive_import.import_google_drive_files(
+                request.user, account, data["files"], data["destination"], request=request,
+            )
+        except drive_import.DriveImportError as exc:
+            return Response(
+                {"detail": str(exc), "status": exc.code},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(result)
