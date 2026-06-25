@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { DoorClosed, FileText, Loader2, ShieldCheck } from "lucide-react";
+import { DoorClosed, FileText, Loader2, TriangleAlert } from "lucide-react";
 
 import { SiteHeader } from "@/components/layout/site-header";
 import { Logo } from "@/components/layout/logo";
@@ -62,7 +62,7 @@ export default function OrganizationRoomPage({
                 ) : error ? (
                   <div className="flex h-[360px] flex-col items-center justify-center gap-5 text-center">
                     <span className="flex size-14 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
-                      <ShieldCheck className="size-6" />
+                      <TriangleAlert className="size-6" />
                     </span>
                     <p className="text-sm text-muted-foreground">{error}</p>
                     <Link href="/" className={cn(buttonVariants())}>
@@ -89,6 +89,10 @@ export default function OrganizationRoomPage({
                     </div>
 
                     <div className="grid gap-3">
+                      <p className="text-xs text-muted-foreground">
+                        Only the files {room.organization_name} chose to share
+                        appear here. Nothing else from their account is visible.
+                      </p>
                       {room.items.length === 0 ? (
                         <p className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
                           No shared items are available in this room.

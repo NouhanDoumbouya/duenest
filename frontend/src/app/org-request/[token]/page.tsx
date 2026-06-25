@@ -2,7 +2,13 @@
 
 import { FormEvent, use, useEffect, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, FileUp, Loader2, ShieldCheck } from "lucide-react";
+import {
+  CheckCircle2,
+  FileUp,
+  Loader2,
+  ShieldCheck,
+  TriangleAlert,
+} from "lucide-react";
 
 import { SiteHeader } from "@/components/layout/site-header";
 import { Logo } from "@/components/layout/logo";
@@ -119,7 +125,7 @@ export default function OrganizationRequestPage({
                 ) : error ? (
                   <div className="flex h-[340px] flex-col items-center justify-center gap-5 text-center">
                     <span className="flex size-14 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
-                      <ShieldCheck className="size-6" />
+                      <TriangleAlert className="size-6" />
                     </span>
                     <p className="text-sm text-muted-foreground">{error}</p>
                     <Link href="/" className={cn(buttonVariants())}>

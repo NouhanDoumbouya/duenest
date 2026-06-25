@@ -1007,6 +1007,171 @@ export function progressPercent(progress: PortalCaseProgress): number {
   return Math.round(clamped * 100);
 }
 
+/**
+ * The single most useful next step for a case, in plain language. Used as a
+ * calm one-line hint on case cards and as the case-detail next-action banner.
+ * Ordered by urgency: your review work first, then the recipient's work, then
+ * the ready/setup states. Pure and deterministic so it is easy to test.
+ */
+export function caseNextAction(portalCase: PortalCase): string {
+  const p = portalCase.progress;
+  if (portalCase.status === "archived") return "Archived";
+  if (p.uploads_needing_review > 0) {
+    return `Review ${p.uploads_needing_review} upload${
+      p.uploads_needing_review === 1 ? "" : "s"
+    }`;
+  }
+  if (p.requests_needs_replacement > 0) {
+    return `${p.requests_needs_replacement} awaiting replacement`;
+  }
+  if (p.missing_requirements > 0) {
+    return `${p.missing_requirements} document${
+      p.missing_requirements === 1 ? "" : "s"
+    } still needed`;
+  }
+  if (portalCase.status === "ready" || p.suggested_status === "ready") {
+    return "Ready to move forward";
+  }
+  if (p.total_requirements === 0) return "Add what this case needs";
+  return "On track";
+}
+
+// ---- Client-side list filtering ---------------------------------------------
+//
+// The portal case/people list endpoints return the full active set, so the
+// Cases and People sub-pages filter and search in memory. Keeping this logic as
+// pure functions makes the filtering easy to test and the pages lean.
+
+/** A quick operational lens for the Cases list. */
+export type CaseFocus =
+  | "all"
+  | "needs_review"
+  | "missing_docs"
+  | "due_soon"
+  | "overdue"
+  | "ready";
+
+export interface PortalCaseListFilters {
+  /** Matches the case title or the person's name, case-insensitive. */
+  search?: string;
+  /** Exact system status, or "" for any. */
+  status?: PortalCaseStatus | "";
+  /** Exact custom-status key, or "" for any. */
+  customStatusKey?: string;
+  /** Restrict to one person, or null for any. */
+  personId?: number | null;
+  /** A quick operational lens (review/missing/due/ready). */
+  focus?: CaseFocus;
+}
+
+/** Day-count between an ISO date (YYYY-MM-DD) and `now`; negative = past. */
+function daysUntil(isoDate: string, now: Date): number {
+  const due = new Date(`${isoDate}T00:00:00`);
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const ms = due.getTime() - start.getTime();
+  return Math.round(ms / 86_400_000);
+}
+
+/** Cases that are still "live" enough to count as due-soon/overdue. */
+const OPEN_CASE_STATUSES = new Set<PortalCaseStatus>([
+  "draft",
+  "collecting_documents",
+  "waiting_for_review",
+  "ready",
+  "blocked",
+]);
+
+function matchesFocus(
+  portalCase: PortalCase,
+  focus: CaseFocus,
+  now: Date,
+): boolean {
+  const p = portalCase.progress;
+  switch (focus) {
+    case "needs_review":
+      return p.uploads_needing_review > 0;
+    case "missing_docs":
+      return p.missing_requirements > 0;
+    case "ready":
+      return portalCase.status === "ready" || p.suggested_status === "ready";
+    case "due_soon": {
+      if (!portalCase.due_date) return false;
+      if (!OPEN_CASE_STATUSES.has(portalCase.status)) return false;
+      const days = daysUntil(portalCase.due_date, now);
+      return days >= 0 && days <= 7;
+    }
+    case "overdue": {
+      if (!portalCase.due_date) return false;
+      if (!OPEN_CASE_STATUSES.has(portalCase.status)) return false;
+      return daysUntil(portalCase.due_date, now) < 0;
+    }
+    case "all":
+    default:
+      return true;
+  }
+}
+
+/** Apply the Cases-list search + filters in memory. AND across every filter. */
+export function filterPortalCases(
+  cases: PortalCase[],
+  filters: PortalCaseListFilters,
+  now: Date = new Date(),
+): PortalCase[] {
+  const query = (filters.search ?? "").trim().toLowerCase();
+  return cases.filter((portalCase) => {
+    if (filters.status && portalCase.status !== filters.status) return false;
+    if (
+      filters.customStatusKey &&
+      portalCase.custom_status?.key !== filters.customStatusKey
+    ) {
+      return false;
+    }
+    if (
+      typeof filters.personId === "number" &&
+      portalCase.person.id !== filters.personId
+    ) {
+      return false;
+    }
+    if (filters.focus && !matchesFocus(portalCase, filters.focus, now)) {
+      return false;
+    }
+    if (query) {
+      const haystack =
+        `${portalCase.title} ${portalCase.person.full_name}`.toLowerCase();
+      if (!haystack.includes(query)) return false;
+    }
+    return true;
+  });
+}
+
+export interface PortalPeopleListFilters {
+  /** Matches the person's name or email, case-insensitive. */
+  search?: string;
+  /** Exact person status, or "" for any. */
+  status?: PortalPersonStatus | "";
+  /** Exact person type, or "" for any. */
+  personType?: PortalPersonType | "";
+}
+
+/** Apply the People-list search + filters in memory. AND across every filter. */
+export function filterPortalPeople(
+  people: PortalPerson[],
+  filters: PortalPeopleListFilters,
+): PortalPerson[] {
+  const query = (filters.search ?? "").trim().toLowerCase();
+  return people.filter((person) => {
+    if (filters.status && person.status !== filters.status) return false;
+    if (filters.personType && person.person_type !== filters.personType) {
+      return false;
+    }
+    if (query) {
+      const haystack = `${person.full_name} ${person.email ?? ""}`.toLowerCase();
+      if (!haystack.includes(query)) return false;
+    }
+    return true;
+  });
+}
+
 // ---- Plan + limit helpers ---------------------------------------------------
 
 /** Human-readable labels for each capacity-limited portal resource. */

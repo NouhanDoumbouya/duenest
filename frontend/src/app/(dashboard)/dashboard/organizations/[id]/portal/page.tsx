@@ -1,22 +1,17 @@
 "use client";
 
-// Owner UI for CertaNest Portals (B2B Portals MVP). An organization manages the
-// people it serves (clients, students, applicants, employees, family members)
-// and the document "cases" attached to each of them.
+// Owner UI for CertaNest Portals (B2B Portals MVP) — the portal OVERVIEW: the
+// operating center an org admin lands on. It answers, top to bottom, "what needs
+// attention", "how are we doing", and "what do I do next". The People and Cases
+// lists live on their own filterable sub-pages; this page links to them through
+// the shared portal nav and surfaces the work (review queue, reminders) here.
 //
 // The whole feature is behind the `b2b_portals` feature flag: a disabled flag
 // surfaces as a 503 (we show a calm "coming soon" state). Writes require an org
 // admin/owner role: non-admins get a 403 and a view-only message. Public links
 // (room URL, request upload URL) are frontend page routes — safe to show/copy.
 
-import {
-  FormEvent,
-  use,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   AlarmClock,
@@ -25,83 +20,50 @@ import {
   CheckCircle2,
   ClipboardCheck,
   ClipboardList,
-  Clock,
-  DoorOpen,
   FileWarning,
-  FolderTree,
   Inbox,
   LayoutTemplate,
-  Loader2,
   Mail,
   Plus,
   RotateCcw,
   ShieldAlert,
-  SlidersHorizontal,
   Sparkles,
   UserPlus,
-  Users,
-  X,
 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { buttonVariants } from "@/components/ui/button";
-import { DrawerBackdrop, DrawerPanel } from "@/components/ui/drawer";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { PageContainer } from "@/components/ui/page-container";
 import { PageHeader } from "@/components/ui/page-header";
-import {
-  InlineAlert,
-  ProductMetric,
-  SegmentedControl,
-  TrustNotice,
-} from "@/components/ui/product-ui";
+import { InlineAlert, ProductMetric, TrustNotice } from "@/components/ui/product-ui";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { Textarea } from "@/components/ui/textarea";
 import { Toast, type ToastState } from "@/components/ui/toast";
 import {
   LimitWarningBanners,
   PlanUsageCard,
 } from "@/components/features/portals/plan-usage-card";
+import { PortalNav } from "@/components/features/portals/portal-nav";
+import {
+  AddPersonModal,
+  CreateCaseModal,
+} from "@/components/features/portals/portal-modals";
 import { ReminderModal } from "@/components/features/portals/reminder-modal";
 import { CreateCaseFromTemplateModal } from "@/components/features/portals/template-modals";
-import { CustomStatusChip } from "@/components/features/portals/custom-status-chip";
-import {
-  CustomFieldsEditModal,
-  CustomFieldsView,
-} from "@/components/features/portals/custom-fields-section";
 import { useFeature } from "@/components/features/feature-flags-provider";
 import { ApiError } from "@/lib/api";
 import { formatDate } from "@/lib/documents";
 import { canManageOrganization, getOrganization } from "@/lib/organizations";
 import {
-  PORTAL_CASE_PRIORITY_LABELS,
-  PORTAL_CASE_PRIORITY_ORDER,
-  PORTAL_CASE_PRIORITY_TONE,
   PORTAL_CASE_STATUS_LABELS,
   PORTAL_CASE_STATUS_TONE,
-  PORTAL_CASE_TYPE_LABELS,
-  PORTAL_CASE_TYPE_ORDER,
-  PORTAL_PERSON_STATUS_LABELS,
-  PORTAL_PERSON_STATUS_TONE,
-  PORTAL_PERSON_TYPE_LABELS,
-  PORTAL_PERSON_TYPE_ORDER,
   dashboardActivityLabel,
-  createPortalCase,
-  createPortalPerson,
-  getPersonCustomFields,
-  getPortalCases,
   getPortalDashboard,
   getPortalLimits,
   getPortalPeople,
   getPortalTemplates,
-  isOrgLimitError,
   isPortalNotEnabledError,
   planLabel,
-  progressPercent,
-  setPersonCustomFields,
 } from "@/lib/portals";
 import { cn } from "@/lib/utils";
 import type { Organization } from "@/types/organizations";
@@ -112,24 +74,15 @@ import type {
   DashboardQueues,
   DashboardReviewItem,
   OrganizationDashboard,
-  PortalCase,
-  PortalCasePriority,
-  PortalCaseType,
   PortalLimits,
   PortalPerson,
-  PortalPersonType,
   OrgCaseTemplateSummary,
   ReminderType,
-  CustomField,
-  CustomFieldValues,
 } from "@/types/portals";
-
-type PortalTab = "people" | "cases";
 
 interface PortalState {
   dashboard: OrganizationDashboard;
   people: PortalPerson[];
-  cases: PortalCase[];
   templates: OrgCaseTemplateSummary[];
 }
 
@@ -140,25 +93,6 @@ interface PortalState {
  * - `view_only`: the user is a member but not an admin (403).
  */
 type BlockKind = "coming_soon" | "paywall" | "view_only" | null;
-
-const TABS: Array<{ value: PortalTab; label: string }> = [
-  { value: "people", label: "People" },
-  { value: "cases", label: "Cases" },
-];
-
-/**
- * Pick the best message for a create-form error. An `organization_plan_limit_exceeded`
- * error carries a clear, human `message` from the backend — surface that. Any
- * other ApiError uses its message; everything else uses the fallback.
- */
-function orgLimitMessage(err: unknown, fallback: string): string {
-  if (isOrgLimitError(err)) {
-    const message = (err.data as Record<string, unknown>).message;
-    if (typeof message === "string" && message) return message;
-  }
-  if (err instanceof ApiError) return err.message;
-  return fallback;
-}
 
 export default function OrganizationPortalPage({
   params,
@@ -172,7 +106,6 @@ export default function OrganizationPortalPage({
   const [org, setOrg] = useState<Organization | null>(null);
   const [data, setData] = useState<PortalState | null>(null);
   const [limits, setLimits] = useState<PortalLimits | null>(null);
-  const [tab, setTab] = useState<PortalTab>("cases");
   const [loading, setLoading] = useState(true);
   const [block, setBlock] = useState<BlockKind>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -183,25 +116,22 @@ export default function OrganizationPortalPage({
   const [templateForCase, setTemplateForCase] =
     useState<OrgCaseTemplateSummary | null>(null);
   // When set, the bulk-reminder modal is open pre-set to this reminder type.
-  // `null` means closed; an open value carries the type to start on.
   const [reminderType, setReminderType] = useState<ReminderType | null>(null);
 
   const canManage = org ? canManageOrganization(org.user_role) : false;
 
   // The dashboard endpoint is the PRIMARY operational data (metrics, queues,
-  // plan, recent activity). People + cases are still loaded for the tabs and the
-  // Create case modal's person picker.
+  // plan, recent activity). People + templates back the Create case / From
+  // template actions; the case list itself lives on its own sub-page.
   const loadPortal = useCallback(async (): Promise<PortalState> => {
-    const [dashboard, people, cases, templates] = await Promise.all([
+    const [dashboard, people, templates] = await Promise.all([
       getPortalDashboard(orgId),
       getPortalPeople(orgId),
-      getPortalCases(orgId),
       getPortalTemplates(orgId),
     ]);
     return {
       dashboard,
       people: people.people,
-      cases: cases.cases,
       templates: templates.templates,
     };
   }, [orgId]);
@@ -244,11 +174,8 @@ export default function OrganizationPortalPage({
           setLimits(next.dashboard.plan);
         }
       })
-      .catch(async (err) => {
+      .catch((err) => {
         if (!active) return;
-        // The limits endpoint should not 403 with portal_not_enabled, but if
-        // it does (or any portal call does), show the paywall rather than a
-        // generic error.
         if (isPortalNotEnabledError(err)) {
           setBlock("paywall");
           return;
@@ -259,8 +186,6 @@ export default function OrganizationPortalPage({
             return;
           }
           if (err.status === 403) {
-            // A 403 here means either not-an-admin (writes blocked) or
-            // not-a-member. The org load succeeding tells us they're a member.
             setBlock("view_only");
             return;
           }
@@ -330,10 +255,7 @@ export default function OrganizationPortalPage({
     return (
       <PageContainer width="wide">
         {backLink}
-        <PageHeader
-          eyebrow={org ? org.name : "Organization"}
-          title="Portal"
-        />
+        <PageHeader eyebrow={org ? org.name : "Organization"} title="Portal" />
         <section className="rounded-2xl border border-border bg-card p-6 shadow-card sm:p-8">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
             <Sparkles className="size-3.5" aria-hidden />
@@ -399,51 +321,33 @@ export default function OrganizationPortalPage({
   const metrics = dashboard.metrics;
   const queues = dashboard.queues;
   const isEmpty = metrics.total_people === 0 && metrics.total_cases === 0;
+  const hasPeople = data.people.length > 0;
 
   return (
     <PageContainer width="wide">
       {backLink}
+      <PortalNav orgId={orgId} active="overview" />
       <PageHeader
         eyebrow={dashboard.organization.name || org?.name || "Organization"}
-        title="Portal"
-        description="Manage the people you serve and the documents each of them needs — request, review, and get every case ready."
+        title="Overview"
+        description="What needs attention, how every case is tracking, and the next step to take."
         actions={
           canManage ? (
             <div className="flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setReminderType("missing_documents")}
-              >
-                <Mail className="size-4" /> Send reminders
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setAddingPerson(true)}
-              >
-                <UserPlus className="size-4" /> Add person
-              </Button>
               {data.templates.length > 0 && (
                 <Button
                   variant="outline"
                   onClick={() => setTemplateForCase(data.templates[0])}
-                  disabled={data.people.length === 0}
-                  title={
-                    data.people.length === 0
-                      ? "Add a person first"
-                      : "Create a case from a template"
-                  }
+                  disabled={!hasPeople}
+                  title={hasPeople ? "Create a case from a template" : "Add a person first"}
                 >
                   <LayoutTemplate className="size-4" /> From template
                 </Button>
               )}
               <Button
                 onClick={() => setCreatingCase(true)}
-                disabled={data.people.length === 0}
-                title={
-                  data.people.length === 0
-                    ? "Add a person first"
-                    : undefined
-                }
+                disabled={!hasPeople}
+                title={hasPeople ? undefined : "Add a person first"}
               >
                 <ClipboardList className="size-4" /> Create case
               </Button>
@@ -451,35 +355,6 @@ export default function OrganizationPortalPage({
           ) : undefined
         }
       />
-
-      {!canManage && (
-        <TrustNotice icon={ShieldAlert} title="View-only access">
-          You can view this portal. Adding people, creating cases, and sending
-          requests are limited to organization owners and admins.
-        </TrustNotice>
-      )}
-
-      {/* Quick links to the portal's sub-surfaces (visible to all members). */}
-      <div className="flex flex-wrap gap-2">
-        <Link
-          href={`/dashboard/organizations/${orgId}/portal/documents`}
-          className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
-        >
-          <FolderTree className="size-4" aria-hidden /> Documents
-        </Link>
-        <Link
-          href={`/dashboard/organizations/${orgId}/portal/templates`}
-          className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
-        >
-          <LayoutTemplate className="size-4" aria-hidden /> Templates
-        </Link>
-        <Link
-          href={`/dashboard/organizations/${orgId}/portal/settings/customization`}
-          className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
-        >
-          <SlidersHorizontal className="size-4" aria-hidden /> Customization
-        </Link>
-      </div>
 
       {/* Portal status + plan badge. */}
       <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -495,62 +370,60 @@ export default function OrganizationPortalPage({
         </span>
       </div>
 
+      {!canManage && (
+        <TrustNotice icon={ShieldAlert} title="View-only access">
+          You can view this portal. Adding people, creating cases, and sending
+          requests are limited to organization owners and admins.
+        </TrustNotice>
+      )}
+
       {limits && <LimitWarningBanners data={limits} />}
 
       {isEmpty ? (
         <EmptyDashboard
+          orgId={orgId}
           canManage={canManage}
           onAddPerson={() => setAddingPerson(true)}
           onCreateCase={() => setCreatingCase(true)}
-          hasPeople={data.people.length > 0}
+          hasPeople={hasPeople}
         />
       ) : (
         <>
+          <NeedsAttentionBanner metrics={metrics} />
+
           <OperationalCards metrics={metrics} />
 
           <div className="grid gap-6 xl:grid-cols-[1.7fr_1fr]">
-            <div className="space-y-6">
+            <div className="space-y-4">
+              <h2 className="font-heading text-base font-semibold">
+                Needs attention
+              </h2>
               <ActionQueues
                 queues={queues}
                 onRemind={canManage ? setReminderType : undefined}
               />
-
-              <section className="space-y-5">
-                <SegmentedControl
-                  value={tab}
-                  options={TABS}
-                  onChange={setTab}
-                  label="Portal sections"
-                />
-
-                {tab === "people" ? (
-                  <PeopleList
-                    orgId={orgId}
-                    people={data.people}
-                    canManage={canManage}
-                    onAdd={() => setAddingPerson(true)}
-                  />
-                ) : (
-                  <CaseList
-                    orgId={orgId}
-                    cases={data.cases}
-                    canManage={canManage}
-                    hasPeople={data.people.length > 0}
-                    onCreate={() => setCreatingCase(true)}
-                  />
-                )}
-              </section>
             </div>
 
             <div className="space-y-6">
+              {canManage && (
+                <QuickActions
+                  hasPeople={hasPeople}
+                  hasTemplates={data.templates.length > 0}
+                  onCreateCase={() => setCreatingCase(true)}
+                  onCreateFromTemplate={() =>
+                    data.templates[0] && setTemplateForCase(data.templates[0])
+                  }
+                  onAddPerson={() => setAddingPerson(true)}
+                  onSendReminders={() => setReminderType("missing_documents")}
+                />
+              )}
               <TemplatesCard
                 orgId={orgId}
                 templates={data.templates}
                 canManage={canManage}
-                hasPeople={data.people.length > 0}
+                hasPeople={hasPeople}
                 onCreateFromTemplate={() =>
-                  data.templates[0] &&
-                  setTemplateForCase(data.templates[0])
+                  data.templates[0] && setTemplateForCase(data.templates[0])
                 }
               />
               {limits && <PlanUsageCard data={limits} />}
@@ -566,7 +439,6 @@ export default function OrganizationPortalPage({
           onClose={() => setAddingPerson(false)}
           onCreated={async () => {
             setAddingPerson(false);
-            setTab("people");
             await refresh("Person added.");
           }}
         />
@@ -579,7 +451,6 @@ export default function OrganizationPortalPage({
           onClose={() => setCreatingCase(false)}
           onCreated={async () => {
             setCreatingCase(false);
-            setTab("cases");
             await refresh("Case created.");
           }}
         />
@@ -605,7 +476,6 @@ export default function OrganizationPortalPage({
           onClose={() => setTemplateForCase(null)}
           onCreated={async () => {
             setTemplateForCase(null);
-            setTab("cases");
             await refresh("Case created from template.");
           }}
         />
@@ -616,356 +486,238 @@ export default function OrganizationPortalPage({
   );
 }
 
-// ---- People list ------------------------------------------------------------
-
-function PeopleList({
-  orgId,
-  people,
-  canManage,
-  onAdd,
-}: {
-  orgId: number;
-  people: PortalPerson[];
-  canManage: boolean;
-  onAdd: () => void;
-}) {
-  if (people.length === 0) {
-    return (
-      <div className="rounded-2xl border border-dashed border-border bg-card">
-        <EmptyState
-          icon={Users}
-          title="No people yet."
-          description="Add the clients, students, applicants, or employees you're helping. Each person can hold one or more document cases."
-          action={
-            canManage ? (
-              <Button onClick={onAdd}>
-                <UserPlus className="size-4" /> Add person
-              </Button>
-            ) : undefined
-          }
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div className="grid gap-3">
-      {people.map((person) => (
-        <PersonCard
-          key={person.id}
-          orgId={orgId}
-          person={person}
-          canManage={canManage}
-        />
-      ))}
-    </div>
-  );
-}
+// ---- Needs-attention lead ---------------------------------------------------
 
 /**
- * A person row that can expand to show/edit the org's custom fields for that
- * person. The custom fields (schema + values) are lazily fetched on first
- * expand — the people list stays light until a row is opened. Internal only;
- * never shown on public pages.
+ * A calm, glanceable lead that answers "what needs me right now". Shows only the
+ * non-zero attention items as chips that jump to their queue; when everything is
+ * clear it reassures rather than showing an empty row.
  */
-function PersonCard({
-  orgId,
-  person,
-  canManage,
-}: {
-  orgId: number;
-  person: PortalPerson;
-  canManage: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const [schema, setSchema] = useState<CustomField[] | null>(null);
-  const [values, setValues] = useState<CustomFieldValues>({});
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [editing, setEditing] = useState(false);
-
-  const loadFields = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await getPersonCustomFields(orgId, person.id);
-      setSchema(res.schema);
-      setValues(res.values);
-    } catch (err) {
-      setError(
-        err instanceof ApiError ? err.message : "Could not load custom fields.",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [orgId, person.id]);
-
-  function toggleOpen() {
-    const next = !open;
-    setOpen(next);
-    if (next && schema === null && !loading) void loadFields();
+function NeedsAttentionBanner({ metrics }: { metrics: DashboardMetrics }) {
+  const chips: Array<{ href: string; label: string }> = [];
+  if (metrics.uploaded_requests_needing_review > 0) {
+    chips.push({
+      href: "#queue-review",
+      label: `${metrics.uploaded_requests_needing_review} to review`,
+    });
+  }
+  if (metrics.overdue_cases > 0) {
+    chips.push({
+      href: "#queue-overdue",
+      label: `${metrics.overdue_cases} overdue`,
+    });
+  }
+  if (metrics.missing_required_documents > 0) {
+    chips.push({
+      href: "#queue-missing",
+      label: `${metrics.missing_required_documents} missing document${
+        metrics.missing_required_documents === 1 ? "" : "s"
+      }`,
+    });
+  }
+  if (metrics.needs_replacement_requests > 0) {
+    chips.push({
+      href: "#queue-replacement",
+      label: `${metrics.needs_replacement_requests} to redo`,
+    });
   }
 
-  return (
-    <article className="rounded-xl border border-border bg-card p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="truncate font-medium">{person.full_name}</h3>
-            <StatusBadge
-              tone={PORTAL_PERSON_STATUS_TONE[person.status]}
-              withDot={false}
-            >
-              {PORTAL_PERSON_STATUS_LABELS[person.status]}
-            </StatusBadge>
-          </div>
-          <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-            <span className="rounded-md bg-muted px-1.5 py-0.5">
-              {PORTAL_PERSON_TYPE_LABELS[person.person_type]}
-            </span>
-            {person.email && <span className="truncate">{person.email}</span>}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-3">
-          <span className="text-xs text-muted-foreground">
-            {person.active_cases} active case
-            {person.active_cases === 1 ? "" : "s"}
-          </span>
-          <button
-            type="button"
-            onClick={toggleOpen}
-            aria-expanded={open}
-            className="text-xs font-medium text-primary hover:underline"
-          >
-            {open ? "Hide fields" : "Custom fields"}
-          </button>
-        </div>
-      </div>
-
-      {open && (
-        <div className="mt-3 border-t border-border pt-3">
-          {loading ? (
-            <p className="text-sm text-muted-foreground">Loading custom fields…</p>
-          ) : error ? (
-            <InlineAlert>{error}</InlineAlert>
-          ) : schema && schema.length > 0 ? (
-            <div className="space-y-3">
-              <CustomFieldsView schema={schema} values={values} />
-              {canManage && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setEditing(true)}
-                >
-                  Edit fields
-                </Button>
-              )}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              No custom fields defined for people yet.
-            </p>
-          )}
-        </div>
-      )}
-
-      {editing && canManage && schema && (
-        <CustomFieldsEditModal
-          title={`Edit fields — ${person.full_name}`}
-          description="These details stay internal to your team — they are never shown on public pages."
-          schema={schema}
-          values={values}
-          onClose={() => setEditing(false)}
-          onSave={async (next) => {
-            const res = await setPersonCustomFields(orgId, person.id, next);
-            setValues(res.values);
-            setEditing(false);
-          }}
-        />
-      )}
-    </article>
-  );
-}
-
-// ---- Case list --------------------------------------------------------------
-
-function CaseList({
-  orgId,
-  cases,
-  canManage,
-  hasPeople,
-  onCreate,
-}: {
-  orgId: number;
-  cases: PortalCase[];
-  canManage: boolean;
-  hasPeople: boolean;
-  onCreate: () => void;
-}) {
-  if (cases.length === 0) {
+  if (chips.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-border bg-card">
-        <EmptyState
-          icon={ClipboardList}
-          title="No cases yet."
-          description={
-            hasPeople
-              ? "Create a case to start collecting and tracking the documents a person needs — a visa file, a scholarship application, an onboarding pack."
-              : "Add a person first, then create a case to start collecting the documents they need."
-          }
-          action={
-            canManage && hasPeople ? (
-              <Button onClick={onCreate}>
-                <ClipboardList className="size-4" /> Create case
-              </Button>
-            ) : undefined
-          }
-        />
+      <div className="flex items-center gap-2.5 rounded-xl border border-brand-success/25 bg-brand-success/10 px-4 py-3 text-sm text-brand-success">
+        <CheckCircle2 className="size-4 shrink-0" aria-hidden />
+        <span className="font-medium text-foreground">
+          You&apos;re all caught up.
+        </span>
+        <span className="text-muted-foreground">
+          Nothing needs attention right now.
+        </span>
       </div>
     );
   }
 
   return (
-    <div className="grid gap-3">
-      {cases.map((portalCase) => (
-        <CaseCard key={portalCase.id} orgId={orgId} portalCase={portalCase} />
-      ))}
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-brand-amber/30 bg-brand-amber/10 px-4 py-3">
+      <span className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground">
+        <AlarmClock className="size-4 text-brand-amber" aria-hidden />
+        Needs attention
+      </span>
+      <span className="flex flex-wrap gap-1.5">
+        {chips.map((chip) => (
+          <Link
+            key={chip.href}
+            href={chip.href}
+            className="rounded-full border border-brand-amber/30 bg-card px-2.5 py-0.5 text-xs font-medium text-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            {chip.label}
+          </Link>
+        ))}
+      </span>
     </div>
   );
 }
 
-function CaseCard({
-  orgId,
-  portalCase,
-}: {
-  orgId: number;
-  portalCase: PortalCase;
-}) {
-  const percent = progressPercent(portalCase.progress);
-  const missing = portalCase.progress.missing_requirements;
-  const review = portalCase.progress.uploads_needing_review;
-  return (
-    <Link
-      href={`/dashboard/organizations/${orgId}/portal/cases/${portalCase.id}`}
-      className="block rounded-xl border border-border bg-card p-4 shadow-card transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-elevated focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transform-none motion-reduce:transition-none"
-    >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="truncate font-medium">{portalCase.title}</h3>
-            {portalCase.custom_status ? (
-              <CustomStatusChip status={portalCase.custom_status} />
-            ) : (
-              <StatusBadge
-                tone={PORTAL_CASE_STATUS_TONE[portalCase.status]}
-                withDot={false}
-              >
-                {PORTAL_CASE_STATUS_LABELS[portalCase.status]}
-              </StatusBadge>
-            )}
-            {portalCase.priority !== "normal" && (
-              <StatusBadge
-                tone={PORTAL_CASE_PRIORITY_TONE[portalCase.priority]}
-                withDot={false}
-              >
-                {PORTAL_CASE_PRIORITY_LABELS[portalCase.priority]}
-              </StatusBadge>
-            )}
-          </div>
-          <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-            <span className="truncate">{portalCase.person.full_name}</span>
-            <span className="rounded-md bg-muted px-1.5 py-0.5">
-              {PORTAL_CASE_TYPE_LABELS[portalCase.case_type]}
-            </span>
-            {portalCase.due_date && (
-              <span>Due {formatDate(portalCase.due_date)}</span>
-            )}
-          </p>
-        </div>
-        <ArrowUpRight
-          className="mt-1 size-4 shrink-0 text-muted-foreground"
-          aria-hidden
-        />
-      </div>
+// ---- Quick actions ----------------------------------------------------------
 
-      <div className="mt-3">
-        <div
-          className="h-2 overflow-hidden rounded-full bg-muted"
-          role="progressbar"
-          aria-valuenow={percent}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-label="Readiness"
+/** A compact card of the most common admin actions, one obvious primary. */
+function QuickActions({
+  hasPeople,
+  hasTemplates,
+  onCreateCase,
+  onCreateFromTemplate,
+  onAddPerson,
+  onSendReminders,
+}: {
+  hasPeople: boolean;
+  hasTemplates: boolean;
+  onCreateCase: () => void;
+  onCreateFromTemplate: () => void;
+  onAddPerson: () => void;
+  onSendReminders: () => void;
+}) {
+  return (
+    <section className="rounded-2xl border border-border bg-card p-5">
+      <h2 className="font-heading text-base font-semibold">Quick actions</h2>
+      <p className="mt-1 text-xs text-muted-foreground">
+        The things your team does most.
+      </p>
+      <div className="mt-4 flex flex-col gap-2">
+        <Button
+          onClick={onCreateCase}
+          disabled={!hasPeople}
+          title={hasPeople ? undefined : "Add a person first"}
+          className="w-full justify-center"
         >
-          <div
-            className="h-full rounded-full bg-primary transition-[width] duration-300"
-            style={{ width: `${percent}%` }}
-          />
-        </div>
-        <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-          <span>{percent}% ready</span>
-          {missing > 0 && (
-            <span className="text-brand-amber">{missing} missing</span>
-          )}
-          {review > 0 && (
-            <span className="text-brand-amber">{review} to review</span>
-          )}
-        </p>
+          <ClipboardList className="size-4" /> Create case
+        </Button>
+        {hasTemplates && (
+          <Button
+            variant="outline"
+            onClick={onCreateFromTemplate}
+            disabled={!hasPeople}
+            title={hasPeople ? undefined : "Add a person first"}
+            className="w-full justify-center"
+          >
+            <LayoutTemplate className="size-4" /> Create from template
+          </Button>
+        )}
+        <Button
+          variant="outline"
+          onClick={onAddPerson}
+          className="w-full justify-center"
+        >
+          <UserPlus className="size-4" /> Add person
+        </Button>
+        <Button
+          variant="outline"
+          onClick={onSendReminders}
+          className="w-full justify-center"
+        >
+          <Mail className="size-4" /> Send reminders
+        </Button>
       </div>
-    </Link>
+    </section>
   );
 }
 
 // ---- Empty dashboard --------------------------------------------------------
 
 /**
- * Shown when the org has no people AND no cases: a single focused panel with one
- * obvious next action, instead of a wall of empty queues.
+ * Shown when the org has no people AND no cases: a single focused panel that
+ * walks an admin through the first steps, instead of a wall of empty queues.
  */
 function EmptyDashboard({
+  orgId,
   canManage,
   hasPeople,
   onAddPerson,
   onCreateCase,
 }: {
+  orgId: number;
   canManage: boolean;
   hasPeople: boolean;
   onAddPerson: () => void;
   onCreateCase: () => void;
 }) {
+  const steps = [
+    {
+      title: "Add a person",
+      body: "A client, student, or applicant you're helping.",
+    },
+    {
+      title: "Create a case",
+      body: "The documents that person needs, in one place.",
+    },
+    {
+      title: "Request documents",
+      body: "Send a secure upload link — no account needed.",
+    },
+    {
+      title: "Review and get ready",
+      body: "Accept uploads and move the case forward.",
+    },
+  ];
   return (
-    <div className="rounded-2xl border border-dashed border-border bg-card">
-      <EmptyState
-        icon={ClipboardList}
-        title="Create your first case."
-        description="Add a client, student, or applicant, then create a case to start collecting and reviewing the documents they need — all in one calm, trackable place."
-        action={
-          canManage ? (
-            <div className="flex flex-wrap justify-center gap-2">
-              <Button variant="outline" onClick={onAddPerson}>
-                <UserPlus className="size-4" /> Add person
-              </Button>
-              <Button
-                onClick={onCreateCase}
-                disabled={!hasPeople}
-                title={!hasPeople ? "Add a person first" : undefined}
-              >
-                <ClipboardList className="size-4" /> Create case
-              </Button>
+    <section className="rounded-2xl border border-dashed border-border bg-card p-6 sm:p-8">
+      <div className="max-w-prose">
+        <h2 className="font-heading text-xl font-semibold">
+          Set up your first workflow.
+        </h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          A portal keeps the people you serve and the documents each of them
+          needs in one calm, trackable place. Here&apos;s the shape of it:
+        </p>
+      </div>
+      <ol className="mt-5 grid gap-3 sm:grid-cols-2">
+        {steps.map((step, i) => (
+          <li
+            key={step.title}
+            className="flex gap-3 rounded-xl border border-border bg-background/40 p-3"
+          >
+            <span
+              className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary"
+              aria-hidden
+            >
+              {i + 1}
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-medium">{step.title}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">{step.body}</p>
             </div>
-          ) : undefined
-        }
-      />
-    </div>
+          </li>
+        ))}
+      </ol>
+      {canManage && (
+        <div className="mt-5 flex flex-wrap gap-2">
+          <Button onClick={onAddPerson}>
+            <UserPlus className="size-4" /> Add person
+          </Button>
+          <Button
+            variant="outline"
+            onClick={onCreateCase}
+            disabled={!hasPeople}
+            title={hasPeople ? undefined : "Add a person first"}
+          >
+            <ClipboardList className="size-4" /> Create case
+          </Button>
+          <Link
+            href={`/dashboard/organizations/${orgId}/portal/templates`}
+            className={cn(buttonVariants({ variant: "ghost" }))}
+          >
+            <LayoutTemplate className="size-4" /> Start from a template
+          </Link>
+        </div>
+      )}
+    </section>
   );
 }
 
 // ---- Operational summary cards ----------------------------------------------
 
 /**
- * The compact "what needs doing" count grid: the six action-driving numbers, a
- * restrained tone per card, and a secondary stat row. Cards with a queue link
- * scroll to the matching action queue; the rest are static counts.
+ * The compact "what needs doing" count grid: the six action-driving numbers and
+ * a restrained tone per card. Cards with a queue link scroll to the matching
+ * action queue; the rest are static counts.
  */
 function OperationalCards({ metrics }: { metrics: DashboardMetrics }) {
   const cards: Array<{
@@ -1055,54 +807,7 @@ function OperationalCards({ metrics }: { metrics: DashboardMetrics }) {
           ),
         )}
       </div>
-
-      {/* Secondary stats — smaller, calm context. */}
-      <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
-        <SecondaryStat
-          icon={Users}
-          label={`${metrics.active_people} active ${
-            metrics.active_people === 1 ? "person" : "people"
-          }`}
-        />
-        <SecondaryStat
-          icon={Clock}
-          label={`${metrics.due_soon_cases} due soon`}
-        />
-        <SecondaryStat
-          icon={Mail}
-          label={`${metrics.active_document_requests} active request${
-            metrics.active_document_requests === 1 ? "" : "s"
-          }`}
-        />
-        <SecondaryStat
-          icon={DoorOpen}
-          label={`${metrics.active_sharing_rooms} active room${
-            metrics.active_sharing_rooms === 1 ? "" : "s"
-          }`}
-        />
-        {metrics.readiness_average !== null && (
-          <SecondaryStat
-            icon={ClipboardCheck}
-            label={`${metrics.readiness_average}% avg readiness`}
-          />
-        )}
-      </div>
     </section>
-  );
-}
-
-function SecondaryStat({
-  icon: Icon,
-  label,
-}: {
-  icon: typeof Users;
-  label: string;
-}) {
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <Icon className="size-3.5" aria-hidden />
-      {label}
-    </span>
   );
 }
 
@@ -1269,6 +974,7 @@ function ReviewNowQueue({ items }: { items: DashboardReviewItem[] }) {
               )}
             </QueueRow>
           ))}
+          <QueueMore shown={items.length} cap={QUEUE_CAP} />
         </ul>
       )}
     </QueueShell>
@@ -1302,6 +1008,7 @@ function OverdueQueue({
           {items.slice(0, QUEUE_CAP).map((item) => (
             <CaseQueueRow key={item.case_id} item={item} />
           ))}
+          <QueueMore shown={items.length} cap={QUEUE_CAP} />
         </ul>
       )}
     </QueueShell>
@@ -1335,6 +1042,7 @@ function MissingDocumentsQueue({
           {items.slice(0, QUEUE_CAP).map((item) => (
             <CaseQueueRow key={item.case_id} item={item} showMissingTitles />
           ))}
+          <QueueMore shown={items.length} cap={QUEUE_CAP} />
         </ul>
       )}
     </QueueShell>
@@ -1373,6 +1081,7 @@ function NeedsReplacementQueue({
               subtitle={`${item.person_name} · ${item.case_title}`}
             />
           ))}
+          <QueueMore shown={items.length} cap={QUEUE_CAP} />
         </ul>
       )}
     </QueueShell>
@@ -1395,9 +1104,20 @@ function ReadyQueue({ items }: { items: DashboardCaseItem[] }) {
           {items.slice(0, QUEUE_CAP).map((item) => (
             <CaseQueueRow key={item.case_id} item={item} />
           ))}
+          <QueueMore shown={items.length} cap={QUEUE_CAP} />
         </ul>
       )}
     </QueueShell>
+  );
+}
+
+/** Honest "+N more" line so a capped queue never reads as the whole story. */
+function QueueMore({ shown, cap }: { shown: number; cap: number }) {
+  if (shown <= cap) return null;
+  return (
+    <li className="px-1 pt-0.5 text-xs text-muted-foreground">
+      +{shown - cap} more — open Cases to see them all.
+    </li>
   );
 }
 
@@ -1491,10 +1211,7 @@ function RecentActivity({ queues }: { queues: DashboardQueues }) {
                   <p className="truncate">
                     <span className="font-medium">{label}</span>
                     {objectLabel && (
-                      <span className="text-muted-foreground">
-                        {" "}
-                        · {objectLabel}
-                      </span>
+                      <span className="text-muted-foreground"> · {objectLabel}</span>
                     )}
                   </p>
                   <p className="text-xs text-muted-foreground/80">
@@ -1599,416 +1316,5 @@ function TemplatesCard({
         </div>
       )}
     </section>
-  );
-}
-
-// ---- Add person modal -------------------------------------------------------
-
-function ModalHeader({
-  title,
-  description,
-  onClose,
-}: {
-  title: string;
-  description: string;
-  onClose: () => void;
-}) {
-  return (
-    <div className="flex items-start justify-between gap-3">
-      <div>
-        <h2 className="font-heading text-lg font-semibold">{title}</h2>
-        <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
-      </div>
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label="Close"
-        className="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-      >
-        <X className="size-4" aria-hidden />
-      </button>
-    </div>
-  );
-}
-
-function useEscapeClose(onClose: () => void) {
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-}
-
-function selectClass() {
-  return "h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
-}
-
-function AddPersonModal({
-  orgId,
-  onClose,
-  onCreated,
-}: {
-  orgId: number;
-  onClose: () => void;
-  onCreated: () => Promise<void>;
-}) {
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [personType, setPersonType] = useState<PortalPersonType>("client");
-  const [notes, setNotes] = useState("");
-  const [nameTouched, setNameTouched] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEscapeClose(onClose);
-
-  const nameEmpty = fullName.trim().length === 0;
-
-  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (nameEmpty) {
-      setNameTouched(true);
-      return;
-    }
-    setSubmitting(true);
-    setError(null);
-    try {
-      await createPortalPerson(orgId, {
-        full_name: fullName.trim(),
-        person_type: personType,
-        email: email.trim() || undefined,
-        phone: phone.trim() || undefined,
-        notes: notes.trim() || undefined,
-      });
-      await onCreated();
-    } catch (err) {
-      setError(orgLimitMessage(err, "Could not add this person."));
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <DrawerBackdrop onClose={onClose}>
-      <DrawerPanel
-        label="Add person"
-        onClick={(e) => e.stopPropagation()}
-        className="max-w-lg"
-      >
-        <ModalHeader
-          title="Add person"
-          description="Someone you're helping — a client, student, applicant, or employee."
-          onClose={onClose}
-        />
-        <form className="mt-5 flex flex-col gap-4" onSubmit={handleSubmit}>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="pp-name">
-              Full name <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="pp-name"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              onBlur={() => setNameTouched(true)}
-              placeholder="e.g. Amina Diallo"
-              aria-invalid={nameTouched && nameEmpty}
-              disabled={submitting}
-            />
-            {nameTouched && nameEmpty && (
-              <p className="text-xs text-destructive">
-                Enter the person&apos;s full name.
-              </p>
-            )}
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="pp-type">Type</Label>
-            <select
-              id="pp-type"
-              value={personType}
-              onChange={(e) =>
-                setPersonType(e.target.value as PortalPersonType)
-              }
-              className={selectClass()}
-              disabled={submitting}
-            >
-              {PORTAL_PERSON_TYPE_ORDER.map((type) => (
-                <option key={type} value={type}>
-                  {PORTAL_PERSON_TYPE_LABELS[type]}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="pp-email">Email (optional)</Label>
-              <Input
-                id="pp-email"
-                type="email"
-                inputMode="email"
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="amina@example.com"
-                disabled={submitting}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="pp-phone">Phone (optional)</Label>
-              <Input
-                id="pp-phone"
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+1 555 000 0000"
-                disabled={submitting}
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="pp-notes">Notes (optional)</Label>
-            <Textarea
-              id="pp-notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={2}
-              placeholder="Anything your team should know."
-              disabled={submitting}
-            />
-          </div>
-
-          {error && <InlineAlert>{error}</InlineAlert>}
-
-          <div className="flex justify-end gap-2 pt-1">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={onClose}
-              disabled={submitting}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={submitting || nameEmpty}>
-              {submitting && <Loader2 className="size-4 animate-spin" />}
-              Add person
-            </Button>
-          </div>
-        </form>
-      </DrawerPanel>
-    </DrawerBackdrop>
-  );
-}
-
-// ---- Create case modal ------------------------------------------------------
-
-function CreateCaseModal({
-  orgId,
-  people,
-  onClose,
-  onCreated,
-}: {
-  orgId: number;
-  people: PortalPerson[];
-  onClose: () => void;
-  onCreated: () => Promise<void>;
-}) {
-  const [personId, setPersonId] = useState<string>(
-    people[0] ? String(people[0].id) : "",
-  );
-  const [title, setTitle] = useState("");
-  const [caseType, setCaseType] = useState<PortalCaseType>("general");
-  const [priority, setPriority] = useState<PortalCasePriority>("normal");
-  const [dueDate, setDueDate] = useState("");
-  const [requirementsText, setRequirementsText] = useState("");
-  const [titleTouched, setTitleTouched] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEscapeClose(onClose);
-
-  const titleEmpty = title.trim().length === 0;
-  const personMissing = personId === "";
-
-  // One requirement per non-empty line — kept simple and explicit.
-  const requirements = useMemo(
-    () =>
-      requirementsText
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean),
-    [requirementsText],
-  );
-
-  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (titleEmpty || personMissing) {
-      setTitleTouched(true);
-      return;
-    }
-    setSubmitting(true);
-    setError(null);
-    try {
-      await createPortalCase(orgId, {
-        person: Number(personId),
-        title: title.trim(),
-        case_type: caseType,
-        priority,
-        due_date: dueDate || undefined,
-        requirements: requirements.length ? requirements : undefined,
-      });
-      await onCreated();
-    } catch (err) {
-      setError(orgLimitMessage(err, "Could not create this case."));
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <DrawerBackdrop onClose={onClose}>
-      <DrawerPanel
-        label="Create case"
-        onClick={(e) => e.stopPropagation()}
-        className="max-w-lg"
-      >
-        <ModalHeader
-          title="Create case"
-          description="A document case for one person — collect, review, and get it ready."
-          onClose={onClose}
-        />
-        <form className="mt-5 flex flex-col gap-4" onSubmit={handleSubmit}>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="pc-person">
-              Person <span className="text-destructive">*</span>
-            </Label>
-            <select
-              id="pc-person"
-              value={personId}
-              onChange={(e) => setPersonId(e.target.value)}
-              className={selectClass()}
-              disabled={submitting}
-            >
-              {people.map((person) => (
-                <option key={person.id} value={person.id}>
-                  {person.full_name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="pc-title">
-              Case title <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="pc-title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              onBlur={() => setTitleTouched(true)}
-              placeholder="e.g. Student visa application"
-              aria-invalid={titleTouched && titleEmpty}
-              disabled={submitting}
-            />
-            {titleTouched && titleEmpty && (
-              <p className="text-xs text-destructive">
-                Give the case a clear title.
-              </p>
-            )}
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="pc-type">Type</Label>
-              <select
-                id="pc-type"
-                value={caseType}
-                onChange={(e) =>
-                  setCaseType(e.target.value as PortalCaseType)
-                }
-                className={selectClass()}
-                disabled={submitting}
-              >
-                {PORTAL_CASE_TYPE_ORDER.map((type) => (
-                  <option key={type} value={type}>
-                    {PORTAL_CASE_TYPE_LABELS[type]}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="pc-priority">Priority</Label>
-              <select
-                id="pc-priority"
-                value={priority}
-                onChange={(e) =>
-                  setPriority(e.target.value as PortalCasePriority)
-                }
-                className={selectClass()}
-                disabled={submitting}
-              >
-                {PORTAL_CASE_PRIORITY_ORDER.map((value) => (
-                  <option key={value} value={value}>
-                    {PORTAL_CASE_PRIORITY_LABELS[value]}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="pc-due">Due date (optional)</Label>
-            <Input
-              id="pc-due"
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              disabled={submitting}
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="pc-reqs">Initial requirements (optional)</Label>
-            <Textarea
-              id="pc-reqs"
-              value={requirementsText}
-              onChange={(e) => setRequirementsText(e.target.value)}
-              rows={3}
-              placeholder={"One document per line, e.g.\nPassport copy\nBank statement"}
-              disabled={submitting}
-            />
-            <p className="text-xs text-muted-foreground">
-              {requirements.length} requirement
-              {requirements.length === 1 ? "" : "s"} · one per line. You can add
-              more later.
-            </p>
-          </div>
-
-          {error && <InlineAlert>{error}</InlineAlert>}
-
-          <div className="flex justify-end gap-2 pt-1">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={onClose}
-              disabled={submitting}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={submitting || titleEmpty || personMissing}
-            >
-              {submitting && <Loader2 className="size-4 animate-spin" />}
-              Create case
-            </Button>
-          </div>
-        </form>
-      </DrawerPanel>
-    </DrawerBackdrop>
   );
 }
