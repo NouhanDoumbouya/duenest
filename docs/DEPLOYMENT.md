@@ -212,7 +212,14 @@ python manage.py collectstatic --noinput
 python manage.py createsuperuser            # optional
 python manage.py seed_feature_flags         # optional, seeds feature registry
 python manage.py generate_encryption_key    # to mint a KEK value
+python manage.py beta_readiness_check        # safe, read-only pre-launch probe
 ```
+
+Run `beta_readiness_check` after deploying and before inviting beta users: it
+prints a boolean-only readiness report (storage private? email/AI configured?
+flags seeded? founder account? **Stripe test mode?** DEBUG off / KEK set?), ending
+in READY / ATTENTION / BLOCKED. It is read-only and exposes no secrets — see
+`docs/FOUNDER_BETA_RUNBOOK.md`.
 
 ### Migrating existing local files to object storage (one-off)
 

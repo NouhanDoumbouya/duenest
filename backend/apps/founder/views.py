@@ -834,6 +834,26 @@ class FounderLaunchReadinessDetailView(generics.RetrieveUpdateAPIView):
         )
 
 
+class FounderBetaReadinessView(APIView):
+    """Automated, boolean-only private-beta readiness snapshot (no secrets).
+
+    Complements the founder-editable launch checklist: this one is computed from
+    settings + the DB (config health, flags, founder account, Stripe mode, security
+    gates, operational counts) and reuses ``build_system_status``. It never returns
+    a secret value, never sends email, never calls AI or Google.
+    """
+
+    permission_classes = [IsFounderUser]
+
+    def get(self, request):
+        from apps.founder.beta_readiness import build_beta_readiness_report
+
+        include_counts = str(
+            request.query_params.get("include_counts", "")
+        ).lower() in {"1", "true", "yes"}
+        return Response(build_beta_readiness_report(include_db_counts=include_counts))
+
+
 class FounderCountryActivityView(APIView):
     permission_classes = [IsFounderUser]
 

@@ -70,6 +70,7 @@ from .views import (
     FounderEmailSettingListView,
     FounderEmailTestSendView,
     FounderLaunchReadinessDetailView,
+    FounderBetaReadinessView,
     FounderLaunchReadinessListView,
     FounderMeView,
     FounderNotificationHealthView,
@@ -293,6 +294,11 @@ urlpatterns = [
         "founder/beta-users/<int:profile_id>/",
         FounderBetaUserDetailView.as_view(),
         name="founder-beta-user-detail",
+    ),
+    path(
+        "founder/beta-readiness/",
+        FounderBetaReadinessView.as_view(),
+        name="founder-beta-readiness",
     ),
     path(
         "founder/launch-readiness/",

@@ -2192,3 +2192,26 @@ organizations **without seeing private data**.
   user/org they reference; operators must not paste private contents into them.
 
 No external support vendor or new secret was introduced.
+
+## Private Beta Readiness V1
+
+An automated, founder-only readiness report (`apps/founder/beta_readiness.py`,
+`GET /api/v1/founder/beta-readiness/`, and `manage.py beta_readiness_check`) that
+helps the operator confirm the platform is safe to open to a small controlled
+group.
+
+- **Boolean-only, no secrets:** the report emits only booleans, counts, and safe
+  mode/provider strings ("console"/"resend", "s3"/"local", "manual"/"stripe",
+  "test"/"live"). It NEVER includes a secret value — not `SECRET_KEY`, the audit
+  hash salt, OAuth client secret, AI/Stripe/storage keys, tokens, or any document
+  content. A test asserts no secret value and no key-shaped string
+  (`sk_live`/`sk_test`/`ya29.`/`AKIA`/`whsec_`) appears in the payload.
+- **Read-only / side-effect-free:** computing the report queries settings + the DB
+  only. It sends no email, calls no AI (and consumes no credits), calls no Google
+  API, and creates/changes no Stripe object — tests assert an empty mail outbox and
+  no AI-usage / operational-event writes.
+- **Founder-gated:** the endpoint requires `IsFounderUser`; a normal user gets
+  `403` (tested). The command reuses `build_system_status` so the numbers match the
+  observability console.
+- **Stripe safety:** a dedicated gate reports `manual`/`test` as safe and flags
+  `live` as a launch blocker — the report itself never switches Stripe mode.

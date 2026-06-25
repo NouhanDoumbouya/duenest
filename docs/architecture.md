@@ -1597,3 +1597,14 @@ existing document upload path:
 - **API:** `GET google-drive/files|destinations`, `POST google-drive/import/preview`,
   `POST google-drive/import` — owner-scoped, gated by `google_drive_import`. No
   tokens/URLs/raw Google responses in any response or audit/operational metadata.
+
+## Private Beta Readiness (`apps/founder/beta_readiness.py`)
+
+A founder-only, automated, **boolean-only** readiness report that complements the
+founder-editable launch checklist. `build_beta_readiness_report()` reuses
+`build_system_status` for live config health and adds launch-gate checks (storage
+private, email/AI configured + capped, feature flags seeded, founder account,
+Stripe test-vs-live, Google OAuth, DEBUG/KEK/audit-salt/hosts, unresolved-critical
+and scheduled-job counts). It is read-only and emits no secret value. Surfaced via
+`GET /api/v1/founder/beta-readiness/` and `manage.py beta_readiness_check`. No new
+model or migration; see `docs/FOUNDER_BETA_RUNBOOK.md`.
