@@ -34,6 +34,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Toast, type ToastState } from "@/components/ui/toast";
 import { CustomStatusChip } from "@/components/features/portals/custom-status-chip";
+import { PortalNav } from "@/components/features/portals/portal-nav";
 import {
   CaseStatusFormModal,
   CustomFieldFormModal,
@@ -44,6 +45,7 @@ import { canManageOrganization, getOrganization } from "@/lib/organizations";
 import {
   FIELD_TYPE_LABELS,
   FIELD_VISIBILITY_LABELS,
+  PORTAL_CASE_STATUS_LABELS,
   STATUS_CATEGORY_LABELS,
   STATUS_CATEGORY_ORDER,
   archiveCaseStatus,
@@ -230,11 +232,11 @@ export default function PortalCustomizationPage({
 
   const backLink = (
     <Link
-      href={`/dashboard/organizations/${orgId}/portal`}
+      href={`/dashboard/organizations/${orgId}`}
       className={cn(buttonVariants({ variant: "ghost" }), "w-fit")}
     >
       <ArrowLeft className="size-4" />
-      Back to portal
+      Back to organization
     </Link>
   );
 
@@ -333,6 +335,7 @@ export default function PortalCustomizationPage({
   return (
     <PageContainer width="wide">
       {backLink}
+      <PortalNav orgId={orgId} active="settings" />
       <PageHeader
         eyebrow={org?.name || "Organization"}
         title="Customization"
@@ -570,7 +573,8 @@ function FieldRow({
             </p>
           )}
           <p className="mt-1 text-xs text-muted-foreground">
-            Key: <code className="rounded bg-muted px-1">{field.key}</code>
+            Reference{" "}
+            <code className="rounded bg-muted px-1">{field.key}</code>
           </p>
         </div>
 
@@ -652,7 +656,13 @@ function StatusCategoryGroup({
                     </p>
                   )}
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Maps to {status.maps_to_system_status.replace(/_/g, " ")}
+                    Counts as{" "}
+                    <span className="font-medium text-foreground">
+                      {(PORTAL_CASE_STATUS_LABELS as Record<string, string>)[
+                        status.maps_to_system_status
+                      ] ?? status.maps_to_system_status.replace(/_/g, " ")}
+                    </span>{" "}
+                    for readiness and queues
                   </p>
                 </div>
 

@@ -26,6 +26,7 @@ import {
 import { OrganizationWorkspace } from "@/components/features/document-organization/organization-workspace";
 import type { OrganizationDataSource } from "@/components/features/document-organization/organization-workspace";
 import { StructureSettings } from "@/components/features/document-organization/structure-settings";
+import { PortalNav } from "@/components/features/portals/portal-nav";
 import { buttonVariants } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer } from "@/components/ui/page-container";
@@ -138,11 +139,11 @@ export default function OrganizationDocumentsPage({
 
   const backLink = (
     <Link
-      href={`/dashboard/organizations/${orgId}/portal`}
+      href={`/dashboard/organizations/${orgId}`}
       className={cn(buttonVariants({ variant: "ghost" }), "w-fit")}
     >
       <ArrowLeft className="size-4" />
-      Back to portal
+      Back to organization
     </Link>
   );
 
@@ -219,6 +220,7 @@ export default function OrganizationDocumentsPage({
   return (
     <PageContainer width="wide">
       {backLink}
+      <PortalNav orgId={orgId} active="documents" />
       <PageHeader
         eyebrow={org?.name || "Organization"}
         title="Documents"

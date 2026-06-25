@@ -20,6 +20,7 @@ import {
 } from "react";
 import Link from "next/link";
 import {
+  AlarmClock,
   ArrowLeft,
   Archive,
   CheckCircle2,
@@ -29,7 +30,9 @@ import {
   Eye,
   ExternalLink,
   FileUp,
+  FileWarning,
   FolderTree,
+  Inbox,
   Loader2,
   Mail,
   Package,
@@ -55,6 +58,7 @@ import { Toast, type ToastState } from "@/components/ui/toast";
 import { FilePreviewDialog } from "@/components/ui/file-preview-dialog";
 import { ReminderModal } from "@/components/features/portals/reminder-modal";
 import { CustomStatusChip } from "@/components/features/portals/custom-status-chip";
+import { PortalNav } from "@/components/features/portals/portal-nav";
 import {
   CustomFieldsEditModal,
   CustomFieldsEmpty,
@@ -77,6 +81,7 @@ import {
   REVIEW_STATUS_TONE,
   archivePortalCase,
   canDecideStatus,
+  caseNextAction,
   copyToClipboard,
   createCasePack,
   createCaseRequest,
@@ -263,11 +268,11 @@ export default function PortalCaseDetailPage({
 
   const backLink = (
     <Link
-      href={`/dashboard/organizations/${orgId}/portal`}
+      href={`/dashboard/organizations/${orgId}/portal/cases`}
       className={cn(buttonVariants({ variant: "ghost" }), "w-fit")}
     >
       <ArrowLeft className="size-4" />
-      Back to portal
+      Back to cases
     </Link>
   );
 
@@ -504,6 +509,7 @@ export default function PortalCaseDetailPage({
   return (
     <PageContainer width="wide">
       {backLink}
+      <PortalNav orgId={orgId} active="cases" />
       <PageHeader
         eyebrow={PORTAL_CASE_TYPE_LABELS[portalCase.case_type]}
         title={portalCase.title}
@@ -544,6 +550,8 @@ export default function PortalCaseDetailPage({
           to organization owners and admins.
         </TrustNotice>
       )}
+
+      <CaseNextActionBanner portalCase={portalCase} />
 
       <CaseSummaryStrip portalCase={portalCase} />
 
@@ -1080,6 +1088,93 @@ function CaseStatusControl({
  * dates that say "what's left to do here". Reuses the case payload already
  * loaded (`progress` + `due_date`/`status`) — no extra fetch.
  */
+/**
+ * The one clear thing to do next on this case, in plain language and with a
+ * tone that matches its urgency. Sits above the detail so an admin never has to
+ * read the whole page to know what the case is waiting on. The wording is shared
+ * with the case card via `caseNextAction` so the list and detail agree.
+ */
+function CaseNextActionBanner({ portalCase }: { portalCase: PortalCase }) {
+  const p = portalCase.progress;
+  const daysLeft = daysUntil(portalCase.due_date);
+  const overdue =
+    daysLeft !== null &&
+    daysLeft < 0 &&
+    portalCase.status !== "completed" &&
+    portalCase.status !== "archived";
+
+  let tone: "good" | "warn" | "danger" | "secure" | "default" = "secure";
+  let Icon = CheckCircle2;
+  let hint = "";
+
+  if (portalCase.status === "archived") {
+    tone = "default";
+    Icon = Archive;
+    hint = "This case is archived. Nothing further is expected.";
+  } else if (p.uploads_needing_review > 0) {
+    tone = "warn";
+    Icon = Inbox;
+    hint = "Open the upload below to accept it, request a replacement, or reject it.";
+  } else if (p.requests_needs_replacement > 0) {
+    tone = "warn";
+    Icon = RotateCcw;
+    hint = "The recipient needs to re-upload. A reminder can nudge them.";
+  } else if (p.missing_requirements > 0) {
+    tone = overdue ? "danger" : "warn";
+    Icon = overdue ? AlarmClock : FileWarning;
+    hint = overdue
+      ? "This case is past its due date. Request the missing documents or send a reminder."
+      : "Request the missing documents, or send a reminder if they were already asked.";
+  } else if (overdue) {
+    tone = "danger";
+    Icon = AlarmClock;
+    hint = "Everything is in — review the case and move it forward.";
+  } else if (portalCase.status === "ready" || p.suggested_status === "ready") {
+    tone = "good";
+    Icon = CheckCircle2;
+    hint = "Every requirement is satisfied. You can move this case forward.";
+  } else if (p.total_requirements === 0) {
+    tone = "secure";
+    Icon = FileWarning;
+    hint = "Add the documents this case needs, then request them from the recipient.";
+  } else {
+    tone = "secure";
+    Icon = CheckCircle2;
+    hint = "Nothing is waiting on you right now.";
+  }
+
+  const toneClass: Record<typeof tone, string> = {
+    good: "border-brand-success/25 bg-brand-success/10",
+    warn: "border-brand-amber/30 bg-brand-amber/10",
+    danger: "border-destructive/25 bg-destructive/10",
+    secure: "border-primary/20 bg-primary/10",
+    default: "border-border bg-card",
+  };
+  const iconClass: Record<typeof tone, string> = {
+    good: "text-brand-success",
+    warn: "text-brand-amber",
+    danger: "text-destructive",
+    secure: "text-primary",
+    default: "text-muted-foreground",
+  };
+
+  return (
+    <section
+      aria-label="Next action"
+      className={cn(
+        "flex items-start gap-3 rounded-2xl border px-5 py-4 shadow-card",
+        toneClass[tone],
+      )}
+    >
+      <Icon className={cn("mt-0.5 size-5 shrink-0", iconClass[tone])} aria-hidden />
+      <div className="min-w-0">
+        <p className="font-medium text-foreground">{caseNextAction(portalCase)}</p>
+        <p className="mt-0.5 text-sm text-muted-foreground">{hint}</p>
+      </div>
+    </section>
+  );
+}
+
 function CaseSummaryStrip({ portalCase }: { portalCase: PortalCase }) {
   const progress = portalCase.progress;
   const daysLeft = daysUntil(portalCase.due_date);

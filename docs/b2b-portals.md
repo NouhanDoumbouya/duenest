@@ -674,8 +674,63 @@ holds only safe ids/keys/labels — never a file URL, token, document content, o
 
 ## Frontend
 
-Owner/staff page `/dashboard/organizations/[orgId]/portal` (dashboard summary +
-people + cases + review queue + case detail/actions). There is **no public UI**.
+Owner/staff surface under `/dashboard/organizations/[orgId]/portal`. There is
+**no public portal UI** (the only public routes remain the per-token request and
+room pages, which expose no internal folders/tags/custom fields).
+
+### Portal UX structure (UX Polish V1, 2026-06-25)
+
+The portal reads as **one connected command center**, not a set of separate
+pages. Every surface renders a shared **portal nav** (`PortalNav`,
+`components/features/portals/portal-nav.tsx`):
+
+| Tab | Route | Purpose |
+| --- | --- | --- |
+| **Overview** | `/portal` | What needs attention, how cases are tracking, quick actions |
+| **Cases** | `/portal/cases` | Filterable list of every case; create / from template |
+| **People** | `/portal/people` | Filterable list of everyone served; add person |
+| **Documents** | `/portal/documents` | Folder/tag/collection/smart-view lens |
+| **Templates** | `/portal/templates` | Reusable case blueprints |
+| **Settings** | `/portal/settings/customization` | Custom fields + case statuses |
+
+**Review** and **Reminders** are not tabs — they are surfaced as queues/actions
+from the Overview, where the work is done. Back links go to **Back to
+organization** (case detail uses **Back to cases**).
+
+- **Overview (`portal/page.tsx`).** Hierarchy, top to bottom: a **Needs
+  attention** lead (only non-zero items as chips that jump to their queue, or a
+  calm "all caught up"), six overview metric cards, the **Needs attention** work
+  queues (review / overdue / missing / needs-replacement / ready, each capped
+  with an honest "+N more"), then a sidebar of **Quick actions** + Templates +
+  Plan usage + Recent activity. Empty workspace → a guided four-step setup.
+- **Cases / People sub-pages.** Real filterable lists. Cases: search + a Focus
+  lens (needs review / missing documents / due soon / overdue / ready) +
+  system-status + custom-status + person filters. People: search + status + type.
+  Filtering is **client-side** over the loaded set via pure, tested helpers
+  (`filterPortalCases` / `filterPortalPeople` in `lib/portals.ts`) — no extra API
+  calls. Each case card shows a plain-language **next action** (`caseNextAction`).
+- **Case detail (`portal/cases/[caseId]/page.tsx`).** A prominent, tone-matched
+  **next-action banner** (`CaseNextActionBanner`) answers "what is this case
+  waiting on?" using the same wording as the case cards.
+
+### Trust + plain-language microcopy
+
+- Public room page states **"Only the files {org} chose to share appear here."**
+- Public request/room **error** states use a warning icon (a prior bug used a
+  success shield).
+- Customization avoids leaking system internals: a custom status reads **"Counts
+  as *Waiting for review* for readiness and queues"** rather than the raw
+  `maps_to_system_status` key; the field machine key is labelled **"Reference"**.
+- Folder placement is **organization only** — it never grants access and is never
+  shown on public pages (see "Document Organization" above).
+
+### Component-test infrastructure
+
+This branch added the first **component render tests** to the frontend: `jsdom` +
+`@testing-library/react`, opted in **per file** with a `// @vitest-environment
+jsdom` docblock so the existing node-environment logic tests are untouched.
+Covered: `PortalNav`, `CaseCard`, `PersonCard`, plus pure-logic tests for the
+filter / next-action helpers.
 
 ## Future work
 

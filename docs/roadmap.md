@@ -2559,3 +2559,66 @@ per-seat Stripe billing + invoices, and org-owned storage.
 
 See `docs/api-spec.md`, `docs/b2b-portals.md`, `docs/security-plan.md`, and
 `docs/security/audit-logs.md`.
+
+## B2B Portal UX Polish V1 — delivered (2026-06-25)
+
+`polish/b2b-portal-ux` is a **frontend/UX-only** pass that makes the now
+feature-rich B2B portal feel like **one connected command center** instead of a
+set of separate pages. **No new backend product system** was added; **no AI, no
+AI credits, no Stripe, no new public routes, no payload rewrites** (the existing
+case-list and dashboard payloads already carried everything the UI needed).
+
+What changed:
+
+* **Shared portal navigation.** A single `PortalNav` tab strip
+  (`components/features/portals/portal-nav.tsx`) — Overview · Cases · People ·
+  Documents · Templates · Settings — now appears on every portal surface with a
+  clear active state (`aria-current`) and horizontal scroll on mobile. Review and
+  Reminders are intentionally **not** tabs; they are surfaced as actions/queues
+  from the Overview, where the work lives. Every sub-page's back link is
+  standardized to **Back to organization** (case detail uses **Back to cases**).
+* **Overview (was the dashboard).** `portal/page.tsx` is now a focused operating
+  center with a clear hierarchy: a **Needs attention** lead (only non-zero items,
+  as chips that jump to their queue, or a calm "all caught up"), the six overview
+  metric cards, the **Needs attention** work queues, then a sidebar of **Quick
+  actions** + Templates + Plan usage + Recent activity. The old in-page
+  People/Cases segmented toggle and the duplicative secondary-stats row were
+  removed. The empty state is now a guided four-step setup.
+* **Cases and People are real, filterable sub-pages.** New
+  `portal/cases/page.tsx` and `portal/people/page.tsx`. Cases supports
+  search + a Focus lens (needs review / missing documents / due soon / overdue /
+  ready) + system-status + custom-status + person filters; People supports
+  search + status + type filters. All filtering is **client-side** over the
+  loaded set (pure, tested helpers `filterPortalCases` / `filterPortalPeople` —
+  no backend or query changes). Each case card now shows a plain-language **next
+  action** (`caseNextAction`).
+* **Case detail next-action banner.** A prominent, tone-matched banner
+  (`CaseNextActionBanner`) answers "what is this case waiting on?" above the
+  detail, using the same `caseNextAction` wording as the case cards so list and
+  detail agree.
+* **Plainer language.** The customization page no longer leaks raw system status
+  keys ("Counts as *Waiting for review* for readiness and queues" instead of
+  "Maps to in_review") and softens the field "Key:" jargon to "Reference".
+* **Public-page trust fixes.** The org public **request** and **room** pages used
+  a `ShieldCheck` (success) icon for their **error** state — corrected to a
+  `TriangleAlert`. The public room page gained an explicit trust line ("Only the
+  files {org} chose to share appear here"). No private file URLs, raw tokens, or
+  document contents are exposed; internal folders/tags/custom fields remain
+  internal.
+
+**Tests.** Added pure-logic tests for the new helpers
+(`portal-list-filters.test.ts`) and **component render tests** for `PortalNav`,
+`CaseCard`, and `PersonCard`. This branch adds the first **component-test infra**
+to the frontend: `jsdom` + `@testing-library/react`, opted in per file with a
+`// @vitest-environment jsdom` docblock so the existing node-environment logic
+tests are unchanged. Full suite: **464 tests pass**; `tsc`, `eslint`, and
+`next build` are green; backend `manage.py check` is clean (no backend changes).
+
+**Deferred (future work):** full mobile/PWA final polish, a client-facing portal
+account, org-owned storage, Teams billing, an AI portal copilot, and full
+page-level render tests (which need fetch/feature-flag mocking).
+
+**Next recommended branch: `mobile/b2b-portal-pwa-polish`** — the dedicated
+mobile/PWA pass for the portal (bottom-sheet modals, folder-sidebar mobile
+fallback, tap-target audit), or `b2b/teams-billing-checkout` for real Teams
+checkout + org-owned storage.

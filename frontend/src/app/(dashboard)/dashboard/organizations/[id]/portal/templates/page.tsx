@@ -39,6 +39,7 @@ import {
   CreateCaseFromTemplateModal,
   TemplateFormModal,
 } from "@/components/features/portals/template-modals";
+import { PortalNav } from "@/components/features/portals/portal-nav";
 import { useFeature } from "@/components/features/feature-flags-provider";
 import { ApiError } from "@/lib/api";
 import { canManageOrganization, getOrganization } from "@/lib/organizations";
@@ -233,11 +234,11 @@ export default function OrganizationTemplatesPage({
 
   const backLink = (
     <Link
-      href={`/dashboard/organizations/${orgId}/portal`}
+      href={`/dashboard/organizations/${orgId}`}
       className={cn(buttonVariants({ variant: "ghost" }), "w-fit")}
     >
       <ArrowLeft className="size-4" />
-      Back to portal
+      Back to organization
     </Link>
   );
 
@@ -331,6 +332,7 @@ export default function OrganizationTemplatesPage({
   return (
     <PageContainer width="wide">
       {backLink}
+      <PortalNav orgId={orgId} active="templates" />
       <PageHeader
         eyebrow={org?.name || "Organization"}
         title="Case templates"
