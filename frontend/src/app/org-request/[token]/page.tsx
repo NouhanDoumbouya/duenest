@@ -193,6 +193,10 @@ export default function OrganizationRequestPage({
                         id="file"
                         type="file"
                         required
+                        // Offer the camera, photo library, and file picker on
+                        // mobile. No `capture` attribute — a requested document
+                        // is often an existing PDF, so we must not force the camera.
+                        accept="image/*,application/pdf,.doc,.docx"
                         onChange={(event) =>
                           setFile(event.target.files?.[0] ?? null)
                         }

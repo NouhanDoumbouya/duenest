@@ -95,7 +95,7 @@ export function PersonCard({
             type="button"
             onClick={toggleOpen}
             aria-expanded={open}
-            className="rounded text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+            className="-mr-1.5 inline-flex min-h-9 items-center rounded-lg px-2 text-xs font-medium text-primary hover:bg-primary/5 hover:underline focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             {open ? "Hide details" : "Details"}
           </button>

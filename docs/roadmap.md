@@ -2622,3 +2622,58 @@ page-level render tests (which need fetch/feature-flag mocking).
 mobile/PWA pass for the portal (bottom-sheet modals, folder-sidebar mobile
 fallback, tap-target audit), or `b2b/teams-billing-checkout` for real Teams
 checkout + org-owned storage.
+
+## Mobile / PWA Final Polish V1 — delivered (2026-06-25)
+
+`mobile/pwa-final-polish` is a **frontend-only** pass that hardens CertaNest on
+phones and as an installable PWA. **No backend changes, no new product systems,
+no AI, no Stripe, no R2 changes, and no change to the PWA caching/offline
+security model.**
+
+The audit confirmed the **PWA foundation was already mature and security-correct**
+(manifest, `sw.js`, `scanner-sw.js`, offline page, icons, metadata, viewport
+`viewport-fit=cover`, bottom-nav, install/update/offline banners). The service
+worker already never caches `/api/*`, navigations, authed responses, tokens, R2
+URLs, or document/share/room/request routes — only the app shell, hashed static
+assets, icons, and OpenCV. So this branch **verified and left the PWA core
+untouched** and focused on page-level mobile UX.
+
+What changed (all CSS/markup-level, conservative):
+
+* **Safe-area for fixed overlays.** The shared `DrawerPanel` (every portal
+  modal), the dashboard "More" nav drawer, and the full-screen scanner now pad
+  past the notch / home indicator with `env(safe-area-inset-*)` — fixed overlays
+  don't inherit the standalone body inset. The slim mobile header is left to the
+  body padding to avoid double-padding.
+* **Tables → cards on phones.** The documents list table renders a stacked card
+  list below `sm` (no horizontal scroll) and the scannable table from `sm` up.
+* **Folder-sidebar mobile toggle.** The document-organization sidebar collapses
+  behind a "Folders & views" disclosure below `lg`, auto-collapsing on selection
+  so a long tree never pushes the document list off-screen.
+* **Public upload on phones.** The org public request file input gained an
+  `accept` list so mobile browsers offer camera / photo library / files; no
+  `capture` is forced (requested docs are often existing PDFs).
+* **Touch targets** bumped on the person-card details toggle and documents mobile
+  cards.
+
+**Scanner offline (verified, not rebuilt):** an "Offline" pill, calm
+queued-scan messaging, and an **encrypted** offline queue — AES-256-GCM
+ciphertext under a non-extractable key, auto-purged after 7 days
+(`lib/scanner/queue.ts`). This is the only place document bytes touch the device,
+and it's encrypted, time-boxed, and connection-recovery only — never an offline
+vault.
+
+**Tests.** Added a **manifest installability** test, an **offline page** render
+test, and a **documents-table mobile-card** render test (reusing the jsdom + RTL
+component-test infra from the B2B portal polish branch). Full suite: **471 tests
+pass**; `tsc`, `eslint`, and `next build` are green; backend `manage.py check` is
+clean (no backend changes).
+
+**Deferred:** native mobile app, React Native, offline vault, offline upload
+queue for public recipients, biometric app lock, advanced push, mobile-specific
+camera rewrite.
+
+**Next recommended branch: `b2b/teams-billing-checkout`** — real Teams checkout /
+per-seat Stripe billing + invoices, and org-owned storage.
+
+See `docs/PWA.md` (section 13) for the full mobile/PWA polish detail.

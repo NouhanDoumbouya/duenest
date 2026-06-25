@@ -56,7 +56,10 @@ export function DrawerPanel({
       ref={panelRef}
       tabIndex={-1}
       className={cn(
-        "h-full w-full max-w-md overflow-y-auto border-l border-border bg-card p-5 shadow-floating outline-none animate-in slide-in-from-right-4 duration-200 ease-out motion-reduce:animate-none",
+        // Full-height slide-over with internal scroll. The bottom padding clears
+        // the iOS home indicator: this panel is a `fixed` overlay, so it does NOT
+        // inherit the standalone body's safe-area padding and must add its own.
+        "h-full w-full max-w-md overflow-y-auto border-l border-border bg-card px-5 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-floating outline-none animate-in slide-in-from-right-4 duration-200 ease-out motion-reduce:animate-none",
         className,
       )}
       onClick={onClick}

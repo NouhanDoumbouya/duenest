@@ -1389,8 +1389,9 @@ export function ScannerExperience({ onClose }: { onClose: () => void }) {
         {ariaStatus}
       </span>
 
-      {/* Top bar */}
-      <header className="flex items-center justify-between gap-3 border-b border-white/10 bg-slate-950/80 px-4 py-3 backdrop-blur-md">
+      {/* Top bar. This is a fixed full-screen overlay, so it pads its own top
+          to clear the notch (it can't inherit the standalone body inset). */}
+      <header className="flex items-center justify-between gap-3 border-b border-white/10 bg-slate-950/80 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-md">
         <div className="flex items-center gap-2 text-sm font-medium">
           <ShieldCheck className="size-4 text-teal-300" aria-hidden="true" />
           <span>CertaNest Scanner</span>
@@ -2358,8 +2359,9 @@ function CameraOverlay(props: {
         />
       )}
 
-      {/* Bottom controls */}
-      <div className="absolute inset-x-0 bottom-0 flex flex-col gap-3 bg-gradient-to-t from-black/80 to-transparent px-6 pb-7 pt-12">
+      {/* Bottom controls. Pad past the home indicator so the capture button is
+          never clipped on notched phones (fixed overlay — no inherited inset). */}
+      <div className="absolute inset-x-0 bottom-0 flex flex-col gap-3 bg-gradient-to-t from-black/80 to-transparent px-6 pb-[max(1.75rem,env(safe-area-inset-bottom))] pt-12">
         {/* Live scan-mode strip — choose the look while framing, like a camera
             mode dial. The choice carries through capture into the review/save,
             so framing and tool choice happen in one place. The filter is applied

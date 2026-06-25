@@ -19,11 +19,29 @@ const STATUS_DOT: Partial<Record<DocumentComputedStatus, string>> = {
   needs_attention: "bg-destructive",
 };
 
+function StatusDot({ doc }: { doc: DocumentRecord }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+      <span
+        className={cn(
+          "size-1.5 shrink-0 rounded-full",
+          STATUS_DOT[doc.computed_status] ?? "bg-muted-foreground",
+        )}
+      />
+      {doc.status_label}
+    </span>
+  );
+}
+
 /**
  * Compact table view of the documents list. A serious-data alternative to
  * cards/list: name, category, type, expiry, and status in scannable columns.
- * Horizontally scrollable on small screens. Selection + trash reuse the same
- * handlers as the cards, so behavior stays identical across views.
+ * Selection + trash reuse the same handlers as the cards, so behavior stays
+ * identical across views.
+ *
+ * On phones a 6-column table would force horizontal scrolling, so below `sm`
+ * the same rows render as a stacked card list (Phase 4: prefer cards over tables
+ * on mobile); the real table only appears from `sm` up.
  */
 export function DocumentsTable({
   docs,
@@ -39,8 +57,72 @@ export function DocumentsTable({
   onRequestDelete: (doc: DocumentRecord) => void;
 }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-border">
-      <table className="w-full min-w-[640px] border-collapse text-sm">
+    <>
+      {/* Mobile: stacked cards, no horizontal scroll. */}
+      <ul className="space-y-2 sm:hidden">
+        {docs.map((doc) => {
+          const selected = selectedIds?.has(doc.id) ?? false;
+          return (
+            <li
+              key={doc.id}
+              className={cn(
+                "flex items-start gap-3 rounded-xl border border-border bg-card p-3",
+                selected && "border-primary/40 bg-primary/5",
+              )}
+            >
+              {selectable && (
+                <button
+                  type="button"
+                  role="checkbox"
+                  aria-checked={selected}
+                  aria-label={selected ? "Deselect" : "Select"}
+                  onClick={() => onToggleSelect?.(doc)}
+                  className={cn(
+                    "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md border transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
+                    selected
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-input bg-card hover:border-primary/60",
+                  )}
+                >
+                  {selected && <Check className="size-4" aria-hidden />}
+                </button>
+              )}
+              <div className="min-w-0 flex-1">
+                <Link
+                  href={`/dashboard/documents/${doc.id}`}
+                  className="block truncate font-medium hover:underline"
+                >
+                  {doc.title}
+                </Link>
+                <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                  {doc.category_name && <span>{doc.category_name}</span>}
+                  {doc.document_type && (
+                    <span className="rounded bg-muted px-1.5 py-0.5">
+                      {doc.document_type}
+                    </span>
+                  )}
+                  {doc.expiry_date && <span>Exp {formatDate(doc.expiry_date)}</span>}
+                </p>
+                <p className="mt-1.5 text-xs">
+                  <StatusDot doc={doc} />
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onRequestDelete(doc)}
+                aria-label="Move to trash"
+                className="flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+              >
+                <Trash2 className="size-4" />
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+
+      {/* Tablet and up: the full scannable table. */}
+      <div className="hidden overflow-x-auto rounded-xl border border-border sm:block">
+        <table className="w-full min-w-[640px] border-collapse text-sm">
         <thead>
           <tr className="border-b border-border bg-muted/40 text-left text-xs text-muted-foreground">
             {selectable && <th className="w-10 px-3 py-2" aria-label="Select" />}
@@ -100,15 +182,7 @@ export function DocumentsTable({
                   {doc.expiry_date ? formatDate(doc.expiry_date) : "—"}
                 </td>
                 <td className="px-3 py-2 align-middle">
-                  <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                    <span
-                      className={cn(
-                        "size-1.5 shrink-0 rounded-full",
-                        STATUS_DOT[doc.computed_status] ?? "bg-muted-foreground",
-                      )}
-                    />
-                    {doc.status_label}
-                  </span>
+                  <StatusDot doc={doc} />
                 </td>
                 <td className="px-3 py-2 text-right align-middle">
                   <button
@@ -125,6 +199,7 @@ export function DocumentsTable({
           })}
         </tbody>
       </table>
-    </div>
+      </div>
+    </>
   );
 }
