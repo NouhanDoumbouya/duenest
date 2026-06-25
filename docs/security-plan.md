@@ -1939,6 +1939,38 @@ adds **no new public route or email system**. **Deterministic — no AI.**
 See `docs/b2b-portals.md`, `docs/api-spec.md` §42, `docs/NOTIFICATIONS.md`, and
 `docs/security/audit-logs.md`.
 
+### Organization Templates V1
+
+An org defines a **reusable case workflow once** and creates a portal case from it in
+one step (`apps/organizations/portal_templates.py`). Applying a template is **pure
+orchestration** over the existing primitives — it reuses `create_portal_case` /
+`create_case_pack` / `create_case_room` / `create_case_document_request` and adds **no
+second pack / room / request / upload system**. **Deterministic — no AI.**
+
+* **Config-only — no document data.** `OrganizationCaseTemplate` /
+  `OrganizationCaseTemplateRequirement` store only workflow configuration (case type,
+  title pattern, priority, due offset, requirement titles/instructions, auto-create
+  toggles). They hold **no document contents, files, tokens, or recipient data**.
+* **Admin-gated, org-isolated.** List / detail are readable by any **active org
+  member**; **create / edit / archive / duplicate / create-case are OWNER/ADMIN only**
+  (the same policy as manual case creation). The template and the target person must
+  both belong to the org. The `b2b_portals` flag and the org Teams entitlement gate it
+  like the rest of the portal. No public endpoint.
+* **Applying a template exposes no private data.** The returned case payload includes
+  only the recipient-facing **public** page links (`room_public_url` / `upload_url`,
+  the established "copy link manually" behavior) — **never** a private file URL,
+  storage key, raw token, or document content.
+* **Optional request emails carry no private data.** With `send_request_emails=true`,
+  recipients are notified through the shared `send_branded_email` helper + the existing
+  `portal_bulk_reminder` template (no new email system), carrying only the public
+  upload link + safe context, and respecting suppression / unsubscribe.
+* **Sanitized audit metadata.** The seven `organization_template_*` /
+  `portal_*template*` events record only safe keys (template id/name, case id, case
+  type, requirement / created-request counts, result) — **never** a raw token, private
+  file URL, storage key, document content, or email body.
+
+See `docs/b2b-portals.md`, `docs/api-spec.md` §43, and `docs/security/audit-logs.md`.
+
 ## Teams Plan + Portal Limits V1
 
 Portals are now governed by an **organization-level entitlement** in addition to

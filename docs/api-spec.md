@@ -6343,3 +6343,151 @@ content, or full email body.
 See `docs/b2b-portals.md`, `docs/NOTIFICATIONS.md`, `docs/security-plan.md`,
 `docs/security/audit-logs.md`, and `docs/roadmap.md`.
 
+## 43 — Organization Templates V1 (`organizations/{org_id}/portal/templates/...`)
+
+An org defines a **reusable case workflow once** and creates a portal case from it in
+one step. Applying a template is **pure orchestration** — it reuses
+`create_portal_case` / `create_case_pack` / `create_case_room` /
+`create_case_document_request` (§38) and adds **no second pack / room / request /
+upload system**. Templates are **configuration only** — no document contents, files,
+tokens, or recipient data. **Deterministic — no AI, no AI credits.**
+
+Service: `apps/organizations/portal_templates.py`. New models
+`OrganizationCaseTemplate` / `OrganizationCaseTemplateRequirement` (migration
+`organizations/0009_*`). The same migration **adds three `PortalCase.case_type`
+values** — `insurance_claim`, `grant`, `internship` — so those template case types
+round-trip; an unknown `case_type` falls back to `general` on apply.
+
+### Endpoints
+
+| Method | Path | Role | Description |
+| --- | --- | --- | --- |
+| `GET` | `/templates/?include_archived=` | member | List templates (archived excluded unless `include_archived=true`) |
+| `POST` | `/templates/` | owner/admin | Create a template |
+| `GET` | `/templates/{id}/` | member | A template with its requirements |
+| `PATCH` | `/templates/{id}/` | owner/admin | Edit (pass `requirements` to replace them) |
+| `POST` | `/templates/{id}/archive/` | owner/admin | Archive a template |
+| `POST` | `/templates/{id}/duplicate/` | owner/admin | Editable copy (`"<name> (copy)"`) |
+| `POST` | `/templates/{id}/create-case/` | owner/admin | Create a portal case from the template |
+
+### Permissions & gating
+
+* **Authentication required.** List / detail = any **active member** of `{org_id}`.
+  Create / edit / archive / duplicate / create-case = **OWNER/ADMIN** only (the same
+  policy as manual case creation). Non-members denied.
+* **Two gates** (same as the rest of the portal): the `b2b_portals` feature flag
+  (`503` when off) and the org Teams entitlement (`403 portal_not_enabled`).
+* **Org isolation:** a template + the target person must both belong to `{org_id}`.
+
+### Template shape
+
+```json
+{
+  "id": 5, "name": "Student visa", "description": "...",
+  "case_type": "visa", "default_case_title": "{person_name} — student visa",
+  "default_priority": "normal", "default_due_days": 30,
+  "auto_create_pack": true, "auto_create_room": true, "auto_create_requests": false,
+  "default_room_title": "Visa workspace", "default_room_description": "...",
+  "status": "active", "requirement_count": 3,
+  "created_at": "...", "updated_at": "...",
+  "requirements": [
+    {
+      "id": 11, "title": "Passport", "instructions": "Photo page only",
+      "required": true, "sort_order": 0,
+      "request_message": "Please upload your passport photo page",
+      "due_days_offset": 7, "accepted_file_types": ["pdf", "jpg"]
+    }
+  ]
+}
+```
+
+`requirements` is included on detail (and on the create/patch/duplicate responses);
+the list endpoint omits it and returns `requirement_count` only. `default_case_title`
+supports the `{person_name}` placeholder. `accepted_file_types` is an **advisory** list
+— **not enforced in V1**.
+
+On create / edit, `requirements` may be a list of objects (or bare title strings);
+passing `requirements` on `PATCH` **replaces** the template's requirement set.
+
+### Create case from template — `POST .../templates/{id}/create-case/`
+
+Body:
+
+```json
+{
+  "person_id": 3,
+  "title": "Optional title override",
+  "due_date": "2026-07-31",
+  "create_pack": true,
+  "create_room": true,
+  "create_requests": false,
+  "send_request_emails": false,
+  "selected_requirement_ids": [11, 12]
+}
+```
+
+`person_id` is required; the toggles are optional and **fall back to the template's
+`auto_create_*` defaults** when omitted. `title` overrides the rendered
+`default_case_title`; `due_date` overrides the `default_due_days` offset.
+`selected_requirement_ids` limits the pack/requests to a subset (omit for all).
+
+Process: validate → create the `PortalCase` (title / due date / case_type / priority
+from the template or overrides) → optional pack (reuses `create_case_pack`, then
+enriches each requirement with its instructions / due date / sort order) → optional
+sharing room (reuses `create_case_room`, applying the template room title/description)
+→ optional document requests (one `DocumentRequestLink` per selected requirement,
+recipient = the case person, linked to the matching pack requirement via
+`PortalCaseDocumentRequest`).
+
+Response (`201`):
+
+```json
+{
+  "case": { ... build_portal_case_payload ... },
+  "pack_created": true,
+  "room_created": true,
+  "created_requests_count": 0,
+  "skipped_requirements": [],
+  "warnings": [],
+  "progress": { ... compute_case_progress ... }
+}
+```
+
+The `case` payload includes the recipient-facing **public** page links
+(`room_public_url` / `upload_url`) — the established "copy link manually" behavior,
+the same as the case-detail payload — never a private file URL.
+
+### Limits → warnings
+
+The **active-case** org limit is enforced by `create_portal_case` and is the **only
+hard blocker**: it raises `403 organization_plan_limit_exceeded` (§39) **before
+anything is created**. The **sharing-room** and **document-request** org limits are
+**best-effort**: a room/request that hits its limit is **skipped and the case is still
+created**, with a `warnings` entry (`room_limit_reached` / `request_limit_reached`).
+The template **pack's** `DocumentBundle` is owned by the **org-owner user** and is not
+separately org-limited in V1 (it still counts against that account's personal storage
+until org-owned storage exists — see §38 / `docs/BILLING.md`).
+
+### Optional request emails
+
+Creating requests **does not send email by default**. With
+`send_request_emails=true`, each recipient is notified by reusing the shared
+`send_branded_email` helper + the existing `portal_bulk_reminder` template (no new
+email system). The email carries only the **public upload link** + safe context —
+never a private file URL, raw token, or document content — and respects
+suppression / unsubscribe.
+
+### Audit
+
+`organization_template_created`, `organization_template_updated`,
+`organization_template_archived`, `portal_case_created_from_template`,
+`portal_template_pack_created`, `portal_template_room_created`,
+`portal_template_requests_created` — recorded via the unified owner-scoped Audit Log
+(§37, `metadata.org_id`). Metadata is limited to safe keys (`template_id`,
+`template_name`, `case_id`, `case_type`, `requirements_count`,
+`created_requests_count`, `result`) — never a raw token, private file URL, storage
+key, document content, or email body.
+
+See `docs/b2b-portals.md`, `docs/security-plan.md`,
+`docs/security/audit-logs.md`, and `docs/roadmap.md`.
+

@@ -668,3 +668,148 @@ export interface CreateCaseRequestBody {
   due_date?: string | null;
   requirement?: number;
 }
+
+// ---- Organization case templates --------------------------------------------
+//
+// A reusable blueprint an org saves once and spins new cases from. It carries
+// the case defaults (type, title pattern, priority, due window) plus the
+// auto-create toggles (pack / room / requests) and an ordered list of document
+// requirements. Templates support a 10-value `CaseType` — a superset of the
+// `PortalCaseType` the live cases use today (it adds `insurance_claim`, `grant`,
+// and `internship`). Managing templates is admin/owner only; any member may
+// read them. Behind the `b2b_portals` flag + Teams entitlement.
+
+/**
+ * The kind of case a template produces. A superset of `PortalCaseType` — the
+ * three extra values (`insurance_claim`, `grant`, `internship`) are valid on a
+ * template and on a case created from one.
+ */
+export type CaseType =
+  | "visa"
+  | "scholarship"
+  | "admission"
+  | "employee_onboarding"
+  | "compliance"
+  | "client_file"
+  | "insurance_claim"
+  | "grant"
+  | "internship"
+  | "general";
+
+/** Lifecycle status of a template. Archived templates are hidden by default. */
+export type OrgCaseTemplateStatus = "active" | "archived";
+
+/**
+ * One document requirement on a template. `sort_order` is the position used to
+ * order rows; the UI sets it from each row's index on submit. `due_days_offset`
+ * is a per-requirement due window relative to the case's start (null = none).
+ */
+export interface OrgTemplateRequirement {
+  id?: number;
+  title: string;
+  instructions?: string;
+  required: boolean;
+  sort_order: number;
+  request_message?: string;
+  due_days_offset?: number | null;
+  accepted_file_types?: string[];
+}
+
+/**
+ * The shared fields of a template — the base for both the list summary and the
+ * full detail. `default_case_title` may contain the literal `{person_name}`
+ * placeholder, expanded by `renderTemplateTitlePreview` when a case is created.
+ */
+export interface OrgCaseTemplateBase {
+  id?: number;
+  name: string;
+  description?: string;
+  case_type: CaseType;
+  default_case_title?: string;
+  default_priority: PortalCasePriority;
+  default_due_days?: number | null;
+  auto_create_pack: boolean;
+  auto_create_room: boolean;
+  auto_create_requests: boolean;
+  default_room_title?: string;
+  default_room_description?: string;
+  status: OrgCaseTemplateStatus;
+  requirement_count: number;
+}
+
+/** A full template, including its ordered requirements (detail response). */
+export interface OrgCaseTemplate extends OrgCaseTemplateBase {
+  id: number;
+  requirements: OrgTemplateRequirement[];
+}
+
+/** A list-row template — no `requirements` array, just the `requirement_count`. */
+export type OrgCaseTemplateSummary = OrgCaseTemplateBase & { id: number };
+
+/** Response from listing templates. */
+export interface OrgCaseTemplatesResponse {
+  templates: OrgCaseTemplateSummary[];
+  count: number;
+}
+
+/**
+ * Body for creating or editing a template. Include `requirements` to replace the
+ * full set (a PATCH that omits it leaves the existing requirements untouched).
+ */
+export interface OrgCaseTemplateBody {
+  name: string;
+  description?: string;
+  case_type: CaseType;
+  default_case_title?: string;
+  default_priority: PortalCasePriority;
+  default_due_days?: number | null;
+  auto_create_pack: boolean;
+  auto_create_room: boolean;
+  auto_create_requests: boolean;
+  default_room_title?: string;
+  default_room_description?: string;
+  status?: OrgCaseTemplateStatus;
+  requirements?: OrgTemplateRequirement[];
+}
+
+/**
+ * Body for creating a case from a template. Omitted `create_*` toggles fall back
+ * to the template's `auto_create_*` defaults. `selected_requirement_ids` narrows
+ * which of the template's requirements become requests/pack items; omit to use
+ * them all. `send_request_emails` is opt-in (off by default).
+ */
+export interface CreateCaseFromTemplateBody {
+  person_id: number;
+  title?: string;
+  due_date?: string | null;
+  create_pack?: boolean;
+  create_room?: boolean;
+  create_requests?: boolean;
+  send_request_emails?: boolean;
+  selected_requirement_ids?: number[];
+}
+
+/**
+ * A non-blocking warning a create-from-template can carry. Room/request limit
+ * hits are NOT errors — they come back here so the case is still created and the
+ * UI can explain what was skipped.
+ */
+export type CreateCaseFromTemplateWarning =
+  | "room_limit_reached"
+  | "request_limit_reached"
+  | "room_not_created";
+
+/**
+ * Result of creating a case from a template: the new case (same shape as
+ * `getPortalCase`), what was auto-created, which requirements were skipped, any
+ * non-blocking warnings, and the fresh progress snapshot.
+ */
+export interface CreateCaseFromTemplateResult {
+  case: PortalCase;
+  pack_created: boolean;
+  room_created: boolean;
+  created_requests_count: number;
+  skipped_requirements: string[];
+  warnings: CreateCaseFromTemplateWarning[];
+  progress: PortalCaseProgress;
+}

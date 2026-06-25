@@ -823,6 +823,9 @@ class PortalCase(models.Model):
         EMPLOYEE_ONBOARDING = "employee_onboarding", "Employee onboarding"
         COMPLIANCE = "compliance", "Compliance"
         CLIENT_FILE = "client_file", "Client file"
+        INSURANCE_CLAIM = "insurance_claim", "Insurance claim"
+        GRANT = "grant", "Grant"
+        INTERNSHIP = "internship", "Internship"
         GENERAL = "general", "General"
 
     class Status(models.TextChoices):
@@ -1122,6 +1125,94 @@ class PortalReminderRecipient(models.Model):
 
     def __str__(self):
         return f"PortalReminderRecipient(batch={self.batch_id}, email={self.recipient_email!r})"
+
+
+class OrganizationCaseTemplate(models.Model):
+    """
+    A reusable case workflow an organization defines once and applies to new portal
+    cases (Organization Templates V1). It captures the defaults staff would
+    otherwise re-enter every time — case type, title pattern, priority, due offset,
+    a checklist of requirements, and whether to auto-create the pack / sharing room
+    / document requests. It is org-scoped configuration only: it stores NO document
+    contents, files, tokens, or recipient data — applying it CREATES the existing
+    primitives (PortalCase / DocumentBundle / SharingRoom / DocumentRequestLink),
+    never a new system.
+    """
+
+    class Status(models.TextChoices):
+        ACTIVE = "active", "Active"
+        ARCHIVED = "archived", "Archived"
+
+    organization = models.ForeignKey(
+        Organization, on_delete=models.CASCADE, related_name="case_templates"
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+        related_name="case_templates_created",
+    )
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    # Mirrors PortalCase.CaseType values (stored as a plain string so the template
+    # set can extend independently); unknown values fall back to GENERAL on apply.
+    case_type = models.CharField(max_length=24, default=PortalCase.CaseType.GENERAL)
+    # Title pattern; supports the ``{person_name}`` placeholder.
+    default_case_title = models.CharField(max_length=255, blank=True)
+    default_priority = models.CharField(
+        max_length=8, choices=PortalCase.Priority.choices,
+        default=PortalCase.Priority.NORMAL,
+    )
+    default_due_days = models.PositiveIntegerField(null=True, blank=True)
+    auto_create_pack = models.BooleanField(default=True)
+    auto_create_room = models.BooleanField(default=True)
+    auto_create_requests = models.BooleanField(default=False)
+    default_room_title = models.CharField(max_length=255, blank=True)
+    default_room_description = models.TextField(blank=True)
+    status = models.CharField(
+        max_length=12, choices=Status.choices, default=Status.ACTIVE
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    archived_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+        indexes = [
+            models.Index(fields=["organization", "status", "-updated_at"]),
+        ]
+
+    def __str__(self):
+        return f"OrganizationCaseTemplate(org={self.organization_id}, name={self.name!r})"
+
+
+class OrganizationCaseTemplateRequirement(models.Model):
+    """One checklist item in an ``OrganizationCaseTemplate``. Becomes a pack
+    requirement (and optionally a document request) when the template is applied.
+    Configuration only — no document contents/files/tokens."""
+
+    template = models.ForeignKey(
+        OrganizationCaseTemplate, on_delete=models.CASCADE, related_name="requirements"
+    )
+    title = models.CharField(max_length=255)
+    instructions = models.TextField(blank=True)
+    required = models.BooleanField(default=True)
+    sort_order = models.PositiveIntegerField(default=0)
+    # Default instructions text used for the document request to the recipient.
+    request_message = models.TextField(blank=True)
+    # Days from case creation this requirement's request is due (optional).
+    due_days_offset = models.PositiveIntegerField(null=True, blank=True)
+    # Optional advisory list of accepted file types (NOT enforced in V1).
+    accepted_file_types = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["sort_order", "id"]
+        indexes = [
+            models.Index(fields=["template", "sort_order"]),
+        ]
+
+    def __str__(self):
+        return f"OrganizationCaseTemplateRequirement(template={self.template_id}, title={self.title!r})"
 
 
 class OrganizationPlanProfile(models.Model):

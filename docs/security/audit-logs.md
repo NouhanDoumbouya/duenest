@@ -60,6 +60,14 @@ reads are **not** logged.
   `metadata.org_id`); metadata is limited to safe keys (reminder_type, recipient /
   sent / skipped / failed counts, case id, reason category, result) — never a raw
   upload token, private file URL, storage key, document content, or full email body.
+- **Organization Templates:** organization_template_created,
+  organization_template_updated, organization_template_archived,
+  portal_case_created_from_template, portal_template_pack_created,
+  portal_template_room_created, portal_template_requests_created. Same scoping
+  (category `system`, owner = the org owner, actor = the acting member,
+  `metadata.org_id`); metadata is limited to safe keys (template_id, template_name,
+  case_id, case_type, requirements_count, created_requests_count, result) — never a
+  raw token, private file URL, storage key, document content, or email body.
 
 The **Organization Dashboard V1** (`GET …/portal/dashboard/`, §41) is a **reader**,
 not a writer, of this log: its recent-activity feed reads the most recent **safe**

@@ -29,8 +29,10 @@ import {
   DoorOpen,
   FileWarning,
   Inbox,
+  LayoutTemplate,
   Loader2,
   Mail,
+  Plus,
   RotateCcw,
   ShieldAlert,
   Sparkles,
@@ -62,6 +64,7 @@ import {
   PlanUsageCard,
 } from "@/components/features/portals/plan-usage-card";
 import { ReminderModal } from "@/components/features/portals/reminder-modal";
+import { CreateCaseFromTemplateModal } from "@/components/features/portals/template-modals";
 import { useFeature } from "@/components/features/feature-flags-provider";
 import { ApiError } from "@/lib/api";
 import { formatDate } from "@/lib/documents";
@@ -85,6 +88,7 @@ import {
   getPortalDashboard,
   getPortalLimits,
   getPortalPeople,
+  getPortalTemplates,
   isOrgLimitError,
   isPortalNotEnabledError,
   planLabel,
@@ -105,6 +109,7 @@ import type {
   PortalLimits,
   PortalPerson,
   PortalPersonType,
+  OrgCaseTemplateSummary,
   ReminderType,
 } from "@/types/portals";
 
@@ -114,6 +119,7 @@ interface PortalState {
   dashboard: OrganizationDashboard;
   people: PortalPerson[];
   cases: PortalCase[];
+  templates: OrgCaseTemplateSummary[];
 }
 
 /**
@@ -162,6 +168,9 @@ export default function OrganizationPortalPage({
   const [toast, setToast] = useState<ToastState | null>(null);
   const [addingPerson, setAddingPerson] = useState(false);
   const [creatingCase, setCreatingCase] = useState(false);
+  // When set, the create-case-from-template modal is open for this template.
+  const [templateForCase, setTemplateForCase] =
+    useState<OrgCaseTemplateSummary | null>(null);
   // When set, the bulk-reminder modal is open pre-set to this reminder type.
   // `null` means closed; an open value carries the type to start on.
   const [reminderType, setReminderType] = useState<ReminderType | null>(null);
@@ -172,15 +181,17 @@ export default function OrganizationPortalPage({
   // plan, recent activity). People + cases are still loaded for the tabs and the
   // Create case modal's person picker.
   const loadPortal = useCallback(async (): Promise<PortalState> => {
-    const [dashboard, people, cases] = await Promise.all([
+    const [dashboard, people, cases, templates] = await Promise.all([
       getPortalDashboard(orgId),
       getPortalPeople(orgId),
       getPortalCases(orgId),
+      getPortalTemplates(orgId),
     ]);
     return {
       dashboard,
       people: people.people,
       cases: cases.cases,
+      templates: templates.templates,
     };
   }, [orgId]);
 
@@ -400,6 +411,20 @@ export default function OrganizationPortalPage({
               >
                 <UserPlus className="size-4" /> Add person
               </Button>
+              {data.templates.length > 0 && (
+                <Button
+                  variant="outline"
+                  onClick={() => setTemplateForCase(data.templates[0])}
+                  disabled={data.people.length === 0}
+                  title={
+                    data.people.length === 0
+                      ? "Add a person first"
+                      : "Create a case from a template"
+                  }
+                >
+                  <LayoutTemplate className="size-4" /> From template
+                </Button>
+              )}
               <Button
                 onClick={() => setCreatingCase(true)}
                 disabled={data.people.length === 0}
@@ -484,6 +509,16 @@ export default function OrganizationPortalPage({
             </div>
 
             <div className="space-y-6">
+              <TemplatesCard
+                orgId={orgId}
+                templates={data.templates}
+                canManage={canManage}
+                hasPeople={data.people.length > 0}
+                onCreateFromTemplate={() =>
+                  data.templates[0] &&
+                  setTemplateForCase(data.templates[0])
+                }
+              />
               {limits && <PlanUsageCard data={limits} />}
               <RecentActivity queues={queues} />
             </div>
@@ -524,6 +559,20 @@ export default function OrganizationPortalPage({
           onSent={async () => {
             setReminderType(null);
             await refresh("Reminders sent.");
+          }}
+        />
+      )}
+
+      {templateForCase && canManage && (
+        <CreateCaseFromTemplateModal
+          orgId={orgId}
+          template={templateForCase}
+          people={data.people}
+          onClose={() => setTemplateForCase(null)}
+          onCreated={async () => {
+            setTemplateForCase(null);
+            setTab("cases");
+            await refresh("Case created from template.");
           }}
         />
       )}
@@ -1314,6 +1363,97 @@ function RecentActivity({ queues }: { queues: DashboardQueues }) {
             );
           })}
         </ul>
+      )}
+    </section>
+  );
+}
+
+// ---- Templates entry point --------------------------------------------------
+
+/**
+ * A small sidebar card linking to the templates library, with a quick
+ * "Create from template" action when templates exist. When there are none, it
+ * nudges admins to set up their first template.
+ */
+function TemplatesCard({
+  orgId,
+  templates,
+  canManage,
+  hasPeople,
+  onCreateFromTemplate,
+}: {
+  orgId: number;
+  templates: OrgCaseTemplateSummary[];
+  canManage: boolean;
+  hasPeople: boolean;
+  onCreateFromTemplate: () => void;
+}) {
+  const manageHref = `/dashboard/organizations/${orgId}/portal/templates`;
+  const count = templates.length;
+
+  return (
+    <section className="rounded-2xl border border-border bg-card p-5">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h2 className="flex items-center gap-2 font-heading text-base font-semibold">
+            <LayoutTemplate className="size-4 text-primary" aria-hidden />
+            Templates
+          </h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Reusable blueprints for the cases you set up most often.
+          </p>
+        </div>
+        {count > 0 && (
+          <StatusBadge tone="neutral" withDot={false}>
+            {count}
+          </StatusBadge>
+        )}
+      </div>
+
+      {count === 0 ? (
+        <div className="mt-4 rounded-xl border border-dashed border-border px-3 py-4 text-center">
+          <p className="text-xs text-muted-foreground">
+            {canManage
+              ? "Save a case setup once and reuse it — defaults and required documents in one click."
+              : "No templates yet."}
+          </p>
+          {canManage && (
+            <Link
+              href={manageHref}
+              className={cn(
+                buttonVariants({ variant: "outline", size: "sm" }),
+                "mt-3",
+              )}
+            >
+              <Plus className="size-4" /> Create a template
+            </Link>
+          )}
+        </div>
+      ) : (
+        <div className="mt-4 flex flex-col gap-2">
+          {canManage && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onCreateFromTemplate}
+              disabled={!hasPeople}
+              title={hasPeople ? undefined : "Add a person first"}
+              className="w-full justify-center"
+            >
+              <LayoutTemplate className="size-4" /> Create from template
+            </Button>
+          )}
+          <Link
+            href={manageHref}
+            className={cn(
+              buttonVariants({ variant: "ghost", size: "sm" }),
+              "w-full justify-center text-muted-foreground",
+            )}
+          >
+            Manage templates
+            <ArrowUpRight className="size-4" />
+          </Link>
+        </div>
       )}
     </section>
   );
