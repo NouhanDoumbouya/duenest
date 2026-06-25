@@ -44,6 +44,7 @@ import {
   PlanUsageCard,
 } from "@/components/features/portals/plan-usage-card";
 import { PortalNav } from "@/components/features/portals/portal-nav";
+import { OrgOnboardingCard } from "@/components/features/portals/org-onboarding-card";
 import {
   AddPersonModal,
   CreateCaseModal,
@@ -58,6 +59,7 @@ import {
   PORTAL_CASE_STATUS_LABELS,
   PORTAL_CASE_STATUS_TONE,
   dashboardActivityLabel,
+  getOrgOnboarding,
   getPortalDashboard,
   getPortalLimits,
   getPortalPeople,
@@ -74,6 +76,7 @@ import type {
   DashboardQueues,
   DashboardReviewItem,
   OrganizationDashboard,
+  OrgOnboarding,
   PortalLimits,
   PortalPerson,
   OrgCaseTemplateSummary,
@@ -84,6 +87,7 @@ interface PortalState {
   dashboard: OrganizationDashboard;
   people: PortalPerson[];
   templates: OrgCaseTemplateSummary[];
+  onboarding: OrgOnboarding;
 }
 
 /**
@@ -124,15 +128,17 @@ export default function OrganizationPortalPage({
   // plan, recent activity). People + templates back the Create case / From
   // template actions; the case list itself lives on its own sub-page.
   const loadPortal = useCallback(async (): Promise<PortalState> => {
-    const [dashboard, people, templates] = await Promise.all([
+    const [dashboard, people, templates, onboarding] = await Promise.all([
       getPortalDashboard(orgId),
       getPortalPeople(orgId),
       getPortalTemplates(orgId),
+      getOrgOnboarding(orgId),
     ]);
     return {
       dashboard,
       people: people.people,
       templates: templates.templates,
+      onboarding,
     };
   }, [orgId]);
 
@@ -378,6 +384,13 @@ export default function OrganizationPortalPage({
       )}
 
       {limits && <LimitWarningBanners data={limits} />}
+
+      <OrgOnboardingCard
+        orgId={orgId}
+        onboarding={data.onboarding}
+        canManage={canManage}
+        onChanged={() => refresh()}
+      />
 
       {isEmpty ? (
         <EmptyDashboard

@@ -782,3 +782,34 @@ filter / next-action helpers.
   catalog.
 - `docs/roadmap.md` — "B2B Portals MVP" and "Teams Plan + Portal Limits V1"
   delivered sections.
+
+## Onboarding & Demo Workspaces (delivered 2026-06-25)
+
+A deterministic setup guide and a safe sample workspace for the B2B portal.
+
+- **Setup guide** (`apps/organizations/onboarding.py`): `build_org_onboarding_payload`
+  returns an 8-step checklist DERIVED from the org's real data — create template,
+  add person, create case, request documents, review an upload, organize files,
+  send a reminder, check activity — plus the single deterministic `next_action`.
+  Only the dismissed flag + the demo record live on the new
+  `OrganizationOnboarding` model; the steps are always computed live (no AI).
+- **Demo workspace** (`apps/organizations/demo.py`): `create_organization_demo_workspace`
+  reuses the real services to build a "Scholarship Application Demo" template, a
+  "Demo Applicant" person, a case from the template, sample custom fields/statuses,
+  and a People / Demo Applicant / Scholarship Application folder tree. It is
+  **idempotent**, **sends no email** (the person has no address;
+  `send_request_emails=False`), **calls no AI**, and creates **no document files
+  or real-looking identity data** — requirement titles are obvious placeholders.
+  Every object is tagged `[Demo]` and its id recorded in
+  `OrganizationOnboarding.demo_refs`; `cleanup_organization_demo_workspace` removes
+  them all (case, person, template, statuses, fields, folders, request links, pack).
+- **Endpoints** (members read, admin write, behind the b2b_portals flag + Teams
+  entitlement): `GET .../portal/onboarding/`, `POST .../portal/onboarding/dismiss/`,
+  `POST .../portal/demo/`, `POST .../portal/demo/cleanup/`.
+- **Frontend**: an `OrgOnboardingCard` on the portal Overview (live checklist +
+  progress + next action + demo CTA + dismiss). The founder Organizations
+  list/detail show a **Demo** badge for orgs with a demo workspace.
+
+**Limitation:** demo records are real and count toward plan limits until removed
+(kept minimal). Personal onboarding + personal demo data are unchanged (they
+already existed in `apps/users`).

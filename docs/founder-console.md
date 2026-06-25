@@ -197,3 +197,11 @@ pages. Founders can support users **without seeing private document contents**;
 there is no impersonation, no file download, no account deletion, and no live
 billing change. See `docs/api-spec.md` (Founder admin tools) and
 `docs/security-plan.md` (Founder Admin Tools V1) for the full safe-data contract.
+
+## Demo workspace awareness (Onboarding & Demo Workspaces V1)
+
+The founder Organizations list and detail now show a **Demo** badge for any org
+that has created a sample demo workspace (`has_demo_workspace`), so demo data is
+easy to tell apart from real beta activity. This is read-only; founders cannot
+create or remove an org's demo workspace from the console (that lives in the org's
+own portal Overview, admin-gated).

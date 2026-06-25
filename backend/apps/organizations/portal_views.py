@@ -960,3 +960,60 @@ class PortalLimitsView(_PortalBase):
 
         org = self.get_org(request, org_id, require_enabled=False)
         return Response(build_organization_limit_payload(org))
+
+
+# ---- Onboarding & Demo Workspaces V1 ---------------------------------------
+
+
+class PortalOnboardingView(_PortalBase):
+    """The org portal setup guide (derived checklist + next action). Members read."""
+
+    def get(self, request, org_id):
+        from .onboarding import build_org_onboarding_payload
+
+        org = self.get_org(request, org_id)
+        return Response(build_org_onboarding_payload(org))
+
+
+class PortalOnboardingDismissView(_PortalBase):
+    """Dismiss (or restore) the setup guide. Admin/owner only."""
+
+    def post(self, request, org_id):
+        from .onboarding import build_org_onboarding_payload, dismiss_org_onboarding
+
+        org = self.get_org(request, org_id, write=True)
+        dismissed = True
+        if isinstance(request.data, dict) and "dismissed" in request.data:
+            dismissed = bool(request.data.get("dismissed"))
+        dismiss_org_onboarding(org, dismissed=dismissed)
+        return Response(build_org_onboarding_payload(org))
+
+
+class PortalDemoView(_PortalBase):
+    """Create the safe sample demo workspace (idempotent). Admin/owner only.
+
+    Sends no email, calls no AI, and creates no sensitive-looking files."""
+
+    def post(self, request, org_id):
+        from .demo import create_organization_demo_workspace
+        from .onboarding import build_org_onboarding_payload
+
+        org = self.get_org(request, org_id, write=True)
+        result = create_organization_demo_workspace(org, request.user)
+        return Response(
+            {**result, "onboarding": build_org_onboarding_payload(org)}
+        )
+
+
+class PortalDemoCleanupView(_PortalBase):
+    """Remove the demo workspace (by tracked ids). Admin/owner only."""
+
+    def post(self, request, org_id):
+        from .demo import cleanup_organization_demo_workspace
+        from .onboarding import build_org_onboarding_payload
+
+        org = self.get_org(request, org_id, write=True)
+        result = cleanup_organization_demo_workspace(org)
+        return Response(
+            {**result, "onboarding": build_org_onboarding_payload(org)}
+        )

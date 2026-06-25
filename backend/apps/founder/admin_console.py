@@ -70,11 +70,19 @@ def _safe_event(event: OperationalEvent) -> dict:
 # ---- Organizations ----------------------------------------------------------
 
 
+def _org_has_demo(org: Organization) -> bool:
+    try:
+        return bool(org.onboarding.demo_created_at)
+    except Exception:  # noqa: BLE001 — no onboarding row yet
+        return False
+
+
 def _org_summary(org: Organization) -> dict:
     payload = build_organization_limit_payload(org)
     usage = payload.get("usage", {})
     owner = org.created_by
     return {
+        "has_demo_workspace": _org_has_demo(org),
         "id": org.id,
         "name": org.name,
         "slug": org.slug,

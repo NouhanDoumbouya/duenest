@@ -2,6 +2,10 @@ from django.urls import path
 from rest_framework.routers import DefaultRouter
 
 from .portal_views import (
+    PortalDemoCleanupView,
+    PortalDemoView,
+    PortalOnboardingDismissView,
+    PortalOnboardingView,
     PortalCaseArchiveView,
     PortalCaseCreatePackView,
     PortalCaseCreateRequestView,
@@ -70,6 +74,11 @@ urlpatterns = [
     *router.urls,
     # B2B Portals MVP — org-scoped, feature-gated (b2b_portals).
     path(f"{_PORTAL}/summary/", PortalSummaryView.as_view(), name="portal-summary"),
+    # Onboarding & Demo Workspaces V1 — setup guide + safe sample workspace.
+    path(f"{_PORTAL}/onboarding/", PortalOnboardingView.as_view(), name="portal-onboarding"),
+    path(f"{_PORTAL}/onboarding/dismiss/", PortalOnboardingDismissView.as_view(), name="portal-onboarding-dismiss"),
+    path(f"{_PORTAL}/demo/", PortalDemoView.as_view(), name="portal-demo"),
+    path(f"{_PORTAL}/demo/cleanup/", PortalDemoCleanupView.as_view(), name="portal-demo-cleanup"),
     # Organization Dashboard V1 — operational command center (read-only).
     path(f"{_PORTAL}/dashboard/", PortalDashboardView.as_view(), name="portal-dashboard"),
     # Organization Templates V1 — reusable case workflows.

@@ -779,6 +779,7 @@ export interface FounderOrgListItem {
   owner: { id: number; email: string } | null;
   plan: string;
   portal_enabled: boolean;
+  has_demo_workspace: boolean;
   members: number;
   people: number;
   active_cases: number;
