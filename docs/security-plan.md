@@ -20,6 +20,13 @@ The first version of CertaNest must be designed around the following principle:
 
 This security plan defines the rules, risks, controls, and implementation expectations for v0.1 and future versions.
 
+> **Hardening status & risk register:** the current private-beta security
+> posture, the consolidated **risk register**, and the **retention-policy
+> foundation** live in `docs/security-compliance-hardening-v1.md`. Companion
+> references: `docs/SECURITY_HARDENING_REPORT.md`,
+> `docs/SECURITY_PRIVACY_CHECKLIST.md`, `docs/PUBLIC_LINK_SECURITY.md`,
+> `docs/FILE_UPLOAD_SECURITY.md`, `docs/ENCRYPTION.md`.
+
 ---
 
 ## 2. Security Objectives

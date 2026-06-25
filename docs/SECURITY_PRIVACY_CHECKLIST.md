@@ -33,6 +33,12 @@ for the broader plan.
 ## Logging
 - ✅ No keys, DEKs, plaintext, OCR text, access codes, tokens, or paths in logs.
 - ✅ Decryption failures log safe category only; user sees a generic message.
+- ✅ Audit / operational / scheduled-job sinks sanitize metadata; audit hashes
+  IP/UA (salted SHA-256).
+- ✅ Activity trails (file/room/document/emergency) sanitize metadata via
+  `safe_audit_metadata` (Security & Compliance Hardening V1). Raw IP/UA in those
+  trails is owner-visible only — see risk R-1 in
+  `docs/security-compliance-hardening-v1.md`.
 
 ## Founder visibility
 - ✅ Security overview shows encrypted / plaintext-legacy / failed counts,
@@ -73,8 +79,14 @@ for the broader plan.
 - ⛔ CSP nonces/Report-Only rollout for the Next.js frontend.
 
 ## Launch blockers (must clear before public launch)
+- ✅ Private object storage with presigned URLs (Cloudflare R2).
+- ✅ Upload magic-byte sniffing + AV scan code (ClamAV, fail-closed).
+- ✅ Privacy/security pages (`/privacy`, `/security`, in-app Trust Center).
 - ⛔ Production secret manager + KEK backups.
-- ⛔ Private object storage with signed URLs.
-- ⛔ Upload magic-byte sniffing + AV scan.
-- ⛔ Monitoring/alerting, backups, email delivery, privacy/legal pages.
+- ⛔ Enable + monitor ClamAV in production; enable Redis cache (cluster-wide
+  throttles/lockouts).
+- ⛔ Monitoring/alerting, backups, email delivery.
 - ⛔ External security review + penetration test.
+
+See `docs/security-compliance-hardening-v1.md` for the full risk register and
+retention-policy foundation.

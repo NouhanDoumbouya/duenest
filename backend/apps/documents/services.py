@@ -14,6 +14,7 @@ from django.core.files.base import ContentFile
 from django.db.models import Count, Q
 from django.utils import timezone
 
+from .audit import safe_audit_metadata
 from .models import (
     Document,
     DocumentActivity,
@@ -670,7 +671,9 @@ def log_activity(
             actor_type=actor_type,
             ip_address=client_ip(request) if request is not None else None,
             user_agent=(request.META.get("HTTP_USER_AGENT", "")[:1000] if request else ""),
-            metadata=metadata or {},
+            # Defense-in-depth: drop any token/url/storage-key/content a caller may
+            # accidentally pass before it lands in an owner-visible activity trail.
+            metadata=safe_audit_metadata(metadata or {}),
         )
     except Exception:  # noqa: BLE001 — logging must never break the flow
         logger.warning("Failed to record file activity", exc_info=True)
@@ -692,7 +695,7 @@ def log_room_activity(
             user_agent=(
                 request.META.get("HTTP_USER_AGENT", "")[:1000] if request else ""
             ),
-            metadata=metadata or {},
+            metadata=safe_audit_metadata(metadata or {}),
         )
     except Exception:  # noqa: BLE001 — logging must never break the flow
         logger.warning("Failed to record room activity", exc_info=True)
@@ -2253,7 +2256,7 @@ def log_document_activity(
             related_checklist=related_checklist,
             related_bundle=related_bundle,
             related_proof=related_proof,
-            metadata=metadata or {},
+            metadata=safe_audit_metadata(metadata or {}),
         )
     except Exception:  # noqa: BLE001 — logging must never break the flow
         logger.warning("Failed to record document activity", exc_info=True)
@@ -2279,7 +2282,7 @@ def log_emergency_event(
             event_type=event_type,
             actor_label=actor_label[:120],
             description=description[:255],
-            metadata=metadata or {},
+            metadata=safe_audit_metadata(metadata or {}),
         )
     except Exception:  # noqa: BLE001 — logging must never break the flow
         logger.warning("Failed to record emergency activity", exc_info=True)
