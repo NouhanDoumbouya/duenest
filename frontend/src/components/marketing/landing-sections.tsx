@@ -354,10 +354,10 @@ export function Organizations() {
             ))}
           </ul>
           <Link
-            href="/use-cases/agencies-schools"
+            href="/use-cases/client-document-collection"
             className="mt-7 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
           >
-            See the organization workflow
+            See the client document collection workflow
             <ArrowRight className="size-4" aria-hidden />
           </Link>
           <p className="mt-4 text-xs text-muted-foreground">

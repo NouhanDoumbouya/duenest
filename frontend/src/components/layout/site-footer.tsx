@@ -25,6 +25,8 @@ const columns: { heading: string; links: FooterLink[] }[] = [
       { label: "Students", href: "/use-cases/students" },
       { label: "Visa documents", href: "/use-cases/visa-documents" },
       { label: "Job applications", href: "/use-cases/job-applications" },
+      { label: "Client document collection", href: "/use-cases/client-document-collection" },
+      { label: "Secure document sharing", href: "/use-cases/secure-document-sharing" },
       { label: "Agencies & schools", href: "/use-cases/agencies-schools" },
       { label: "All use cases", href: "/use-cases" },
     ],
