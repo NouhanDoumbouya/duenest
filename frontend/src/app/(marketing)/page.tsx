@@ -29,6 +29,13 @@ import { ScrollReveal } from "@/components/marketing/scroll-reveal";
 import { PersonaSplit } from "@/components/marketing/persona-split";
 import { LifeRadarMockup } from "@/components/marketing/mockups";
 import { HeroReadinessComposite } from "@/components/marketing/hero-composite";
+import {
+  Differentiation,
+  Integrations,
+  Organizations,
+  ProductProof,
+  ReadinessLoop,
+} from "@/components/marketing/landing-sections";
 import { LiveCountdown } from "@/components/marketing/live-countdown";
 import { buttonVariants } from "@/components/ui/button";
 import { PRIMARY_CTA, PRIVATE_BETA } from "@/lib/cta";
@@ -39,7 +46,7 @@ export const metadata: Metadata = {
     absolute: "CertaNest — Life Documents, Deadlines & Proof, Ready When Life Asks",
   },
   description:
-    "CertaNest is a secure life-admin platform that keeps important documents, deadlines, renewals, subscriptions, reusable application packs, trusted sharing, and emergency access organized and ready whenever life asks. Private by default. Free during the private beta.",
+    "Organize important documents, track renewals and deadlines, prepare application packs, request documents from others, and share proof securely — all from one calm readiness workspace. Private by default. Free during the private beta.",
   alternates: { canonical: "/" },
 };
 
@@ -84,6 +91,22 @@ const FAQ_ITEMS: { q: string; a: string }[] = [
   {
     q: "Why not use only a scanner app?",
     a: "Scanning is one step. CertaNest takes the scan into a vault, tracks its expiry, adds it to application packs, and lets you share it safely — the whole readiness workflow, not just a clean PDF.",
+  },
+  {
+    q: "Why not just use calendar reminders?",
+    a: "A calendar only knows what you remember to add by hand. CertaNest derives deadlines from your actual documents and packs, surfaces the next action first, and links each reminder to the file it's about.",
+  },
+  {
+    q: "Is CertaNest for individuals or organizations?",
+    a: "Both. Individuals organize and share their own documents; organizations collect documents from many people through request links and review them from one place. The same readiness system works from both sides.",
+  },
+  {
+    q: "How do Google imports work?",
+    a: "Sign in with Google, then import the specific files (Drive), deadlines (Calendar), or attachments (Gmail) you choose. Imports are review-before-save and import-only — nothing syncs automatically and CertaNest never writes back to your Google account.",
+  },
+  {
+    q: "Are Gmail imports public or automatic?",
+    a: "No. Gmail attachment import is limited to selected beta users while Google verification is completed, and it never scans your inbox or syncs automatically — you pick the message and the attachment, and confirm before anything is saved.",
   },
   {
     q: "Are application pack templates official?",
@@ -148,10 +171,14 @@ export default function LandingPage() {
         <Hero />
         <TrustBar />
         <Problem />
-        <HowItWorks />
+        <Differentiation />
+        <ReadinessLoop />
         <LifeRadar />
         <CoreSystem />
+        <Organizations />
+        <Integrations />
         <Security />
+        <ProductProof />
         <UseCases />
         <Beta />
         <Faq />
@@ -180,17 +207,16 @@ function Hero() {
         <div className="content-fade-in flex flex-col items-start text-left">
           <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card/80 px-3 py-1 text-xs font-medium text-muted-foreground shadow-xs backdrop-blur">
             <span className="flex size-1.5 rounded-full bg-brand-teal" />
-            Your life-admin, securely organized
+            Life-admin, securely organized
           </span>
 
           <h1 className="mt-6 font-heading text-[2.7rem] leading-[1.02] font-semibold tracking-tight text-balance sm:text-6xl lg:text-[4rem]">
-            Life documents, deadlines, and proof — ready when life asks.
+            Your important documents, ready before life asks.
           </h1>
 
           <p className="mt-5 max-w-md text-lg leading-relaxed text-pretty text-muted-foreground">
-            CertaNest helps you organize essential files, track renewals and
-            subscriptions, prepare reusable application packs, and share trusted
-            access securely.
+            CertaNest turns scattered files, deadlines, applications, document
+            requests, and secure sharing into one calm readiness workspace.
           </p>
 
           {/* The whole product in four verbs — the 10-second understanding test. */}
@@ -233,15 +259,24 @@ function Hero() {
             </Link>
           </div>
 
-          <p className="mt-5 text-sm font-medium text-foreground/80">
-            Private until you share it.
-          </p>
-          <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-            <span>Free during private beta</span>
-            <span className="text-border">·</span>
-            <span>No credit card</span>
-            <span className="text-border">·</span>
-            <span>Export anytime</span>
+          <ul className="mt-6 flex flex-wrap gap-2">
+            {[
+              "Private until shared",
+              "Import-only integrations",
+              "Export anytime",
+              "Built for sensitive proof",
+            ].map((t) => (
+              <li
+                key={t}
+                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card/80 px-2.5 py-1 text-xs font-medium text-foreground/80 shadow-xs backdrop-blur"
+              >
+                <Check className="size-3 text-brand-success" aria-hidden />
+                {t}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-xs text-muted-foreground">
+            Private beta · No credit card required
           </p>
         </div>
 
@@ -365,76 +400,6 @@ function Problem() {
             </ul>
           </ScrollReveal>
         </div>
-      </div>
-    </section>
-  );
-}
-
-// ---- How it works (4 steps) ------------------------------------------------
-
-function HowItWorks() {
-  const steps = [
-    {
-      icon: ScanLine,
-      title: "Add",
-      body: "Scan, upload, or save important documents and details — CertaNest captures the key dates for you.",
-    },
-    {
-      icon: Folder,
-      title: "Organize",
-      body: "Keep files, subscriptions, renewals, and application packs structured around real life.",
-    },
-    {
-      icon: Radar,
-      title: "Watch",
-      body: "Life Radar tracks what needs attention before it becomes urgent.",
-    },
-    {
-      icon: ShieldCheck,
-      title: "Share",
-      body: "Send selected access securely, prepare emergency access, and revoke whenever you need.",
-    },
-  ];
-  return (
-    <section id="how-it-works" className="scroll-mt-20 border-y border-border bg-card/50">
-      <div className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:py-24">
-        <ScrollReveal>
-          <SectionHeader
-            eyebrow="How it works"
-            title="One calm system keeps life documents ready."
-            description="No setup marathon. Add what matters once, and CertaNest keeps it organized, watched, and ready for the moment you need it."
-          />
-        </ScrollReveal>
-        <ol className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {steps.map((step, i) => {
-            const Icon = step.icon;
-            return (
-              <ScrollReveal
-                key={step.title}
-                as="li"
-                delay={i * 80}
-                className="flex h-full flex-col gap-4 rounded-2xl border border-border bg-card p-6 shadow-card"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="flex size-11 items-center justify-center rounded-xl bg-brand-navy text-brand-teal-bright">
-                    <Icon className="size-5" />
-                  </span>
-                  <span className="font-heading text-2xl font-semibold tabular-nums text-muted-foreground/30">
-                    {i + 1}
-                  </span>
-                </div>
-                <div>
-                  <h3 className="font-heading text-lg font-semibold">
-                    {step.title}
-                  </h3>
-                  <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                    {step.body}
-                  </p>
-                </div>
-              </ScrollReveal>
-            );
-          })}
-        </ol>
       </div>
     </section>
   );
