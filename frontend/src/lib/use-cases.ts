@@ -21,6 +21,10 @@ export interface UseCase {
   features: string[];
   /** A single honest trust line shown near the CTA. */
   trustNote: string;
+  /** Optional visible FAQ (also emitted as FAQPage JSON-LD — must match copy). */
+  faqs?: { q: string; a: string }[];
+  /** Related use-case slugs for internal linking (descriptive anchors). */
+  related?: string[];
 }
 
 export const USE_CASES: UseCase[] = [
@@ -163,6 +167,108 @@ export const USE_CASES: UseCase[] = [
     ],
     features: ["Vault", "Scan", "Deadlines & Renewals", "Emergency Access", "SafeSend"],
     trustNote: "Emergency access is read-only and revocable. Nothing is shared publicly.",
+  },
+  {
+    slug: "client-document-collection",
+    eyebrow: "For teams & agencies",
+    title: "Collect documents from clients without email chaos",
+    metaTitle: "Client Document Collection Software Without Email Chaos",
+    metaDescription:
+      "Collect documents from clients with secure request links, review workflows, reminders, and organized case folders — instead of messy email threads.",
+    pain: "Email is a poor document collection system: attachments get buried in threads, you lose track of who sent what, and chasing missing files eats your week.",
+    solution:
+      "Send a secure request link, let recipients upload without an account, then review and track every submission from one place.",
+    workflow: [
+      "Create a reusable request template for a case type",
+      "Send a secure file request link to each client",
+      "Recipients upload through the link — no account needed",
+      "Review uploads: accept, reject, or ask for a replacement",
+      "Keep missing files visible and send reminders",
+      "Share selected proof back through an expiring room",
+    ],
+    features: ["Document Requests", "CertaNest Portals", "Review workflow", "Deadlines & Renewals", "SafeSend"],
+    trustNote: "Request links are scoped to one case — recipients never see your workspace or other clients.",
+    faqs: [
+      {
+        q: "Do clients need an account to upload?",
+        a: "No. Each client gets a secure request link and uploads directly — no sign-up, no app to install.",
+      },
+      {
+        q: "How do I know what's still missing?",
+        a: "Every request shows what's received, accepted, or still outstanding, so nothing slips through. You can send a reminder in one click.",
+      },
+      {
+        q: "Is this enterprise software?",
+        a: "CertaNest is built for small teams and is in private beta. It doesn't offer enterprise compliance certifications or single sign-on yet — we're honest about what exists today.",
+      },
+    ],
+    related: ["agencies-schools", "secure-document-sharing", "visa-documents"],
+  },
+  {
+    slug: "secure-document-sharing",
+    eyebrow: "For secure sharing",
+    title: "Share proof without oversharing",
+    metaTitle: "Secure Document Sharing — Share Proof Without Oversharing",
+    metaDescription:
+      "Share selected documents with expiring access, revocation controls, audit history, and private-by-default storage — never a public link to your whole vault.",
+    pain: "Sharing a document by email or a public link exposes more than you intended, and you can't take it back once it's out.",
+    solution:
+      "Share only the items you choose, with an expiry, an optional access code, and a full activity log — and revoke access whenever you want.",
+    workflow: [
+      "Pick only the documents you need to share",
+      "Add an expiry and, optionally, an access code",
+      "Send a secure link, QR, or code — never the original file",
+      "Watch the activity log as it's opened",
+      "Revoke access anytime",
+    ],
+    features: ["SafeSend", "Redaction & Watermarking", "Audit logs", "Custom QR", "Sharing Rooms"],
+    trustNote: "Private until shared. Revoked and expired links are blocked server-side, not just hidden.",
+    faqs: [
+      {
+        q: "Can I take back access after sharing?",
+        a: "Yes. Revoke a share at any time, and expiring links close automatically. Both are enforced on the server, not just hidden in the UI.",
+      },
+      {
+        q: "Does the recipient see my whole vault?",
+        a: "No. A share exposes only the specific items you select. Everything else stays private.",
+      },
+      {
+        q: "Is the storage secure?",
+        a: "Files are encrypted at rest and private by default. We describe our protections plainly, without exaggerated security claims.",
+      },
+    ],
+    related: ["client-document-collection", "families", "visa-documents"],
+  },
+  {
+    slug: "passport-renewal-reminders",
+    eyebrow: "For deadlines & renewals",
+    title: "Never miss a passport or visa expiry",
+    metaTitle: "Passport Expiry Reminder App — Never Miss a Renewal",
+    metaDescription:
+      "Track passport, visa, and ID expiry dates and get reminders before they lapse — derived from your real documents, not a calendar you have to maintain.",
+    pain: "An expired passport or visa is discovered at the worst possible moment — at the airport, mid-application, or right before a deadline.",
+    solution:
+      "CertaNest reads the expiry dates on your documents and surfaces renewals before they lapse, with reminders 7, 30, 60, or 90 days ahead.",
+    workflow: [
+      "Add or scan your passport, visa, and ID documents",
+      "Set the expiry and renewal dates (or confirm the detected ones)",
+      "Choose how far ahead you want reminders",
+      "Let Life Radar surface what needs attention first",
+      "Renew with time to spare and keep proof ready",
+    ],
+    features: ["Deadlines & Renewals", "Life Radar", "Vault", "Scan", "Application Packs"],
+    trustNote: "Reminders are rule-based on dates you control — no guesswork, and your documents stay private.",
+    faqs: [
+      {
+        q: "How far ahead do reminders arrive?",
+        a: "You choose — typically 7, 30, 60, or 90 days before an expiry or renewal date, and you can set recurring reminders.",
+      },
+      {
+        q: "Does CertaNest renew my passport for me?",
+        a: "No. CertaNest helps you stay ready and on time. It doesn't submit applications for you, and it isn't legal or immigration advice.",
+      },
+    ],
+    related: ["visa-documents", "students", "families"],
   },
 ];
 

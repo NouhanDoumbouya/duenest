@@ -1,12 +1,13 @@
 import Link from "next/link";
-import { ArrowRight, Check, ShieldCheck } from "lucide-react";
+import { ArrowRight, Check, Plus, ShieldCheck } from "lucide-react";
 
 import { SiteHeader } from "@/components/layout/site-header";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { Eyebrow } from "@/components/marketing/section";
 import { buttonVariants } from "@/components/ui/button";
+import { buildUseCaseJsonLd } from "@/lib/seo";
 import { cn } from "@/lib/utils";
-import type { UseCase } from "@/lib/use-cases";
+import { getUseCase, type UseCase } from "@/lib/use-cases";
 
 // Launch-gated CTA: during private beta the real action is the waitlist; at
 // public launch (NEXT_PUBLIC_PRIVATE_BETA_ENABLED=false) it becomes register.
@@ -19,8 +20,15 @@ const PRIMARY_CTA = PRIVATE_BETA
   : { href: "/register", label: "Start organizing for free" };
 
 export function UseCasePage({ useCase }: { useCase: UseCase }) {
+  const related = (useCase.related ?? [])
+    .map((slug) => getUseCase(slug))
+    .filter((u): u is UseCase => Boolean(u));
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(buildUseCaseJsonLd(useCase)) }}
+      />
       <SiteHeader />
       <main className="mx-auto w-full max-w-5xl px-4 py-14 sm:px-6 lg:py-20">
         {/* Hero */}
@@ -117,6 +125,57 @@ export function UseCasePage({ useCase }: { useCase: UseCase }) {
             </Link>
           </div>
         </section>
+
+        {/* FAQ — visible content that exactly matches the FAQPage JSON-LD. */}
+        {useCase.faqs && useCase.faqs.length > 0 && (
+          <section className="mt-12">
+            <h2 className="text-xl font-semibold">Frequently asked questions</h2>
+            <div className="mt-5 divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
+              {useCase.faqs.map((f) => (
+                <details key={f.q} className="group">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-sm font-medium transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
+                    {f.q}
+                    <Plus
+                      className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-45"
+                      aria-hidden
+                    />
+                  </summary>
+                  <p className="px-5 pb-5 text-sm leading-relaxed text-muted-foreground">
+                    {f.a}
+                  </p>
+                </details>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Related use cases — descriptive internal links for crawl + discovery. */}
+        {related.length > 0 && (
+          <section className="mt-12">
+            <h2 className="text-xl font-semibold">Related use cases</h2>
+            <ul className="mt-5 grid gap-3 sm:grid-cols-3">
+              {related.map((u) => (
+                <li key={u.slug}>
+                  <Link
+                    href={`/use-cases/${u.slug}`}
+                    className="group flex h-full flex-col rounded-2xl border border-border bg-card p-5 transition-colors hover:bg-muted/40"
+                  >
+                    <span className="flex items-center gap-1.5 font-semibold">
+                      {u.title}
+                      <ArrowRight
+                        className="size-3.5 opacity-0 transition-opacity group-hover:opacity-100"
+                        aria-hidden
+                      />
+                    </span>
+                    <span className="mt-1 text-sm text-muted-foreground">
+                      {u.eyebrow}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
       </main>
       <SiteFooter />
     </>
