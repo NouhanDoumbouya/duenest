@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 
 import {
+  AiAssist,
   Differentiation,
   Integrations,
   Organizations,
@@ -12,7 +13,10 @@ import {
 } from "./landing-sections";
 import { PRIMARY_CTA, PRIVATE_BETA } from "@/lib/cta";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllEnvs();
+});
 
 describe("Landing V2 sections", () => {
   it("differentiation frames readiness over storage with a lifecycle", () => {
@@ -90,6 +94,30 @@ describe("Landing V2 sections", () => {
       "guaranteed secure",
     ]) {
       expect(text).not.toContain(claim);
+    }
+  });
+});
+
+describe("AiAssist (gated)", () => {
+  it("renders nothing when AI marketing is off (default)", () => {
+    vi.stubEnv("NEXT_PUBLIC_AI_ENABLED", "false");
+    const { container } = render(<AiAssist />);
+    expect(container.firstChild).toBeNull();
+  });
+
+  it("renders document generation + consent framing when AI is enabled", () => {
+    vi.stubEnv("NEXT_PUBLIC_AI_ENABLED", "true");
+    const { container } = render(<AiAssist />);
+    expect(screen.getByText(/Generate a document draft/i)).toBeTruthy();
+    expect(screen.getByText(/Chat with your documents/i)).toBeTruthy();
+    const text = (container.textContent ?? "").toLowerCase();
+    // Honest, consent-first — opt-in, reviewed, your own docs, never trained on.
+    expect(text).toContain("opt-in");
+    expect(text).toContain("review before save");
+    expect(text).toContain("never sold or used to train");
+    // No autonomy/overclaim.
+    for (const bad of ["auto-saved without", "fully automatic", "no review"]) {
+      expect(text).not.toContain(bad);
     }
   });
 });
