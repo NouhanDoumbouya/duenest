@@ -46,7 +46,7 @@ export const metadata: Metadata = {
     absolute: "CertaNest — Life Documents, Deadlines & Proof, Ready When Life Asks",
   },
   description:
-    "Organize important documents, track renewals and deadlines, prepare application packs, request documents from others, and share proof securely — all from one calm readiness workspace. Private by default. Free during the private beta.",
+    "CertaNest is a life admin app for important documents — organize files, track renewals and deadlines, prepare application packs, request documents from others, and share proof securely from one calm readiness workspace. Private by default. Free during the private beta.",
   alternates: { canonical: "/" },
 };
 
@@ -215,8 +215,9 @@ function Hero() {
           </h1>
 
           <p className="mt-5 max-w-md text-lg leading-relaxed text-pretty text-muted-foreground">
-            CertaNest turns scattered files, deadlines, applications, document
-            requests, and secure sharing into one calm readiness workspace.
+            CertaNest is a life admin app for important documents — it turns
+            scattered files, deadlines, applications, document requests, and
+            secure sharing into one calm readiness workspace.
           </p>
 
           {/* The whole product in four verbs — the 10-second understanding test. */}
