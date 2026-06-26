@@ -19,6 +19,7 @@ import {
   Inbox,
   Layers,
   Mail,
+  MessagesSquare,
   Plus,
   Radar,
   RefreshCw,
@@ -27,6 +28,7 @@ import {
   ShieldCheck,
   Sparkles,
   Upload,
+  Wand2,
 } from "lucide-react";
 
 import { Eyebrow, SectionHeader } from "@/components/marketing/section";
@@ -539,6 +541,86 @@ export function ProductProof() {
             {PRIMARY_CTA.label}
             <ArrowRight className="size-4" aria-hidden />
           </Link>
+        </ScrollReveal>
+      </div>
+    </section>
+  );
+}
+
+// ---- AI assist (gated) — only marketed once AI is actually live -------------
+//
+// Renders ONLY when NEXT_PUBLIC_AI_ENABLED=true (same gate the AI FAQ uses), so
+// we never advertise AI users can't reach yet. Copy is consent-first: opt-in,
+// review-before-save, your own documents only, never sold or used for training.
+
+/** Whether AI features are live enough to market (build-time public flag). */
+export function aiMarketingEnabled(): boolean {
+  return (process.env.NEXT_PUBLIC_AI_ENABLED ?? "false").toLowerCase() === "true";
+}
+
+export function AiAssist() {
+  if (!aiMarketingEnabled()) return null;
+  const cards = [
+    {
+      icon: Wand2,
+      title: "Generate a document draft",
+      body: "Draft cover letters, personal statements, and form answers from details you've already saved — then review and edit before anything is kept.",
+    },
+    {
+      icon: Sparkles,
+      title: "Smart intake",
+      body: "Add a file and get a suggested title, category, and key dates — as suggestions you confirm, never auto-saved.",
+    },
+    {
+      icon: MessagesSquare,
+      title: "Chat with your documents",
+      body: "Ask questions about the specific documents you select. AI only ever sees what you choose.",
+    },
+  ];
+  return (
+    <section id="ai" className="scroll-mt-20">
+      <div className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:py-24">
+        <ScrollReveal>
+          <SectionHeader
+            eyebrow="AI, with your consent"
+            title="When you want it, AI helps you do more."
+            description="AI is optional and opt-in. It assists with drafting, intake, and answering questions about documents you choose — always as suggestions you review before saving. Reminders and deadline checks stay rule-based."
+          />
+        </ScrollReveal>
+        <div className="mt-12 grid gap-5 md:grid-cols-3">
+          {cards.map((c, i) => {
+            const Icon = c.icon;
+            return (
+              <ScrollReveal
+                key={c.title}
+                delay={(i % 3) * 80}
+                className="surface-hover flex h-full flex-col gap-3 rounded-2xl border border-border bg-card p-6 shadow-card"
+              >
+                <span className="flex size-11 items-center justify-center rounded-xl bg-brand-navy text-brand-teal-bright">
+                  <Icon className="size-5" />
+                </span>
+                <h3 className="font-heading text-base font-semibold">{c.title}</h3>
+                <p className="text-sm leading-relaxed text-muted-foreground">{c.body}</p>
+                <ul className="mt-auto flex flex-wrap gap-1.5 pt-1">
+                  {["Opt-in", "Review before save", "Your documents only"].map((t) => (
+                    <li
+                      key={t}
+                      className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-muted-foreground"
+                    >
+                      {t}
+                    </li>
+                  ))}
+                </ul>
+              </ScrollReveal>
+            );
+          })}
+        </div>
+        <ScrollReveal className="mt-6">
+          <p className="mx-auto max-w-2xl text-center text-xs leading-relaxed text-muted-foreground">
+            AI is consent-based: it only ever sees documents you choose, every
+            suggestion is reviewed before it&apos;s saved, and your documents are
+            never sold or used to train models.
+          </p>
         </ScrollReveal>
       </div>
     </section>

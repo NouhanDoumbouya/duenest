@@ -30,6 +30,7 @@ import { PersonaSplit } from "@/components/marketing/persona-split";
 import { LifeRadarMockup } from "@/components/marketing/mockups";
 import { HeroReadinessComposite } from "@/components/marketing/hero-composite";
 import {
+  AiAssist,
   Differentiation,
   Integrations,
   Organizations,
@@ -179,6 +180,7 @@ export default function LandingPage() {
         <Integrations />
         <Security />
         <ProductProof />
+        <AiAssist />
         <UseCases />
         <Beta />
         <Faq />
