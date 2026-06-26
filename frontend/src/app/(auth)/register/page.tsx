@@ -104,7 +104,7 @@ function RegisterForm() {
             </div>
           )}
 
-          <GoogleButton />
+          <GoogleButton inviteCode={inviteCode} />
 
           <div className="flex items-center gap-3">
             <Separator className="flex-1" />

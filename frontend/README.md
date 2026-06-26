@@ -32,6 +32,7 @@ The backend (Django REST API) is expected at the URL in
 | Variable                   | Description                     | Example                        |
 | -------------------------- | ------------------------------- | ------------------------------ |
 | `NEXT_PUBLIC_API_BASE_URL` | Base URL of the CertaNest backend | `http://127.0.0.1:8000/api/v1` |
+| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | Public Google Web OAuth client id for "Continue with Google" (same id as the backend's `GOOGLE_OAUTH_CLIENT_ID`). Unset → the Google button is gracefully unavailable. Never the client **secret**. | `1234.apps.googleusercontent.com` |
 
 `.env.local` is git-ignored. Only `.env.local.example` is committed.
 

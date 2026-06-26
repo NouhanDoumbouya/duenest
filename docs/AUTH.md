@@ -32,6 +32,30 @@ relies on cookies.
 - `GET  /api/v1/auth/csrf/` — sets/refreshes the CSRF cookie.
 - `GET  /api/v1/users/me/` — current user; the source of truth for auth state.
 
+### Google sign-in (frontend: Google Identity Services)
+
+"Continue with Google" on the login/register pages uses **Google Identity
+Services** (GIS), not a second auth system:
+
+1. The frontend loads `https://accounts.google.com/gsi/client` once
+   (`src/lib/google-identity.ts`) and renders Google's button using the **public**
+   client id `NEXT_PUBLIC_GOOGLE_CLIENT_ID`.
+2. After the user authenticates with Google, GIS returns a Google **ID token** to
+   the `GoogleButton` callback. The token is held only in memory.
+3. The button calls `googleLogin({ id_token })` → `POST /api/v1/auth/google/`. The
+   backend verifies the token server-side (`verify_google_id_token`): signature,
+   expiry, issuer, `email_verified`, and **audience == `GOOGLE_OAUTH_CLIENT_ID`**.
+   It then sets the same HttpOnly auth cookies as password login.
+4. On success the button redirects with the same safe logic as password login
+   (`postAuthDestination`: a same-origin `?next=` wins, else onboarding/dashboard).
+
+The frontend `NEXT_PUBLIC_GOOGLE_CLIENT_ID` and backend `GOOGLE_OAUTH_CLIENT_ID`
+are the **same** Google Web OAuth client id (also shared with the
+Drive/Calendar/Gmail integrations). The client **secret** is backend-only. The
+Google ID token is never stored (no local/session storage) and never logged.
+Without the public client id, the button shows a graceful "unavailable" state —
+it never fakes a login.
+
 ## 3. How a request is authenticated
 
 `apps.users.cookie_auth.CookieJWTAuthentication` (the default DRF auth class):
