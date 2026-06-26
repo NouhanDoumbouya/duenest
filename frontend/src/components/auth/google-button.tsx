@@ -1,6 +1,21 @@
-import { Button } from "@/components/ui/button";
+"use client";
 
-/** Official Google "G" mark. */
+import { useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Loader2, TriangleAlert } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { ApiError } from "@/lib/api";
+import { googleLogin } from "@/lib/auth";
+import { getOnboardingState } from "@/lib/onboarding";
+import { postAuthDestination } from "@/lib/readiness";
+import {
+  type GoogleCredentialResponse,
+  getGoogleClientId,
+  loadGoogleIdentity,
+} from "@/lib/google-identity";
+
+/** Official Google "G" mark (used only for the graceful fallback button). */
 function GoogleIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden className="size-4">
@@ -24,27 +39,179 @@ function GoogleIcon() {
   );
 }
 
+/** Only same-origin relative paths are honoured as a post-login destination. */
+function safeNext(next: string | null): string | null {
+  return next && next.startsWith("/") && !next.startsWith("//") ? next : null;
+}
+
+type Phase = "unavailable" | "loading" | "ready" | "authenticating";
+
 /**
- * Google sign-in entry point.
+ * "Continue with Google" — real Google Identity Services sign-in.
  *
- * Honest by design: until the Google Identity flow is wired to
- * POST /api/v1/auth/google/, this stays disabled and clearly labelled — we
- * never fake a Google login.
+ * Flow: GIS renders Google's button → the user authenticates → GIS hands us a
+ * Google **ID token** → we send it to the backend `/auth/google/` (which verifies
+ * it server-side) via `googleLogin` → tokens are set by the backend → we redirect
+ * with the same safe logic as password login.
+ *
+ * The ID token is held only in memory for the single backend call — never stored,
+ * never logged. Without `NEXT_PUBLIC_GOOGLE_CLIENT_ID` the button shows a graceful
+ * unavailable state (we never fake a Google login).
  */
-export function GoogleButton() {
+export function GoogleButton({ inviteCode }: { inviteCode?: string }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const clientId = getGoogleClientId();
+  const [phase, setPhase] = useState<Phase>(clientId ? "loading" : "unavailable");
+  const [error, setError] = useState<string | null>(null);
+
+  // The GIS callback is registered once; route through a ref so it always sees
+  // the latest invite code / query params / router without re-initializing GIS.
+  // The ref is refreshed in an effect (never during render).
+  const handlerRef = useRef<(resp: GoogleCredentialResponse) => void>(() => {});
+  useEffect(() => {
+    handlerRef.current = async (response: GoogleCredentialResponse) => {
+      const credential = response?.credential;
+      if (!credential) {
+        setError("Google sign-in was cancelled or did not complete.");
+        return;
+      }
+      setError(null);
+      setPhase("authenticating");
+      try {
+        // The ID token is sent ONLY to our backend, which verifies it. We never
+        // store or log it.
+        await googleLogin({
+          id_token: credential,
+          invite_code: inviteCode?.trim() || undefined,
+        });
+        const explicitNext = safeNext(searchParams.get("next"));
+        let onboarding = null;
+        if (!explicitNext) {
+          try {
+            onboarding = await getOnboardingState();
+          } catch {
+            onboarding = null;
+          }
+        }
+        router.replace(postAuthDestination({ explicitNext, onboarding }));
+      } catch (err) {
+        setPhase("ready");
+        setError(
+          err instanceof ApiError
+            ? err.message
+            : "We couldn't complete Google sign-in. Please try again.",
+        );
+      }
+    };
+  });
+
+  useEffect(() => {
+    if (!clientId) return;
+    let active = true;
+    loadGoogleIdentity()
+      .then((idClient) => {
+        if (!active || !containerRef.current) return;
+        idClient.initialize({
+          client_id: clientId,
+          callback: (resp) => handlerRef.current(resp),
+          cancel_on_tap_outside: true,
+        });
+        idClient.renderButton(containerRef.current, {
+          type: "standard",
+          theme: "outline",
+          size: "large",
+          text: "continue_with",
+          shape: "pill",
+          logo_alignment: "left",
+          width: Math.min(Math.max(containerRef.current.clientWidth || 320, 220), 400),
+        });
+        setPhase("ready");
+      })
+      .catch(() => {
+        if (active) {
+          setPhase("unavailable");
+          setError("Google sign-in is unavailable right now. Use email instead.");
+        }
+      });
+    return () => {
+      active = false;
+    };
+    // clientId is build-time-stable; intentionally run once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Graceful unavailable state — config missing or GIS failed to load.
+  if (phase === "unavailable") {
+    return (
+      <div className="flex flex-col gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          className="h-11 w-full justify-center gap-2 text-sm font-medium"
+          disabled
+          title="Google sign-in is unavailable"
+        >
+          <GoogleIcon />
+          Continue with Google
+        </Button>
+        {error && (
+          <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+            <TriangleAlert className="size-3.5 shrink-0" />
+            {error}
+          </p>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <Button
-      type="button"
-      variant="outline"
-      className="h-11 w-full justify-center gap-2 text-sm font-medium"
-      disabled
-      title="Google sign-in coming soon"
-    >
-      <GoogleIcon />
-      Continue with Google
-      <span className="text-xs font-normal text-muted-foreground">
-        (coming soon)
-      </span>
-    </Button>
+    <div className="flex flex-col gap-2">
+      {phase === "authenticating" ? (
+        <Button
+          type="button"
+          variant="outline"
+          className="h-11 w-full justify-center gap-2 text-sm font-medium"
+          disabled
+        >
+          <Loader2 className="size-4 animate-spin" />
+          Signing in with Google…
+        </Button>
+      ) : (
+        <>
+          {phase === "loading" && (
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 w-full justify-center gap-2 text-sm font-medium"
+              disabled
+            >
+              <Loader2 className="size-4 animate-spin" />
+              Loading Google…
+            </Button>
+          )}
+          {/* GIS renders Google's official button into this container. */}
+          <div
+            ref={containerRef}
+            className={`flex min-h-11 w-full justify-center ${
+              phase === "ready" ? "" : "hidden"
+            }`}
+            data-testid="google-button-container"
+          />
+        </>
+      )}
+
+      {error && phase !== "authenticating" && (
+        <p
+          className="flex items-center gap-1.5 rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive"
+          role="alert"
+        >
+          <TriangleAlert className="size-3.5 shrink-0" />
+          {error}
+        </p>
+      )}
+    </div>
   );
 }

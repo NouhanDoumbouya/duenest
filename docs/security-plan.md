@@ -230,6 +230,20 @@ The backend should enforce reasonable password validation:
 - Frontend storage strategy should be reviewed carefully before production.
 - Token refresh flow must be handled securely.
 
+### Google sign-in (frontend, Google Identity Services)
+
+- The frontend uses only the **public** client id (`NEXT_PUBLIC_GOOGLE_CLIENT_ID`);
+  the Google client **secret** is backend-only and never reaches the browser.
+- The Google **ID token** is held only in memory for the single backend call —
+  never written to local/session storage and never logged.
+- The token is sent **only** to `POST /api/v1/auth/google/`, which verifies it
+  server-side (signature, expiry, issuer, `email_verified`, audience =
+  `GOOGLE_OAUTH_CLIENT_ID`). The frontend never trusts Google profile data and
+  never bypasses backend verification.
+- If the client id is unset, the button shows a graceful unavailable state — it
+  never fabricates a login. Reuses the existing Google Web OAuth client (shared
+  with integrations); it does not add a second auth system.
+
 ### Future Authentication Improvements
 
 - email verification

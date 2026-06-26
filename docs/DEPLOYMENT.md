@@ -174,6 +174,14 @@ DUENEST_KEK_V1_B64=<base64 32-byte key>   # generate_encryption_key
 # Google Calendar Import V1 (docs/integrations-google-calendar.md) adds NO new env:
 # it reuses the three GOOGLE_OAUTH_* values above and the existing read-only
 # `calendar.readonly` scope. Gate it with the `google_calendar_import` feature flag.
+#
+# --- Google sign-in ("Continue with Google"; docs/AUTH.md) ---
+# Frontend (Vercel) build-time PUBLIC var — the SAME client id as
+# GOOGLE_OAUTH_CLIENT_ID above. The client SECRET is never set on Vercel.
+#   NEXT_PUBLIC_GOOGLE_CLIENT_ID=<google-web-client-id>
+# On the one Google Web OAuth client, add:
+#   Authorized JavaScript origins: https://certanest.com  (+ http://localhost:3000 for dev)  ← for login
+#   Authorized redirect URIs:      https://api.certanest.com/api/v1/integrations/google/callback/  ← for integrations
 ```
 
 Production settings **fail closed** if the encryption KEK is missing/malformed.

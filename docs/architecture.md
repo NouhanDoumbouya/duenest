@@ -565,6 +565,16 @@ sequenceDiagram
     Backend-->>Frontend: Protected resource response
 ```
 
+### Google sign-in (frontend)
+
+"Continue with Google" uses **Google Identity Services** (`src/lib/google-identity.ts`
++ `GoogleButton`): the frontend renders Google's button with the public
+`NEXT_PUBLIC_GOOGLE_CLIENT_ID`, receives a Google **ID token**, and sends it to the
+existing `POST /auth/google/`, which verifies it server-side (audience =
+`GOOGLE_OAUTH_CLIENT_ID`). It is the same Google Web OAuth client as the
+integrations — not a second auth system. The ID token is never stored or logged;
+the client secret never reaches the browser. See `docs/AUTH.md`.
+
 ### Security Notes
 
 The backend must never trust the frontend for authorization. Every resource query must be scoped to the authenticated user.
