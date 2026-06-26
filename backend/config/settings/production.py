@@ -2,12 +2,28 @@ from decouple import Csv, config
 
 from .base import *  # noqa: F401,F403
 from apps.core.security import key_provider
+from apps.core.security.startup_checks import verify_production_security
 
 DEBUG = False
+
+# Founder tools are never granted to all staff in production — only superusers
+# and the FOUNDER_EMAILS allowlist (SEC-009 / M-4). Hardcoded here so a stray
+# FOUNDER_ALLOW_ALL_STAFF=true in the environment cannot widen access.
+FOUNDER_ALLOW_ALL_STAFF = False
 
 # Fail closed: refuse to start if the active file/field encryption KEK is
 # missing or malformed, so we never silently run without encryption keys.
 key_provider.validate_configuration()
+
+# Fail closed on the remaining security-critical settings (SEC-010): a missing or
+# dev-default SECRET_KEY (H-1) or AUDIT_LOG_HASH_SALT (M-3), or a left-on
+# FOUNDER_ALLOW_ALL_STAFF (M-4), aborts startup instead of silently running with
+# a publicly-known value.
+verify_production_security(
+    secret_key=SECRET_KEY,  # noqa: F405
+    audit_salt=AUDIT_LOG_HASH_SALT,  # noqa: F405
+    founder_allow_all_staff=FOUNDER_ALLOW_ALL_STAFF,
+)
 
 # Billing fails closed in production via apps.billing.apps.BillingConfig.ready()
 # (SEC-004): the unsigned manual provider must never be active here, and Stripe

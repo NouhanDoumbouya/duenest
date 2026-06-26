@@ -9,13 +9,17 @@ from decouple import Csv, config
 
 from apps.ai.config import resolve_ai_settings
 from apps.ai.embeddings import resolve_embeddings_settings
+from apps.core.security.startup_checks import (
+    INSECURE_DEV_AUDIT_SALT,
+    INSECURE_DEV_SECRET_KEY,
+)
 from apps.notifications.email_config import resolve_email_settings
 from config.storage import build_storages
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-SECRET_KEY = config("DJANGO_SECRET_KEY", 
-                    default="unsafe-dev-secret-key-change-me-for-local-development-only")
+# Insecure dev default — production.py fails closed if this is still in effect.
+SECRET_KEY = config("DJANGO_SECRET_KEY", default=INSECURE_DEV_SECRET_KEY)
 
 DEBUG = config("DJANGO_DEBUG", default=False, cast=bool)
 
@@ -369,8 +373,15 @@ RESEND_WEBHOOK_SECRET = config("RESEND_WEBHOOK_SECRET", default="")
 # value in production; a dev fallback keeps local/test runs working.
 AUDIT_LOG_HASH_SALT = config(
     "AUDIT_LOG_HASH_SALT",
-    default="dev-audit-salt-not-for-production",
+    default=INSECURE_DEV_AUDIT_SALT,
 )
+
+# Number of trusted reverse proxies (load balancer / CDN) in front of the app.
+# The real client IP is read this many hops from the RIGHT of X-Forwarded-For —
+# the part the outermost trusted proxy appended — so a client cannot spoof it by
+# pre-setting the header (SEC-011). Default 1 (a single load balancer); set 0 to
+# ignore X-Forwarded-For entirely (direct connections / no proxy).
+TRUSTED_PROXY_COUNT = config("TRUSTED_PROXY_COUNT", default=1, cast=int)
 
 # Public URLs. FRONTEND_APP_URL is the canonical name; DUENEST_APP_BASE_URL is
 # kept as a backward-compatible alias (used in existing email link building).
@@ -456,7 +467,26 @@ REST_FRAMEWORK = {
     ),
     "DEFAULT_PAGINATION_CLASS": "apps.core.pagination.StandardResultsSetPagination",
     "PAGE_SIZE": 20,
+    # Baseline rate limiting (SEC-012). Without a default throttle, only the
+    # endpoints that opt in are protected; everything else — including expensive
+    # export/redaction/merge work — is wide open to authenticated
+    # resource-exhaustion abuse. These broad per-user/per-IP caps are generous
+    # enough to be invisible to normal use while bounding scripted hammering.
+    # Heavy endpoints add their own tighter ScopedRateThrottle on top.
+    "DEFAULT_THROTTLE_CLASSES": (
+        "rest_framework.throttling.UserRateThrottle",
+        "rest_framework.throttling.AnonRateThrottle",
+    ),
     "DEFAULT_THROTTLE_RATES": {
+        # Broad backstop caps applied to every endpoint (per authenticated user
+        # and per anonymous IP respectively).
+        "user": _throttle_rate("1200/min"),
+        "anon": _throttle_rate("120/min"),
+        # Heavy document operations (decrypt + render/zip). Tight per-user caps
+        # so a single account cannot exhaust the workers (SEC-012).
+        "document_export": _throttle_rate("20/min"),
+        "protected_copy": _throttle_rate("12/min"),
+        "fill_sign": _throttle_rate("20/min"),
         "waitlist": _throttle_rate("5/hour"),
         "invite_validate": _throttle_rate("20/hour"),
         # Quick Share public access-code attempts (anti brute-force).
@@ -635,6 +665,15 @@ SIMPLE_JWT = {
     ),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
+    # Bind every issued token to a hash of the user's password (SEC-013). When the
+    # password changes — e.g. a password reset after a suspected compromise — all
+    # previously issued access AND refresh tokens stop validating immediately,
+    # instead of lingering until the 15-minute access token expires. Adds no extra
+    # query (the auth path already loads the user). Env-toggleable as a safety
+    # valve; defaults on.
+    "CHECK_REVOKE_TOKEN": config(
+        "JWT_CHECK_REVOKE_TOKEN", default=True, cast=bool
+    ),
 }
 
 # ===========================================================================

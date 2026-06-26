@@ -659,7 +659,13 @@ class PublicSharedFileSerializer(serializers.Serializer):
 
 
 class DocumentFileActivitySerializer(serializers.ModelSerializer):
-    """Owner-only activity entry."""
+    """Owner-only activity entry.
+
+    The raw visitor ``ip_address`` is intentionally NOT exposed (SEC-014): it is
+    stored only for abuse investigation, and surfacing a visitor's raw IP to the
+    document owner is a privacy leak inconsistent with the salted-hash design used
+    by the audit log.
+    """
 
     class Meta:
         model = DocumentFileActivity
@@ -668,7 +674,6 @@ class DocumentFileActivitySerializer(serializers.ModelSerializer):
             "action",
             "actor_type",
             "share_link",
-            "ip_address",
             "metadata",
             "created_at",
         ]
@@ -2249,13 +2254,14 @@ class PublicShareRoomSerializer(serializers.Serializer):
 
 
 class RoomActivitySerializer(serializers.ModelSerializer):
+    # Raw visitor ip_address is intentionally omitted (SEC-014) — stored for abuse
+    # investigation only, never surfaced to the room owner.
     class Meta:
         model = RoomActivity
         fields = [
             "id",
             "action",
             "actor_type",
-            "ip_address",
             "metadata",
             "created_at",
         ]
