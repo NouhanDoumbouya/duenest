@@ -639,10 +639,22 @@ def reminder_date_for_rule(rule) -> date | None:
 
 
 def client_ip(request) -> str | None:
-    """Best-effort client IP (respects a single proxy hop)."""
+    """Best-effort client IP that resists X-Forwarded-For spoofing (SEC-011).
+
+    ``X-Forwarded-For`` is appended to by each proxy, so the leftmost entry is
+    client-supplied and trivially spoofable. With ``settings.TRUSTED_PROXY_COUNT``
+    trusted proxies in front, the trustworthy client IP is the Nth entry from the
+    RIGHT — the value the outermost trusted proxy actually observed. Falls back to
+    ``REMOTE_ADDR`` (and ignores the header entirely when the count is 0).
+    """
+    from django.conf import settings
+
+    num_proxies = getattr(settings, "TRUSTED_PROXY_COUNT", 1)
     forwarded = request.META.get("HTTP_X_FORWARDED_FOR")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
+    if forwarded and isinstance(num_proxies, int) and num_proxies > 0:
+        parts = [p.strip() for p in forwarded.split(",") if p.strip()]
+        if len(parts) >= num_proxies:
+            return parts[-num_proxies]
     return request.META.get("REMOTE_ADDR")
 
 

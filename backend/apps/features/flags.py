@@ -44,11 +44,18 @@ class FeatureDisabled(APIException):
 
 
 def is_founder(user) -> bool:
-    return bool(
-        user
-        and getattr(user, "is_authenticated", False)
-        and (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False))
-    )
+    """Founder check for feature-flag visibility (FOUNDER_ONLY / BETA_ONLY).
+
+    Delegates to the single canonical implementation in
+    :mod:`apps.founder.permissions` so feature gating uses the SAME strict rule
+    as the founder console: superusers always qualify; other staff must be on the
+    ``FOUNDER_EMAILS`` allowlist (``FOUNDER_ALLOW_ALL_STAFF`` relaxes this in dev).
+    Previously this was a weaker "any staff" check, a latent privilege-escalation
+    foot-gun if reused for authorization (SEC-009 / M-5).
+    """
+    from apps.founder.permissions import is_founder as _is_founder
+
+    return _is_founder(user)
 
 
 def is_beta_user(user) -> bool:

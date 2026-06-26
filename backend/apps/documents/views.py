@@ -2723,6 +2723,8 @@ class DocumentBundleExportMergedPdfView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "document_export"
 
     def post(self, request, bundle_id):
         require_feature_enabled("application_pack_preparation", request.user)
@@ -2817,6 +2819,8 @@ class DocumentsBulkExportView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "document_export"
 
     def post(self, request):
         doc_ids = _parse_id_list(request, "document_ids")
@@ -4644,6 +4648,9 @@ def _copy_as_payload(copy) -> dict:
 
 class ProtectedCopyGenerateView(_ProtectedCopyScopedView):
     """POST → render the protected file (new encrypted private file). No AI."""
+
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "protected_copy"
 
     def post(self, request, pk):
         from .document_protection import (
@@ -7858,6 +7865,8 @@ class DocumentFileFillSignView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "fill_sign"
 
     def post(self, request, pk):
         require_feature_enabled("fill_sign", request.user)

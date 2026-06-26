@@ -2233,3 +2233,60 @@ group.
   observability console.
 - **Stripe safety:** a dedicated gate reports `manual`/`test` as safe and flags
   `live` as a launch blocker — the report itself never switches Stripe mode.
+
+## Security Hardening V2 (audit remediation)
+
+Remediations from a full read-only security audit. The platform was already
+defense-in-depth (owner-scoped authorization, envelope encryption, hashed access
+codes, signed/idempotent Stripe webhooks); these changes close fail-open
+configuration gaps and abuse surfaces. The relevant code is in
+`apps/core/security/startup_checks.py`, `config/settings/`,
+`apps/documents/{services,views,serializers}.py`, and `apps/features/flags.py`.
+
+- **SEC-010 — production fails closed on insecure config (was fail-open).**
+  `production.py` now calls `verify_production_security()` at import time and
+  refuses to start when `DJANGO_SECRET_KEY` (H-1) or `AUDIT_LOG_HASH_SALT` (M-3)
+  is unset or still equals its public development default, mirroring the existing
+  KEK/billing fail-closed checks. The dev defaults live in one place
+  (`startup_checks.py`) so the settings default and the rejection can never drift.
+- **SEC-009 — founder access cannot be widened by env in prod (M-4).**
+  `FOUNDER_ALLOW_ALL_STAFF` is now hardcoded `False` in `production.py`
+  (a stray `=true` in the environment is ignored), and the previously weaker
+  "any staff" `is_founder` in `apps/features/flags.py` now delegates to the
+  single strict implementation in `apps/founder/permissions.py` (superuser, or
+  staff on the `FOUNDER_EMAILS` allowlist). Feature-flag gating and the founder
+  console now share one rule (M-5).
+- **SEC-012 — baseline + heavy-endpoint rate limiting (H-2).** DRF now has a
+  global `DEFAULT_THROTTLE_CLASSES` (per-user + per-IP backstop), and the
+  expensive document operations carry tight `ScopedRateThrottle` scopes:
+  bulk/merged export (`document_export`), redaction/watermark rasterization
+  (`protected_copy`), and fill & sign (`fill_sign`). This bounds authenticated
+  resource-exhaustion abuse. The global backstop is disabled in the test settings
+  for determinism; the scoped limits stay active and are tested.
+- **SEC-013 — tokens are revoked on password change (M-1).** `SIMPLE_JWT` now
+  sets `CHECK_REVOKE_TOKEN`, binding every issued access/refresh token to a hash
+  of the user's password. A password reset (e.g. after a suspected compromise)
+  immediately invalidates all previously issued tokens instead of leaving an
+  access token valid until its 15-minute lifetime expires. No extra query — the
+  auth path already loads the user. Toggleable via `JWT_CHECK_REVOKE_TOKEN`.
+- **SEC-011 — X-Forwarded-For is no longer client-spoofable (M-6).**
+  `client_ip()` now reads the real client from `TRUSTED_PROXY_COUNT` hops from the
+  RIGHT of `X-Forwarded-For` (the value the outermost trusted proxy observed)
+  instead of the spoofable leftmost entry. Default `1` (single load balancer);
+  set it to match the real proxy chain, or `0` to ignore the header. This keeps
+  audit IP-hashes, activity logs, and analytics dedupe trustworthy.
+- **SEC-014 — raw visitor IPs are never shown to owners (M-2).** The owner-facing
+  `DocumentFileActivitySerializer` and `RoomActivitySerializer` no longer expose
+  the raw `ip_address` field (it is retained on the model for abuse investigation
+  only). This matches the salted-hash privacy posture of the audit log.
+
+**Operational note:** lockouts and throttles are cache-backed and therefore fail
+open under the default per-process `LocMemCache` when more than one process/instance
+runs. Any multi-instance deployment must enable the shared Redis cache
+(`ENABLE_REDIS_CACHE=true` + `REDIS_URL`) so these controls are cluster-wide.
+
+**Deferred (tracked, lower risk):** at-rest hashing of stored activity IP/UA
+(currently retained raw for abuse review, but no longer surfaced); moving the
+Content-Security-Policy from Report-Only to enforced nonce-based; CSV
+formula-injection neutralisation on the subscriptions export; atomic plan/storage
+limit checks (current check-then-create has a small TOCTOU window).
