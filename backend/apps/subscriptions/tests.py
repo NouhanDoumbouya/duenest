@@ -725,3 +725,24 @@ class DeprecationGateTest(APITestCase):
             format="json",
         )
         self.assertEqual(res.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+
+
+class CsvFormulaInjectionTest(SubscriptionBaseTest):
+    """SEC-015 — the CSV export neutralizes spreadsheet formula injection."""
+
+    def test_export_quotes_formula_like_cells(self):
+        self.client.force_authenticate(self.alice)
+        self.make_sub(
+            owner=self.alice,
+            name='=HYPERLINK("http://evil")',
+            provider="@SUM(A1)",
+            notes="+1+1",
+        )
+        resp = self.client.get("/api/v1/subscriptions/export/")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        body = resp.content.decode()
+        # Each risky user-entered cell is prefixed with a single quote so a
+        # spreadsheet renders it as literal text, not an executable formula.
+        self.assertIn("'=HYPERLINK", body)
+        self.assertIn("'@SUM(A1)", body)
+        self.assertIn("'+1+1", body)

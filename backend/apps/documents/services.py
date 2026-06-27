@@ -14,7 +14,7 @@ from django.core.files.base import ContentFile
 from django.db.models import Count, Q
 from django.utils import timezone
 
-from .audit import safe_audit_metadata
+from .audit import hash_request_fingerprint, safe_audit_metadata
 from .models import (
     Document,
     DocumentActivity,
@@ -674,6 +674,7 @@ def log_activity(
     """
     try:
         owner_id = file.document.owner_id if file.document_id else file.uploaded_by_id
+        fingerprint = hash_request_fingerprint(request) if request is not None else {}
         DocumentFileActivity.objects.create(
             owner_id=owner_id,
             document_id=file.document_id,
@@ -681,8 +682,10 @@ def log_activity(
             share_link=share_link,
             action=action,
             actor_type=actor_type,
-            ip_address=client_ip(request) if request is not None else None,
-            user_agent=(request.META.get("HTTP_USER_AGENT", "")[:1000] if request else ""),
+            # Store a salted hash of the visitor fingerprint, never the raw IP/UA
+            # (SEC-014) — supports abuse correlation without retaining PII.
+            ip_hash=fingerprint.get("ip_hash", ""),
+            user_agent_hash=fingerprint.get("user_agent_hash", ""),
             # Defense-in-depth: drop any token/url/storage-key/content a caller may
             # accidentally pass before it lands in an owner-visible activity trail.
             metadata=safe_audit_metadata(metadata or {}),
@@ -698,15 +701,15 @@ def log_room_activity(
     from .models import RoomActivity
 
     try:
+        fingerprint = hash_request_fingerprint(request) if request is not None else {}
         RoomActivity.objects.create(
             owner_id=room.owner_id,
             room=room,
             action=action,
             actor_type=actor_type,
-            ip_address=client_ip(request) if request is not None else None,
-            user_agent=(
-                request.META.get("HTTP_USER_AGENT", "")[:1000] if request else ""
-            ),
+            # Salted-hash fingerprint only — never the raw IP/UA (SEC-014).
+            ip_hash=fingerprint.get("ip_hash", ""),
+            user_agent_hash=fingerprint.get("user_agent_hash", ""),
             metadata=safe_audit_metadata(metadata or {}),
         )
     except Exception:  # noqa: BLE001 — logging must never break the flow

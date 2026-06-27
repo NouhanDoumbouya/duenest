@@ -573,8 +573,15 @@ class DocumentFileActivity(models.Model):
     )
     action = models.CharField(max_length=64, choices=Action.choices)
     actor_type = models.CharField(max_length=32, choices=ActorType.choices)
+    # Deprecated raw network identifiers (SEC-014). No longer populated — the
+    # salted-hash fields below carry the fingerprint instead. Kept nullable for
+    # backward compatibility; existing rows are purged by a data migration.
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     user_agent = models.TextField(blank=True)
+    # Salted SHA-256 fingerprints (apps.documents.audit) — abuse correlation
+    # without retaining a visitor's raw IP / user-agent.
+    ip_hash = models.CharField(max_length=64, blank=True)
+    user_agent_hash = models.CharField(max_length=64, blank=True)
     metadata = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -2285,8 +2292,15 @@ class RoomActivity(models.Model):
     )
     action = models.CharField(max_length=64, choices=Action.choices)
     actor_type = models.CharField(max_length=32, choices=ActorType.choices)
+    # Deprecated raw network identifiers (SEC-014). No longer populated — the
+    # salted-hash fields below carry the fingerprint instead. Kept nullable for
+    # backward compatibility; existing rows are purged by a data migration.
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     user_agent = models.TextField(blank=True)
+    # Salted SHA-256 fingerprints (apps.documents.audit) — abuse correlation
+    # without retaining a visitor's raw IP / user-agent.
+    ip_hash = models.CharField(max_length=64, blank=True)
+    user_agent_hash = models.CharField(max_length=64, blank=True)
     metadata = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

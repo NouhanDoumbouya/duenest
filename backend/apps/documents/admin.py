@@ -105,8 +105,8 @@ class DocumentFileActivityAdmin(admin.ModelAdmin):
         "share_link",
         "action",
         "actor_type",
-        "ip_address",
-        "user_agent",
+        "ip_hash",
+        "user_agent_hash",
         "metadata",
         "created_at",
     ]
