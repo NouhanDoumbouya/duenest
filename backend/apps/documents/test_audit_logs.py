@@ -271,3 +271,36 @@ class IntegrationTests(APITestCase):
         with mock.patch("apps.ai.client.generate") as g:
             self.client.post("/api/v1/sharing-rooms/", {"title": "R"}, format="json")
         g.assert_not_called()
+
+
+class ActivityFingerprintAtRestTests(APITestCase):
+    """SEC-014 — activity trails store a salted hash, never a raw IP/UA."""
+
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="fp", email="fp@x.com", password="StrongPass123!DN"
+        )
+
+    @override_settings(AUDIT_LOG_HASH_SALT="test-salt", TRUSTED_PROXY_COUNT=0)
+    def test_log_activity_persists_hash_not_raw_ip(self):
+        from django.test import RequestFactory
+
+        from apps.documents.models import DocumentFileActivity
+        from apps.documents.services import log_activity
+
+        file = _png(self.owner)
+        request = RequestFactory().get(
+            "/", REMOTE_ADDR="203.0.113.42", HTTP_USER_AGENT="Mozilla/5.0 Probe"
+        )
+        log_activity(file=file, action="view", actor_type="owner", request=request)
+
+        entry = DocumentFileActivity.objects.latest("id")
+        # Hashes are present...
+        self.assertTrue(entry.ip_hash)
+        self.assertTrue(entry.user_agent_hash)
+        # ...the raw values are NOT stored...
+        self.assertIsNone(entry.ip_address)
+        self.assertEqual(entry.user_agent, "")
+        # ...and the hash does not leak the plaintext IP.
+        self.assertNotIn("203.0.113.42", entry.ip_hash)
+        self.assertEqual(len(entry.ip_hash), 64)  # sha256 hex

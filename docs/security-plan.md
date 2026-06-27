@@ -2285,8 +2285,41 @@ open under the default per-process `LocMemCache` when more than one process/inst
 runs. Any multi-instance deployment must enable the shared Redis cache
 (`ENABLE_REDIS_CACHE=true` + `REDIS_URL`) so these controls are cluster-wide.
 
-**Deferred (tracked, lower risk):** at-rest hashing of stored activity IP/UA
-(currently retained raw for abuse review, but no longer surfaced); moving the
-Content-Security-Policy from Report-Only to enforced nonce-based; CSV
-formula-injection neutralisation on the subscriptions export; atomic plan/storage
-limit checks (current check-then-create has a small TOCTOU window).
+### Hardening V2 follow-ups (completed)
+
+A second pass closed the remaining well-contained items:
+
+- **SEC-014 (at-rest) — activity trails no longer retain raw IP/UA.**
+  `log_activity` / `log_room_activity` now persist only a salted SHA-256
+  `ip_hash` / `user_agent_hash` (via `hash_request_fingerprint`); the deprecated
+  raw `ip_address` / `user_agent` columns are no longer written and existing rows
+  are purged by a data migration (`documents/migrations/0041`). The founder admin
+  surfaces the hashes, not raw values.
+- **SEC-015 — CSV formula-injection neutralised on the subscriptions export.**
+  Every user-entered cell (name, provider, plan, category, payment label, notes)
+  is passed through `_csv_safe`, which prefixes any cell beginning with `= + - @`
+  or a tab/CR with a single quote so spreadsheets render it as text, not a formula.
+- **Operational — production warns when running without a shared cache.**
+  `production.py` emits a `django.security` warning when `ENABLE_REDIS_CACHE` is
+  off, since the cache-backed rate limits and access-code lockouts fail open across
+  multiple processes/instances without Redis. (Non-fatal so single-instance lean
+  deploys still boot.)
+- **CI** stays manual-only for now. The repository is private, so GitHub Actions
+  bills minutes; automatic runs remain paused to avoid charges while account
+  billing is off (run the workflow from the Actions tab, or locally, before
+  merging). Re-enable the `push`/`pull_request` triggers in `.github/workflows/
+  ci.yml` once billing is restored.
+- **Dependencies.** `npm audit fix` cleared the auto-fixable frontend advisory; the
+  rest are transitively pinned by Next.js (postcss) or dev-server/Windows-only
+  (esbuild) and are left for a dedicated Next.js upgrade rather than a forced bump.
+
+**Still deferred (needs dedicated work, not a quick patch):**
+
+- **CSP Report-Only → enforced nonce-based** — requires per-request nonce wiring
+  through the Next App Router and live browser verification; shipping it blind can
+  break inline scripts. Own branch + manual verification.
+- **Atomic plan/storage limit checks** — the current check-then-create has a small
+  TOCTOU window; a correct fix needs row-locking that behaves differently on
+  SQLite (dev) vs PostgreSQL (prod). Low severity.
+- **Splitting `apps/documents/views.py`** (~8k lines) into focused modules — a
+  maintainability refactor, done in small test-backed slices.

@@ -25,6 +25,20 @@ verify_production_security(
     founder_allow_all_staff=FOUNDER_ALLOW_ALL_STAFF,
 )
 
+# Rate limits and public access-code lockouts are cache-backed. Under the default
+# per-process LocMemCache they are NOT shared across workers/instances, so they
+# fail OPEN the moment more than one process runs (SEC-012 operational note).
+# This is a non-fatal warning so a single-instance lean deploy still boots.
+if not ENABLE_REDIS_CACHE:  # noqa: F405
+    import logging
+
+    logging.getLogger("django.security").warning(
+        "Production is running WITHOUT a shared Redis cache "
+        "(ENABLE_REDIS_CACHE is off). Rate limits and public access-code "
+        "lockouts will not be enforced across multiple processes/instances. "
+        "Set ENABLE_REDIS_CACHE=true + REDIS_URL for any multi-instance deploy."
+    )
+
 # Billing fails closed in production via apps.billing.apps.BillingConfig.ready()
 # (SEC-004): the unsigned manual provider must never be active here, and Stripe
 # must have its keys. Manual mode stays available only in dev/test.

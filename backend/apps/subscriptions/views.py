@@ -39,6 +39,25 @@ _ALLOWED_ORDERING = {
 
 _TRUE = {"1", "true", "yes", "on"}
 
+# Characters that make a spreadsheet treat a CSV cell as a formula. A user-entered
+# value like "=HYPERLINK(...)" or "@SUM(...)" in name/notes/provider could execute
+# when the export is opened in Excel/Sheets (CSV formula injection).
+_CSV_FORMULA_TRIGGERS = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_safe(value):
+    """Neutralize CSV/spreadsheet formula injection by quoting risky cells.
+
+    Returns the value as text; if it begins with a formula trigger it is prefixed
+    with a single quote so spreadsheets render it as literal text, not a formula.
+    """
+    if value is None:
+        return ""
+    text = str(value)
+    if text[:1] in _CSV_FORMULA_TRIGGERS:
+        return "'" + text
+    return text
+
 
 class _SubscriptionsDeprecatedMixin:
     """
@@ -294,7 +313,10 @@ class SubscriptionViewSet(_SubscriptionsDeprecatedMixin, viewsets.ModelViewSet):
         writer = csv.writer(buffer)
         writer.writerow(columns)
         for sub in rows:
-            writer.writerow([
+            # Every cell passes through _csv_safe so user-entered fields (name,
+            # provider, plan_name, category, payment label, notes) can't smuggle a
+            # spreadsheet formula into the export.
+            writer.writerow([_csv_safe(value) for value in [
                 sub.name,
                 sub.provider,
                 sub.plan_name,
@@ -311,7 +333,7 @@ class SubscriptionViewSet(_SubscriptionsDeprecatedMixin, viewsets.ModelViewSet):
                 "yes" if sub.cancel_candidate else "no",
                 "yes" if sub.is_archived else "no",
                 sub.notes.replace("\n", " ").strip(),
-            ])
+            ]])
         response = HttpResponse(buffer.getvalue(), content_type="text/csv")
         response["Content-Disposition"] = (
             'attachment; filename="duenest-subscriptions.csv"'
