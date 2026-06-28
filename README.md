@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./brand/logo/duenest-logo.png" alt="CertaNest Logo" width="220" />
+  <img src="./brand/certanest/assets/final/png/certanest-app-icon-1024.png" alt="CertaNest Logo" width="220" />
 </p>
 
 <h1 align="center">CertaNest</h1>
