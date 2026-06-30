@@ -2313,6 +2313,37 @@ A second pass closed the remaining well-contained items:
   rest are transitively pinned by Next.js (postcss) or dev-server/Windows-only
   (esbuild) and are left for a dedicated Next.js upgrade rather than a forced bump.
 
+## Security Hardening V3 (low-severity quick wins)
+
+A small follow-up closing the easy items from the audit's Low tier. None were
+remotely exploitable on a correctly-configured deploy; these are defense-in-depth
+and abuse-bounding. Code lives in `apps/documents/scanner.py`,
+`apps/organizations/views.py`, `apps/documents/models.py`, and
+`apps/documents/document_requests.py`.
+
+- **SEC-016 — scanner sniffs image magic bytes.** `validate_uploaded_scan` now
+  verifies the file's real signature (PNG `\x89PNG…`, JPEG `\xff\xd8\xff`) against
+  the client-declared MIME, not just for PDFs — so a renamed non-image can't be
+  stored as an `image/png`. This brings the scanner path in line with the shared
+  upload validator.
+- **SEC-017 — public document-request inputs are validated + bounded.** The
+  anonymous organization upload endpoint now validates the submitter `email`
+  (falling back to the request's recipient email if malformed) and caps `notes`
+  at 1000 chars, so an anonymous uploader can't store an oversized/garbage blob or
+  an unvalidated value in the staff-facing trail.
+- **SEC-018 — document-request re-uploads are bounded.** A `NEEDS_REPLACEMENT`
+  request previously allowed uploads regardless of the count cap. Re-opening now
+  grants exactly one more upload allowance (`max_uploads = max(max_uploads,
+  upload_count + 1)`) and `can_upload` always enforces `upload_count < max_uploads`,
+  so a re-opened request accepts the replacement but never unlimited re-uploads.
+
+**Still deferred (each its own task):** registration user-enumeration (the correct
+fix is a deferred email-verification flow — a real feature, not a patch; mitigated
+today by the 10/hour register throttle); CSP enforced nonce-based (needs live
+browser verification); plan/storage TOCTOU row-locking; and the remaining
+lower-value Lows (legacy ShareRoom numeric code, quick-share `dn_code` oracle,
+org public GET throttling, `assign_tags` org scope, member-request file encryption).
+
 **Still deferred (needs dedicated work, not a quick patch):**
 
 - **CSP Report-Only → enforced nonce-based** — requires per-request nonce wiring

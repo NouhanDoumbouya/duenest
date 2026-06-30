@@ -112,3 +112,35 @@ class PublicUploadSecurityTests(APITestCase):
             upload_url(self.req.public_upload_token), {"file": f}, format="multipart"
         )
         self.assertEqual(resp.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+
+    def test_submitter_email_and_notes_are_validated_and_bounded(self):
+        # SEC-017: an anonymous submitter cannot store an oversized notes blob or
+        # an invalid email. Invalid email falls back to the request recipient.
+        from .models import DocumentRequestSubmission
+
+        self.req.recipient_email = "recipient@example.com"
+        self.req.save(update_fields=["recipient_email"])
+        f = SimpleUploadedFile("p.pdf", b"%PDF-1.4 hi", content_type="application/pdf")
+        resp = self.client.post(
+            upload_url(self.req.public_upload_token),
+            {"file": f, "email": "not-an-email", "notes": "x" * 5000},
+            format="multipart",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        sub = DocumentRequestSubmission.objects.get(request=self.req)
+        self.assertEqual(sub.submitted_by_email, "recipient@example.com")  # fallback
+        self.assertLessEqual(len(sub.notes), 1000)
+
+    def test_valid_submitter_email_and_notes_are_stored(self):
+        from .models import DocumentRequestSubmission
+
+        f = SimpleUploadedFile("p.pdf", b"%PDF-1.4 hi", content_type="application/pdf")
+        resp = self.client.post(
+            upload_url(self.req.public_upload_token),
+            {"file": f, "email": "submitter@example.com", "notes": "Here is my passport."},
+            format="multipart",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        sub = DocumentRequestSubmission.objects.get(request=self.req)
+        self.assertEqual(sub.submitted_by_email, "submitter@example.com")
+        self.assertEqual(sub.notes, "Here is my passport.")

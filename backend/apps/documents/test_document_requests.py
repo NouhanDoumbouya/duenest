@@ -208,6 +208,30 @@ class ReviewAndAttachTests(_Base):
         req.refresh_from_db()
         self.assertEqual(req.status, "uploaded")
 
+    def test_needs_replacement_grants_exactly_one_more_upload(self):
+        # SEC-018: re-opening for a replacement grants ONE more upload, not
+        # unlimited — uploads stay bounded by max_uploads in every state.
+        from apps.documents.document_requests import mark_needs_replacement
+
+        req = self._uploaded_request()  # one upload done: count=1, max_uploads=1
+        self.assertEqual(req.upload_count, 1)
+        mark_needs_replacement(req)
+        req.refresh_from_db()
+        self.assertEqual(req.status, "needs_replacement")
+        self.assertEqual(req.max_uploads, 2)  # exactly one more allowance granted
+        self.assertTrue(req.can_upload)
+        # Once that replacement is used (count hits the cap), no further uploads.
+        req.upload_count = 2
+        self.assertFalse(req.can_upload)
+
+    def test_needs_replacement_never_reduces_a_larger_cap(self):
+        from apps.documents.document_requests import mark_needs_replacement
+
+        req = self._uploaded_request(max_uploads=5)  # count=1, max_uploads=5
+        mark_needs_replacement(req)
+        req.refresh_from_db()
+        self.assertEqual(req.max_uploads, 5)  # max(5, 1+1) — unchanged
+
     def test_cannot_accept_without_upload(self):
         req = DocumentRequestLink.objects.create(owner=self.user, requested_document_title="X")
         resp = self.client.post(f"{LIST_URL}{req.id}/accept/")

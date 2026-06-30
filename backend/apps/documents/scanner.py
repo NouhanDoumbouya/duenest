@@ -45,6 +45,15 @@ _EXTENSION_BY_MIME = {
     "image/png": ".png",
 }
 _PDF_MAGIC = b"%PDF-"
+_PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+_JPEG_MAGIC = b"\xff\xd8\xff"
+# Magic-byte signatures per allowed content type, so the client-declared MIME is
+# never trusted on its own (SEC-016). PDFs are also structurally checked later.
+_CONTENT_TYPE_MAGIC = {
+    "application/pdf": (_PDF_MAGIC,),
+    "image/png": (_PNG_MAGIC,),
+    "image/jpeg": (_JPEG_MAGIC,),
+}
 
 
 class ScanValidationError(Exception):
@@ -107,9 +116,14 @@ def validate_uploaded_scan(uploaded) -> str:
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
         )
 
+    # Server-side magic-byte sniffing: the client-declared MIME must match the
+    # file's real signature, so a renamed executable/HTML can't pose as an
+    # allowed image or PDF (SEC-016).
     head = _read_head(uploaded)
-    if content_type == "application/pdf" and not head.startswith(_PDF_MAGIC):
-        raise ScanValidationError("The file is not a valid PDF.")
+    signatures = _CONTENT_TYPE_MAGIC.get(content_type)
+    if signatures and not any(head.startswith(sig) for sig in signatures):
+        label = "PDF" if content_type == "application/pdf" else "image"
+        raise ScanValidationError(f"The file is not a valid {label}.")
 
     return content_type
 

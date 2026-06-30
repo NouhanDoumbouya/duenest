@@ -207,12 +207,20 @@ def reject_document_request(request: DocumentRequestLink, reason: str = "") -> D
 
 
 def mark_needs_replacement(request: DocumentRequestLink, reason: str = "") -> DocumentRequestLink:
-    """Ask the recipient for a clearer/correct replacement (re-opens upload)."""
+    """Ask the recipient for a clearer/correct replacement (re-opens upload).
+
+    Grants exactly one more upload allowance (never reducing a larger configured
+    cap) so the re-opened request can accept the replacement but not unlimited
+    re-uploads (SEC-018).
+    """
     _require_reviewable(request)
     request.status = _Status.NEEDS_REPLACEMENT
     request.rejection_reason = (reason or "").strip()
     request.reviewed_at = timezone.now()
-    request.save(update_fields=["status", "rejection_reason", "reviewed_at", "updated_at"])
+    request.max_uploads = max(request.max_uploads, request.upload_count + 1)
+    request.save(update_fields=[
+        "status", "rejection_reason", "reviewed_at", "max_uploads", "updated_at",
+    ])
     return request
 
 

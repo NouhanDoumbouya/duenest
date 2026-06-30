@@ -1,6 +1,8 @@
 import io
 
 from django.conf import settings
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.validators import validate_email
 from django.db.models import Count, Q, Sum
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
@@ -1173,16 +1175,30 @@ class PublicDocumentRequestView(APIView):
         except file_validation.MalwareScanUnavailable as exc:
             raise _PublicUploadScanUnavailable(exc.message)
 
+        # Validate + bound the public-submitter inputs (SEC-017): the email must be
+        # a well-formed address (else fall back to the request's recipient email)
+        # and notes are length-capped, so an anonymous uploader can't store an
+        # oversized/garbage blob or an unvalidated value in the staff-facing trail.
+        submitted_email = (str(request.data.get("email") or "").strip())[:254]
+        if submitted_email:
+            try:
+                validate_email(submitted_email)
+            except DjangoValidationError:
+                submitted_email = request_obj.recipient_email
+        else:
+            submitted_email = request_obj.recipient_email
+        submitted_notes = (str(request.data.get("notes") or "").strip())[:1000]
+
         # Encrypt-at-rest before storage (SEC-002): the submitter's document
         # (often an ID/passport) is never written as plaintext.
         submission = DocumentRequestSubmission(
             organization=request_obj.organization,
             request=request_obj,
-            submitted_by_email=request.data.get("email", request_obj.recipient_email),
+            submitted_by_email=submitted_email,
             original_filename=getattr(uploaded, "name", ""),
             content_type=getattr(uploaded, "content_type", ""),
             file_size=len(_data),
-            notes=request.data.get("notes", ""),
+            notes=submitted_notes,
         )
         encrypt_submission_file(submission, _data, f"{submission.file_uuid.hex}.enc")
         submission.save()

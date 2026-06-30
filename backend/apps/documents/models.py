@@ -3030,13 +3030,16 @@ class DocumentRequestLink(models.Model):
 
     @property
     def can_upload(self) -> bool:
-        """Whether the recipient may currently upload (status + expiry + count)."""
+        """Whether the recipient may currently upload (status + expiry + count).
+
+        A needs-replacement request is re-opened by the owner, who grants one more
+        upload allowance at that point (``mark_needs_replacement`` bumps
+        ``max_uploads``). Uploads are always bounded by ``upload_count <
+        max_uploads`` so a re-opened request can't accept unlimited re-uploads
+        (SEC-018).
+        """
         if self.status not in self.UPLOADABLE_STATUSES or self.is_expired:
             return False
-        # A needs-replacement request was explicitly re-opened by the owner, so a
-        # fresh upload is always allowed regardless of the prior upload count.
-        if self.status == self.Status.NEEDS_REPLACEMENT:
-            return True
         return self.upload_count < max(self.max_uploads, 1)
 
 
