@@ -122,6 +122,26 @@ class ScannerUploadTests(APITestCase):
         resp = self.client.post(self.url, {"file": fake}, format="multipart")
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_non_image_posing_as_png_rejected(self):
+        # SEC-016: the client-declared image MIME must match the file's magic
+        # bytes, so a renamed non-image can't slip through as image/png.
+        self.auth()
+        fake = SimpleUploadedFile(
+            "scan.png", b"<html>not a png</html>", content_type="image/png"
+        )
+        resp = self.client.post(self.url, {"file": fake}, format="multipart")
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_real_png_upload_accepted(self):
+        from PIL import Image
+
+        self.auth()
+        buf = BytesIO()
+        Image.new("RGB", (24, 24), (10, 20, 30)).save(buf, "PNG")
+        upload = SimpleUploadedFile("scan.png", buf.getvalue(), content_type="image/png")
+        resp = self.client.post(self.url, {"file": upload}, format="multipart")
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.content)
+
     @override_settings(SCANNER_MAX_UPLOAD_MB=1)
     def test_oversized_rejected(self):
         self.auth()
