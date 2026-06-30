@@ -94,6 +94,8 @@ in Vercel. Only if you later add Stripe.js/Elements would you expose:
    - `invoice.payment_succeeded` (and/or `invoice.paid`)
    - `invoice.payment_failed`
    - `invoice.payment_action_required`
+   - `customer.subscription.trial_will_end` *(trial-ending heads-up email)*
+   - `invoice.upcoming` *(renewal heads-up email before the next charge)*
    - *(optional, handled too:* `charge.refunded`*)*
 4. Copy the endpoint's **Signing secret** (`whsec_...`) into
    `STRIPE_WEBHOOK_SECRET` (step 2). The signature is verified against the **raw
@@ -110,8 +112,11 @@ in Vercel. Only if you later add Stripe.js/Elements would you expose:
    to the webhook; confirm in **Stripe → Webhooks** (200s) and in Railway logs.
 6. `GET /billing/status/` now shows the active/trialing subscription;
    `is_pro(user)` is true.
-7. `POST /billing/portal/` returns a portal URL; cancel there →
-   `customer.subscription.updated/deleted` flips status back.
+7. Cancel via either path: `POST /billing/cancel/` (the in-app button) now calls
+   Stripe directly (`cancel_at_period_end=true`) — access continues until period
+   end, then a webhook flips status; `POST /billing/resume/` undoes it. The Stripe
+   Customer Portal (`POST /billing/portal/`) still works too. If the provider is
+   unreachable, cancel returns `502` and does NOT mark the plan canceled locally.
 8. Replay a webhook from the Stripe dashboard → handler returns
    `{"status":"ignored","reason":"duplicate"}` (idempotent).
 9. When verified, swap to **live** keys + a live webhook and repeat a real charge.
