@@ -136,6 +136,7 @@ class BriefingNoModelNoSpendTests(APITestCase):
             username="b", email="b@x.com", password="StrongPass123!DN"
         )
         AiPreference.objects.create(user=self.user, ai_enabled=True)
+        _grant_pro(self.user)  # briefing is a Pro feature
         self.client.force_authenticate(self.user)
         self.url = reverse("document-ai-briefing")
 
@@ -155,3 +156,26 @@ class BriefingNoModelNoSpendTests(APITestCase):
         self.assertFalse(resp.data.get("model_called", True))
         gen.assert_not_called()  # no provider call happened
         self.assertEqual(self._used(), 0)  # ...so no credit was spent
+
+
+@override_settings(**_CONFIGURED)
+class AutomationAiIsProGatedTests(APITestCase):
+    """Pricing (migration 0017): proactive briefing is Pro-only for free users;
+    the conversational assistant deliberately stays free (covered by
+    apps.documents.test_ai_chat)."""
+
+    def setUp(self):
+        self.free = User.objects.create_user(
+            username="free-auto", email="fa@x.com", password="StrongPass123!DN"
+        )
+        AiPreference.objects.create(user=self.free, ai_enabled=True)
+        self.client.force_authenticate(self.free)
+
+    def test_free_user_blocked_from_briefing_with_no_model_call(self):
+        gen = mock.Mock()
+        with _flags(True), mock.patch("apps.documents.ai_briefing.build_briefing", gen):
+            resp = self.client.post(reverse("document-ai-briefing"), {}, format="json")
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.data["available"])
+        self.assertEqual(resp.data["reason"], "ai_feature_not_in_plan")
+        gen.assert_not_called()  # blocked before any briefing work

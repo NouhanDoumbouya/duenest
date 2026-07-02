@@ -185,9 +185,13 @@ suggested routes with source snippets.
 
 AI usage is now metered with **monthly AI credits** (not per-day actions):
 - **Free:** 10 credits/month, 3 AI-indexed documents, basic features only (summary,
-  single-doc Q&A, deadline extraction, reminder suggestion, extraction).
+  single-doc Q&A, deadline extraction, reminder suggestion, extraction) plus the
+  conversational assistant (chat) as a credit-limited taste.
 - **Pro:** 200 credits/month, 300 AI-indexed documents, all features including
-  multi-doc Q&A, drafting, pack copilot, readiness checks.
+  multi-doc Q&A, drafting, pack copilot, readiness checks, proactive briefing, and
+  AI file intake (`ai_briefing` / `ai_intake`, seeded by billing migration
+  `0017_ai_briefing_intake_flags`: Free off, Pro/Teams on). The deterministic
+  (non-AI) intake path remains available on Free.
 
 Credits cost 1–5 per feature call (see `docs/BILLING.md` "AI plan limits" for the
 full table). A credit is spent only after a genuinely successful AI call — blocked,

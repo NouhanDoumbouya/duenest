@@ -105,6 +105,14 @@ class ConsentGateOnEndpointTests(APITestCase):
         self.user = User.objects.create_user(
             username="c", email="c@x.com", password="StrongPassword123!DN"
         )
+        # Briefing is a Pro feature (migration 0017); this suite isolates the
+        # consent gate, so entitle the user to reach past the plan gate.
+        from apps.billing.models import Plan, UserSubscription
+
+        UserSubscription.objects.create(
+            user=self.user, plan=Plan.objects.get(key="pro"),
+            provider="manual", status="active", billing_interval="month",
+        )
         self.client.force_authenticate(self.user)
 
     def test_briefing_requires_consent(self):

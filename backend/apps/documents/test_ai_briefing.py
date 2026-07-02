@@ -30,6 +30,16 @@ def _flags(value: bool):
     return mock.patch("apps.features.flags.is_feature_enabled", return_value=value)
 
 
+def _grant_pro(user):
+    # Proactive briefing is a Pro AI feature; endpoint tests need an entitled user.
+    from apps.billing.models import Plan, UserSubscription
+
+    UserSubscription.objects.create(
+        user=user, plan=Plan.objects.get(key="pro"),
+        provider="manual", status="active", billing_interval="month",
+    )
+
+
 class BriefingEnabledTests(SimpleTestCase):
     @override_settings(AI_CONFIGURED=False)
     def test_not_configured_disables(self):
@@ -146,6 +156,7 @@ class AiBriefingEndpointTests(APITestCase):
         self.user = User.objects.create_user(
             username="api", email="api@x.com", password="StrongPassword123!DN"
         )
+        _grant_pro(self.user)
         self.client.force_authenticate(self.user)
         AiPreference.objects.create(user=self.user, ai_enabled=True)
         self.url = reverse("document-ai-briefing")
