@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import {
+  FileCheck,
   FileText,
+  Fingerprint,
   KeyRound,
   Lock,
   ShieldAlert,
@@ -27,9 +29,9 @@ export const metadata: Metadata = {
 const controls = [
   {
     icon: Lock,
-    title: "Encrypted at rest",
+    title: "AES-256-GCM encryption at rest",
     description:
-      "Uploaded files are encrypted at rest. CertaNest decrypts a file only after its permission checks pass.",
+      "Files are encrypted with AES-256-GCM under a per-file key (itself wrapped) before the bytes ever reach storage. A file is decrypted in memory only after ownership, trash, revoke/expiry, and access-code checks pass.",
   },
   {
     icon: UserCheck,
@@ -38,22 +40,34 @@ const controls = [
       "Documents, files, reminders, checklists, application packs, exports, and account controls are scoped to the signed-in user.",
   },
   {
-    icon: ShieldCheck,
-    title: "Selected-item sharing",
+    icon: FileCheck,
+    title: "Validated, scanned uploads",
     description:
-      "Sharing exposes only the items you choose. Your wider vault is never shared by default.",
+      "Every upload passes one shared checkpoint: size limit, extension allowlist, server-side magic-byte sniffing (the client's declared type is never trusted), PDF structure checks, and optional malware scanning that fails closed in production.",
   },
   {
     icon: TimerReset,
     title: "Expiry & revocation",
     description:
-      "Shares and emergency access can expire and be revoked. Revoked or expired access is blocked server-side.",
+      "Every share carries an expiry, and shares plus emergency access can be revoked. Revoked or expired access is blocked server-side — including on the file bytes, not just the page.",
   },
   {
     icon: KeyRound,
     title: "Hashed access codes",
     description:
-      "Optional access codes for shared items are stored hashed, never in plain text, and verified on the server.",
+      "Optional access codes are hashed with Django's password hasher (PBKDF2). The plaintext code is shown once at creation and never stored or returned again; attempts are rate-limited and lock the resource after repeated failures.",
+  },
+  {
+    icon: Fingerprint,
+    title: "Minimal-fingerprint audit logs",
+    description:
+      "Sensitive actions are recorded in an owner-scoped audit log. IP and user-agent are stored only as salted SHA-256 hashes — never in plain text — and log metadata is sanitized to drop sensitive keys.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Selected-item sharing",
+    description:
+      "Sharing exposes only the items you choose. Your wider vault is never shared by default.",
   },
   {
     icon: FileText,

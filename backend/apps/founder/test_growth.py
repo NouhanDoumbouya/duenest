@@ -167,3 +167,72 @@ class GrowthActionTests(APITestCase):
         self.client.force_authenticate(self.user)
         resp = self.client.get(reverse("founder-growth-actions"))
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class TimeToValueTests(APITestCase):
+    """Activation time-to-first-value aggregate + funnel endpoint wiring."""
+
+    def setUp(self):
+        self.founder = User.objects.create_user(
+            username="ttv-founder", email="ttvf@example.com",
+            password="Pw!DueNest123", is_staff=True,
+        )
+
+    def test_median_first_document_latency(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from apps.documents.models import Document
+
+        from .growth import build_time_to_value
+
+        t0 = timezone.now() - timedelta(days=10)
+        # Two users, first document at 2h and 6h after signup respectively.
+        for i, hours in enumerate((2, 6)):
+            u = User.objects.create_user(
+                username=f"ttv{i}", email=f"ttv{i}@x.com", password="Pw!DueNest123"
+            )
+            User.objects.filter(pk=u.pk).update(date_joined=t0)
+            doc = Document.objects.create(owner=u, title="ID")
+            # created_at is auto_now_add; backdate it via update (bypasses auto).
+            Document.objects.filter(pk=doc.pk).update(created_at=t0 + timedelta(hours=hours))
+
+        data = build_time_to_value()
+        first_doc = next(m for m in data["milestones"] if m["key"] == "first_document")
+        self.assertEqual(first_doc["reached"], 2)
+        self.assertEqual(first_doc["median_hours"], 4.0)  # median of [2, 6]
+        self.assertEqual(first_doc["within_24h_pct"], 100.0)
+
+    def test_only_earliest_document_counts_per_owner(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from apps.documents.models import Document
+
+        from .growth import build_time_to_value
+
+        t0 = timezone.now() - timedelta(days=5)
+        u = User.objects.create_user(
+            username="ttv-multi", email="ttvm@x.com", password="Pw!DueNest123"
+        )
+        User.objects.filter(pk=u.pk).update(date_joined=t0)
+        for hours in (3, 20, 50):
+            doc = Document.objects.create(owner=u, title="Doc")
+            Document.objects.filter(pk=doc.pk).update(created_at=t0 + timedelta(hours=hours))
+
+        first_doc = next(
+            m for m in build_time_to_value()["milestones"] if m["key"] == "first_document"
+        )
+        self.assertEqual(first_doc["reached"], 1)  # one owner, earliest only
+        self.assertEqual(first_doc["median_hours"], 3.0)  # earliest doc, not 20/50
+
+    def test_funnel_endpoint_includes_time_to_value(self):
+        self.client.force_authenticate(self.founder)
+        resp = self.client.get(reverse("founder-growth-funnel"))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        payload = resp.json()
+        self.assertIn("time_to_value", payload)
+        keys = {m["key"] for m in payload["time_to_value"]["milestones"]}
+        self.assertEqual(keys, {"first_document", "first_reminder", "first_share"})

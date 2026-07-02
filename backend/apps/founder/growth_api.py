@@ -15,6 +15,7 @@ from rest_framework.views import APIView
 from .growth import (
     build_growth_funnel,
     build_growth_overview,
+    build_time_to_value,
     build_utm_url,
     campaign_metrics,
 )
@@ -185,12 +186,14 @@ class FounderGrowthFunnelView(APIView):
     permission_classes = [IsFounderUser]
 
     def get(self, request):
-        return Response(
-            build_growth_funnel(
-                request.query_params.get("range"),
-                campaign_key=request.query_params.get("campaign") or None,
-            )
+        range_key = request.query_params.get("range")
+        data = build_growth_funnel(
+            range_key,
+            campaign_key=request.query_params.get("campaign") or None,
         )
+        # Time-to-first-value complements the funnel counts with activation speed.
+        data["time_to_value"] = build_time_to_value(range_key)
+        return Response(data)
 
 
 class FounderGrowthCampaignListCreateView(_GrowthContextMixin, generics.ListCreateAPIView):
