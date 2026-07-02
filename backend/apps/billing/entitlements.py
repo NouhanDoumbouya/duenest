@@ -289,6 +289,11 @@ AI_FEATURE_PLAN_FLAGS = {
     "requirement_link_checklist": "ai_requirement_checklist",
     "application_document_generation": "ai_application_document_generation",
     "magic_inbox_triage": "ai_magic_inbox",
+    # Automation AI reserved for Pro. NOTE: "ai_chat" is deliberately NOT here —
+    # the conversational assistant stays available on Free (credit-limited) as an
+    # acquisition taste; briefing + intake are the paid "automation" AI.
+    "briefing": "ai_briefing",
+    "intake": "ai_intake",
 }
 
 # Feature-based credit costs. Heavier / multi-document features cost more. An

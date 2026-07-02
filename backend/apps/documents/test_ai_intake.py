@@ -26,6 +26,16 @@ _CONFIGURED = dict(
 )
 
 
+def _grant_pro(user):
+    # AI file intake is a Pro feature; endpoint tests need an entitled user.
+    from apps.billing.models import Plan, UserSubscription
+
+    UserSubscription.objects.create(
+        user=user, plan=Plan.objects.get(key="pro"),
+        provider="manual", status="active", billing_interval="month",
+    )
+
+
 def _flags(value: bool):
     return mock.patch("apps.features.flags.is_feature_enabled", return_value=value)
 
@@ -117,6 +127,7 @@ class FileIntakeEndpointTests(APITestCase):
         self.user = User.objects.create_user(
             username="api", email="api@x.com", password="StrongPassword123!DN"
         )
+        _grant_pro(self.user)
         self.client.force_authenticate(self.user)
         AiPreference.objects.create(user=self.user, ai_enabled=True)
 
@@ -159,3 +170,21 @@ class FileIntakeEndpointTests(APITestCase):
             resp = self.client.post(reverse("file-inbox-intake", args=[f.id]), {}, format="json")
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data["summary"], "A passport.")
+
+    @override_settings(**_CONFIGURED)
+    def test_free_user_blocked_from_ai_intake(self):
+        # Pricing (migration 0017): AI intake is Pro-only. Deterministic intake
+        # still works for Free elsewhere; here the AI path is gated with no call.
+        free = User.objects.create_user(
+            username="free-intake", email="fi@x.com", password="StrongPassword123!DN"
+        )
+        AiPreference.objects.create(user=free, ai_enabled=True)
+        f = self._inbox_file(free)
+        svc = mock.Mock()
+        self.client.force_authenticate(free)
+        with _flags(True), mock.patch("apps.documents.ai_intake.suggest_intake", svc):
+            resp = self.client.post(reverse("file-inbox-intake", args=[f.id]), {}, format="json")
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.data["available"])
+        self.assertEqual(resp.data["reason"], "ai_feature_not_in_plan")
+        svc.assert_not_called()
