@@ -12,11 +12,12 @@ and date-range logic stays consistent with the rest of the founder console.
 
 from __future__ import annotations
 
+import math
 import re
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 from django.contrib.auth import get_user_model
-from django.db.models import Count
+from django.db.models import Count, Min
 from django.utils import timezone
 
 from apps.documents.models import (
@@ -192,6 +193,75 @@ def build_growth_funnel(range_key: str | None = None, *, campaign_key: str | Non
         "biggest_drop_off": biggest,
         "total_conversion_signup_to_activated": total_conversion,
     }
+
+
+def _percentile(values: list[float], p: float) -> float | None:
+    """Linear-interpolated percentile of ``values`` (1 dp). None when empty."""
+    if not values:
+        return None
+    s = sorted(values)
+    if len(s) == 1:
+        return round(s[0], 1)
+    k = (len(s) - 1) * (p / 100.0)
+    lo, hi = math.floor(k), math.ceil(k)
+    if lo == hi:
+        return round(s[int(k)], 1)
+    return round(s[lo] + (s[hi] - s[lo]) * (k - lo), 1)
+
+
+def build_time_to_value(range_key: str | None = None) -> dict:
+    """Time-to-first-value: latency (hours) from signup to each first milestone.
+
+    Complements the funnel's "how many" with "how fast" — it surfaces where
+    activation stalls, not just whether users convert. Computed purely from the
+    earliest owned record per user vs. that user's ``date_joined`` (no event
+    dependency, so it is robust even for signups made before event
+    instrumentation existed). Founder-only (caller-gated); reads no document
+    content. ``range_key`` restricts to users who signed up within the window.
+    """
+    since, _ = _range_bounds(range_key)
+
+    milestones = (
+        ("first_document", "First document added",
+         Document.objects.filter(is_trashed=False)),
+        ("first_reminder", "First reminder created",
+         DocumentReminderRule.objects.all()),
+        ("first_share", "First SafeSend created",
+         DocumentFileShareLink.objects.all()),
+    )
+
+    out = []
+    for key, label, qs in milestones:
+        first_by_owner = dict(
+            qs.values_list("owner")
+            .annotate(first_at=Min("created_at"))
+            .values_list("owner", "first_at")
+        )
+        joined_qs = User.objects.filter(pk__in=first_by_owner.keys())
+        if since:
+            joined_qs = joined_qs.filter(date_joined__gte=since)
+        joined_by_owner = dict(joined_qs.values_list("pk", "date_joined"))
+
+        latencies = []
+        for owner_id, first_at in first_by_owner.items():
+            joined = joined_by_owner.get(owner_id)
+            # Guard against clock skew / pre-join records (never negative latency).
+            if joined and first_at and first_at >= joined:
+                latencies.append((first_at - joined).total_seconds() / 3600.0)
+
+        out.append({
+            "key": key,
+            "label": label,
+            "reached": len(latencies),
+            "median_hours": _percentile(latencies, 50),
+            "p75_hours": _percentile(latencies, 75),
+            "within_24h_pct": (
+                _pct(sum(1 for h in latencies if h <= 24), len(latencies))
+                if latencies else None
+            ),
+        })
+
+    return {"range": _range_config(range_key)[0], "milestones": out}
 
 
 # ---------------------------------------------------------------------------
