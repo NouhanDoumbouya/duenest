@@ -123,6 +123,13 @@ class ManualProvider:
             raise BillingError("Webhook payload missing id/type.")
         return data
 
+    def cancel_subscription(self, *, subscription_id, at_period_end=True):
+        # No real provider to call — the service flips the local cancel flag.
+        return {"manual": True}
+
+    def resume_subscription(self, *, subscription_id):
+        return {"manual": True}
+
 
 # ---- Stripe provider (live; untested in this environment) ------------------
 
@@ -193,6 +200,27 @@ class StripeProvider:
         except Exception as exc:  # stripe.error.SignatureVerificationError etc.
             raise BillingError("Webhook signature verification failed.") from exc
         return event
+
+    def cancel_subscription(self, *, subscription_id, at_period_end=True):
+        """Stop billing at Stripe. Without this call, cancelling in-app would only
+        flip a local flag while Stripe keeps charging the customer."""
+        stripe = self._client()
+        if not subscription_id:
+            raise BillingError("No provider subscription id to cancel.")
+        if at_period_end:
+            return stripe.Subscription.modify(
+                subscription_id, cancel_at_period_end=True
+            )
+        return stripe.Subscription.cancel(subscription_id)
+
+    def resume_subscription(self, *, subscription_id):
+        """Undo a scheduled period-end cancellation at Stripe."""
+        stripe = self._client()
+        if not subscription_id:
+            raise BillingError("No provider subscription id to resume.")
+        return stripe.Subscription.modify(
+            subscription_id, cancel_at_period_end=False
+        )
 
 
 def get_provider():

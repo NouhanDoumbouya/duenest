@@ -187,7 +187,16 @@ class CancelSubscriptionView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        sub = services.cancel_subscription(request.user)
+        # If the provider call fails, cancel_subscription does NOT flip the local
+        # flag — surface a clean error instead of a 500 so the user can retry.
+        try:
+            sub = services.cancel_subscription(request.user)
+        except BillingError:
+            return Response(
+                {"detail": "We couldn't reach the payment provider to cancel right "
+                 "now. Your plan was not changed — please try again shortly."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
         if not sub:
             return Response(
                 {"detail": "No active subscription to cancel."},
@@ -200,7 +209,14 @@ class ResumeSubscriptionView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        services.resume_subscription(request.user)
+        try:
+            services.resume_subscription(request.user)
+        except BillingError:
+            return Response(
+                {"detail": "We couldn't reach the payment provider to resume right "
+                 "now. Please try again shortly."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
         return Response(_billing_status_payload(request.user))
 
 

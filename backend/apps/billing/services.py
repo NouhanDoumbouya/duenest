@@ -191,10 +191,20 @@ def open_billing_portal(user) -> dict:
 
 
 def cancel_subscription(user, at_period_end: bool = True) -> UserSubscription | None:
-    """Mark the user's subscription to cancel at period end (manual provider)."""
+    """Cancel the user's subscription at period end.
+
+    For a real Stripe subscription this tells the provider to stop billing — the
+    critical step the in-app cancel button was previously missing. The provider
+    call happens FIRST: if it fails we do NOT flip the local flag, so the UI never
+    shows "canceled" while Stripe keeps charging the customer.
+    """
     sub = entitlements.get_effective_subscription(user)
     if not sub:
         return None
+    if sub.provider == "stripe" and sub.provider_subscription_id:
+        get_provider().cancel_subscription(
+            subscription_id=sub.provider_subscription_id, at_period_end=at_period_end
+        )
     sub.cancel_at_period_end = True
     sub.canceled_at = timezone.now()
     sub.save(update_fields=["cancel_at_period_end", "canceled_at", "updated_at"])
@@ -205,6 +215,10 @@ def resume_subscription(user) -> UserSubscription | None:
     sub = entitlements.get_effective_subscription(user)
     if not sub or not sub.cancel_at_period_end:
         return None
+    if sub.provider == "stripe" and sub.provider_subscription_id:
+        get_provider().resume_subscription(
+            subscription_id=sub.provider_subscription_id
+        )
     sub.cancel_at_period_end = False
     sub.canceled_at = None
     sub.save(update_fields=["cancel_at_period_end", "canceled_at", "updated_at"])
@@ -349,9 +363,39 @@ def _apply_event(event_type: str, obj: dict, record: BillingEvent) -> None:
         _handle_payment_failed(obj, record)
     elif event_type == "charge.refunded":
         _handle_refund(obj, record)
+    elif event_type == "customer.subscription.trial_will_end":
+        _handle_trial_will_end(obj, record)
+    elif event_type == "invoice.upcoming":
+        _handle_renewal_upcoming(obj, record)
     else:
         record.status = BillingEvent.Status.IGNORED
         record.save(update_fields=["status"])
+
+
+def _handle_trial_will_end(obj, record):
+    """Stripe trial ending soon → branded heads-up. Manual-provider trials get
+    this from the cron; Stripe-backed trials previously got nothing."""
+    user, sub, _ = _user_subscription_for(obj, record)
+    if user is None:
+        record.status = BillingEvent.Status.IGNORED
+        record.save(update_fields=["status"])
+        return
+    from .lifecycle_email import send_trial_ending_email
+
+    send_trial_ending_email(user, sub)
+
+
+def _handle_renewal_upcoming(obj, record):
+    """Stripe ``invoice.upcoming`` → renewal heads-up before the next charge.
+    Idempotent via the per-event BillingEvent record (one email per renewal)."""
+    user, sub, _ = _user_subscription_for(obj, record)
+    if user is None:
+        record.status = BillingEvent.Status.IGNORED
+        record.save(update_fields=["status"])
+        return
+    from .lifecycle_email import send_renewal_upcoming_email
+
+    send_renewal_upcoming_email(user, sub)
 
 
 def _handle_refund(obj, record):
@@ -456,6 +500,22 @@ def _upsert_subscription_from_event(obj, record):
     if end_ts:
         defaults["current_period_end"] = timezone.datetime.fromtimestamp(
             end_ts, tz=timezone.get_current_timezone()
+        )
+    start_ts = obj.get("current_period_start")
+    if start_ts:
+        defaults["current_period_start"] = timezone.datetime.fromtimestamp(
+            start_ts, tz=timezone.get_current_timezone()
+        )
+    # A Stripe `past_due` arriving via subscription.updated must get a grace
+    # deadline, or it would keep paid access indefinitely with no dunning clock
+    # (the cron only expires time-bounded grace periods). Don't reset an existing
+    # deadline on later updates.
+    if status == UserSubscription.Status.PAST_DUE and not (
+        sub and sub.grace_period_until
+    ):
+        grace_days = BillingEmailSettings.load().grace_period_days
+        defaults["grace_period_until"] = timezone.now() + timezone.timedelta(
+            days=grace_days
         )
     if sub:
         for k, v in defaults.items():
